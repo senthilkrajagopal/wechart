@@ -355,7 +355,7 @@ export function Bookmarks({
       <button
         ref={trigger}
         type="button"
-        className="dashboard__bookmarks-button"
+        className="btn dashboard__bookmarks-button"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}

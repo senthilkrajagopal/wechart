@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { IN_MY_WORKSPACE, myCopyOf } from './workspace';
+import { IN_MY_WORKSPACE, myCopyOf, sharedIn } from './workspace';
 
 /**
  * T466 (AC-187; UX-106, UX-109, UX-111): one page frame and one dialog
@@ -369,6 +369,151 @@ test.describe('control sizes by surface (T476)', () => {
     // "Label: value" inside it, on its row.
     await expect(pill.locator('button[aria-expanded]')).toBeVisible();
     await expect(pill).toContainText(/Status\s*:/);
+  });
+});
+
+/**
+ * T684 (AC-187, AC-352; T406's critique, CMP-01 to CMP-03, DSH-05, EXP-23,
+ * and the pressed tokens of EDI-14 and EXP-02): one button rule, the
+ * designs' `.btn` (32 tall, padding 0 12, 14/400; 2026-09-27 06:66); an
+ * item's head at that one height, History first; and one pressed state,
+ * their `.btn.pressed` (accent-soft, the accent's border and ink, 600; 06:68).
+ */
+test.describe('one button rule and one pressed state (T684)', () => {
+  /** A colour token as the browser resolves it. */
+  const tokenOf = (page: Page, token: string) =>
+    page.evaluate((name) => {
+      const probe = document.createElement('span');
+      probe.style.color = `var(${name})`;
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    }, token);
+  const drawn = (control: Locator) =>
+    control.evaluate((node) => {
+      const computed = getComputedStyle(node);
+      return {
+        height: Math.round(node.getBoundingClientRect().height),
+        padding: `${computed.paddingTop} ${computed.paddingRight}`,
+        font: `${computed.fontSize}/${computed.fontWeight}`,
+      };
+    });
+  const pressedLook = (control: Locator) =>
+    control.evaluate((node) => {
+      const computed = getComputedStyle(node);
+      return {
+        background: computed.backgroundColor,
+        border: computed.borderTopColor,
+        ink: computed.color,
+        weight: computed.fontWeight,
+      };
+    });
+
+  test('a button.btn: 32 tall, padding 0 12, at 14/400 (CMP-01)', async ({ page }) => {
+    // The Export pane's Cancel, one CMP-01 names.
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await page.locator('.dashboard__header').getByRole('button', { name: 'More' }).click();
+    await page.getByRole('menuitem', { name: 'Export…' }).click();
+    const cancel = page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true });
+    await expect(cancel).toHaveClass(/\bbtn\b/);
+    expect(await drawn(cancel)).toEqual({ height: 32, padding: '0px 12px', font: '14px/400' });
+  });
+
+  test('a dashboard’s head: History, Bookmarks, then Edit in my workspace, all 32/14, ⋯ a 32 px icon button; History pressed as the designs’ .btn.pressed; its description under its title', async ({
+    page,
+    request,
+  }) => {
+    const title = `Head ${String(Date.now())}`;
+    const id = await sharedIn(request, 'dashboard', 'root', {
+      title,
+      description: 'Revenue for EMEA, refreshed nightly.',
+    });
+    await page.goto(`/explore/dashboards/${id}`);
+    const header = page.locator('.dashboard__header');
+    await expect(header.getByRole('heading', { level: 1 })).toHaveText(title);
+    // 2026-09-27 design 04, state E; design 13, screen 1 (DSH-05, EXP-23).
+    // The primary reads "Open my copy" once the copy exists: here, the
+    // workspace dashboard it was shared from (T348).
+    const buttons = header.getByRole('button');
+    await expect(buttons).toHaveText([
+      'History',
+      /^Bookmarks/,
+      /^(Edit in my workspace|Open my copy)$/,
+      '⋯',
+    ]);
+    for (const at of [0, 1, 2]) {
+      const button = buttons.nth(at);
+      expect((await drawn(button)).height, String(at)).toBe(32);
+      expect((await drawn(button)).font.split('/')[0], String(at)).toBe('14px');
+    }
+    const history = header.getByRole('button', { name: 'History', exact: true });
+    expect(await drawn(history)).toEqual({ height: 32, padding: '0px 12px', font: '14px/400' });
+    // With the clock (06, pin 1).
+    await expect(history.locator('svg')).toHaveCount(1);
+    const more = header.getByRole('button', { name: 'More' });
+    expect(await more.evaluate((node) => node.getBoundingClientRect().width)).toBe(32);
+    expect((await drawn(more)).height).toBe(32);
+
+    // Pressed while its panel is open: the designs' .btn.pressed (CMP-03).
+    await history.click();
+    await expect(history).toHaveAttribute('aria-pressed', 'true');
+    expect(await pressedLook(history)).toEqual({
+      background: await tokenOf(page, '--wc-bg-accent-soft'),
+      border: await tokenOf(page, '--wc-accent'),
+      ink: await tokenOf(page, '--wc-accent'),
+      weight: '600',
+    });
+
+    // The description, under the title in text-sm, text-secondary (R76 dashboard-Q2).
+    const description = header.locator('.dashboard__description');
+    await expect(description).toHaveText('Revenue for EMEA, refreshed nightly.');
+    expect(
+      await description.evaluate((node) => ({
+        size: getComputedStyle(node).fontSize,
+        ink: getComputedStyle(node).color,
+      })),
+    ).toEqual({ size: '14px', ink: await tokenOf(page, '--wc-text-secondary') });
+    const [heading, under] = [
+      await header.getByRole('heading', { level: 1 }).boundingBox(),
+      await description.boundingBox(),
+    ];
+    expect((under?.y ?? 0) >= (heading?.y ?? 0) + (heading?.height ?? 0)).toBe(true);
+  });
+
+  test('a dashboard with no description shows none', async ({ page }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await expect(page.locator('.dashboard__header h1')).toBeVisible();
+    await expect(page.locator('.dashboard__description')).toHaveCount(0);
+  });
+
+  test('a segmented control’s pressed segment and Explore’s Show: accent-soft, the accent’s ink, at 600 (EDI-14, EXP-02)', async ({
+    page,
+  }) => {
+    await page.goto('/model/files/cubes%2Forders.yml');
+    const pressed = page
+      .getByRole('group', { name: 'Right pane view' })
+      .locator('button[aria-pressed="true"]');
+    await expect(pressed).toHaveCount(1);
+    // A segment has no border of its own but its divider (2026-09-30 14:80).
+    const segment = await pressedLook(pressed);
+    expect({ background: segment.background, ink: segment.ink, weight: segment.weight }).toEqual({
+      background: await tokenOf(page, '--wc-bg-accent-soft'),
+      ink: await tokenOf(page, '--wc-accent'),
+      weight: '600',
+    });
+
+    await page.goto('/explore');
+    const chosen = page
+      .getByRole('radiogroup', { name: 'Show' })
+      .locator('.kind-filter__choice.is-chosen');
+    await expect(chosen).toHaveCount(1);
+    const show = await pressedLook(chosen);
+    expect({ background: show.background, ink: show.ink, weight: show.weight }).toEqual({
+      background: await tokenOf(page, '--wc-bg-accent-soft'),
+      ink: await tokenOf(page, '--wc-accent'),
+      weight: '600',
+    });
   });
 });
 

@@ -184,7 +184,10 @@ test('Save to folders on a local chart page opens its dashboard ready to choose 
   // beside it (design 04, state F; T359, AC-254).
   await page.goto(`/explore/charts/${made.chartId}`);
   const head = page.locator('.chart-page__head');
-  await expect(head.getByRole('link', { name: /Edit chart/ })).toHaveClass('btn btn-sm');
+  // A plain .btn at the head's one height, 32 px (T684, CMP-02).
+  const edit = head.getByRole('link', { name: /Edit chart/ });
+  await expect(edit).toHaveClass('btn');
+  expect(await edit.evaluate((node) => Math.round(node.getBoundingClientRect().height))).toBe(32);
   await expect(head.getByRole('button', { name: /^Propose to / })).toHaveClass('btn-primary');
   await expect(head.getByTestId('chart-home')).toHaveCount(0);
 });

@@ -11,7 +11,8 @@ import { TableScroll } from '../../shell/TableScroll';
 import { onTabKey } from '../../shell/tabKeys';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import { MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
-import { approvedText, HistoryPanel, historyQuery } from '../history/HistoryPanel';
+import { PencilIcon } from '../../dashboard/edit/EditChrome';
+import { approvedText, HistoryIcon, HistoryPanel, historyQuery } from '../history/HistoryPanel';
 import { RestoreDialogs, useRestore } from '../history/restore';
 import { SourceVersion } from './SourceVersion';
 import { WorkspaceBand } from '../explore/WorkspaceBand';
@@ -324,6 +325,24 @@ function Settings({ source }: { source: StoredSource }) {
         <span className="badge source-settings__driver">{DRIVERS[source.driver].label}</span>
         {source.inWorkspace ? <span className="badge source-settings__status">Draft</span> : null}
         <span className="source-settings__spacer" />
+        {/* History first, with its clock, as every item head has it (design
+            15:424; T684): a .btn, pressed while its panel is open. */}
+        {history.data == null ? null : (
+          <button
+            ref={historyButton}
+            type="button"
+            className={historyOpen ? 'btn pressed dashboard__history' : 'btn dashboard__history'}
+            data-history-button=""
+            aria-pressed={historyOpen}
+            onClick={() => {
+              setHistoryOpen((was) => !was);
+              setViewing(undefined);
+            }}
+          >
+            <HistoryIcon />
+            History
+          </button>
+        )}
         {/* A copy only: one made new in the workspace is the only one there is. */}
         {source.inWorkspace && source.canWrite && source.origin !== null ? (
           <button
@@ -337,21 +356,6 @@ function Settings({ source }: { source: StoredSource }) {
             Discard my copy…
           </button>
         ) : null}
-        {history.data == null ? null : (
-          <button
-            ref={historyButton}
-            type="button"
-            className="btn btn-sm dashboard__history"
-            data-history-button=""
-            aria-pressed={historyOpen}
-            onClick={() => {
-              setHistoryOpen((was) => !was);
-              setViewing(undefined);
-            }}
-          >
-            History
-          </button>
-        )}
         {/* Its tables as cubes (T492; the user, 2026-10-02: "add generate cube
             within the datasource details page"): into My workspace's model,
             to go to its folder, wherever models are workspace-only, with
@@ -376,6 +380,7 @@ function Settings({ source }: { source: StoredSource }) {
         {/* Not while an old version shows (design 06, state A). */}
         {copies && viewing === undefined ? (
           <button type="button" className="btn btn-primary" onClick={() => void editInWorkspace()}>
+            <PencilIcon />
             Edit in my workspace
           </button>
         ) : null}
@@ -387,7 +392,7 @@ function Settings({ source }: { source: StoredSource }) {
           <span ref={moreButton}>
             <MenuButton
               label={`More actions for ${source.name}`}
-              className="btn-ghost btn-sm"
+              className="icon-button"
               items={[
                 {
                   key: 'delete',

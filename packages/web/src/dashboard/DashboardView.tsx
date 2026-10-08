@@ -261,6 +261,7 @@ import { withLocalCharts } from './model/localCharts';
 import { viewFor } from './bookmarks/applyBookmark';
 import { Bookmarks } from './bookmarks/Bookmarks';
 import type { ViewState } from './bookmarks/viewState';
+import { HistoryIcon } from '../workspaces/history/HistoryPanel';
 
 /**
  * A saved dashboard, open for reading (AC-018).
@@ -5309,8 +5310,25 @@ export function DashboardView({
         quietEdit={place?.proposeTo !== undefined}
         onStart={onEditStart}
         onDiscard={onDiscard}
+        description={(shown) => shown.description}
         headerActions={(session) => (
           <>
+            {/* Its versions, first in the head (T357, AC-289; design 06, pin 1;
+                2026-09-27 04 state E; T684): for those the API shows them to,
+                never while editing or read-only. A .btn, pressed while its
+                panel is open. */}
+            {onHistory === undefined || session.editing || readOnly ? null : (
+              <button
+                type="button"
+                className={historyOpen ? 'btn pressed dashboard__history' : 'btn dashboard__history'}
+                data-history-button=""
+                aria-pressed={historyOpen}
+                onClick={onHistory}
+              >
+                <HistoryIcon />
+                History
+              </button>
+            )}
             {/* A reader's: what the dashboard shows now, under a name (T127,
                 AC-121). Not while editing, nor in a security context's
                 preview, where nothing is marked and nothing is the reader's. */}
@@ -5326,28 +5344,6 @@ export function DashboardView({
                 }}
                 onApply={applyView}
               />
-            )}
-            {/* Its versions, beside it (T357, AC-289; design 06, pin 1): for
-                those the API shows them to, never while editing or read-only. */}
-            {onHistory === undefined || session.editing || readOnly ? null : (
-              <button
-                type="button"
-                className="btn btn-sm dashboard__history"
-                data-history-button=""
-                aria-pressed={historyOpen}
-                onClick={onHistory}
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none">
-                  <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" />
-                  <path
-                    d="M8 4.5V8l2.5 1.5"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                History
-              </button>
             )}
             {/* A shared one's way to change it: a copy in My workspace
                 (T348, AC-278; design 04, state E). A workspace one's way
@@ -5424,9 +5420,7 @@ export function DashboardView({
                 label="More"
                 testId="dashboard-more"
                 className={
-                  exporting
-                    ? 'btn-ghost icon-button dashboard__more is-pressed'
-                    : 'btn-ghost icon-button dashboard__more'
+                  exporting ? 'icon-button dashboard__more is-pressed' : 'icon-button dashboard__more'
                 }
                 items={[
                   {

@@ -987,12 +987,16 @@ export function ExplorePage() {
               Rename
             </button>
           ) : null}
-          {/* Access with its lock, pressed while its panel is open (T473;
-              design 07, pin 1). */}
+          {/* Access with its lock: a ghost as Rename is, pressed while its
+              panel is open (T473; design 07, pin 1 and 07:179; T684). */}
           {mayEditAccess ? (
             <button
               type="button"
-              className="btn-sm explore__access"
+              className={
+                accessOpen
+                  ? 'btn btn-sm pressed explore__access'
+                  : 'btn btn-sm btn-ghost explore__access'
+              }
               ref={accessButton}
               aria-expanded={accessOpen}
               aria-controls={accessOpen ? ACCESS_PANEL_ID : undefined}
@@ -1011,7 +1015,8 @@ export function ExplorePage() {
           {headerMenu.length === 0 ? null : (
             <MenuButton
               label={`More actions for ${folderTitle}`}
-              className="btn-ghost btn-sm"
+              // The item heads' 32 px icon button (T684; R76 components-Q1).
+              className="icon-button"
               testId="folder-more"
               items={headerMenu}
             >

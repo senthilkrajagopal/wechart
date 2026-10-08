@@ -886,7 +886,15 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       await page.request.put('/api/cube-store/sql-runner', { data: { on: false } });
       await page.goto('/sources');
       await expect(page.getByRole('link', { name: 'Cube Store' })).toHaveCount(0);
-      await page.getByRole('button', { name: 'More actions for Data sources' }).click();
+      // The list head's ⋯, the item heads' 32 px icon button (T684; R76 components-Q1).
+      const more = page.getByRole('button', { name: 'More actions for Data sources' });
+      expect(
+        await more.evaluate((node) => {
+          const box = node.getBoundingClientRect();
+          return { width: Math.round(box.width), height: Math.round(box.height) };
+        }),
+      ).toEqual({ width: 32, height: 32 });
+      await more.click();
       await page.getByRole('menuitem', { name: 'Turn on the SQL runner for Cube Store…' }).click();
       const dialog = page.getByRole('dialog', { name: 'Turn on the SQL runner for Cube Store?' });
       await expect(dialog).toContainText(

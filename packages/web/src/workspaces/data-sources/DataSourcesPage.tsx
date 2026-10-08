@@ -87,7 +87,8 @@ export function DataSourcesPage() {
             <span ref={more}>
               <MenuButton
                 label="More actions for Data sources"
-                className="btn-ghost btn-sm"
+                // The item heads' 32 px icon button (T684; R76 components-Q1).
+                className="icon-button"
                 items={[
                   {
                     key: 'cube-store',

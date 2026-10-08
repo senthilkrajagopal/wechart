@@ -76,6 +76,16 @@ const byText = (version: KeptVersion, now: Date) => {
 /** Long enough to be clamped to two lines, with More beside it. */
 const LONG = 110;
 
+/** The clock on every item head's History button (design 06, pin 1; design 15:424; T684). */
+export function HistoryIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none">
+      <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8 4.5V8l2.5 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function HistoryPanel({
   kind,
   id,

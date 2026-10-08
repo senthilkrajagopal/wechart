@@ -89,26 +89,43 @@ test.describe('as a Super-Admin', () => {
     await page.goto(`/explore?folder=${ids.c}`);
     const button = page.getByRole('button', { name: 'Access', exact: true });
     await expect(button.locator('svg[data-icon="lock"]')).toHaveCount(1);
+    // Closed, a ghost, as Rename beside it (design 07:179; T684, EXP-13).
+    expect(
+      await button.evaluate((element) => ({
+        border: getComputedStyle(element).borderTopColor,
+        background: getComputedStyle(element).backgroundColor,
+      })),
+    ).toEqual({ border: 'rgba(0, 0, 0, 0)', background: 'rgba(0, 0, 0, 0)' });
     await button.click();
     const panel = accessPanel(page);
     await expect(panel).toHaveAccessibleName(`Access ${P} / ${C}`);
     await expect(panel.getByRole('heading', { level: 2 })).toHaveText('Access');
-    // Pressed while its panel is open: the accent's border and colour.
+    // Pressed while its panel is open: the designs' one .btn.pressed (T684,
+    // CMP-03): accent-soft, the accent's border and ink, at 600.
     await expect(button).toHaveAttribute('aria-expanded', 'true');
     const pressed = await button.evaluate((element) => {
       const style = getComputedStyle(element);
-      const accent = getComputedStyle(document.documentElement)
-        .getPropertyValue('--wc-accent')
-        .trim();
-      const probe = document.createElement('span');
-      probe.style.color = accent;
-      document.body.append(probe);
-      const accentRgb = getComputedStyle(probe).color;
-      probe.remove();
-      return { border: style.borderTopColor, color: style.color, accentRgb };
+      const resolved = (token: string) => {
+        const probe = document.createElement('span');
+        probe.style.color = `var(${token})`;
+        document.body.append(probe);
+        const rgb = getComputedStyle(probe).color;
+        probe.remove();
+        return rgb;
+      };
+      return {
+        border: style.borderTopColor,
+        color: style.color,
+        background: style.backgroundColor,
+        weight: style.fontWeight,
+        accentRgb: resolved('--wc-accent'),
+        softRgb: resolved('--wc-bg-accent-soft'),
+      };
     });
     expect(pressed.border).toBe(pressed.accentRgb);
     expect(pressed.color).toBe(pressed.accentRgb);
+    expect(pressed.background).toBe(pressed.softRgb);
+    expect(pressed.weight).toBe('600');
 
     await expect(
       panel.getByRole('region', { name: 'Read-write groups' }).getByTestId('access-help'),

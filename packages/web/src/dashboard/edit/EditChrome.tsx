@@ -134,6 +134,11 @@ export interface EditChromeProps<T> {
   /** A line under the title: where it lives (T348). */
   readonly subtitle?: ReactNode | undefined;
   /**
+   * The author's description, directly under the title, as design 14 draws
+   * an item's (T684; R76 dashboard-Q2): nothing when there is none.
+   */
+  readonly description?: ((document: T) => string | undefined) | undefined;
+  /**
    * Edit as a plain button, where another action is the page's primary: a
    * workspace copy's "Propose to …" (design 04, state F).
    */
@@ -200,6 +205,7 @@ export function EditChrome<T>({
   overlay,
   headerActions,
   subtitle,
+  description,
   quietEdit = false,
   saveBlocked,
   onStart,
@@ -425,7 +431,8 @@ export function EditChrome<T>({
             <button
               ref={editButton}
               type="button"
-              className={quietEdit ? 'btn btn-sm' : 'btn-primary'}
+              // A head's one height (T684): a plain .btn beside its primary.
+              className={quietEdit ? 'btn' : 'btn-primary'}
               onClick={start}
             >
               <PencilIcon />
@@ -434,6 +441,11 @@ export function EditChrome<T>({
           )}
           {/* Last, as the prototype has the settings gear. */}
           {typeof headerActions === 'function' ? headerActions(session) : headerActions}
+          {/* Its description, on its own line under the title (T684). */}
+          {(() => {
+            const text = description?.(current)?.trim() ?? '';
+            return text === '' ? null : <p className="dashboard__description">{text}</p>;
+          })()}
           {/* Where it lives, on its own line (T348; design 04, states E and F). */}
           {subtitle === undefined ? null : <p className="dashboard__ownership">{subtitle}</p>}
         </header>

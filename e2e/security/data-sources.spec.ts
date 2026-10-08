@@ -279,6 +279,46 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
   test.describe('as writer, opening one', () => {
     test.use({ role: 'writer' });
 
+    test('heads it with History, Generate cubes…, then Edit in my workspace, all 32/14, and ⋯ a 32 px icon button (T684)', async ({
+      page,
+    }) => {
+      await page.goto('/data-sources');
+      await page
+        .getByRole('main')
+        .getByRole('table', { name: 'Data sources' })
+        .getByRole('link', { name: `sales_${RUN}`, exact: true })
+        .click();
+      // Design 15:424, "Generate cubes…" per R57 (SRC-04, CMP-02, EXP-23).
+      const head = page.locator('.source-settings__head');
+      await expect(head.getByRole('button')).toHaveText([
+        'History',
+        'Generate cubes…',
+        'Edit in my workspace',
+        '⋯',
+      ]);
+      for (const name of ['History', 'Generate cubes…', 'Edit in my workspace']) {
+        const drawn = await head
+          .getByRole('button', { name, exact: true })
+          .evaluate((node) => ({
+            height: Math.round(node.getBoundingClientRect().height),
+            font: getComputedStyle(node).fontSize,
+          }));
+        expect(drawn, name).toEqual({ height: 32, font: '14px' });
+      }
+      // History with its clock, Edit in my workspace with its pencil (15:424).
+      await expect(head.getByRole('button', { name: 'History' }).locator('svg')).toHaveCount(1);
+      await expect(
+        head.getByRole('button', { name: 'Edit in my workspace' }).locator('svg'),
+      ).toHaveCount(1);
+      const more = head.getByRole('button', { name: `More actions for sales_${RUN}` });
+      expect(
+        await more.evaluate((node) => {
+          const box = node.getBoundingClientRect();
+          return { width: Math.round(box.width), height: Math.round(box.height) };
+        }),
+      ).toEqual({ width: 32, height: 32 });
+    });
+
     test('opens its settings from Data sources and Explore: read-only in its folder, with its tests and Cube’s use', async ({
       page,
     }) => {

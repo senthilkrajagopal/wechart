@@ -9342,7 +9342,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **dashboard-Q4:** a table tile's rows at 24 px, §4's dense row and the editor's results grid (direction §4 amended);
     - **components-Q2:** a filter pill's label at 400 and its value at 600, as design 04 draws them.
   - Depends on: none
-- [ ] T684 (AC-187, AC-352) One button rule and one pressed state: every `.btn` 32/14, item heads at one height with History first, and the designs' `.btn.pressed` *(added 2026-10-08 by T406)*
+- [x] T684 (AC-187, AC-352) One button rule and one pressed state: every `.btn` 32/14, item heads at one height with History first, and the designs' `.btn.pressed` *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, `packages/web/src/workspaces/explore/ExplorePage.tsx` (+ tests), `e2e/consistency.spec.ts`
   - Findings: CMP-01, CMP-02, CMP-03, DSH-05, EXP-13, EXP-23 (the button), SRC-04, and the pressed tokens of EDI-14 and EXP-02.
   - Failing test:
@@ -9356,6 +9356,19 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **components-Q1:** the ⋯ in list and admin heads is the same 32 px icon button as on item heads. That includes the Data sources list's ⋯, which holds Cube Store's switch and is 30 × 24 today.
     - **dashboard-Q2:** the dashboard header follows state E: its ownership line and its actions, with no Markings button (backlog §3). The description stays under the title in `text-sm`, text-secondary, as design 14 draws an item's, and nothing shows when there is none.
   - Depends on: none
+  - **Built 2026-10-08.**
+    - **One button rule.** `.btn` is the designs' `.btn`: 32 tall, padding 0 12, 14/400, inline-flex with a 6 px gap, on one line. It is declared before `.btn-primary` and `.btn-sm`, so those keep their weight and 24 px. Every `className="btn"` call site takes it, Export's Cancel among them (CMP-01).
+    - **Item heads at one height, History first.**
+      - The dashboard: History (with the clock), Bookmarks ▾, the primary, then ⋯, all 32/14 (DSH-05, EXP-23).
+      - A data source: History (now with the clock), Generate cubes…, Edit in my workspace (now with the pencil), then ⋯ (SRC-04, CMP-02). A copy's Discard my copy… sits after History.
+      - The chart page's History is the same `.btn` with the clock. A workspace item's quiet Edit, on the dashboard and the chart page, is a `.btn` at 32, not `btn-sm`.
+      - The clock is one `HistoryIcon` (`workspaces/history/HistoryPanel.tsx`).
+    - **⋯ as a 32 px icon button (components-Q1).** On the dashboard, a data source and the chart page's head, and in the Data sources list's head and the folder heading in Explore. Row ⋯ menus (Explore's rows, Bookmarks' rows) are not heads, and are unchanged.
+      - A model file's ⋯ stays `btn-sm`. It sits in the editor's 44 px pane head (design 03 note 2), which draws its actions small; a 32 px button made the head 45 px. T691 owns that pane chrome.
+    - **A pane's foot note at text-xs's 16 px line.** Beside buttons that no longer wrap, Generate cubes' "Resolve 2 clashes first" took two 20 px lines, and the foot grew 8 px between steps (`model-design.spec.ts` T485). At 16 px, two lines fit the foot's 32 px row.
+    - **One pressed state (CMP-03).** `.btn.pressed`: accent-soft, the accent's border and ink, 600, kept on hover. History on the dashboard, the chart page and a data source, and Access, use it. Access closed is `btn btn-sm btn-ghost`, as 07:179 draws it (EXP-13). `.seg`'s pressed segment, Explore's Show and the SQL runner's run filter use `bg-accent-soft` in place of the 12 % accent mix (EDI-14, EXP-02). A segment keeps its divider and no accent border, as 2026-09-30 14:80 draws `.seg span.on`. The YAML diff's "Show all lines" takes the same ground.
+    - **The description (dashboard-Q2).** `EditChrome` takes a `description`. The dashboard's shows on its own line directly under the title, above the ownership line, at 14/20 in text-secondary. Nothing shows for none or blank.
+    - **Tests.** `e2e/consistency.spec.ts` "one button rule and one pressed state (T684)" covers four cases: a `.btn` at 32/0 12/14/400; the dashboard's head, History pressed and the description; no description; and `.seg` and Show pressed. The security suite covers Access as a ghost, then pressed (`access.spec.ts`), the data source's head (`data-sources.spec.ts`), and Data sources' ⋯ at 32 × 32 (`sql-runner.spec.ts`). `chart-page.spec.ts` now expects the quiet Edit chart as `btn` at 32 px (the review's one finding).
 - [ ] T685 (AC-352, AC-070, AC-073) The dashboard settings page as design 05 draws it *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/dashboard/settings/SettingsPage.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/dashboard.spec.ts`
   - Findings: DSH-06, DSH-07, DSH-08, DSH-09, DSH-10.

@@ -85,6 +85,20 @@ button:not([class]) {
   min-height: 32px;
   padding: 0 12px;
 }
+/* One button rule (T684, CMP-01): the designs' .btn, 32 tall, padding 0 12,
+   at 14/400 (2026-09-27 06:66). Declared before .btn-primary and .btn-sm,
+   which keep their weight and their 24 px by coming later. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: var(--wc-text-sm-size);
+  font-weight: 400;
+  white-space: nowrap;
+}
 /* Every link, in the accent token (AC-005). With no rule, a link nothing had
    styled drew in the browser's #0000ee — 1.63:1 on a dark surface — and its
    visited purple likewise; the palette's results and Security's dashboard
@@ -119,6 +133,16 @@ button[type='submit']:hover:not(:disabled):not([aria-disabled='true']),
 }
 .btn-ghost { border-color: transparent; background: none; }
 .btn-sm { min-height: 24px; height: 24px; padding: 0 8px; font-size: var(--wc-text-xs-size); }
+/* One pressed state (T684, CMP-03): the designs' .btn.pressed, accent-soft
+   with the accent's border and ink, at 600 (06:68, 07:69). History with its
+   panel open, Access with its own. Kept on hover. */
+.btn.pressed,
+.btn.pressed:hover:not(:disabled):not([aria-disabled='true']) {
+  border-color: var(--wc-accent);
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: 600;
+}
 
 input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']),
 select,
@@ -1152,8 +1176,9 @@ main:has(.model-page) {
   font-size: 12px;
 }
 .seg button:first-child { border-left: 0; }
+/* The pressed segment in the one pressed tint (T684, EDI-14; 2026-09-30 14:80). */
 .seg button[aria-pressed='true'] {
-  background: color-mix(in srgb, var(--wc-accent) 12%, var(--wc-bg-surface));
+  background: var(--wc-bg-accent-soft);
   color: var(--wc-accent);
   font-weight: 600;
 }
@@ -2374,14 +2399,8 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
 @media (min-width: 1024px) {
   .access-panel .undo-toast { right: calc(360px + 16px); }
 }
-/* The folder header's Access, with its lock, pressed while its panel is open (pin 1). */
-.explore__access { display: inline-flex; align-items: center; gap: 6px; }
-.explore__access[aria-expanded='true'] {
-  background: var(--wc-bg-accent-soft);
-  border-color: var(--wc-accent);
-  color: var(--wc-accent);
-  font-weight: var(--wc-text-xs-strong-weight);
-}
+/* The folder header's Access, with its lock: a ghost closed, .btn.pressed
+   while its panel is open (pin 1; 07:179; T684, EXP-13). Both from .btn. */
 .access-picker {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -2661,7 +2680,9 @@ main:has(.admin-page--docked) {
 .source-pane__foot > .btn,
 .source-pane__foot > .btn-primary { min-height: 32px; }
 .source-pane__spacer { flex: 1; }
-.source-pane__foot-note { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+/* At text-xs's own 16 px line (T684): beside buttons that no longer wrap, a
+   note of two lines stays within their 32 px, and the foot keeps its height. */
+.source-pane__foot-note { font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); color: var(--wc-text-secondary); }
 .source-pane__foot-note.is-err { color: var(--wc-status-error); }
 
 /* Exporting a dashboard (T511; AC-354, AC-360; design 13, screen 1): design
@@ -4507,7 +4528,7 @@ code.schedules__sub { font-family: var(--wc-font-code); }
   border-left: 1px solid var(--wc-border-subtle); background: var(--wc-bg-surface);
 }
 .sql-runs .seg label:first-child { border-left: 0; }
-.sql-runs .seg label.is-on { background: color-mix(in srgb, var(--wc-accent) 12%, var(--wc-bg-surface)); color: var(--wc-accent); font-weight: 600; }
+.sql-runs .seg label.is-on { background: var(--wc-bg-accent-soft); color: var(--wc-accent); font-weight: 600; }
 .sql-runs .seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .sql-runs .seg label:focus-within { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
 .sql-runs__sub { margin: 0; padding: 6px 14px; font-size: 12px; color: var(--wc-text-secondary); border-bottom: 1px solid var(--wc-border-subtle); }
@@ -4674,6 +4695,17 @@ code.schedules__sub { font-family: var(--wc-font-code); }
 }
 .reviews__summary > .btn { justify-self: start; }
 
+/* Its description, directly under its title in text-sm, text-secondary, as
+   design 14 draws an item's (T684; R76 dashboard-Q2). */
+.dashboard__description {
+  flex-basis: 100%;
+  max-width: 860px;
+  margin: -6px 0 0;
+  font-size: var(--wc-text-sm-size);
+  line-height: 20px;
+  color: var(--wc-text-secondary);
+  overflow-wrap: anywhere;
+}
 /* Where an item lives, under its title (T348; design 04, states E and F). */
 .dashboard__ownership {
   flex-basis: 100%;
@@ -4714,8 +4746,9 @@ code.schedules__sub { font-family: var(--wc-font-code); }
   opacity: 0;
   cursor: pointer;
 }
+/* The one pressed tint (T684, EXP-02). */
 .kind-filter__choice.is-chosen {
-  background: color-mix(in srgb, var(--wc-accent) 12%, var(--wc-bg-surface));
+  background: var(--wc-bg-accent-soft);
   color: var(--wc-accent);
   font-weight: 600;
 }
@@ -4877,8 +4910,6 @@ main:has(.dashboard) > .with-panel[data-open='true'] { flex: 1; min-height: 0; p
 .history-panel__limit { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .history-panel__skeleton { height: 64px; border-radius: 6px; background: var(--wc-bg-subtle); }
 .history-panel__error { display: grid; gap: 6px; justify-items: start; }
-.dashboard__history { display: inline-flex; align-items: center; gap: 6px; }
-.dashboard__history[aria-pressed='true'] { border-color: var(--wc-accent); color: var(--wc-accent); }
 /* A kept version in the item's place (state A). */
 .version-view { display: grid; gap: 10px; }
 .version-band {
@@ -5050,7 +5081,7 @@ main:has(.review-view) {
    drawn inside it, the editor's box clipping one outside (T637). */
 .yaml-diff__all { justify-self: start; }
 /* On, seen as on, as the History button's pressed state is (T637's review). */
-.yaml-diff__all[aria-pressed='true'] { border-color: var(--wc-accent); color: var(--wc-accent); font-weight: 600; }
+.yaml-diff__all[aria-pressed='true'] { border-color: var(--wc-accent); background: var(--wc-bg-accent-soft); color: var(--wc-accent); font-weight: 600; }
 .yaml-diff .cm-collapsedLines:focus-visible { outline-offset: -2px; }
 .yaml-diff__code .cm-editor {
   max-height: calc(100vh - 220px);

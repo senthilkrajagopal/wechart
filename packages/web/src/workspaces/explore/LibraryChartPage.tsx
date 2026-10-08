@@ -12,7 +12,7 @@ import { metaQueryOf } from '../../query/meta';
 import { hasWorkspace, ME_QUERY } from '../../shell/me';
 import { ProposalBand } from './ProposalBand';
 import { ProposeFlow } from './ProposeFlow';
-import { approvedText, HistoryPanel, historyQuery } from '../history/HistoryPanel';
+import { approvedText, HistoryIcon, HistoryPanel, historyQuery } from '../history/HistoryPanel';
 import { FOLDERS_QUERY } from './folders';
 import { placeOf, type ItemWorkspace } from './placeOf';
 import { WorkspaceBand } from './WorkspaceBand';
@@ -451,17 +451,21 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
             {home.data === undefined ? null : <ChartHomeLine home={home.data} />}
             <span className="chart-page__spacer" />
             {/* Its versions, beside it (T357, AC-289; design 06, pin 1): only
-            where the API shows them, to the folder's read-write members. */}
+            where the API shows them, to the folder's read-write members. A
+            .btn with its clock, pressed while its panel is open (T684). */}
             {mayHistory ? (
               <button
                 type="button"
-                className="btn btn-sm dashboard__history"
+                className={
+                  historyOpen ? 'btn pressed dashboard__history' : 'btn dashboard__history'
+                }
                 data-history-button=""
                 aria-pressed={historyOpen}
                 onClick={() => {
                   setHistoryOpen((was) => !was);
                 }}
               >
+                <HistoryIcon />
                 History
               </button>
             ) : null}
@@ -495,8 +499,9 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
                       state F), Edit beside it. */}
                   <a
                     className={
+                      // A head's one height (T684): a plain .btn beside its primary.
                       place?.kind === 'workspace' && place.proposeTo !== undefined
-                        ? 'btn btn-sm'
+                        ? 'btn'
                         : 'btn-primary'
                     }
                     href={`/explore/charts/${encodeURIComponent(chartId)}/edit`}
@@ -527,7 +532,8 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
               <span ref={moreButton} className="chart-page__more">
                 <MenuButton
                   label={`More actions for ${title}`}
-                  className="btn-ghost btn-sm"
+                  // A 32 px icon button, as design 14:391 draws it (T684).
+                  className="icon-button"
                   items={[
                     {
                       key: 'delete',
