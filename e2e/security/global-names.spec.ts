@@ -1,8 +1,15 @@
+import { readFileSync } from 'node:fs';
+
 import type { APIRequestContext } from '@playwright/test';
+import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
 import { CUBE, serviceToken } from '../api-process';
-import { approvedBy, modelFilesIn, proposedModel } from '../model-files';
-import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
+import { approvedBy, landed, modelFilesIn, proposedModel } from '../model-files';
+import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
+
+const KEY = JSON.parse(
+  readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
+) as XcubeKey;
 
 /**
  * T702 (AC-421, AC-424): xcube `256d632371`, asked directly under wechart's
@@ -194,6 +201,129 @@ test.describe('the first approval of a new name lands it (T704, AC-422)', () => 
       );
       await superRequest.delete(`/api/documents/folder/${target}`);
       await writerContext.close();
+    }
+  });
+});
+
+/**
+ * T707 (AC-427): a deleted item's name lands again, and xcube takes it: a
+ * cube of it landed, deleted, and a new file declaring it landed through a
+ * workspace and a proposal `super` approves, then queried for its own SQL's
+ * answer; and a data source made, deleted and made again under one name.
+ */
+test.describe('a deleted item’s name lands again (T707, AC-427)', () => {
+  test.use({ role: 'super' });
+
+  test('is taken by a new file once the cube is deleted, and xcube serves the new one', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const LANDING = { timeout: 90_000 };
+    const request = page.request;
+    const retake = `retake_${RUN}`;
+    const cubeOf = (sql: string) =>
+      `cubes:\n  - name: ${retake}\n    sql: ${sql}\n    measures:\n      - name: total\n        sql: n\n        type: sum\n`;
+    const folder = await request.post('/api/documents', {
+      data: { kind: 'folder', title: `Retake ${RUN}`, folderId: 'root' },
+    });
+    expect(folder.status(), await folder.text()).toBe(201);
+    const target = ((await folder.json()) as { id: string }).id;
+    const first = { path: `cubes/${retake}.yml`, content: cubeOf('SELECT 1 AS n') };
+    const second = { path: `cubes/${retake}_again.yml`, content: cubeOf('SELECT 2 AS n') };
+    try {
+      expect(await landed(request, target, [first])).toEqual([first]);
+      const deleted = await request.delete(
+        `/api/model/files?folder=${encodeURIComponent(target)}&path=${encodeURIComponent(first.path)}`,
+        LANDING,
+      );
+      expect(deleted.status(), await deleted.text()).toBe(200);
+
+      expect(await landed(request, target, [second])).toEqual([second]);
+      const items = (
+        (await (await request.get(`${ROUTES}/items`, { headers: headers() })).json()) as {
+          items: { folderId: string; name: string; yaml: string }[];
+        }
+      ).items.filter((item) => item.name.toLowerCase() === retake);
+      expect(items).toEqual([
+        expect.objectContaining({ folderId: xcubeIdOf(target), name: retake }),
+      ]);
+      // Served as the new one: its own SQL's answer, 2, never the deleted one's 1.
+      const answer = await request.post('/api/load', {
+        data: { query: { measures: [`${retake}.total`] } },
+        ...LANDING,
+      });
+      expect(answer.status(), await answer.text()).toBe(200);
+      expect(((await answer.json()) as { data: Record<string, unknown>[] }).data).toEqual([
+        { [`${retake}.total`]: expect.stringMatching(/^2(\.0+)?$/) },
+      ]);
+    } finally {
+      for (const path of [first.path, second.path])
+        await request.delete(
+          `/api/model/files?folder=${encodeURIComponent(target)}&path=${encodeURIComponent(path)}`,
+          LANDING,
+        );
+      await request.delete(`/api/documents/folder/${target}`);
+    }
+  });
+
+  test('is taken by a new data source once the one of that name is deleted, and xcube takes it', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const request = page.request;
+    const name = `restage_${RUN}`;
+    const folder = await request.post('/api/documents', {
+      data: { kind: 'folder', title: `Restage ${RUN}`, folderId: 'root' },
+    });
+    expect(folder.status(), await folder.text()).toBe(201);
+    const target = ((await folder.json()) as { id: string }).id;
+    const fields = {
+      host: 'sample-db',
+      port: 5432,
+      database: 'sample',
+      user: 'sample',
+      ssl: false,
+    };
+    const make = async () =>
+      request.post('/api/data-sources', {
+        data: await testedSource(request, {
+          folderId: target,
+          name,
+          driver: 'postgres',
+          authMethod: 'password',
+          fields,
+          sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', fields, 'sample') },
+        }),
+        timeout: 90_000,
+      });
+    const held = async () =>
+      (
+        (await (await request.get(`${ROUTES}/connections`, { headers: headers() })).json()) as {
+          connections: { name: string; folderId: string }[];
+        }
+      ).connections.filter((each) => each.name.toLowerCase() === name);
+    try {
+      const first = await make();
+      expect(first.status(), await first.text()).toBe(201);
+      const removed = await request.delete(
+        `/api/data-sources/${((await first.json()) as { id: string }).id}`,
+      );
+      expect(removed.status(), await removed.text()).toBe(204);
+      expect(await held()).toEqual([]);
+
+      const again = await make();
+      expect(again.status(), await again.text()).toBe(201);
+      expect(await held()).toEqual([
+        expect.objectContaining({ name, folderId: xcubeIdOf(target) }),
+      ]);
+    } finally {
+      const listed = (await (await request.get('/api/data-sources')).json()) as {
+        id: string;
+        name: string;
+      }[];
+      for (const each of listed.filter((source) => source.name === name))
+        await request.delete(`/api/data-sources/${each.id}`);
+      await request.delete(`/api/documents/folder/${target}`);
     }
   });
 });

@@ -486,3 +486,110 @@ describe('a workspace data source’s name (T705, AC-422, AC-424, AC-282)', () =
     expect((await madeSource('writer', await project('writer'), creek)).statusCode).toBe(201);
   });
 });
+
+/**
+ * T707 (AC-427; `[R71]` 4): a deleted cube's, view's or data source's name is
+ * free again. A delete is already refused while anything uses the item. By
+ * xcube's reasoning, what it serves a new item of a deleted name is its own,
+ * never the old one's cache or rollups (research `xcube-256d632371.md`, 5.2;
+ * "never" is UNVERIFIED by wechart beyond xcube's test), so wechart does
+ * nothing more for it.
+ */
+describe('a deleted item’s name (T707, AC-427)', () => {
+  const approve = (id: string) =>
+    as('super', { method: 'POST', url: `/api/proposals/${id}/approve`, payload: {} });
+  const propose = (kind: string, id: string) =>
+    as('writer', { method: 'POST', url: '/api/proposals', payload: { kind, id } });
+
+  it('is taken again by a draft cube: made, renamed to, proposed and approved, and it lands', async () => {
+    const margin = `margin_${MARK}`;
+    await files().write([{ folderId: ids.sales, path: shared(margin), content: cube(margin) }]);
+    const folderId = await project('writer');
+    // Held while it is landed.
+    const early = await save(
+      'writer',
+      folderId,
+      `cubes/${margin}_new.yml`,
+      cube(margin),
+      ids.sales,
+    );
+    expect(early.statusCode, early.body).toBe(422);
+
+    const deleted = await as('writer', {
+      method: 'DELETE',
+      url: `/api/model/files?folder=${encodeURIComponent(ids.sales)}&path=${encodeURIComponent(shared(margin))}`,
+    });
+    expect(deleted.statusCode, deleted.body).toBe(200);
+
+    // Made under it, in another project folder of the workspace.
+    const other = await project('writer');
+    const direct = await save('writer', other, shared(margin), cube(margin), ids.sales);
+    expect(direct.statusCode, direct.body).toBe(200);
+    expect(
+      (
+        await as('writer', {
+          method: 'DELETE',
+          url: `/api/model/files?folder=${encodeURIComponent(other)}&path=${encodeURIComponent(shared(margin))}`,
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const path = `cubes/${margin}_new.yml`;
+    const made = await save('writer', folderId, path, cube(`${margin}_draft`), ids.sales);
+    expect(made.statusCode, made.body).toBe(200);
+    const renamed = await save('writer', folderId, path, cube(margin.toUpperCase()));
+    expect(renamed.statusCode, renamed.body).toBe(200);
+    const proposed = await propose('model', (await fileIn(folderId, path))!.id);
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    const approved = await approve(proposed.json<{ id: string }>().id);
+    expect(approved.statusCode, approved.body).toBe(200);
+    expect((await fileIn(ids.sales, path))?.content).toBe(cube(margin.toUpperCase()));
+  });
+
+  it('is taken again by a draft data source: made, renamed to, proposed and approved, and it lands', async () => {
+    const staging = `staging_${MARK}`;
+    const landed = await sources().create({
+      folderId: ids.sales,
+      name: staging,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields,
+      sealed: { password: sealed },
+    });
+    const folderId = await project('writer');
+    expect((await madeSource('writer', folderId, staging)).statusCode).toBe(409);
+
+    const deleted = await as('writer', {
+      method: 'DELETE',
+      url: `/api/data-sources/${landed.id}`,
+    });
+    expect(deleted.statusCode, deleted.body).toBe(204);
+
+    // Renamed to it: a draft of another name takes it.
+    const other = await madeSource('writer', await project('writer'), `${staging}_other`);
+    expect(other.statusCode, other.body).toBe(201);
+    const renamed = await as('writer', {
+      method: 'PUT',
+      url: `/api/data-sources/${other.json<{ id: string }>().id}`,
+      payload: { name: staging },
+    });
+    expect(renamed.statusCode, renamed.body).toBe(200);
+    // Removed again, so the one made below is the only draft of the name.
+    expect(
+      (
+        await as('writer', {
+          method: 'DELETE',
+          url: `/api/data-sources/${other.json<{ id: string }>().id}`,
+        })
+      ).statusCode,
+    ).toBe(204);
+
+    const made = await madeSource('writer', folderId, staging);
+    expect(made.statusCode, made.body).toBe(201);
+    const proposed = await propose('data-source', made.json<{ id: string }>().id);
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    const approved = await approve(proposed.json<{ id: string }>().id);
+    expect(approved.statusCode, approved.body).toBe(200);
+    expect((await sources().inFolder(ids.sales)).map((each) => each.name)).toContain(staging);
+  });
+});

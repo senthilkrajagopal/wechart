@@ -13124,12 +13124,14 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - **Tests:** `routes/fixed-names.test.ts` (8): a landed data source's rename refused and its name kept; a workspace draft's taken; an edit copy's cube and view renames refused at save, its file unchanged; such a copy refused at propose, and at approval with nothing landed; a title-only copy saved, proposed and landed; a draft model renamed; a delete of a used cube refused naming the chart. Full unit suite: API 1699/1700, the one being `jobs/history.test.ts`, which fails alone on the branch's base too (see T700).
     - **ACs not ticked:** AC-423 also asks that no way to rename be offered, and that a landed model file offer no Rename (T722). AC-291's move rules are T714's and T715's. AC-275 stays ticked; its delete half is shown again here.
 
-- [ ] T707 (AC-427) Let a deleted cube's, view's or data source's name be taken again
+- [x] T707 (AC-427) Let a deleted cube's, view's or data source's name be taken again
   - Files: `packages/api/src/model/names.ts` (landed names read after deletes), `packages/api/src/routes/draft-names.test.ts`, `e2e/security/global-names.spec.ts`
   - Failing test:
     - `draft-names.test.ts`: a landed `margin_cube` and a data source `staging` are deleted. Drafts of those names are then made, renamed to, proposed and approved, and they land (AC-427).
     - `global-names.spec.ts`, on the image: xcube doesn't refuse that landing either.
     - Whatever the research says of 5.2 (an old cache or rollup reaching the new item) is noted here. If it calls for wechart behaviour, that goes to the user first.
+    - *Noted (2026-10-07):* research `xcube-256d632371.md`, "Deleted names (5.1, 5.2)": a new item of a deleted name gets the old alias only on the same data source and connection identity, and Cube reuses a cached result or rollup only for identical SQL and structure, so it is never served the old definition's results ("never" is xcube's reasoning, UNVERIFIED by wechart beyond xcube's test). It calls for no wechart behaviour. Landed names are read from the store at each check, so a delete frees its name at once; the tests above pass on the code T704 and T705 built.
+    - *Noted (2026-10-07):* the e2e also shows, on the image, a deleted data source's name taken by a new one, and the re-landed cube queried for its new SQL's answer. AC-427 is not ticked here: its `default` exception is T708's.
   - Depends on: T705
 
 - [ ] T708 (AC-310, AC-426) Hold `default` to the shared root
