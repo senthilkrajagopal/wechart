@@ -13,7 +13,7 @@ import {
 } from './access/AccessPanel';
 import { AccessChip, AccessIcon, OnlySuperAdminsChip } from './AccessChip';
 import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
-import { folderRoleOf, rightFrom } from './folderRole';
+import { folderRoleOf, mayRenameFolder, rightFrom } from './folderRole';
 import {
   CUBE_STORE_ID,
   CUBE_STORE_QUERY,
@@ -492,10 +492,23 @@ export function ExplorePage() {
   const parentId = chain.length > 1 ? chain.at(-2)?.id : undefined;
   const openIsEmpty =
     !searching && known && !isRoot && contents.isSuccess && contents.data.length === 0;
+  // Asked of the folder holding the open one: its rename needs write there
+  // too (T761, AC-291), as its delete does.
   const parentAccess = useQuery({
     ...folderAccessQuery(parentId ?? ''),
-    enabled: signedIn && !inMyWorkspace && openIsEmpty && parentId !== undefined,
+    enabled: signedIn && !inMyWorkspace && !searching && parentId !== undefined,
     retry: false,
+  });
+  /** Rename beside the heading (AC-192): on the folder and the one holding it (T761, AC-291). */
+  const mayRenameOpen = mayRenameFolder({
+    mayChange: role.mayRename,
+    signedIn,
+    inMyWorkspace,
+    parent: rightFrom({
+      answered: parentAccess.isSuccess,
+      refusedWith:
+        parentAccess.error instanceof AccessRefused ? parentAccess.error.status : undefined,
+    }),
   });
   const mayDeleteOpen =
     openIsEmpty &&
@@ -965,7 +978,7 @@ export function ExplorePage() {
           {mayEditAccess && access.data?.onlySuperAdmins ? <OnlySuperAdminsChip /> : null}
           {/* A root is not a folder anyone named, so it has no Rename; nor
               has a folder the user may not change (AC-192, T331). */}
-          {!searching && renaming === null && !isRoot && known && role.mayRename ? (
+          {!searching && renaming === null && !isRoot && known && mayRenameOpen ? (
             <button
               type="button"
               className="btn-ghost btn-sm"

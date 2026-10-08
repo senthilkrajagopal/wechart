@@ -1,6 +1,43 @@
 import { describe, expect, it } from 'vitest';
 
-import { folderRoleOf, rightFrom, type FolderRoleOf } from './folderRole';
+import { folderRoleOf, mayRenameFolder, rightFrom, type FolderRoleOf } from './folderRole';
+
+/**
+ * T761 (AC-291, amended 2026-10-08 on the user's "Yes" of 2026-09-27): a
+ * folder's rename needs write on the folder holding it too, so Rename beside
+ * its heading is offered only where the user may write both.
+ */
+describe('Rename beside a folder’s heading (T761, AC-291)', () => {
+  it('is offered where they may change the folder and write the one holding it', () => {
+    expect(
+      mayRenameFolder({ mayChange: true, signedIn: true, inMyWorkspace: false, parent: 'write' }),
+    ).toBe(true);
+    // In their own workspace, every folder is theirs; with sign-in off, the single user's.
+    expect(
+      mayRenameFolder({ mayChange: true, signedIn: true, inMyWorkspace: true, parent: 'unknown' }),
+    ).toBe(true);
+    expect(
+      mayRenameFolder({
+        mayChange: true,
+        signedIn: false,
+        inMyWorkspace: false,
+        parent: 'unknown',
+      }),
+    ).toBe(true);
+  });
+
+  it('is not offered where the one holding it is only viewed, or not yet known, nor where the folder isn’t theirs', () => {
+    expect(
+      mayRenameFolder({ mayChange: true, signedIn: true, inMyWorkspace: false, parent: 'read' }),
+    ).toBe(false);
+    expect(
+      mayRenameFolder({ mayChange: true, signedIn: true, inMyWorkspace: false, parent: 'unknown' }),
+    ).toBe(false);
+    expect(
+      mayRenameFolder({ mayChange: false, signedIn: true, inMyWorkspace: false, parent: 'write' }),
+    ).toBe(false);
+  });
+});
 
 /**
  * The right in a shared folder, from how its access answered (T330's route,

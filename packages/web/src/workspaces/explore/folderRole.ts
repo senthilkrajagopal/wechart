@@ -42,6 +42,32 @@ export interface FolderRoleOf {
 const EVERY_KIND: readonly CreatableKind[] = ['dashboard', 'chart', 'folder'];
 
 /**
+ * Rename beside the open folder's heading (T761, AC-291; the user's "Yes" of
+ * 2026-09-27): a folder's rename needs write on it and on the folder holding
+ * it, as its move and delete do. In the user's own workspace every folder is
+ * theirs, and with sign-in off the single user's; in the shared tree, the
+ * holding folder's right as its access answered them, offered only once it
+ * has said `write`.
+ */
+export function mayRenameFolder({
+  mayChange,
+  signedIn,
+  inMyWorkspace,
+  parent,
+}: {
+  /** The open folder's own role says Rename (`FolderRole.mayRename`). */
+  readonly mayChange: boolean;
+  readonly signedIn: boolean;
+  readonly inMyWorkspace: boolean;
+  /** The right in the folder holding it, as `rightFrom` gives it. */
+  readonly parent: FolderRoleOf['right'];
+}): boolean {
+  if (!mayChange) return false;
+  if (!signedIn || inMyWorkspace) return true;
+  return parent === 'write';
+}
+
+/**
  * The user's right in a shared folder, from how its access answered them
  * (`GET /api/folders/:id/access`, T330): it answers a Super-Admin or a
  * read-write member of the folder, refuses one who only sees it with 403,

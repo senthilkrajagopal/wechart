@@ -378,7 +378,15 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
       await expect(chip(page).locator('svg[data-icon="pencil"]')).toHaveCount(1);
       expect(await offered(page)).toEqual(['▣Folder']);
       await expect(plusFolder(page)).toBeVisible();
+      // No Rename: Roles is held by the root, which they only view, and a
+      // folder's rename needs write there too (T761, AC-291, the user's "Yes"
+      // of 2026-09-27). Inner, held by Roles, they may rename.
+      await expect(newButton(page)).toBeVisible();
+      await expect(head(page).getByRole('button', { name: 'Rename' })).toHaveCount(0);
+      await open(page, names.inner);
+      await expect(chip(page)).toHaveText('Your access: Read-write');
       await expect(head(page).getByRole('button', { name: 'Rename' })).toBeVisible();
+      await open(page, names.roles);
       await expect(contents(page)).toContainText(
         'To add a dashboard, chart, model or data source here, create it in My workspace with this folder as its target.',
       );

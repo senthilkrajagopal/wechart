@@ -9855,7 +9855,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - **AC-136, AC-009 and AC-137 stay ticked, retested on items mode:**
       - `check.test.ts` (20), `snapshot.test.ts` (25), `client.test.ts`, `changesets.test.ts` and `publish.test.ts`;
       - in Chrome on compose's Cube on the image: the model specs (50), including `model.spec.ts`'s error on its file with no line, `publish-model.spec.ts`'s new member in the chart builder, and the cut-over spec's D2, where the revision holding the publish says `via: 'changeset'` and the other API and Cube instance list it at once.
-- [ ] T451 (AC-321, AC-288, AC-291, AC-322, AC-285, AC-278, AC-254, AC-189, AC-235) Check a proposal with a changeset's dry run when it is made, and apply that changeset at approval *(split from T426, 2026-09-26)*
+- [x] T451 (AC-321, AC-288, AC-291, AC-322, AC-285, AC-278, AC-254, AC-189, AC-235) Check a proposal with a changeset's dry run when it is made, and apply that changeset at approval *(split from T426, 2026-09-26)*
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/xcube/changesets.ts`, `e2e/security/publish-check.spec.ts`
   - Failing test: `publish-check.spec.ts`, against xcube's image:
     - a proposal is checked (`dryRun`) when made, and applied at approval;
@@ -9966,7 +9966,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - **AC-291's renames and moves.** A landed cube, view or data source is no longer renamed (T706, T722). A move is refused if it would leave any reference off its referrer's path (AC-425). T714 and T715 build that, so AC-291's direct actions are shown there rather than here.
     - **The dry run's refusals.** At propose and at approval, xcube now also refuses a name in use and a reference off its path. T701 reads those kinds, and T713 words them as AC-322 does.
     - This task's own remaining ticks (AC-321, AC-291, and AC-288 for the user) wait on those tasks as well.
-  - **Verified 2026-10-08 (group 3): AC-288 and AC-321 ticked.** AC-291 stays open (its folder rename needs write on the parent, T761).
+  - **Verified 2026-10-08 (group 3): AC-288 and AC-321 ticked.** AC-291 stayed open for its folder rename needing write on the parent (T761); ticked there on 2026-10-08, which closes this task.
     - **AC-288, amended first:** its Fails-when now excepts the proposal's data sources, which land first and stay landed, following the user's R52 (the coordinator's call, 2026-10-07, overturnable). No route yet makes a proposal holding data sources and models together, so on the real surface a refused approval changes nothing.
     - **Added to `e2e/security/publish-check.spec.ts`** (both passed at once, because the behaviour was built here):
       - after the refused approval, the cube xcube serves is unchanged: `/api/meta` lists its measure `total` and not the proposed `proposed_count` (AC-321's "no published module changes");
@@ -14281,12 +14281,22 @@ These tasks are what group 3's check of the open criteria found missing. Each is
     - **Tests:** `me.test.ts` (2); `DashboardView.test.tsx` (2: offered by default, not offered when refused); the e2e above, on Chrome against compose's xcube, with `workspace-edit` and `explore-roles` (54 passed). Sign-in off (the phase-1 suite, Chrome): `chart-page`, `library-chart`, and `markings.spec.ts` "Copy puts … the chart on another dashboard" still pass. The full web suite passes (2640).
   - **AC-277 ticked.** "My workspace" never appears to a reader: `workspaces.spec.ts` "has no My workspace in the tree", `explore-roles.spec.ts`'s reader tests, and `access/workspaces.test.ts` (no workspace; every create answers 403). No create or edit action appears: these tests, plus the reader tests in `workspace-edit` (no Edit, Edit in my workspace or settings), `access` (no Access button), `history` (no History), `data-sources` (pointed to Explore), `jobs-scope` (Jobs and Schedules not found) and `deleting` (no Delete).
 
-- [ ] T761 (AC-291) A folder's rename needs read-write access to the folder holding it too
-  - Files: `docs/spec.md` (AC-291 amended), `packages/api/src/server.ts` (a folder's rename), `packages/api/src/access/direct.test.ts`, `packages/web/src/workspaces/explore/folderRole.ts` (+ test), `e2e/security/explore-roles.spec.ts`
+- [x] T761 (AC-291) A folder's rename needs read-write access to the folder holding it too
+  - Files: `docs/spec.md` (AC-291 amended), `packages/api/src/server.ts` (a folder's rename), `packages/api/src/access/direct.test.ts`, `packages/web/src/workspaces/explore/folderRole.ts` (+ test), `packages/web/src/workspaces/explore/ExplorePage.tsx`, `e2e/security/explore-roles.spec.ts`
   - Failing test:
     - `direct.test.ts`: a read-write member of /W who only views the root is refused a rename of /W (403), and its title is unchanged. A read-write member of the root, and a Super-Admin, rename it.
     - `folderRole.test.ts` and `explore-roles.spec.ts`: such a member is offered no Rename beside /W's heading or on its row.
   - The user's 2026-09-27 answer to item 6, "renaming a folder needs write on its parent": "Yes" (handoff). Neither AC-291 nor the code had it: a folder's rename checks only the folder itself.
+  - **Done 2026-10-08.** AC-291 amended first, citing that answer. Red first: `direct.test.ts`'s rename of /W by `writer` answered 200, and `folderRole.test.ts` found no `mayRenameFolder`.
+    - **The API** (`server.ts`): a folder's `PATCH` with a new title, and its `PUT` with a changed title, need write on the folder holding it (`mayWrite` on its `folderId`), as its move and delete do; otherwise 403, nothing changed. A description alone isn't a rename.
+    - **Explore** (`folderRole.ts`, `mayRenameFolder`; `ExplorePage.tsx`): Rename beside the heading needs the folder's role and the holding folder's access answering them (`rightFrom`), asked of it whenever a shared folder is open; always in the user's own workspace, and with sign-in off. A row's Rename in the open folder is the open folder's to give, as before.
+    - **The existing e2e changed with the amendment:** `explore-roles.spec.ts`'s writer asserted Rename beside Roles, which the root holds and they only view; it now asserts none there, and Rename beside Inner, which Roles holds.
+    - **Tests, passing:** `direct.test.ts` (refused by `PATCH` and `PUT` with nothing changed; the description still theirs; a subfolder of /W renamed; a Super-Admin renames /W) with the whole `src/access` (293) under the lock; `folderRole.test.ts` (2) and Explore's unit tests (244); in Chrome against compose's xcube, `explore-roles`, `access` and `deleting` (53); with sign-in off, `explore.spec.ts` and `explore-rename-move.spec.ts`.
+  - **AC-291 ticked.** Each clause shown:
+    - applied at once, and only with read-write: `access/direct.test.ts` (T329's tests and this task's), `explore-roles.spec.ts` (subfolders made, renamed), `access.spec.ts` (groups set on a subfolder), `deleting.spec.ts` and `isolation.spec.ts`;
+    - a move needs both folders, and one leaving a reference off its path is refused: `direct.test.ts`, `routes/move-paths.test.ts` and `move-paths.spec.ts` (T714, T715);
+    - a change touching models or data sources refused while a module it affects would fail: `binding.spec.ts` "a delete of a cube a chart or a cube references is refused…" and `deleting.spec.ts`'s refused model-file and data-source deletes; a folder's move by T715's check against xcube's tree;
+    - a landed cube, view or data source isn't renamed: `fixed-names.spec.ts` and T706's and T722's API tests.
 
 - [ ] T762 (AC-429) List phase 1's bookmarks to Super-Admins with sign-in on
   - Files: `packages/api/src/server.ts` (the bookmarks listing), `packages/api/src/access/bookmarks.test.ts`, `e2e/security/bookmarks.spec.ts`

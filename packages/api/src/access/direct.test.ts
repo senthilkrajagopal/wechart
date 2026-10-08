@@ -45,6 +45,8 @@ const secured = {
 
 const docs = () => documents(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
+/** Folders a test makes through the API, removed after. */
+const madeHere: string[] = [];
 let app: FastifyInstance | undefined;
 const cookies: Record<string, string> = {};
 const ids = { w: '', v: '', r: '', wDashboard: '', rDashboard: '', wChart: '' };
@@ -88,11 +90,14 @@ beforeAll(async () => {
     bookmarks: bookmarkStore(getDb()),
     images: imageStore(getDb()),
   });
-  for (const who of ['writer', 'reader']) cookies[who] = await signIn(app, USERS[who]!);
+  for (const who of ['writer', 'reader', 'super']) cookies[who] = await signIn(app, USERS[who]!);
 });
 
 afterAll(async () => {
   if (app !== undefined) await app.close();
+  for (const id of madeHere) {
+    if ((await docs().get('folder', id)) !== null) await docs().remove('folder', id);
+  }
   for (const { kind, id } of made.reverse()) {
     if ((await docs().get(kind, id)) !== null) await docs().remove(kind, id);
   }
@@ -206,6 +211,68 @@ describe('a read-write member’s direct changes, applied at once (T329, AC-291)
       expect((await as('writer', options)).statusCode, what).toBe(403);
     }
     expect(await docs().get('folder', ids.w)).toEqual(before);
+  });
+
+  /**
+   * T761: a folder's rename needs write on the folder holding it too (the
+   * user's answer of 2026-09-27, "renaming a folder needs write on its
+   * parent": "Yes"; AC-291 amended). `writer` writes /W but only views the
+   * root, which holds it.
+   */
+  it('refuses renaming a folder held by one they may only view, and renames it in one they may write', async () => {
+    const before = (await docs().get('folder', ids.w))!;
+    const refusals: [string, InjectOptions][] = [
+      [
+        'rename /W',
+        { method: 'PATCH', url: `/api/documents/folder/${ids.w}`, payload: { title: 'W renamed' } },
+      ],
+      [
+        'save /W renamed',
+        {
+          method: 'PUT',
+          url: `/api/documents/folder/${ids.w}`,
+          payload: { body: { ...before.body, title: 'W renamed' }, version: before.version },
+        },
+      ],
+    ];
+    for (const [what, options] of refusals) {
+      expect((await as('writer', options)).statusCode, what).toBe(403);
+    }
+    expect(await docs().get('folder', ids.w)).toEqual(before);
+
+    // Its description is still theirs to change: that isn't a rename.
+    const described = await as('writer', {
+      method: 'PATCH',
+      url: `/api/documents/folder/${ids.w}`,
+      payload: { description: 'What W is for' },
+    });
+    expect(described.statusCode).toBe(200);
+
+    // A subfolder of /W, which they may write, renames at once.
+    const made = await as('writer', {
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'folder', title: 'Below W', folderId: ids.w },
+    });
+    expect(made.statusCode).toBe(201);
+    const below = made.json<{ id: string }>().id;
+    madeHere.push(below);
+    const renamed = await as('writer', {
+      method: 'PATCH',
+      url: `/api/documents/folder/${below}`,
+      payload: { title: 'Below W, renamed' },
+    });
+    expect(renamed.statusCode).toBe(200);
+    expect((await docs().get('folder', below))?.body['title']).toBe('Below W, renamed');
+
+    // A Super-Admin, who writes the root, renames /W.
+    const bySuper = await as('super', {
+      method: 'PATCH',
+      url: `/api/documents/folder/${ids.w}`,
+      payload: { title: 'W, by a Super-Admin' },
+    });
+    expect(bySuper.statusCode).toBe(200);
+    expect((await docs().get('folder', ids.w))?.body['title']).toBe('W, by a Super-Admin');
   });
 
   it('deletes an empty subfolder of their folder, at once', async () => {

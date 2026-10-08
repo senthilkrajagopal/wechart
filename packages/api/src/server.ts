@@ -4892,6 +4892,13 @@ export function buildServer({
               (await governingFolder(kind, stored)) &&
             !mayWrite(seen, await governingFolder(kind, { id, body: body.body }));
       if (moved) return reply.code(403).send({ error: READ_ONLY });
+      // A folder's rename needs write on the folder holding it too (T761, AC-291).
+      if (
+        kind === 'folder' &&
+        body.body['title'] !== stored.body['title'] &&
+        !mayWrite(seen, folderIdOf(stored.body))
+      )
+        return reply.code(403).send({ error: READ_ONLY });
       // Never across a workspace's edge (T343's review).
       const [from, to] =
         kind === 'folder'
@@ -5444,6 +5451,18 @@ export function buildServer({
             body.folderId,
           )
         : mayWrite(found.seen, body.folderId))
+    ) {
+      return reply.code(403).send({ error: READ_ONLY });
+    }
+    // A folder's rename needs write on the folder holding it too (T761,
+    // AC-291; the user's "Yes", 2026-09-27).
+    if (
+      kind === 'folder' &&
+      title !== undefined &&
+      found.seen !== undefined &&
+      found.stored !== null &&
+      title !== found.stored.body['title'] &&
+      !mayWrite(found.seen, folderIdOf(found.stored.body))
     ) {
       return reply.code(403).send({ error: READ_ONLY });
     }
