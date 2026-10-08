@@ -12,7 +12,7 @@ import { StatusIcon } from '../../../shell/StatusIcon';
 import { useFocusTrap } from '../../../shell/useFocusTrap';
 import { TargetTree } from '../../data-sources/TargetTree';
 import type { Seal } from '../../data-sources/connectionTest';
-import { ImportSources, type SourceDecision } from './ImportSources';
+import { ImportSources, type HeldName, type SourceDecision } from './ImportSources';
 import type { Target } from '../NewItemDialog';
 
 /**
@@ -49,7 +49,8 @@ type Warning =
   | { readonly kind: 'in-target'; readonly version: number | null }
   | { readonly kind: 'in-workspace'; readonly targetPath: readonly string[] | null }
   | { readonly kind: 'cube-in-target'; readonly cube: string; readonly file: string }
-  | { readonly kind: 'source-name-in-target' };
+  /** The data source its name means is off the target's path: this one blocks (T719). */
+  | { readonly kind: 'off-path' };
 
 interface Reviewed {
   readonly target: { readonly id: string; readonly path: readonly string[] };
@@ -59,7 +60,10 @@ interface Reviewed {
     readonly title: string;
     readonly ownCharts?: number;
     readonly driver?: string;
-    readonly mappedTo?: { readonly name: string; readonly path: readonly string[] };
+    /** Its folder's path, none for one the user can't see (T719). */
+    readonly mappedTo?: { readonly name: string; readonly path: readonly string[] | null };
+    /** Mapped because its name is that one's (T719, AC-358). */
+    readonly held?: true;
     readonly lands: 'draft' | 'not-imported-yet' | 'not-imported';
     readonly warnings: readonly Warning[];
   }[];
@@ -136,8 +140,8 @@ export function warningText(
     }
     case 'cube-in-target':
       return `Cube ${warning.cube} is already in ${target}, in ${warning.file}. Proposing this draft is refused until one of them is renamed.`;
-    case 'source-name-in-target':
-      return `${target} already has a data source named ${item.title}.`;
+    case 'off-path':
+      return `The data source of this name isn’t in ${target} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`;
   }
 }
 
@@ -197,6 +201,46 @@ export function ImportPane({
   const only = targets.data?.length === 1 ? targets.data[0]!.id : '';
   const targetId = target === '' ? only : target;
 
+  /**
+   * The file's data sources whose names are held (T719, AC-358): Review asked
+   * with nothing decided, once the file and the target are known. Each is
+   * mapped by the import itself, and the Data sources step asks nothing of it.
+   */
+  const held = useQuery({
+    queryKey: ['import-held', chosen?.pick, targetId],
+    queryFn: async ({ signal }) => {
+      const response = await fetch('/api/import/review', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ file, targetFolderId: targetId }),
+        signal,
+      });
+      if (!response.ok)
+        throw new Error(
+          await saidBy(response, `It couldn’t be reviewed (${String(response.status)}).`),
+        );
+      const reviewed = (await response.json()) as Reviewed;
+      return Object.fromEntries(
+        reviewed.items.flatMap((item): [string, HeldName][] =>
+          item.kind === 'data-source' && item.held === true && item.mappedTo !== undefined
+            ? [
+                [
+                  item.key,
+                  {
+                    name: item.mappedTo.name,
+                    path: item.mappedTo.path,
+                    onPath: !item.warnings.some((warning) => warning.kind === 'off-path'),
+                  },
+                ],
+              ]
+            : [],
+        ),
+      );
+    },
+    enabled: step >= 1 && file !== undefined && targetId !== '' && sources.length > 0,
+    staleTime: 0,
+  });
+
   const review = useQuery({
     queryKey: ['import-review', chosen?.pick, targetId, JSON.stringify(decisions)],
     queryFn: async ({ signal }) => {
@@ -209,14 +253,17 @@ export function ImportPane({
           ...(sources.length === 0
             ? {}
             : {
-                dataSources: sources.flatMap((source): { name: string; map?: string; create?: string }[] => {
-                  const decision = decisions[source.name];
-                  return decision === undefined
-                    ? []
-                    : decision.kind === 'map'
-                      ? [{ name: source.name, map: decision.to.id }]
-                      : [{ name: source.name, create: decision.name }];
-                }),
+                dataSources: sources.flatMap(
+                  (source): { name: string; map?: string; create?: string }[] => {
+                    const decision = decisions[source.name];
+                    // A held one the API maps itself: nothing is sent of it (T719).
+                    return decision === undefined || decision.kind === 'held'
+                      ? []
+                      : decision.kind === 'map'
+                        ? [{ name: source.name, map: decision.to.id }]
+                        : [{ name: source.name, create: decision.name }];
+                  },
+                ),
               }),
         }),
         signal,
@@ -245,6 +292,8 @@ export function ImportPane({
       for (const source of sources) {
         const decision = decisions[source.name];
         if (decision === undefined) throw new Error(`Decide ${source.name} first.`);
+        // Held, the API maps it: nothing to make or send (T719).
+        if (decision.kind === 'held') continue;
         if (decision.kind === 'map') {
           to.set(source.name, decision.to.id);
           continue;
@@ -253,8 +302,8 @@ export function ImportPane({
         let already = made.current.get(decision.testId);
         if (already === undefined) {
           const created = await fetch('/api/data-sources', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
               folderId: 'mine',
               name: decision.name,
@@ -271,7 +320,11 @@ export function ImportPane({
             throw new Error(
               `${decision.name} couldn’t be created: ${await saidBy(created, `error ${String(created.status)}`)}`,
             );
-          already = { id: ((await created.json()) as { id: string }).id, name: decision.name, described: false };
+          already = {
+            id: ((await created.json()) as { id: string }).id,
+            name: decision.name,
+            described: false,
+          };
           made.current.set(decision.testId, already);
           setLeftBehind([...made.current.values()].map((each) => each.name));
         }
@@ -298,7 +351,12 @@ export function ImportPane({
           targetFolderId: targetId,
           ...(sources.length === 0
             ? {}
-            : { dataSources: sources.map((source) => ({ name: source.name, to: to.get(source.name) })) }),
+            : {
+                dataSources: sources.flatMap((source) => {
+                  const chosen = to.get(source.name);
+                  return chosen === undefined ? [] : [{ name: source.name, to: chosen }];
+                }),
+              }),
         }),
       });
       if (!response.ok)
@@ -603,8 +661,7 @@ export function ImportPane({
                     </p>
                     <div className="import-pane__part">
                       <p>
-                        <b className="is-code">{chosen.name}</b> can’t be read as a wechart
-                        export.
+                        <b className="is-code">{chosen.name}</b> can’t be read as a wechart export.
                       </p>
                       <p>{chosen.read.unreadable}</p>
                     </div>
@@ -675,6 +732,13 @@ export function ImportPane({
           )
         ) : null}
 
+        {/* What is held couldn't be read: said, not left silent (T719's review). */}
+        {step === 2 && held.isError ? (
+          <p className="source-pane__alert" role="alert">
+            <StatusIcon kind="err" />
+            {held.error.message}
+          </p>
+        ) : null}
         {/* Kept while other steps show, so what was typed and tested stays;
             anew for another file or target, which what may be chosen follows. */}
         {file === undefined || targetId === '' || sources.length === 0 ? null : (
@@ -686,6 +750,7 @@ export function ImportPane({
                 id: targetId,
                 path: targets.data?.find((each) => each.id === targetId)?.path ?? [],
               }}
+              held={held.data ?? {}}
               onDecisions={setDecisions}
               {...(seal === undefined ? {} : { seal })}
             />
@@ -751,14 +816,12 @@ export function ImportPane({
                               : item.kind === 'model'
                                 ? 'Model'
                                 : item.mappedTo !== undefined
-                                  ? `Mapped to ${item.mappedTo.name} in ${pathText(item.mappedTo.path)}`
+                                  ? `Mapped to ${item.mappedTo.name} in ${item.mappedTo.path === null ? 'a folder you can’t see' : pathText(item.mappedTo.path)}`
                                   : item.lands === 'draft'
-                                    ? `Data source, created · test passed ${
-                                        (() => {
-                                          const decision = decisions[item.key];
-                                          return decision?.kind === 'create' ? decision.at : '';
-                                        })()
-                                      }`
+                                    ? `Data source, created · test passed ${(() => {
+                                        const decision = decisions[item.key];
+                                        return decision?.kind === 'create' ? decision.at : '';
+                                      })()}`
                                     : `Data source · ${driverLabel(item.driver ?? '')}`}
                         </span>
                       </span>

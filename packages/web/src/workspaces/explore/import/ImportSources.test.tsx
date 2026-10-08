@@ -19,7 +19,13 @@ const REPLICA = {
   name: 'emea_replica',
   driver: 'postgres',
   authMethod: 'password',
-  fields: { host: 'pg-replica-1.sales.internal', port: 5432, database: 'sales', user: 'cube_reader', ssl: true },
+  fields: {
+    host: 'pg-replica-1.sales.internal',
+    port: 5432,
+    database: 'sales',
+    user: 'cube_reader',
+    ssl: true,
+  },
   description: 'Read replica for EMEA order cubes.',
 };
 const DW = {
@@ -27,7 +33,12 @@ const DW = {
   name: 'sales_dw',
   driver: 'snowflake',
   authMethod: 'key-pair',
-  fields: { account: 'acme-emea', warehouse: 'REPORTING_WH', database: 'SALES', username: 'CUBE_SVC' },
+  fields: {
+    account: 'acme-emea',
+    warehouse: 'REPORTING_WH',
+    database: 'SALES',
+    username: 'CUBE_SVC',
+  },
   description: null,
 };
 const FOLDERS = [
@@ -60,6 +71,10 @@ function shown(
   sources: readonly (typeof REPLICA | typeof DW)[],
   serve: (url: string, init?: RequestInit) => Promise<Response>,
   held = SOURCES,
+  /** Those whose names are held, as Review says them (T719). */
+  named: Readonly<
+    Record<string, { name: string; path: readonly string[] | null; onPath: boolean }>
+  > = {},
 ) {
   const fetchMock = vi.fn((url: string, init?: RequestInit) =>
     url === '/api/data-sources'
@@ -70,7 +85,8 @@ function shown(
   );
   vi.stubGlobal('fetch', fetchMock);
   const seal = vi.fn(async () => ENVELOPE);
-  const onDecisions = vi.fn<(decisions: Readonly<Record<string, SourceDecision | undefined>>) => void>();
+  const onDecisions =
+    vi.fn<(decisions: Readonly<Record<string, SourceDecision | undefined>>) => void>();
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -78,6 +94,7 @@ function shown(
       <ImportSources
         sources={sources}
         target={{ id: 'emea', path: ['Sales', 'EMEA'] }}
+        held={named}
         seal={seal}
         onDecisions={onDecisions}
       />
@@ -101,10 +118,11 @@ describe('mapping an imported data source (T514, AC-358, AC-361)', () => {
       name: 'Data sources a model in Sales / EMEA can bind to',
     });
     // EMEA's own (none), then Sales, then Shared; never Finance's.
-    expect(within(list).getAllByRole('radio').map((radio) => radio.getAttribute('aria-label'))).toEqual([
-      'sales_dw, Same name, Snowflake, in Sales',
-      'default, PostgreSQL, in Shared',
-    ]);
+    expect(
+      within(list)
+        .getAllByRole('radio')
+        .map((radio) => radio.getAttribute('aria-label')),
+    ).toEqual(['sales_dw, Same name, Snowflake, in Sales', 'default, PostgreSQL, in Shared']);
     expect(last()['sales_dw']).toBeUndefined();
     await userEvent.click(within(list).getByRole('radio', { name: /^sales_dw/ }));
     expect(last()['sales_dw']).toEqual({
@@ -139,7 +157,14 @@ describe('creating an imported data source in the workspace (T514, AC-358, AC-16
             testId: passing ? 't-2' : 't-1',
             checks: passing
               ? [{ id: 'connect', status: 'passed', durationMs: 4 }]
-              : [{ id: 'connect', status: 'failed', durationMs: 4, error: 'password authentication failed' }],
+              : [
+                  {
+                    id: 'connect',
+                    status: 'failed',
+                    durationMs: 4,
+                    error: 'password authentication failed',
+                  },
+                ],
           })
         : answer(404, {}),
     );
@@ -184,41 +209,48 @@ describe('creating an imported data source in the workspace (T514, AC-358, AC-16
     expect(last()['emea_replica']).toBeUndefined();
   });
 
-  it('refuses a name the target already holds until it is mapped or renamed (AC-282, state P)', async () => {
-    const taken = [...SOURCES, listed('s-emea', 'emea_replica', 'postgres', 'emea', ['Sales', 'EMEA'])];
-    const { last } = shown(
-      [REPLICA],
-      (url) =>
-        url === '/api/data-sources/test'
-          ? answer(200, { ok: true, testId: 't-9', checks: [{ id: 'connect', status: 'passed' }] })
-          : answer(404, {}),
-      taken,
-    );
+  // T719 (AC-358; R71): a name never changes, so one is created under its own name alone.
+  it('creates it under its own name only: the name is the file’s, not to be edited', async () => {
+    shown([REPLICA], () => answer(404, {}));
     const replica = row('emea_replica');
     await userEvent.click(within(replica).getByRole('radio', { name: 'Create it' }));
-    expect(await within(replica).findByText('Name taken')).toBeTruthy();
-    expect(within(replica).getByRole('alert').textContent).toContain(
-      'Sales / EMEA already has a data source named emea_replica. A new one can’t take that name there.',
-    );
-    await userEvent.type(within(replica).getByLabelText(/^Password/), 'right');
-    expect((within(replica).getByRole('button', { name: 'Test connection' }) as HTMLButtonElement).disabled).toBe(true);
-
-    await userEvent.click(within(replica).getByRole('button', { name: 'Create under another name' }));
     const name = within(replica).getByLabelText(/^Name/);
-    expect(document.activeElement).toBe(name);
-    await userEvent.clear(name);
-    await userEvent.type(name, 'emea_replica_2');
-    await userEvent.click(within(replica).getByRole('button', { name: 'Test connection' }));
-    await within(replica).findByText(/Every check passed/);
-    expect(last()['emea_replica']).toMatchObject({ kind: 'create', name: 'emea_replica_2' });
+    expect((name as HTMLInputElement).readOnly).toBe(true);
+    expect((name as HTMLInputElement).value).toBe('emea_replica');
+    expect(within(replica).queryByRole('button', { name: 'Create under another name' })).toBeNull();
+  });
+});
 
-    // Or the existing one instead: mapped, and chosen.
-    await userEvent.clear(name);
-    await userEvent.type(name, 'emea_replica');
-    await userEvent.click(within(replica).getByRole('button', { name: 'Use the existing one instead' }));
-    expect(last()['emea_replica']).toEqual({
-      kind: 'map',
-      to: { id: 's-emea', name: 'emea_replica', driver: 'postgres', path: ['Sales', 'EMEA'] },
+/**
+ * T719 (AC-358; R71, R72, R73): one whose name has landed, or a draft in the
+ * workspace holds, is mapped to that one: nothing is asked of it, and it
+ * offers no Map and no Create. One off the target's path blocks the import,
+ * saying so, and nothing of a folder the user can't see.
+ */
+describe('an imported data source whose name is held (T719, AC-358)', () => {
+  it('is mapped to the one holding its name, asking nothing', async () => {
+    const { last } = shown([REPLICA], () => answer(404, {}), SOURCES, {
+      emea_replica: { name: 'EMEA_replica', path: ['Sales'], onPath: true },
     });
+    const replica = row('emea_replica');
+    expect(within(replica).getByRole('status').textContent).toBe('Mapped');
+    expect(within(replica).getByTestId('held').textContent).toBe(
+      'Its name is EMEA_replica’s, in Sales: it is mapped to that one, and not imported.',
+    );
+    expect(within(replica).queryByRole('radio')).toBeNull();
+    expect(within(replica).queryByRole('button', { name: 'Test connection' })).toBeNull();
+    expect(last()['emea_replica']).toEqual({ kind: 'held' });
+  });
+
+  it('blocks the import while that one is off the target’s path, naming no folder unseen', async () => {
+    const { last } = shown([REPLICA], () => answer(404, {}), SOURCES, {
+      emea_replica: { name: 'emea_replica', path: null, onPath: false },
+    });
+    const replica = row('emea_replica');
+    expect(within(replica).getByRole('status').textContent).toBe('Off the target’s path');
+    expect(within(replica).getByRole('alert').textContent).toBe(
+      'Its name is that of a data source in a folder you can’t see, not in Sales / EMEA or a folder above it, so a model there couldn’t use it. Choose a target on its path.',
+    );
+    expect(last()['emea_replica']).toBeUndefined();
   });
 });

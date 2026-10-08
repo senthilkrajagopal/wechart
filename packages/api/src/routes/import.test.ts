@@ -66,6 +66,16 @@ const REVIEWS = `/api/import/review`;
 const MARK = `import${randomUUID().slice(0, 8)}`;
 const TITLE = `Revenue overview ${MARK}`;
 const SOURCE = `${MARK}_emea`;
+/** A data source of a name no data source holds: one the importer maps or creates (T719). */
+const FRESH = `${MARK}_fresh`;
+const freshSource = (name = FRESH) => ({
+  kind: 'data-source',
+  name,
+  driver: 'postgres',
+  authMethod: 'password',
+  fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: true },
+  description: null,
+});
 const MODEL = `${MARK}/orders.yml`;
 const sealed = (tag: string): SealedV1 => ({
   v: 1,
@@ -372,13 +382,16 @@ describe('Review: what an import would land, and what it may affect (T513, AC-35
       lands: 'not-imported-yet',
       warnings: [],
     });
+    // Its name has landed, in the target: mapped to it, not imported (T719, AC-358, R71).
     expect(byTitle.get(SOURCE)).toEqual({
       kind: 'data-source',
       key: SOURCE,
       title: SOURCE,
       driver: 'postgres',
       lands: 'not-imported',
-      warnings: [{ kind: 'source-name-in-target' }],
+      mappedTo: { name: SOURCE, path: [`Sales ${MARK}`] },
+      held: true,
+      warnings: [],
     });
     // The own chart goes with its dashboard: not an item of its own.
     expect(byTitle.has('Revenue')).toBe(false);
@@ -394,7 +407,6 @@ describe('Review: what an import would land, and what it may affect (T513, AC-35
         target: {
           named: () => undefined,
           models: [{ path: `${MARK}/customers.yml`, declares: [`${MARK}_customers`] }],
-          sourceNames: [],
         },
         workspace: [],
       }),
@@ -410,7 +422,6 @@ describe('Review: what an import would land, and what it may affect (T513, AC-35
         target: {
           named: () => undefined,
           models: [{ path: `${MARK}/customers.yml`, declares: [`${MARK}_customers`] }],
-          sourceNames: [],
         },
         workspace: [],
       }),
@@ -576,29 +587,37 @@ describe('importing into My workspace (T513, AC-356)', () => {
   });
 });
 
+/**
+ * T514 (AC-358), on a data source of a name nothing holds (T719: one whose
+ * name has landed is mapped to it, below): mapped to an existing one the
+ * importer chooses, or created under its own name.
+ */
 describe('an import’s data sources (T514, AC-358)', () => {
+  const withFresh = () => exportFile([freshSource()]);
+  const fresh = (body: Reviewed) => body.items.find((item) => item.key === FRESH);
+
   it('reviews each as it was decided: mapped, not imported; created, a new draft under its name', async () => {
-    const mapped = await review('writer', exportFile(), ids.sales, [
-      { name: SOURCE, map: ids.source },
+    const mapped = await review('writer', withFresh(), ids.sales, [
+      { name: FRESH, map: ids.source },
     ]);
     expect(mapped.statusCode, mapped.body).toBe(200);
-    expect(mapped.json<Reviewed>().items.find((item) => item.kind === 'data-source')).toEqual({
+    expect(fresh(mapped.json<Reviewed>())).toEqual({
       kind: 'data-source',
-      key: SOURCE,
-      title: SOURCE,
+      key: FRESH,
+      title: FRESH,
       driver: 'postgres',
       lands: 'not-imported',
       mappedTo: { name: SOURCE, path: [`Sales ${MARK}`] },
       warnings: [],
     });
-    const created = await review('writer', exportFile(), ids.sales, [
-      { name: SOURCE, create: `${MARK}_emea_2` },
+    const created = await review('writer', withFresh(), ids.sales, [
+      { name: FRESH, create: FRESH },
     ]);
     expect(created.statusCode, created.body).toBe(200);
-    expect(created.json<Reviewed>().items.find((item) => item.kind === 'data-source')).toEqual({
+    expect(fresh(created.json<Reviewed>())).toEqual({
       kind: 'data-source',
-      key: SOURCE,
-      title: `${MARK}_emea_2`,
+      key: FRESH,
+      title: FRESH,
       driver: 'postgres',
       lands: 'draft',
       warnings: [],
@@ -607,17 +626,17 @@ describe('an import’s data sources (T514, AC-358)', () => {
 
   it('maps only to one a model in the target can bind to that the importer may use, naming no other', async () => {
     for (const to of [ids.secretSource, randomUUID()]) {
-      const answer = await importing('writer', exportFile(), ids.sales, [{ name: SOURCE, to }]);
+      const answer = await importing('writer', withFresh(), ids.sales, [{ name: FRESH, to }]);
       expect(answer.statusCode, answer.body).toBe(404);
       expect(answer.body).not.toContain(`${MARK}_hidden`);
     }
-    const unmapped = await importing('writer', exportFile(), ids.sales, []);
+    const unmapped = await importing('writer', withFresh(), ids.sales, []);
     expect(unmapped.statusCode).toBe(400);
     expect(unmapped.json<{ error: string }>().error).toBe(
-      `Map each data source to one a model in Sales ${MARK} can bind to, or create it: ${SOURCE}.`,
+      `Map each data source to one a model in Sales ${MARK} can bind to, or create it: ${FRESH}.`,
     );
-    const reviewed = await review('writer', exportFile(), ids.sales, [
-      { name: SOURCE, map: ids.secretSource },
+    const reviewed = await review('writer', withFresh(), ids.sales, [
+      { name: FRESH, map: ids.secretSource },
     ]);
     expect(reviewed.statusCode).toBe(404);
   });
@@ -652,47 +671,132 @@ describe('an import’s data sources (T514, AC-358)', () => {
     held.push(beside.id, below.id, elsewhere.id);
     const before = await everything();
     for (const to of [beside.id, below.id, elsewhere.id]) {
-      const answer = await importing('writer', exportFile(), ids.sales, [{ name: SOURCE, to }]);
+      const answer = await importing('writer', withFresh(), ids.sales, [{ name: FRESH, to }]);
       expect(answer.statusCode, `${to}: ${answer.body}`).toBe(404);
-      const reviewed = await review('writer', exportFile(), ids.sales, [{ name: SOURCE, map: to }]);
+      const reviewed = await review('writer', withFresh(), ids.sales, [{ name: FRESH, map: to }]);
       expect(reviewed.statusCode, `${to}: ${reviewed.body}`).toBe(404);
     }
     expect(await everything()).toEqual(before);
     // Sales's own binds a model in EMEA, below it.
-    const reviewed = await review('writer', exportFile(), emea, [
-      { name: SOURCE, map: ids.source },
-    ]);
+    const reviewed = await review('writer', withFresh(), emea, [{ name: FRESH, map: ids.source }]);
     expect(reviewed.statusCode, reviewed.body).toBe(200);
-    expect(reviewed.json<Reviewed>().items.find((item) => item.kind === 'data-source')).toEqual({
+    expect(fresh(reviewed.json<Reviewed>())).toEqual({
       kind: 'data-source',
-      key: SOURCE,
-      title: SOURCE,
+      key: FRESH,
+      title: FRESH,
       driver: 'postgres',
       lands: 'not-imported',
       mappedTo: { name: SOURCE, path: [`Sales ${MARK}`] },
       warnings: [],
     });
-    const answer = await importing('writer', exportFile(), emea, [
-      { name: SOURCE, to: ids.source },
-    ]);
+    const answer = await importing('writer', withFresh(), emea, [{ name: FRESH, to: ids.source }]);
     expect(answer.statusCode, answer.body).toBe(201);
   });
+});
 
-  it('takes one created in the importer’s workspace, going to the target, as the one chosen', async () => {
+/**
+ * T719 (AC-358; R71, R72, R73): a data source in the file whose name has
+ * landed, in any folder and in any case, is mapped to the landed one and not
+ * brought in, as Review says, with no decision asked; one whose name a draft
+ * in the importer's workspace holds, to that draft. Any other is created
+ * under its own name only. A landed one off the target's path blocks the
+ * import until a target on its path is chosen.
+ */
+describe('an import’s data sources whose names are held (T719, AC-358)', () => {
+  const sourceOf = (body: Reviewed, key: string) => body.items.find((item) => item.key === key);
+
+  it('maps one whose name has landed, in another case, to the landed one, asking nothing, and brings it not', async () => {
+    const shouted = SOURCE.toUpperCase();
+    // The file's one data source, under the landed one's name in another case.
+    const base = exportFile();
+    const file = {
+      ...base,
+      items: base.items.map((item) =>
+        (item as { kind: string }).kind === 'data-source'
+          ? { ...(item as Record<string, unknown>), name: shouted }
+          : item,
+      ),
+    };
+    const reviewed = await review('writer', file, ids.sales, []);
+    expect(reviewed.statusCode, reviewed.body).toBe(200);
+    expect(sourceOf(reviewed.json<Reviewed>(), shouted)).toEqual({
+      kind: 'data-source',
+      key: shouted,
+      title: shouted,
+      driver: 'postgres',
+      lands: 'not-imported',
+      mappedTo: { name: SOURCE, path: [`Sales ${MARK}`] },
+      held: true,
+      warnings: [],
+    });
+    // No decision for it: it is the landed one's; nothing is made of it.
+    const before = (await sources().all()).length;
+    const answer = await importing('writer', file, ids.sales, []);
+    expect(answer.statusCode, answer.body).toBe(201);
+    expect(answer.json<{ created: Record<string, number> }>().created.dataSources).toBe(0);
+    expect((await sources().all()).length).toBe(before);
+  });
+
+  it('creates any other under its own name only', async () => {
+    const reviewed = await review('writer', exportFile([freshSource()]), ids.sales, [
+      { name: FRESH, create: `${MARK}_other` },
+    ]);
+    expect(reviewed.statusCode).toBe(400);
+    expect(reviewed.json<{ error: string }>().error).toBe(
+      `A data source is created under its own name: “${FRESH}”.`,
+    );
+    // One its maker made in their workspace under another name isn't it.
     const own = String((await docs().get('chart', ids.draft))!.body['folderId']);
-    const made = await sources().create({
+    const other = await sources().create({
       folderId: own,
-      name: `${MARK}_made`,
+      name: `${MARK}_other`,
       driver: 'postgres',
       authMethod: 'password',
       fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: true },
-      sealed: { password: sealed(`${MARK}_made`) },
+      sealed: { password: sealed(`${MARK}_other`) },
+      targetFolderId: ids.sales,
+    });
+    held.push(other.id);
+    // Reviewed as mapped to it, or imported given it: refused alike (T719's review).
+    const mappedThere = await review('writer', exportFile([freshSource()]), ids.sales, [
+      { name: FRESH, map: other.id },
+    ]);
+    expect(mappedThere.statusCode, mappedThere.body).toBe(400);
+    expect(mappedThere.json<{ error: string }>().error).toBe(
+      `A data source is created under its own name: “${FRESH}”.`,
+    );
+    const answer = await importing('writer', exportFile([freshSource()]), ids.sales, [
+      { name: FRESH, to: other.id },
+    ]);
+    expect(answer.statusCode, answer.body).toBe(400);
+    expect(answer.json<{ error: string }>().error).toBe(
+      `A data source is created under its own name: “${FRESH}”.`,
+    );
+  });
+
+  it('maps one whose name a draft in its maker’s workspace holds to that draft, going to the target', async () => {
+    const name = `${MARK}_made`;
+    const own = String((await docs().get('chart', ids.draft))!.body['folderId']);
+    const made = await sources().create({
+      folderId: own,
+      name,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: true },
+      sealed: { password: sealed(name) },
       targetFolderId: ids.sales,
     });
     held.push(made.id);
-    const answer = await importing('writer', exportFile(), ids.sales, [
-      { name: SOURCE, to: made.id },
-    ]);
+    const file = exportFile([freshSource(name)]);
+    const reviewed = await review('writer', file, ids.sales, []);
+    expect(sourceOf(reviewed.json<Reviewed>(), name)).toEqual(
+      expect.objectContaining({
+        lands: 'not-imported',
+        mappedTo: { name, path: ['My workspace'] },
+        held: true,
+      }),
+    );
+    const answer = await importing('writer', file, ids.sales, []);
     expect(answer.statusCode, answer.body).toBe(201);
     expect(answer.json<{ created: Record<string, number> }>().created).toEqual({
       dashboards: 1,
@@ -700,5 +804,58 @@ describe('an import’s data sources (T514, AC-358)', () => {
       models: 0,
       dataSources: 1,
     });
+  });
+
+  // T719's review: a draft going above the target is on its path, as a landed one there is.
+  it('maps one whose name a draft going to a folder above the target holds, and blocks nothing', async () => {
+    const name = `${MARK}_above`;
+    const own = String((await docs().get('chart', ids.draft))!.body['folderId']);
+    const above = await sources().create({
+      folderId: own,
+      name,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: true },
+      sealed: { password: sealed(name) },
+      targetFolderId: ROOT_FOLDER_ID,
+    });
+    held.push(above.id);
+    const file = exportFile([freshSource(name)]);
+    const reviewed = await review('writer', file, ids.sales, []);
+    expect(sourceOf(reviewed.json<Reviewed>(), name)).toEqual(
+      expect.objectContaining({
+        mappedTo: { name, path: ['My workspace'] },
+        held: true,
+        warnings: [],
+      }),
+    );
+    const answer = await importing('writer', file, ids.sales, []);
+    expect(answer.statusCode, answer.body).toBe(201);
+  });
+
+  it('blocks it while a landed one of its name is off the target’s path, naming no folder it can’t see', async () => {
+    const hiddenName = `${MARK}_hidden`;
+    const file = exportFile([freshSource(hiddenName)]);
+    const reviewed = await review('writer', file, ids.sales, []);
+    expect(reviewed.statusCode, reviewed.body).toBe(200);
+    expect(sourceOf(reviewed.json<Reviewed>(), hiddenName)).toEqual({
+      kind: 'data-source',
+      key: hiddenName,
+      title: hiddenName,
+      driver: 'postgres',
+      lands: 'not-imported',
+      mappedTo: { name: hiddenName, path: null },
+      held: true,
+      warnings: [{ kind: 'off-path' }],
+    });
+    expect(reviewed.body).not.toContain(`Hidden ${MARK}`);
+    const before = await everything();
+    const answer = await importing('writer', file, ids.sales, []);
+    expect(answer.statusCode, answer.body).toBe(409);
+    expect(answer.json<{ error: string }>().error).toBe(
+      `“${hiddenName}” is the name of a data source that isn’t in Sales ${MARK} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`,
+    );
+    expect(answer.body).not.toContain(`Hidden ${MARK}`);
+    expect(await everything()).toEqual(before);
   });
 });

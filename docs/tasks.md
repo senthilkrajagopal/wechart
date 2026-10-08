@@ -13349,7 +13349,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
 ### Imports (with T508 and its model import in progress)
 
-- [ ] T719 (AC-358) Map an imported data source whose name has landed to that landed data source; create any other under its own name
+- [x] T719 (AC-358) Map an imported data source whose name has landed to that landed data source; create any other under its own name
   - Files: `packages/api/src/routes/import.ts`, `packages/api/src/model/names.ts`, `packages/web/src/workspaces/explore/import/{ImportSources,ImportPane}.tsx` (+ tests)
   - Failing test:
     - `routes/import.test.ts` (AC-358):
@@ -13357,6 +13357,13 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - One whose name hasn't landed is created under its own name, with its secrets entered and tested.
     - `ImportSources.test.tsx`: the first shows as mapped. It offers no Create and no "Create under another name" (AC-358).
   - Depends on: T704, T709
+  - **Done 2026-10-08.**
+    - **The API** (`routes/import.ts`; `server.ts`'s `heldSource`): Review and Import ask, of each data source in the file, which one its name already means: a landed one of the name in any folder and any case, else a draft of it in the importer's workspace (AC-358, R73). Such a one is mapped to it, not imported, and asks no decision; Review says `held`, and `mappedTo` with its folder's path where the importer may see it, none where not. One landed off the target's path (not the target or above it) is Review's `off-path` warning, and Import refuses, 409, "“<name>” is the name of a data source that isn’t in <target> or a folder above it, so a model there couldn’t use it. Choose a target on its path.", nothing written, no folder of it said (AC-357's R73 clause). A draft going to the target or above it is on its path. Any other is mapped by the importer or created under its own name only: a `create` under another, or a map or `to` to a draft of another name, 400 "A data source is created under its own name". The retired `source-name-in-target` warning goes.
+    - **The web:** the Import pane asks Review once, with nothing decided, what is held, and the Data sources step shows each held one as mapped to that one, with no Map and no Create, or, off the target's path, blocking, saying why; held ones send no decision. Create's name is the file's, read-only; "Create under another name" and "Use the existing one instead" go (AC-282's struck clause).
+    - **Tests:** `routes/import.test.ts`: T514's cases moved to a file data source of a name nothing holds (its map and create tests unchanged in what they assert); T719's (6): a landed name in another case mapped, no decision, nothing made; created under its own name only, a map or `to` to a draft of another name refused alike; a draft of the name mapped; one going above the target mapped and blocking nothing; one landed off the path blocking, its folder unsaid. T513's review expectation: the data source whose name the target holds is mapped, no longer warned of. `ImportSources.test.tsx`: the AC-282 rename case replaced by T719's (held mapped with nothing asked; off-path blocking; the name read-only). `ImportPane.test.tsx`: the create flow under its own name; a held source asked nothing and sent no decision. Red before, each. API 1804/1804 then the review's two more; web 2609/2609.
+    - **The review (PASS), its fixes taken:** a draft going above the target is on its path; Review refuses a map to a draft of another name as Import does; an unread held answer is said; dead `.import-source__taken` styles and comments. **Left:** a draft made before the import, held and going to the target, counts in `created.dataSources`; and a held source mapped to one of another driver warns of nothing (AC-361 says "an importer maps": reported).
+    - **Left to T733:** `e2e/security/export-import.spec.ts` (its "Name taken" and "Create under another name" go).
+    - **AC-358 not ticked:** the models' binding is T721's.
 
 - [ ] T720 (AC-357, AC-356) Import a file's models: those of a landed name are mapped to the landed item, and the rest land as drafts in My workspace
   - Files: from the WIP at `a9f286e` on `group4-close-2` (T670/T671, "paused on data-source naming"): `packages/api/src/routes/import-models.test.ts`, `packages/web/src/workspaces/explore/import/ImportPane.tsx` (+ test); `packages/api/src/routes/import.ts`, `packages/api/src/model/names.ts`, `e2e/security/export-import.spec.ts`

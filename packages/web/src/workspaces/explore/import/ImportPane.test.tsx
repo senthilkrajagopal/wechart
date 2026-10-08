@@ -36,7 +36,10 @@ const FILE = {
       body: {
         schemaVersion: 2,
         title: 'Revenue',
-        chart: { source: { cube: 'orders' }, wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] } },
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
+        },
       },
     },
     {
@@ -46,7 +49,10 @@ const FILE = {
       body: {
         schemaVersion: 2,
         title: 'Top products',
-        chart: { source: { cube: 'orders' }, wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] } },
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
+        },
       },
     },
     { kind: 'model', path: 'sales.yml', content: 'cubes: []\n' },
@@ -83,7 +89,13 @@ const REVIEWED = {
       lands: 'draft',
       warnings: [{ kind: 'in-workspace', targetPath: ['Sales', 'EMEA'] }],
     },
-    { kind: 'model', key: 'sales.yml', title: 'sales.yml', lands: 'not-imported-yet', warnings: [] },
+    {
+      kind: 'model',
+      key: 'sales.yml',
+      title: 'sales.yml',
+      lands: 'not-imported-yet',
+      warnings: [],
+    },
     {
       kind: 'data-source',
       key: 'emea_replica',
@@ -139,14 +151,14 @@ const serving = (url: string, init?: RequestInit) =>
       : url === '/api/folders'
         ? answer(200, FOLDERS)
         : url === '/api/import/review'
-      ? answer(200, REVIEWED)
-      : url === `/api/import` && init?.method === 'POST'
-        ? answer(201, {
-            dashboard: { id: 'new-board', title: 'Revenue overview' },
-            created: { dashboards: 1, charts: 2, models: 0, dataSources: 0 },
-            target: { id: 'emea', path: ['Sales', 'EMEA'] },
-          })
-        : answer(404, {});
+          ? answer(200, REVIEWED)
+          : url === `/api/import` && init?.method === 'POST'
+            ? answer(201, {
+                dashboard: { id: 'new-board', title: 'Revenue overview' },
+                created: { dashboards: 1, charts: 2, models: 0, dataSources: 0 },
+                target: { id: 'emea', path: ['Sales', 'EMEA'] },
+              })
+            : answer(404, {});
 
 /** The Data sources step (T514): the file's one mapped to Sales's of its name, then on to Review. */
 async function mapReplica(pane: HTMLElement) {
@@ -154,14 +166,18 @@ async function mapReplica(pane: HTMLElement) {
   expect((next as HTMLButtonElement).disabled).toBe(true);
   const row = within(pane).getByRole('group', { name: /^emea_replica/ });
   await userEvent.click(within(row).getByRole('radio', { name: 'Map to an existing one' }));
-  await userEvent.click(await within(row).findByRole('radio', { name: /^emea_replica, Same name/ }));
+  await userEvent.click(
+    await within(row).findByRole('radio', { name: /^emea_replica, Same name/ }),
+  );
   await userEvent.click(next);
 }
 
 /** Chooses a file, as the button's file picker gives one. */
 async function choose(pane: HTMLElement, text: string, name = 'revenue-overview.wechart.json') {
   const input = pane.querySelector<HTMLInputElement>('input[type="file"]')!;
-  fireEvent.change(input, { target: { files: [new File([text], name, { type: 'application/json' })] } });
+  fireEvent.change(input, {
+    target: { files: [new File([text], name, { type: 'application/json' })] },
+  });
   await within(pane).findByTestId('import-file');
 }
 
@@ -190,13 +206,19 @@ describe('the Import pane: File (T513, AC-359)', () => {
     await choose(pane, JSON.stringify(FILE));
     expect(within(pane).getByText('Read · every part is one this wechart has')).toBeTruthy();
     const holds = within(pane).getByRole('list', { name: 'What it holds' });
-    expect(within(holds).getAllByRole('listitem').map((row) => row.textContent)).toEqual([
+    expect(
+      within(holds)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent),
+    ).toEqual([
       'Revenue overviewDashboard · 1 own chart',
       'Top productsLibrary chart',
       'sales.ymlNot imported yet',
       'emea_replicaPostgreSQL · settings only',
     ]);
-    expect(within(pane).getByText(/doesn’t take models from a file yet, so sales\.yml stays out/)).toBeTruthy();
+    expect(
+      within(pane).getByText(/doesn’t take models from a file yet, so sales\.yml stays out/),
+    ).toBeTruthy();
   });
 
   it('refuses a file it can’t read, saying where, and that nothing was imported', async () => {
@@ -224,6 +246,47 @@ describe('the Import pane: File (T513, AC-359)', () => {
     expect(parts.map((part) => part.textContent)).toEqual([
       'Item 6, “Late orders”Kind alert: this wechart imports dashboards, charts, models and data sources.',
     ]);
+  });
+});
+
+/**
+ * T719 (AC-358; R71): a data source whose name has landed is mapped to the
+ * landed one by the import: the Data sources step asks nothing of it,
+ * Review says where it is mapped, and Import sends no decision for it.
+ */
+describe('the Import pane: a data source whose name is held (T719, AC-358)', () => {
+  it('asks nothing of it, says it is mapped, and sends no decision for it', async () => {
+    const heldReview = {
+      ...REVIEWED,
+      items: REVIEWED.items.map((item) =>
+        item.kind === 'data-source'
+          ? { ...item, mappedTo: { name: 'emea_replica', path: ['Sales'] }, held: true }
+          : item,
+      ),
+    };
+    const { fetchMock, onImported } = shown((url, init) =>
+      url === '/api/import/review' ? answer(200, heldReview) : serving(url, init),
+    );
+    const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
+    await choose(pane, JSON.stringify(FILE));
+    await userEvent.click(within(pane).getByRole('button', { name: /Next: Target/ }));
+    await userEvent.click(await within(pane).findByRole('treeitem', { name: 'EMEA' }));
+    await userEvent.click(within(pane).getByRole('button', { name: /Next: Data sources/ }));
+    const row = within(pane).getByRole('group', { name: /^emea_replica/ });
+    expect((await within(row).findByRole('status')).textContent).toBe('Mapped');
+    expect(within(row).queryByRole('radio')).toBeNull();
+    await userEvent.click(within(pane).getByRole('button', { name: /Next: Review/ }));
+    expect(
+      (await within(pane).findByTestId('lands-data-source-emea_replica')).textContent,
+    ).toContain('Mapped to emea_replica in Sales');
+    await userEvent.click(within(pane).getByRole('button', { name: 'Import to My workspace' }));
+    await vi.waitFor(() => {
+      expect(onImported).toHaveBeenCalledTimes(1);
+    });
+    const made = fetchMock.mock.calls.find(
+      ([url, init]) => url === `/api/import` && init?.method === 'POST',
+    )!;
+    expect((JSON.parse(String(made[1]!.body)) as { dataSources: unknown }).dataSources).toEqual([]);
   });
 });
 
@@ -257,8 +320,11 @@ describe('the Import pane: Target and Review (T513, AC-356, AC-357)', () => {
     expect(within(pane).getByTestId('lands-chart-c2').textContent).toContain(
       'Your workspace has a draft by this name, also → Sales / EMEA. Both are kept; the second approved replaces the first.',
     );
-    expect(within(pane).getByTestId('lands-model-sales.yml').textContent).toContain('Not imported yet');
-    const reviewed = fetchMock.mock.calls.find(([url]) => url === '/api/import/review')!;
+    expect(within(pane).getByTestId('lands-model-sales.yml').textContent).toContain(
+      'Not imported yet',
+    );
+    // The last asked, with the decisions (the first asks what is held: T719).
+    const reviewed = fetchMock.mock.calls.filter(([url]) => url === '/api/import/review').at(-1)!;
     expect(JSON.parse(String(reviewed[1]!.body))).toEqual({
       file: FILE,
       targetFolderId: 'emea',
@@ -273,7 +339,9 @@ describe('the Import pane: Target and Review (T513, AC-356, AC-357)', () => {
         target: { id: 'emea', path: ['Sales', 'EMEA'] },
       });
     });
-    const sent = fetchMock.mock.calls.find(([url, init]) => url === `/api/import` && init?.method === 'POST')!;
+    const sent = fetchMock.mock.calls.find(
+      ([url, init]) => url === `/api/import` && init?.method === 'POST',
+    )!;
     expect(JSON.parse(String(sent[1]!.body))).toEqual({
       file: FILE,
       targetFolderId: 'emea',
@@ -289,9 +357,9 @@ describe('the Import pane: Target and Review (T513, AC-356, AC-357)', () => {
     await userEvent.click(await within(pane).findByRole('treeitem', { name: 'EMEA' }));
     await userEvent.click(within(pane).getByRole('button', { name: /Next: Data sources/ }));
     await mapReplica(pane);
-    expect(
-      (await within(pane).findByTestId('import-where')).textContent,
-    ).toBe('Sign-in is off. Everything still lands in My workspace as new drafts, with the target Sales / EMEA.');
+    expect((await within(pane).findByTestId('import-where')).textContent).toBe(
+      'Sign-in is off. Everything still lands in My workspace as new drafts, with the target Sales / EMEA.',
+    );
   });
 });
 
@@ -308,25 +376,31 @@ describe('a data source created by the import (T514, AC-358)', () => {
             ? answer(200, {
                 ok: false,
                 testId: 't-0',
-                checks: [{ id: 'connect', status: 'failed', error: 'password authentication failed' }],
+                checks: [
+                  { id: 'connect', status: 'failed', error: 'password authentication failed' },
+                ],
               })
-            : answer(200, { ok: true, testId: 't-1', checks: [{ id: 'connect', status: 'passed' }] }))
+            : answer(200, {
+                ok: true,
+                testId: 't-1',
+                checks: [{ id: 'connect', status: 'passed' }],
+              }))
         : url === `/api/import` && init?.method === 'POST' && (imports += 1) === 1
           ? answer(503, { error: 'wechart could not be reached.' })
           : url === '/api/data-sources' && init?.method === 'POST'
-          ? answer(201, { id: 's-new', name: 'emea_replica_2' })
-          : url === '/api/data-sources/s-new' && init?.method === 'PUT'
-            ? answer(200, { id: 's-new', description: 'Read replica.' })
-            : url === '/api/import/review'
-            ? answer(200, {
-                ...REVIEWED,
-                items: REVIEWED.items.map((item) =>
-                  item.kind === 'data-source'
-                    ? { ...item, title: 'emea_replica_2', lands: 'draft' }
-                    : item,
-                ),
-              })
-            : serving(url, init),
+            ? answer(201, { id: 's-new', name: 'emea_replica' })
+            : url === '/api/data-sources/s-new' && init?.method === 'PUT'
+              ? answer(200, { id: 's-new', description: 'Read replica.' })
+              : url === '/api/import/review'
+                ? answer(200, {
+                    ...REVIEWED,
+                    items: REVIEWED.items.map((item) =>
+                      item.kind === 'data-source'
+                        ? { ...item, title: 'emea_replica', lands: 'draft' }
+                        : item,
+                    ),
+                  })
+                : serving(url, init),
     );
     vi.stubGlobal('fetch', fetchMock);
     const onImported = vi.fn();
@@ -355,10 +429,8 @@ describe('a data source created by the import (T514, AC-358)', () => {
     await userEvent.click(within(pane).getByRole('button', { name: /Next: Data sources/ }));
     const row = within(pane).getByRole('group', { name: /^emea_replica/ });
     await userEvent.click(within(row).getByRole('radio', { name: 'Create it' }));
-    // Sales has one by the name, but the target, EMEA, doesn't: the name is free there.
-    const name = within(row).getByLabelText(/^Name/);
-    await userEvent.clear(name);
-    await userEvent.type(name, 'emea_replica_2');
+    // Created under its own name, the file's (T719, R71): Review held none of it.
+    expect((within(row).getByLabelText(/^Name/) as HTMLInputElement).value).toBe('emea_replica');
     await userEvent.type(within(row).getByLabelText(/^Password/), 'wrong');
     await userEvent.click(within(row).getByRole('button', { name: 'Test connection' }));
     await within(row).findByText('password authentication failed');
@@ -369,11 +441,13 @@ describe('a data source created by the import (T514, AC-358)', () => {
     await within(row).findByText(/Every check passed/);
     await userEvent.click(within(pane).getByRole('button', { name: /Next: Review/ }));
     expect((await within(pane).findByTestId('lands-data-source-emea_replica')).textContent).toMatch(
-      /emea_replica_2Data source, created · test passed \d\d:\d\d:\d\dNew draft/,
+      /emea_replicaData source, created · test passed \d\d:\d\d:\d\dNew draft/,
     );
     await userEvent.click(within(pane).getByRole('button', { name: 'Import to My workspace' }));
     // The first Import is refused after the data source is made: trying again doesn't make it twice.
-    expect((await within(pane).findByRole('alert')).textContent).toContain('wechart could not be reached.');
+    expect((await within(pane).findByRole('alert')).textContent).toContain(
+      'wechart could not be reached.',
+    );
     expect(onImported).not.toHaveBeenCalled();
     await userEvent.click(within(pane).getByRole('button', { name: 'Import to My workspace' }));
     await vi.waitFor(() => {
@@ -387,10 +461,13 @@ describe('a data source created by the import (T514, AC-358)', () => {
     expect(posted('/api/data-sources')).toEqual([
       {
         folderId: 'mine',
-        name: 'emea_replica_2',
+        name: 'emea_replica',
         driver: 'postgres',
         authMethod: 'password',
-        fields: FILE.items[4]!.kind === 'data-source' ? (FILE.items[4] as { fields: unknown }).fields : {},
+        fields:
+          FILE.items[4]!.kind === 'data-source'
+            ? (FILE.items[4] as { fields: unknown }).fields
+            : {},
         sealed: { password: envelope },
         targetFolderId: 'emea',
         testId: 't-1',
@@ -411,16 +488,21 @@ describe('what a same-named draft means (T513, AC-357)', () => {
   it('says the second approved replaces the first only where both go to one folder', () => {
     const item = { kind: 'chart', title: 'Top products' };
     expect(
-      warningText({ kind: 'in-workspace', targetPath: ['Sales', 'EMEA'] }, item, 'Sales / EMEA', true),
+      warningText(
+        { kind: 'in-workspace', targetPath: ['Sales', 'EMEA'] },
+        item,
+        'Sales / EMEA',
+        true,
+      ),
     ).toBe(
       'Your workspace has a draft by this name, also → Sales / EMEA. Both are kept; the second approved replaces the first.',
     );
-    expect(warningText({ kind: 'in-workspace', targetPath: ['Finance'] }, item, 'Sales / EMEA', true)).toBe(
-      'Your workspace has a draft by this name, → Finance. Both are kept.',
-    );
-    expect(warningText({ kind: 'in-workspace', targetPath: null }, item, 'Sales / EMEA', true)).toBe(
-      'Your workspace has a draft by this name. Both are kept.',
-    );
+    expect(
+      warningText({ kind: 'in-workspace', targetPath: ['Finance'] }, item, 'Sales / EMEA', true),
+    ).toBe('Your workspace has a draft by this name, → Finance. Both are kept.');
+    expect(
+      warningText({ kind: 'in-workspace', targetPath: null }, item, 'Sales / EMEA', true),
+    ).toBe('Your workspace has a draft by this name. Both are kept.');
   });
 });
 

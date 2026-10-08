@@ -2027,7 +2027,6 @@ export function buildServer({
             ).flat()
           : [];
         const models = modelFiles === undefined ? [] : await modelFiles.list(target);
-        const held = dataSources === undefined ? [] : await dataSources.inFolder(target);
         return {
           target: {
             named: (kind, title) => {
@@ -2038,7 +2037,6 @@ export function buildServer({
               path: file.path,
               declares: objectsOf(file.path, file.content).objects.map((each) => each.name),
             })),
-            sourceNames: held.map((source) => source.name),
           },
           workspace: drafts
             .filter((draft) => draft.kind !== 'folder')
@@ -2085,25 +2083,71 @@ export function buildServer({
             ? { ...about, path: ['My workspace'], created: true }
             : undefined;
         // Else one a model in the target binds to: its own, or above it (AC-273).
-        const parents = new Map(
-          (
-            (cat ? await cat.folders({ counted: false }) : []) as {
-              id: string;
-              parentId: string | null;
-            }[]
-          ).map((folder) => [folder.id, folder.parentId]),
-        );
-        const above: string[] = [];
-        for (
-          let at: string | null | undefined = target;
-          at != null && !above.includes(at);
-          at = at === ROOT_FOLDER_ID ? null : (parents.get(at) ?? ROOT_FOLDER_ID)
-        )
-          above.push(at);
-        if (!above.includes(source.folderId)) return undefined;
+        if (!(await importPathOf(target)).includes(source.folderId)) return undefined;
         return { ...about, path: (await pathsOf(request))(source.folderId) ?? [], created: false };
       },
+      /**
+       * The data source an imported one's name already means (T719, AC-358;
+       * R71, R73): a landed one of the name, in any folder and any case, else
+       * a draft of it in the importer's workspace. Its folder is said only
+       * where the importer may see that folder's data sources.
+       */
+      heldSource: async (request, own, target, name) => {
+        if (dataSources === undefined) return undefined;
+        const key = name.toLowerCase();
+        const named = (await dataSources.all()).filter(
+          (source) => source.name.toLowerCase() === key,
+        );
+        let draft: (typeof named)[number] | undefined;
+        for (const source of named) {
+          const home = await workspaceRootOf(source.folderId);
+          if (home === null) {
+            const seen = await visibilityOf(request);
+            const sees = seen === undefined || seen.rights.get(source.folderId)?.kinds === 'all';
+            return {
+              id: source.id,
+              name: source.name,
+              path: sees ? ((await pathsOf(request))(source.folderId) ?? []) : null,
+              onPath: (await importPathOf(target)).includes(source.folderId),
+              created: false,
+            };
+          }
+          if (home === own) draft = source;
+        }
+        // A draft going to the target or above it is on its path (T719's review).
+        return draft === undefined
+          ? undefined
+          : {
+              id: draft.id,
+              name: draft.name,
+              path: ['My workspace'],
+              onPath:
+                draft.targetFolderId !== null &&
+                (await importPathOf(target)).includes(draft.targetFolderId),
+              created: draft.targetFolderId === target,
+            };
+      },
     });
+  }
+
+  /** The target and each folder above it, to the root: where a model there binds a data source (AC-273). */
+  async function importPathOf(target: string): Promise<string[]> {
+    const parents = new Map(
+      (
+        (cat ? await cat.folders({ counted: false }) : []) as {
+          id: string;
+          parentId: string | null;
+        }[]
+      ).map((folder) => [folder.id, folder.parentId]),
+    );
+    const above: string[] = [];
+    for (
+      let at: string | null | undefined = target;
+      at != null && !above.includes(at);
+      at = at === ROOT_FOLDER_ID ? null : (parents.get(at) ?? ROOT_FOLDER_ID)
+    )
+      above.push(at);
+    return above;
   }
 
   /**

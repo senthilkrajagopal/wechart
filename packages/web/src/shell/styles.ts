@@ -2919,8 +2919,8 @@ main:has(.export-pane--over) { padding-right: 480px; }
 .import-source__choice .is-code { font-family: var(--wc-font-code); }
 .import-source__choice-driver { margin-left: auto; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 .import-source__mismatch { margin: 0; }
-.import-source__taken { align-items: flex-start; }
-.import-source__taken p { margin: 0 0 8px; }
+/* Mapped by its name, or blocking off the target's path (T719). */
+.import-source__held { margin: 0; }
 .import-source__ways { display: flex; flex-wrap: wrap; gap: 8px; }
 .import-source__test { display: grid; gap: 8px; justify-items: start; }
 .import-source__test h4 { margin: 0; }

@@ -24,7 +24,7 @@ import { DATA_SOURCES_QUERY } from '../../data-sources/query';
 import { folderChain, FOLDERS_QUERY } from '../folders';
 
 /**
- * The Import pane's Data sources step (T514; AC-358, AC-361, AC-282, AC-163;
+ * The Import pane's Data sources step (T514, T719; AC-358, AC-361, AC-163;
  * design 13, states M, N, O and P). Each data source in the file is:
  *
  * - **mapped** to an existing one a model in the target can bind to: the
@@ -35,8 +35,12 @@ import { folderChain, FOLDERS_QUERY } from '../folders';
  * - **created** in My workspace from the file's settings, as they are
  *   (design 13's P4 wasn't adopted), with its secrets typed and sealed in the
  *   browser (AC-325), and decided only once a test of exactly those settings
- *   has passed (AC-163, AC-158). A name the target already holds is refused
- *   on its row until it is mapped or renamed (AC-282, state P).
+ *   has passed (AC-163, AC-158), under its own name: a name never changes
+ *   (T719; R71).
+ *
+ * One whose name is held — landed in any folder, or a draft's in the
+ * workspace — is mapped to that one by the import itself, and nothing is
+ * asked of it; off the target's path, it blocks (T719, AC-358; R73).
  *
  * It is created only at Import, from the test that passed.
  */
@@ -63,7 +67,21 @@ export type SourceDecision =
       readonly trials: readonly string[];
       /** When it passed, as Review says it. */
       readonly at: string;
-    };
+    }
+  /**
+   * Its name is a landed one's, or a draft's in the workspace: mapped to that
+   * one by the import itself, nothing to decide (T719, AC-358).
+   */
+  | { readonly kind: 'held' };
+
+/** The data source an imported one's name already means, as Review says it (T719). */
+export interface HeldName {
+  readonly name: string;
+  /** Its folder's path, where the user may see it; none where not. */
+  readonly path: readonly string[] | null;
+  /** In the target or a folder above it: a model there may use it. */
+  readonly onPath: boolean;
+}
 
 interface Tested {
   readonly ok: boolean;
@@ -100,11 +118,14 @@ const known = (driver: string): driver is DriverType => Object.hasOwn(DRIVERS, d
 export function ImportSources({
   sources,
   target,
+  held = {},
   seal: givenSeal,
   onDecisions,
 }: {
   readonly sources: readonly ExportedDataSource[];
   readonly target: { readonly id: string; readonly path: readonly string[] };
+  /** Those whose names are held, by their names in the file (T719, AC-358). */
+  readonly held?: Readonly<Record<string, HeldName>>;
   readonly seal?: Seal;
   readonly onDecisions: (decisions: Readonly<Record<string, SourceDecision | undefined>>) => void;
 }) {
@@ -134,11 +155,13 @@ export function ImportSources({
   const bindable = (listed.data ?? [])
     .filter((source) => chain.includes(source.folderId))
     .sort((a, b) => chain.indexOf(a.folderId) - chain.indexOf(b.folderId));
-  const heldByTarget = (listed.data ?? []).filter((source) => source.folderId === target.id);
   const pathOf = (source: { folderPath: readonly { title: string }[] }) =>
     source.folderPath.map((folder) => folder.title);
 
   const decisionOf = (source: ExportedDataSource, row: Row): SourceDecision | undefined => {
+    // Held: the import maps it; one off the target's path blocks (T719).
+    const holder = held[source.name];
+    if (holder !== undefined) return holder.onPath ? { kind: 'held' } : undefined;
     if (row.mode === 'map') {
       const to = bindable.find((each) => each.id === row.mapTo);
       return to === undefined
@@ -146,7 +169,6 @@ export function ImportSources({
         : { kind: 'map', to: { id: to.id, name: to.name, driver: to.driver, path: pathOf(to) } };
     }
     if (row.mode !== 'create' || !named(row.name)) return undefined;
-    if (heldByTarget.some((held) => held.name === row.name)) return undefined;
     const tested = row.tested;
     if (tested?.ok !== true || tested.testId === undefined) return undefined;
     const testId = tested.testId;
@@ -238,7 +260,7 @@ export function ImportSources({
               ),
             ])
           }
-          taken={heldByTarget.find((held) => held.name === rows[source.name]!.name)?.id}
+          holder={held[source.name]}
           onChange={(next) => {
             change(source.name, next);
           }}
@@ -260,7 +282,7 @@ function SourceRow({
   bindable,
   chain,
   folderTitles,
-  taken,
+  holder,
   onChange,
   onTest,
 }: {
@@ -277,14 +299,13 @@ function SourceRow({
   }[];
   readonly chain: readonly string[];
   readonly folderTitles: ReadonlyMap<string, string>;
-  /** The target's own data source of the name typed, where it holds one (AC-282). */
-  readonly taken: string | undefined;
+  /** The one its name already means, which it is mapped to (T719, AC-358). */
+  readonly holder: HeldName | undefined;
   readonly onChange: (next: (row: Row) => Row) => void;
   readonly onTest: () => void;
 }) {
   const ids = useId();
   const box = useRef<HTMLDivElement>(null);
-  const nameField = useRef<HTMLInputElement>(null);
   const targetText = pathText(target.path);
   const driver = known(source.driver) ? source.driver : undefined;
   const method =
@@ -297,49 +318,81 @@ function SourceRow({
   );
   const values =
     driver === undefined ? undefined : storedValuesOf(driver, source.authMethod, source.fields);
-  const nameTaken = row.mode === 'create' && taken !== undefined;
   const firstFailed = row.tested?.checks.find((check) => check.status === 'failed');
+  const offPath = 'Off the target’s path';
   const status =
-    row.mode === 'map'
-      ? decided
+    holder !== undefined
+      ? holder.onPath
         ? 'Mapped'
-        : 'To decide'
-      : row.mode === 'create'
-        ? nameTaken
-          ? 'Name taken'
-          : row.testing
+        : offPath
+      : row.mode === 'map'
+        ? decided
+          ? 'Mapped'
+          : 'To decide'
+        : row.mode === 'create'
+          ? row.testing
             ? 'Testing…'
             : row.tested === undefined
               ? 'To decide'
               : row.tested.ok
                 ? `Passed · ${row.tested.at}`
                 : `Failed at ${firstFailed === undefined ? 'a check' : (CHECK_LABELS[firstFailed.id] ?? firstFailed.id)} · ${row.tested.at}`
-        : 'To decide';
+          : 'To decide';
   const mapped = bindable.find((each) => each.id === row.mapTo);
+
+  const head = (
+    <div className="import-source__head">
+      <span className="itemicon ic-source" data-icon="data-source" aria-hidden="true" />
+      <b id={`${ids}-name`} className="is-code">
+        {source.name}
+      </b>
+      <span className="import-source__driver">{driverLabel(source.driver)}</span>
+      <span
+        className="import-source__status"
+        // Said as a state where nothing more is asked of it (T719).
+        {...(holder === undefined ? {} : { role: 'status' })}
+      >
+        <StatusIcon
+          kind={
+            status === 'Mapped' || status.startsWith('Passed')
+              ? 'ok'
+              : status === offPath || status.startsWith('Failed')
+                ? 'err'
+                : status === 'Testing…'
+                  ? 'run'
+                  : 'idle'
+          }
+        />
+        {status}
+      </span>
+    </div>
+  );
+  /**
+   * Its name is held (T719, AC-358; R71): mapped to that one by the import,
+   * no Map and no Create. Off the target's path, the import waits for a
+   * target on its path (R73), naming no folder the user can't see.
+   */
+  if (holder !== undefined)
+    return (
+      <div ref={box} role="group" aria-labelledby={`${ids}-name`} className="import-source">
+        {head}
+        {holder.onPath ? (
+          <p className="import-source__held" data-testid="held">
+            {`Its name is ${holder.name}’s, in ${holder.path === null ? 'a folder you can’t see' : pathText(holder.path)}: it is mapped to that one, and not imported.`}
+          </p>
+        ) : (
+          <p className="source-pane__alert import-source__held" role="alert">
+            {holder.path === null
+              ? `Its name is that of a data source in a folder you can’t see, not in ${targetText} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`
+              : `Its name is ${holder.name}’s, in ${pathText(holder.path)}, not in ${targetText} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`}
+          </p>
+        )}
+      </div>
+    );
 
   return (
     <div ref={box} role="group" aria-labelledby={`${ids}-name`} className="import-source">
-      <div className="import-source__head">
-        <span className="itemicon ic-source" data-icon="data-source" aria-hidden="true" />
-        <b id={`${ids}-name`} className="is-code">
-          {source.name}
-        </b>
-        <span className="import-source__driver">{driverLabel(source.driver)}</span>
-        <span className="import-source__status">
-          <StatusIcon
-            kind={
-              status === 'Mapped' || status.startsWith('Passed')
-                ? 'ok'
-                : status === 'Name taken' || status.startsWith('Failed')
-                  ? 'err'
-                  : status === 'Testing…'
-                    ? 'run'
-                    : 'idle'
-            }
-          />
-          {status}
-        </span>
-      </div>
+      {head}
       <div
         className="import-source__modes"
         role="radiogroup"
@@ -439,73 +492,26 @@ function SourceRow({
 
       {row.mode === 'create' ? (
         <div className="import-source__create">
-          {nameTaken ? (
-            <div className="source-pane__alert import-source__taken" role="alert">
-              <StatusIcon kind="err" />
-              <div>
-                <p>
-                  {`${targetText} already has a data source named ${row.name}. A new one can’t take that name there.`}
-                </p>
-                <div className="import-source__ways">
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    onClick={() => {
-                      onChange((now) => ({ ...now, mode: 'map', mapTo: taken }));
-                      // Focus on the one chosen (design 13, the keyboard table).
-                      requestAnimationFrame(() => {
-                        box.current
-                          ?.querySelector<HTMLElement>('.import-source__choices input:checked')
-                          ?.focus();
-                      });
-                    }}
-                  >
-                    Use the existing one instead
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    onClick={() => {
-                      nameField.current?.focus();
-                      nameField.current?.select();
-                    }}
-                  >
-                    Create under another name
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
           <div className="field">
             <label htmlFor={`${ids}-new-name`}>
               <span>Name</span>
-              <span className="field__req"> · required</span>
             </label>
+            {/* Its own, the file's: a name never changes (T719, AC-358; R71). */}
             <input
-              ref={nameField}
-              // Held while its test runs: the pass is of what was sent (T514's review).
-              disabled={row.testing}
               id={`${ids}-new-name`}
               className="is-code"
-              spellCheck={false}
-              autoComplete="off"
+              readOnly
               value={row.name}
-              aria-invalid={nameTaken || !named(row.name) ? true : undefined}
+              aria-invalid={!named(row.name) ? true : undefined}
               aria-describedby={`${ids}-name-note`}
-              onChange={(event) => {
-                const next = event.target.value;
-                onChange((now) => ({ ...now, name: next }));
-              }}
             />
             <span
               id={`${ids}-name-note`}
-              className={nameTaken || !named(row.name) ? 'field__error' : 'connection-form__note'}
+              className={!named(row.name) ? 'field__error' : 'connection-form__note'}
             >
-              {nameTaken
-                ? `Taken in ${targetText}. Choose another name, or use the existing one.`
-                : !named(row.name)
-                  ? nameProblem(row.name, 'data-source')
-                  : `${targetText} has none by this name.`}
+              {!named(row.name)
+                ? nameProblem(row.name, 'data-source')
+                : 'Created under its own name, as the file has it.'}
             </span>
           </div>
           {driver === undefined || values === undefined ? null : (
@@ -635,9 +641,7 @@ function SourceRow({
             <button
               type="button"
               className="btn"
-              disabled={
-                row.testing || missing || nameTaken || !named(row.name) || driver === undefined
-              }
+              disabled={row.testing || missing || !named(row.name) || driver === undefined}
               onClick={onTest}
             >
               {row.tested === undefined && row.trials.length === 0

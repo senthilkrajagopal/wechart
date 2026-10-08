@@ -20,8 +20,9 @@ import { withChartsRenamed } from './workspace-copy';
  * - `POST /api/import/review` says what would land and what each draft may
  *   affect once proposed (AC-357): an item of the same kind and name in the
  *   target or the workspace; a model's cube or view the target already has
- *   (AC-270); a data source's name the target already holds (AC-282). It
- *   writes nothing, and no warning blocks.
+ *   (AC-270). A data source whose name is held is mapped to the one holding
+ *   it, landed or a draft of the importer's (T719, AC-358); one off the
+ *   target's path is the one warning that blocks. It writes nothing.
  * - `POST /api/import` makes the drafts, all together or none.
  *
  * Both read the whole file first (`readExport`): one it can't take is
@@ -46,8 +47,12 @@ export type Warning =
   | { readonly kind: 'in-workspace'; readonly targetPath: readonly string[] | null }
   /** A cube or view it defines is already in the target, in another model file (AC-270). */
   | { readonly kind: 'cube-in-target'; readonly cube: string; readonly file: string }
-  /** The target holds a data source of its name: it can't be created there under it (AC-282). */
-  | { readonly kind: 'source-name-in-target' };
+  /**
+   * The data source its name means isn't in the target or a folder above it,
+   * so a model there couldn't use it: the import waits for a target on its
+   * path (T719; AC-358, AC-357's R73 clause). This one blocks.
+   */
+  | { readonly kind: 'off-path' };
 
 /** What the target and the workspace hold, as the warnings are reckoned against. */
 export interface Holdings {
@@ -58,7 +63,6 @@ export interface Holdings {
       title: string,
     ) => { readonly version: number } | undefined;
     readonly models: readonly { readonly path: string; readonly declares: readonly string[] }[];
-    readonly sourceNames: readonly string[];
   };
   /** The workspace's drafts: their kind, name, and target's path (null for none or one not seen). */
   readonly workspace: readonly {
@@ -94,8 +98,6 @@ export function warningsOf(
       if (holder !== undefined) warnings.push({ kind: 'cube-in-target', cube, file: holder.path });
     }
   }
-  if (item.kind === 'data-source' && target.sourceNames.includes(item.name))
-    warnings.push({ kind: 'source-name-in-target' });
   // A dashboard's or library chart's draft of the name: both are kept.
   const drafted =
     item.kind === 'dashboard' || item.kind === 'chart'
@@ -116,8 +118,13 @@ export interface ReviewItem {
   readonly ownCharts?: number;
   /** A data source's driver. */
   readonly driver?: string;
-  /** A data source mapped to an existing one (T514): its name and folder. */
-  readonly mappedTo?: { readonly name: string; readonly path: readonly string[] };
+  /**
+   * A data source mapped to an existing one (T514): its name and folder,
+   * none for a folder the importer can't see (T719).
+   */
+  readonly mappedTo?: { readonly name: string; readonly path: readonly string[] | null };
+  /** Mapped because its name is that one's (T719, AC-358): not the importer's to decide. */
+  readonly held?: true;
   readonly lands: 'draft' | 'not-imported-yet' | 'not-imported';
   readonly warnings: readonly Warning[];
 }
@@ -135,6 +142,27 @@ export interface Mappable {
   /** Made in the importer's workspace: a new draft. */
   readonly created: boolean;
 }
+
+/**
+ * The data source an imported one's name already means (T719, AC-358; R71,
+ * R72, R73): the landed one of that name, in any folder and any case, else a
+ * draft of it in the importer's workspace.
+ */
+export interface HeldSource {
+  readonly id: string;
+  readonly name: string;
+  /** Its folder's path, where the importer may see it; none where not. */
+  readonly path: readonly string[] | null;
+  /** In the target or a folder above it, or a draft going to the target: a model there may use it. */
+  readonly onPath: boolean;
+  /** A draft in the importer's workspace going to the target: counted as made for the import. */
+  readonly created: boolean;
+}
+
+/** A data source is created under its own name (T719, AC-358; R71: names never change). */
+const ownName = (name: string) => ({
+  error: `A data source is created under its own name: “${name}”.`,
+});
 
 /** One stored document to make. */
 interface Create {
@@ -190,6 +218,30 @@ export interface ImportAccess {
     own: string,
     target: string,
   ) => Promise<Mappable | undefined>;
+  /** The data source an imported one's name already means, if any (`HeldSource`, T719). */
+  readonly heldSource: (
+    request: FastifyRequest,
+    own: string,
+    target: string,
+    name: string,
+  ) => Promise<HeldSource | undefined>;
+}
+
+/** Each of the file's data sources whose name is held, by its name in the file (T719). */
+async function heldIn(
+  request: FastifyRequest,
+  access: ImportAccess,
+  own: string,
+  target: string,
+  file: ExportFile,
+): Promise<Map<string, HeldSource>> {
+  const held = new Map<string, HeldSource>();
+  for (const item of file.items)
+    if (item.kind === 'data-source') {
+      const found = await access.heldSource(request, own, target, item.name);
+      if (found !== undefined) held.set(item.name, found);
+    }
+  return held;
 }
 
 /** Each imported data source's name, and what was decided for it. */
@@ -337,12 +389,20 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
       return reply.code(400).send({
         error: 'Send each data source’s decision as { name, map } or { name, create }.',
       });
+    // Those whose names are held: mapped, whatever was decided (T719, AC-358).
+    const held = await heldIn(request, access, own, target.id, file);
+    // Any other is created under its own name alone (T719; R71).
+    for (const [name, decision] of decided)
+      if (!held.has(name) && decision.create !== undefined && decision.create !== name)
+        return reply.code(400).send(ownName(name));
     // Each mapped one, where the importer may use it: else as none there is (T514).
     const mapped = new Map<string, Mappable>();
     for (const [name, decision] of decided)
-      if (decision.map !== undefined) {
+      if (!held.has(name) && decision.map !== undefined) {
         const found = await access.mappable(request, decision.map, own, target.id);
         if (found === undefined) return reply.code(404).send(NO_SUCH_SOURCE);
+        // A draft of another name is one made under it, as Import refuses (T719's review).
+        if (found.created) return reply.code(400).send(ownName(name));
         mapped.set(name, found);
       }
     const holdings = await access.holdings(request, own, target.id, titles);
@@ -388,8 +448,24 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
               : [],
           },
         ];
+      // One whose name is held: mapped to that one, not imported, nothing
+      // asked; off the target's path, it blocks (T719; AC-358, AC-357).
+      const holder = held.get(item.name);
+      if (holder !== undefined)
+        return [
+          {
+            kind: item.kind,
+            key: item.name,
+            title: item.name,
+            driver: item.driver,
+            lands: 'not-imported',
+            mappedTo: { name: holder.name, path: holder.path },
+            held: true,
+            warnings: holder.onPath ? [] : [{ kind: 'off-path' }],
+          },
+        ];
       // A data source as decided (T514): mapped, not imported; created, a
-      // new draft under the name it takes; undecided, not imported.
+      // new draft under its own name; undecided, not imported.
       const to = mapped.get(item.name);
       if (to !== undefined)
         return [
@@ -436,19 +512,41 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
     const decided = decisionsIn((request.body as { dataSources?: unknown }).dataSources);
     if (decided === undefined)
       return reply.code(400).send({ error: 'Send each data source’s decision as { name, to }.' });
+    const where = target.path.length === 0 ? 'Shared' : target.path.join(' / ');
+    /**
+     * One whose name is held is that one's, whatever was decided (T719,
+     * AC-358); one off the target's path blocks the import until a target on
+     * its path is chosen (AC-357's R73 clause), saying no folder of it.
+     */
+    const held = await heldIn(request, access, own, target.id, file);
+    for (const [name, holder] of held)
+      if (!holder.onPath)
+        return reply.code(409).send({
+          error: `“${name}” is the name of a data source that isn’t in ${where} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`,
+        });
     const undecided = file.items.flatMap((item) =>
-      item.kind === 'data-source' && decided.get(item.name)?.to === undefined ? [item.name] : [],
+      item.kind === 'data-source' &&
+      !held.has(item.name) &&
+      decided.get(item.name)?.to === undefined
+        ? [item.name]
+        : [],
     );
     if (undecided.length > 0)
       return reply.code(400).send({
-        error: `Map each data source to one a model in ${target.path.length === 0 ? 'Shared' : target.path.join(' / ')} can bind to, or create it: ${undecided.join(', ')}.`,
+        error: `Map each data source to one a model in ${where} can bind to, or create it: ${undecided.join(', ')}.`,
       });
     let createdSources = 0;
     for (const item of file.items)
       if (item.kind === 'data-source') {
+        const holder = held.get(item.name);
+        if (holder !== undefined) {
+          if (holder.created) createdSources += 1;
+          continue;
+        }
         const found = await access.mappable(request, decided.get(item.name)!.to!, own, target.id);
         if (found === undefined) return reply.code(404).send(NO_SUCH_SOURCE);
-        if (found.created) createdSources += 1;
+        // One made for it is made under its own name, which would be held (T719).
+        if (found.created) return reply.code(400).send(ownName(item.name));
       }
 
     // New ids for everything: nothing saved is written over (AC-356).
