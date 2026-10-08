@@ -21,6 +21,7 @@ import {
 import type { VersionKind, VersionStore } from '../repos/versions';
 import { cubesOfChart, cubesOfDashboard, shortOf, xcubeFolderOf } from '../model/bind';
 import type { LandingModel } from '../model/landing';
+import { heldIn, namesDeclaredIn, type Names } from '../model/names';
 import { declaredIn } from '../model/split';
 import type { LandingCheck, ModelLanding } from '../model/publish';
 import type {
@@ -59,6 +60,14 @@ export interface ProposalRoutes {
   readonly audit?: AuditStore;
   /** Whether proposals are there at all: not with sign-in off, as workspaces aren't. */
   readonly enabled: boolean;
+  /**
+   * Each namespace's landed names, from the shared folders' model files and
+   * data sources, all but the items `except` names (T704, AC-421).
+   */
+  readonly landedNames?: (except?: {
+    readonly files: ReadonlySet<string>;
+    readonly dataSources: ReadonlySet<string>;
+  }) => Promise<Names>;
   readonly documents: {
     get(kind: 'dashboard' | 'chart' | 'folder', id: string): Promise<Stored | null>;
     named(kind: 'dashboard' | 'chart', folderId: string, title: string): Promise<Stored | null>;
@@ -1027,6 +1036,9 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         proposalId: authored === null ? null : proposal.id,
       });
 
+    // Before anything of it lands, its data sources included (T704; AC-422, AC-321).
+    await refuseNamesInUse(proposal);
+
     // A folder it lands in, deleted since, made again first (T540, AC-389).
     if (routes.recreate !== undefined)
       for (const folderId of new Set(proposal.items.map((item) => item.landsIn))) {
@@ -1376,6 +1388,59 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     return landed;
   };
 
+  /**
+   * One name per item (T704; AC-421, AC-422, AC-424): an approval whose
+   * cube, view, split view or data source takes a name that has landed, in
+   * any folder and in any case, is refused before anything of it lands. An
+   * item it replaces keeps its name, as an edit copy lands over its original,
+   * and so does a data source this proposal landed at an approval refused
+   * since (R52). The refusal says only that the name is in use.
+   */
+  const refuseNamesInUse = async (proposal: Proposal) => {
+    if (routes.landedNames === undefined) return;
+    const models = proposal.items.filter((item) => item.kind === 'model');
+    const sources = proposal.items.filter((item) => item.kind === 'data-source');
+    if (models.length === 0 && sources.length === 0) return;
+    // An edit copy's original, where the copy lands over it: in its own folder.
+    const originOf = (item: ProposedItem) => {
+      const origin = item.snapshot['origin'] as
+        { id?: unknown; folderId?: unknown } | null | undefined;
+      return typeof origin?.id === 'string' && origin.folderId === item.landsIn
+        ? origin.id
+        : undefined;
+    };
+    const kept = (items: readonly ProposedItem[]) =>
+      items
+        .flatMap((item) => [item.replaces?.id, originOf(item)])
+        .filter((id): id is string => id !== undefined);
+    const before = (await routes.versions?.landedBy(proposal.id)) ?? [];
+    const landed = await routes.landedNames({
+      files: new Set([
+        ...kept(models),
+        ...before.filter((version) => version.kind === 'model').map((version) => version.itemId),
+      ]),
+      dataSources: new Set([
+        ...kept(sources),
+        ...before
+          .filter((version) => version.kind === 'data-source')
+          .map((version) => version.itemId),
+      ]),
+    });
+    const held = heldIn(landed, {
+      items: models.flatMap((item) => namesDeclaredIn(String(item.snapshot['content'] ?? ''))),
+      dataSources: sources.map((item) => String(item.snapshot['name'] ?? item.title)),
+    });
+    if (held.length === 0) return;
+    const said = held.map((name) => `“${name}”`);
+    throw new Refused(
+      409,
+      held.length === 1
+        ? `The name ${said[0]!} is already in use, so nothing was approved.`
+        : `The names ${said.slice(0, -1).join(', ')} and ${said.at(-1)!} are already in use, so nothing was approved.`,
+      { names: held },
+    );
+  };
+
   /** A proposed model as it lands: its file, in the folder it lands in (T451). */
   const landingModelOf = (item: ProposedItem): LandingModel => {
     const origin = item.snapshot['origin'] as { id?: unknown } | null | undefined;
@@ -1544,6 +1609,15 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       routes.versions === undefined
     )
       return reply.code(503).send({ error: 'Approvals can’t be landed here.' });
+    // A name landed meanwhile is said as in use, not as a change in its
+    // folder (T704, AC-424); held again as it lands, for one landing since.
+    try {
+      await refuseNamesInUse(proposal);
+    } catch (failure) {
+      if (failure instanceof Refused)
+        return reply.code(failure.status).send({ error: failure.message, ...failure.extra });
+      throw failure;
+    }
     const changed = await changedSince(proposal);
     if (changed !== undefined)
       return reply.code(409).send({

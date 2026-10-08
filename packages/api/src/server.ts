@@ -75,6 +75,7 @@ import type { Changeset } from './xcube/changesets';
 import { XcubeError, type XcubeAdmin } from './xcube/client';
 import { ROOT_ONLY, XCUBE_ROOT, type PublishedFolders } from './xcube/folders';
 import { cubesUsing, extendsIn } from './xcube/used-by';
+import { landedNamesOf } from './model/names';
 import { declaredIn } from './model/split';
 import type { PublicationStore } from './xcube/publications';
 import { registerModelPublishing } from './model/publish';
@@ -1488,6 +1489,21 @@ export function buildServer({
       // With its models, as they will resolve once landed (T451).
       bind: (kind, folderId, body, resolver) => boundIn(kind, folderId, body, undefined, resolver),
       modelLanding,
+      // One name per item (T704, AC-421): what the shared folders hold.
+      ...(modelFiles?.inFolders === undefined
+        ? {}
+        : {
+            landedNames: async (except: Parameters<typeof landedNamesOf>[0]['except']) => {
+              const published = folders === undefined ? ROOT_ONLY : await folders();
+              return landedNamesOf({
+                files: await modelFiles.inFolders!([...published.ids.keys()]),
+                dataSources: ((await dataSources?.all()) ?? []).filter((source) =>
+                  published.ids.has(source.folderId),
+                ),
+                ...(except === undefined ? {} : { except }),
+              });
+            },
+          }),
       // Held to what its items bound to when proposed (T456, AC-321).
       ...(proposalBindings === undefined ? {} : { bindings: proposalBindings }),
       ...(folders === undefined

@@ -13053,7 +13053,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - `routes/names.test.ts`: the API refuses a workspace model declaring such a cube, and a data source so named, and accepts upper case (AC-426).
   - Depends on: T701
 
-- [ ] T704 (AC-421, AC-422, AC-424, AC-321) Land each name only once in its namespace: an approval holding a name that has already landed, in any case, is refused before anything of it lands
+- [x] T704 (AC-421, AC-422, AC-424, AC-321) Land each name only once in its namespace: an approval holding a name that has already landed, in any case, is refused before anything of it lands
   - Files:
     - `packages/api/src/model/names.ts` (new, + test):
       - the names a model file declares: its cubes, its views, and each `split: true` view's `<view>_<cube alias>`;
