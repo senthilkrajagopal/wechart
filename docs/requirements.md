@@ -950,6 +950,27 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R72 — R71's details: references stay on the folder path, imports map by name, the name grammar** (2026-10-07, the user and the coordinator)
+- Q: now that names are global, may an item refer to a cube or data source outside its own folder path? A: "Own folder or above (Recommended)". *Every reference must point to an item in the referrer's own folder or an ancestor:*
+  - *a chart or dashboard to a cube or view;*
+  - *a join, an `extends` or a view to a cube;*
+  - *a cube to its data source, including one it inherits through `extends`.*
+
+  *A move that would break this is refused, naming what breaks. Names are shown for folders the mover can see, and a count for the rest, as AC-322 does. A reader who may see a dashboard can therefore always query its cubes (AC-263).*
+- Q: an import holds a model or data source whose name has already landed. A: "Map to existing (Recommended)". *The imported item is left out. The imported charts use the landed item of that name, as AC-358 already does for data sources. Review lists what was mapped.*
+- **The grammar, from xcube's answer** (`to-wechart/2026-10-07-2005-global-names-grammar-and-extends.md`; the coordinator's call, overturnable):
+  - *A name is an ASCII letter, then ASCII letters, digits and underscores. It may not contain `__` or end in `_`, and is at most 40 characters.*
+  - *A cube or view name may not be a reserved word, compared ignoring case: Python's keywords, `None`, `True`, `False`, or Cube's own names such as `CUBE`, `TABLE` and `SECURITY_CONTEXT`. Data source names are exempt, but only the root may have `default`.*
+  - *Upper case is allowed, and every comparison ignores case. xcube gives a name with upper case a lower-case SQL alias.*
+  - *The names Cube makes for a view's `split: true` cubes (`<view>_<cube alias>`) count as names too.*
+- **Smaller calls (the coordinator, overturnable):**
+  - *A data source has no separate title; its description is enough.*
+  - *R71's "request to the folder's owners" is the existing calculation request (AC-050), which already carries a free-text description.*
+  - *Renaming a draft is checked as making one is.*
+  - *A model file's name stays per folder: each file declares one cube and is named for it, so the cube's global name keeps them apart.*
+  - *In the cube picker, a workspace copy is listed in place of the landed cube, marked as the user's copy.*
+  - *Whether non-root items keep a short `sql_alias` follows xcube's answer to ask 1.2.*
+
 **R71 — one name per item across the whole system: cubes, views and data sources** (2026-10-07, the user, after a brainstorm on naming, modules and workspaces)
 - The user: "datasources will have unique names and the names will not changes." Then: "okay.. lets have unique name for both datasources as well as cubes across the entire system." Then: "There is no migration, since we are in development and this is not yet in production.. we can delete all tables/dashboards/cubes and recreate them." Then, on Claude's seven decisions: "we dont need the name to be locked.. the first publish wins is this doable? all other decisions are good with me." Then: "okay proceed with these changes first before we do any other changes".
 - *Decided:*
