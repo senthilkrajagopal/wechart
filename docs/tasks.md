@@ -13391,11 +13391,40 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - "Landed" means any shared folder's file here, but only xcube-served folders in `landedNames`.
       - Two new models of one name in a file are refused only as xcube refuses them.
 
-- [ ] T736 (AC-357) An import blocked by an off-path mapped item can leave out the charts that use it, and their tiles
+- [x] T736 (AC-357) An import blocked by an off-path mapped item can leave out the charts that use it, and their tiles
   - Files: `packages/api/src/routes/import.ts` (+ `import-models.test.ts`), `packages/web/src/workspaces/explore/import/ImportPane.tsx` (+ test)
   - Failing test: `import-models.test.ts` and `ImportPane.test.tsx` (AC-357): an import whose model or data source is mapped to one off the target's path is offered leaving out the charts that use it, and their tiles; left out, it lands without them, and the rest as T720 lands it. One that no chart in the file uses blocks nothing: AC-357's Fails-when names "a chart it holds", while T719 and T720 block on every off-path one.
   - Depends on: T720
   - *Added 2026-10-08, the coordinator's call on T720: AC-357's "leave out the charts that use it" is its own task.*
+  - **Done 2026-10-08.**
+    - **The API** (`routes/import.ts`):
+      - **What Review says.** For a model mapped to a cube or view off the target's path, Review's `off-path` warning now lists `charts`: the file's charts that use one of its names held off the path (`cubesOfChartBody`), each with `key`, `title` and `leftOut`.
+      - **What blocks.** It blocks only while one of those charts is not left out; one that no chart uses blocks nothing.
+      - **Leaving charts out.** Review and Import take `leaveOut`, a list of the file's chart ids.
+        - A malformed list is 400.
+        - So is a chart that uses no item off the target's path: "Only a chart that uses a cube or view off the target’s path can be left out."
+        - Review counts a dashboard's own charts without those left out, and marks a library chart left out as `left-out`.
+        - Import makes neither the left-out charts nor their tiles. `withoutCharts` takes their tiles off the dashboard at any depth, and their ids out of `charts`, before the ids are renamed.
+      - **Import's 409** now ends "Choose a target on its path, or leave out the charts that use it."
+      - **Data sources:** an off-path data source still blocks as T719 has it. Charts use cubes, not data sources.
+    - **The web** (`ImportPane.tsx`, `styles.ts`):
+      - **The model's row.** Under the warning, a model's row offers a checkbox: "Leave out <titles>, and their tiles" ("its tile" for one).
+      - **What it sends.** Ticking it sends `leaveOut` to Review and Import. The list is kept for the file and target it was chosen with, and none is sent for another. Review keeps showing its last answer while it asks again.
+      - **When Import is enabled.** The warning stops the import only while a chart that uses the cube is not left out.
+      - **The wording.** It says "or leave out the charts that use it", or that no chart in the file uses the cube. A left-out library chart reads "Left out".
+    - **Tests:**
+      - `import-models.test.ts`, T736's 4 cases, each red before:
+        - the charts named, and a partial leave-out refused;
+        - landing without B and C and their tiles: pages p1 [t1] and p2 [], `charts` only A's new id, Review's counts;
+        - a chart that uses nothing off the path refused;
+        - an unused one blocking nothing.
+      - **T720's three off-path cases now have a chart in the file use the off-path cube.** Their expectations gained `charts` and the longer 409 text: a premise change, since an unused one no longer blocks. "On its path it lands" now uses a chart on `ops`, as T720's review asked.
+      - `ImportPane.test.tsx`: 3 cases, red before.
+      - API 1819/1819, web 2618/2618.
+    - **Not ticked:** AC-357 waits for T733's e2e on the image.
+    - **Left as questions:**
+      - A dashboard's own filters or text tiles on an off-path cube aren't counted as a chart's use. AC-357 names only charts.
+      - Leaving out a library chart that the dashboard doesn't show is allowed whenever it uses the off-path cube.
 
 - [ ] T721 (AC-358) Bind an imported model's cubes to the data source chosen for, or mapped to, the file's one
   - Files: `packages/core/src/importBinding.ts` (+ test, from the same WIP), `packages/api/src/routes/import.ts`

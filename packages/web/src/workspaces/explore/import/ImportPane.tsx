@@ -32,8 +32,10 @@ import type { Target } from '../NewItemDialog';
  * - **Data sources:** each mapped or created (T514). Until then passed over.
  * - **Review:** what lands, each item with what it may affect once proposed,
  *   counted (AC-357). A model whose cube or view name is held is mapped to
- *   that one (T720); one mapped off the target's path, or whose path My
- *   workspace's root holds, stops the import until that changes. The
+ *   that one (T720); one mapped off the target's path stops the import while
+ *   a chart that uses it stays in, and those charts can be left out with
+ *   their tiles (T736); one whose path My workspace's root holds stops it
+ *   until that changes. The
  *   primary writes everything at once; a refusal names each part and why.
  *
  * Everything lands in My workspace as new drafts, with sign-in off too
@@ -55,7 +57,15 @@ type Warning =
   | { readonly kind: 'in-target'; readonly version: number | null }
   | { readonly kind: 'in-workspace'; readonly targetPath: readonly string[] | null }
   /** The data source, cube or view its name means is off the target's path: this one blocks (T719, T720). */
-  | { readonly kind: 'off-path' }
+  | {
+      readonly kind: 'off-path';
+      /** For a cube or view, the file's charts that use it, and whether each is left out (T736). */
+      readonly charts?: readonly {
+        readonly key: string;
+        readonly title: string;
+        readonly leftOut: boolean;
+      }[];
+    }
   /** My workspace's root has a model file at its path: this one blocks (T720). */
   | { readonly kind: 'path-in-workspace' }
   /** That one's driver differs: which, where its folder is seen (AC-361). */
@@ -63,7 +73,10 @@ type Warning =
 
 /** Whether a warning stops the import (T719, T720). */
 const stopsImport = (warning: Warning) =>
-  warning.kind === 'off-path' || warning.kind === 'path-in-workspace';
+  warning.kind === 'path-in-workspace' ||
+  // A cube or view off the path: while a chart that uses it stays in (T736).
+  (warning.kind === 'off-path' &&
+    (warning.charts === undefined || warning.charts.some((chart) => !chart.leftOut)));
 
 /** A refusal of the import, with each part and why where the API names them (T720). */
 class Refused extends Error {
@@ -87,7 +100,8 @@ interface Reviewed {
     readonly mappedTo?: { readonly name: string; readonly path: readonly string[] | null };
     /** Mapped because its name is that one's (T719, AC-358). */
     readonly held?: true;
-    readonly lands: 'draft' | 'not-imported-yet' | 'not-imported';
+    /** `left-out`: a chart left out, with its tiles (T736). */
+    readonly lands: 'draft' | 'not-imported-yet' | 'not-imported' | 'left-out';
     readonly warnings: readonly Warning[];
   }[];
 }
@@ -167,9 +181,12 @@ export function warningText(
       return `Your workspace has a draft by this name${goes}. Both are kept${same ? '; the second approved replaces the first' : ''}.`;
     }
     case 'off-path':
-      return item.kind === 'model'
-        ? `The cube or view of this name isn’t in ${target} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path.`
-        : `The data source of this name isn’t in ${target} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`;
+      if (item.kind !== 'model')
+        return `The data source of this name isn’t in ${target} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`;
+      // The charts that use it may be left out instead (T736); none using it, nothing stops.
+      return warning.charts?.length === 0
+        ? `The cube or view of this name isn’t in ${target} or a folder above it, and no chart in the file uses it.`
+        : `The cube or view of this name isn’t in ${target} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path${warning.charts === undefined ? '' : ', or leave out the charts that use it'}.`;
     case 'path-in-workspace':
       return 'My workspace already has a model file at this path. Rename or remove one of them, then import again.';
     case 'driver-differs':
@@ -217,6 +234,14 @@ export function ImportPane({
   const made = useRef(new Map<string, { id: string; name: string; described: boolean }>());
   /** Their names, which discarding leaves in My workspace (T514's review). */
   const [leftBehind, setLeftBehind] = useState<readonly string[]>([]);
+  /**
+   * The file's charts left out, each using a cube off the target's path, by
+   * id (T736): for the file and target they were chosen with, none for another.
+   */
+  const [leaving, setLeaving] = useState<{ readonly at: string; readonly ids: readonly string[] }>({
+    at: '',
+    ids: [],
+  });
 
   useEffect(() => {
     heading.current?.focus();
@@ -287,8 +312,16 @@ export function ImportPane({
     staleTime: 0,
   });
 
+  const leavingAt = `${String(chosen?.pick)}:${targetId}`;
+  const leaveOut = leaving.at === leavingAt ? leaving.ids : [];
   const review = useQuery({
-    queryKey: ['import-review', chosen?.pick, targetId, JSON.stringify(decisions)],
+    queryKey: [
+      'import-review',
+      chosen?.pick,
+      targetId,
+      JSON.stringify(decisions),
+      JSON.stringify(leaveOut),
+    ],
     queryFn: async ({ signal }) => {
       const response = await fetch('/api/import/review', {
         method: 'POST',
@@ -296,6 +329,7 @@ export function ImportPane({
         body: JSON.stringify({
           file,
           targetFolderId: targetId,
+          ...(leaveOut.length === 0 ? {} : { leaveOut }),
           ...(sources.length === 0
             ? {}
             : {
@@ -321,6 +355,11 @@ export function ImportPane({
       return (await response.json()) as Reviewed;
     },
     enabled: step === 3 && file !== undefined && targetId !== '',
+    // Kept while charts are left out or put back, for the same file and target (T736).
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === chosen?.pick && previousQuery?.queryKey[2] === targetId
+        ? previous
+        : undefined,
     staleTime: 0,
     gcTime: 0,
   });
@@ -395,6 +434,8 @@ export function ImportPane({
         body: JSON.stringify({
           file,
           targetFolderId: targetId,
+          // The charts left out, with their tiles (T736).
+          ...(leaveOut.length === 0 ? {} : { leaveOut }),
           ...(sources.length === 0
             ? {}
             : {
@@ -890,7 +931,9 @@ export function ImportPane({
                           ? 'New draft'
                           : item.lands === 'not-imported-yet'
                             ? 'Not imported yet'
-                            : 'Not imported'}
+                            : item.lands === 'left-out'
+                              ? 'Left out'
+                              : 'Not imported'}
                       </span>
                     </div>
                     {item.warnings.map((warning) => (
@@ -899,6 +942,42 @@ export function ImportPane({
                         <span>{warningText(warning, item, targetPath, signedIn)}</span>
                       </p>
                     ))}
+                    {/* The charts that use a cube off the path, left out with their tiles (T736). */}
+                    {item.warnings
+                      .flatMap((warning) =>
+                        warning.kind === 'off-path' &&
+                        warning.charts !== undefined &&
+                        warning.charts.length > 0
+                          ? [warning.charts]
+                          : [],
+                      )
+                      .map((using) => {
+                        const keys = using.map((chart) => chart.key);
+                        const all = keys.every((key) => leaveOut.includes(key));
+                        return (
+                          <label key={`leave:${item.key}`} className="import-pane__leave">
+                            <input
+                              type="checkbox"
+                              checked={all}
+                              disabled={importing.isPending}
+                              onChange={() => {
+                                setLeaving({
+                                  at: leavingAt,
+                                  ids: all
+                                    ? leaveOut.filter((id) => !keys.includes(id))
+                                    : [
+                                        ...leaveOut,
+                                        ...keys.filter((key) => !leaveOut.includes(key)),
+                                      ],
+                                });
+                              }}
+                            />
+                            <span>
+                              {`Leave out ${listed(using.map((chart) => chart.title))}, and ${using.length === 1 ? 'its tile' : 'their tiles'}`}
+                            </span>
+                          </label>
+                        );
+                      })}
                   </li>
                 ))}
               </ul>

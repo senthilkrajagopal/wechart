@@ -626,6 +626,128 @@ describe('the models of an imported file (T720, AC-356, AC-357)', () => {
   });
 });
 
+/**
+ * T736 (AC-357; R73): a model mapped to a cube off the target's path stops
+ * the import while a chart in the file uses it; the charts that do can be
+ * left out, with their tiles, and then it goes. One no chart uses stops
+ * nothing.
+ */
+describe('leaving out the charts that use a cube off the target’s path (T736, AC-357)', () => {
+  const offPath = (charts: { key: string; title: string; leftOut: boolean }[]) => ({
+    ...REVIEWED,
+    items: REVIEWED.items.map((item) =>
+      item.kind === 'model'
+        ? {
+            ...item,
+            lands: 'not-imported',
+            mappedTo: { name: 'orders', path: ['Ops'] },
+            held: true,
+            warnings: [{ kind: 'off-path', charts }],
+          }
+        : item,
+    ),
+  });
+  async function toReview(pane: HTMLElement) {
+    await choose(pane, JSON.stringify(FILE));
+    await userEvent.click(within(pane).getByRole('button', { name: /Next: Target/ }));
+    await userEvent.click(await within(pane).findByRole('treeitem', { name: 'EMEA' }));
+    await userEvent.click(within(pane).getByRole('button', { name: /Next: Data sources/ }));
+    await mapReplica(pane);
+  }
+
+  it('stops the import until the charts that use it are left out, then imports without them', async () => {
+    const { fetchMock, onImported } = shown((url, init) => {
+      if (url !== '/api/import/review') return serving(url, init);
+      const { leaveOut } = JSON.parse(String(init?.body)) as { leaveOut?: string[] };
+      return answer(
+        200,
+        offPath([
+          { key: 'c1', title: 'Revenue', leftOut: leaveOut?.includes('c1') ?? false },
+          { key: 'c2', title: 'Top products', leftOut: leaveOut?.includes('c2') ?? false },
+        ]),
+      );
+    });
+    const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
+    await toReview(pane);
+    const model = await within(pane).findByTestId('lands-model-sales.yml');
+    expect(model.textContent).toContain(
+      'The cube or view of this name isn’t in Sales / EMEA or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path, or leave out the charts that use it.',
+    );
+    const primary = within(pane).getByRole('button', { name: `Import to My workspace` });
+    expect((primary as HTMLButtonElement).disabled).toBe(true);
+    expect(within(pane).getByText(`1 warning stops the import`)).toBeTruthy();
+
+    const leave = within(model).getByRole('checkbox', {
+      name: 'Leave out Revenue and Top products, and their tiles',
+    });
+    expect((leave as HTMLInputElement).checked).toBe(false);
+    await userEvent.click(leave);
+    await vi.waitFor(() => {
+      expect(
+        (within(pane).getByRole('button', { name: `Import to My workspace` }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false);
+    });
+    expect(
+      (
+        within(within(pane).getByTestId('lands-model-sales.yml')).getByRole('checkbox', {
+          name: 'Leave out Revenue and Top products, and their tiles',
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+    const reviewed = fetchMock.mock.calls.filter(([url]) => url === '/api/import/review').at(-1)!;
+    expect((JSON.parse(String(reviewed[1]!.body)) as { leaveOut: unknown }).leaveOut).toEqual([
+      'c1',
+      'c2',
+    ]);
+
+    await userEvent.click(within(pane).getByRole('button', { name: `Import to My workspace` }));
+    await vi.waitFor(() => {
+      expect(onImported).toHaveBeenCalledTimes(1);
+    });
+    const sent = fetchMock.mock.calls.find(
+      ([url, init]) => url === `/api/import` && init?.method === 'POST',
+    )!;
+    expect((JSON.parse(String(sent[1]!.body)) as { leaveOut: unknown }).leaveOut).toEqual([
+      'c1',
+      'c2',
+    ]);
+  });
+
+  it('stops nothing for one that no chart in the file uses', async () => {
+    shown((url, init) =>
+      url === '/api/import/review' ? answer(200, offPath([])) : serving(url, init),
+    );
+    const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
+    await toReview(pane);
+    const model = await within(pane).findByTestId('lands-model-sales.yml');
+    expect(model.textContent).toContain(
+      'The cube or view of this name isn’t in Sales / EMEA or a folder above it, and no chart in the file uses it.',
+    );
+    expect(within(model).queryByRole('checkbox')).toBeNull();
+    const primary = within(pane).getByRole('button', { name: `Import to My workspace` });
+    expect((primary as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('says a library chart left out is left out', async () => {
+    shown((url, init) =>
+      url === '/api/import/review'
+        ? answer(200, {
+            ...REVIEWED,
+            items: REVIEWED.items.map((item) =>
+              item.kind === 'chart' ? { ...item, lands: 'left-out', warnings: [] } : item,
+            ),
+          })
+        : serving(url, init),
+    );
+    const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
+    await toReview(pane);
+    expect((await within(pane).findByTestId('lands-chart-c2')).textContent).toBe(
+      'Top productsLibrary chartLeft out',
+    );
+  });
+});
+
 describe('what a same-named draft means (T513, AC-357)', () => {
   it('says the second approved replaces the first only where both go to one folder', () => {
     const item = { kind: 'chart', title: 'Top products' };

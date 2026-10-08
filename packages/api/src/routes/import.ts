@@ -9,6 +9,7 @@ import {
 } from '@wechart/core';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
+import { cubesOfChartBody } from '../access/queries';
 import { USER } from '../auth/guard';
 import { namesDeclaredIn } from '../model/names';
 import { withChartsRenamed } from './workspace-copy';
@@ -56,9 +57,17 @@ export type Warning =
    * The data source, cube or view its name means isn't in the target or a
    * folder above it, so the target couldn't use it: the import waits for a
    * target on its path (T719, T720; AC-358, AC-357's R73 clause). This one
-   * blocks.
+   * blocks. For a cube or view, the file's charts that use it (T736): it
+   * blocks only while one of them is not left out.
    */
-  | { readonly kind: 'off-path' }
+  | {
+      readonly kind: 'off-path';
+      readonly charts?: readonly {
+        readonly key: string;
+        readonly title: string;
+        readonly leftOut: boolean;
+      }[];
+    }
   /**
    * My workspace's root has a model file at its path, which it would land
    * over (T720): it blocks until one of them is renamed or removed.
@@ -135,7 +144,8 @@ export interface ReviewItem {
   readonly mappedTo?: { readonly name: string; readonly path: readonly string[] | null };
   /** Mapped because its name is that one's (T719, T720; AC-358): not the importer's to decide. */
   readonly held?: true;
-  readonly lands: 'draft' | 'not-imported-yet' | 'not-imported';
+  /** `left-out`: a chart the importer leaves out, with its tiles (T736). */
+  readonly lands: 'draft' | 'not-imported-yet' | 'not-imported' | 'left-out';
   readonly warnings: readonly Warning[];
 }
 
@@ -310,20 +320,82 @@ async function heldModelsIn(
   own: string,
   target: string,
   file: ExportFile,
-): Promise<Map<string, { readonly holder: HeldItem; readonly asked: string }>> {
-  const held = new Map<string, { readonly holder: HeldItem; readonly asked: string }>();
+): Promise<Map<string, HeldModel>> {
+  const held = new Map<string, HeldModel>();
+  const charts = file.items.filter((item): item is ExportedChart => item.kind === 'chart');
   for (const item of file.items)
     if (item.kind === 'model') {
       const names = namesDeclaredIn(item.content);
       const holders = await access.heldItems(request, own, target, names);
       const holder = holders.find((each) => !each.onPath) ?? holders[0];
-      if (holder !== undefined)
+      if (holder !== undefined) {
+        const off = new Set(
+          holders.filter((each) => !each.onPath).map((each) => nameKey(each.name)),
+        );
         held.set(item.path, {
           holder,
           asked: names.find((name) => nameKey(name) === nameKey(holder.name)) ?? holder.name,
+          // The file's charts that use a name of it held off the path (T736).
+          using: charts.filter((chart) =>
+            cubesOfChartBody(chart.body).some((cube) => off.has(nameKey(cube))),
+          ),
         });
+      }
     }
   return held;
+}
+
+/** A model of the file mapped to the one holding a name of it (`heldModelsIn`). */
+interface HeldModel {
+  readonly holder: HeldItem;
+  readonly asked: string;
+  /** The file's charts that use a name of it held off the target's path (T736). */
+  readonly using: readonly ExportedChart[];
+}
+
+/** The charts a body asks to leave out (T736): their ids in the file; undefined for a body not so. */
+function leaveOutIn(value: unknown): ReadonlySet<string> | undefined {
+  if (value === undefined) return new Set();
+  if (!Array.isArray(value) || !value.every((each) => typeof each === 'string')) return undefined;
+  return new Set(value as string[]);
+}
+
+/** Whether every chart to leave out uses an item off the target's path (T736). */
+const leavable = (held: ReadonlyMap<string, HeldModel>, leaveOut: ReadonlySet<string>) => {
+  const may = new Set(
+    [...held.values()]
+      .filter((model) => !model.holder.onPath)
+      .flatMap((model) => model.using.map((chart) => chart.id)),
+  );
+  return [...leaveOut].every((id) => may.has(id));
+};
+
+/** Why a chart can't be left out: only one that uses an item off the target's path may be (T736). */
+const NOT_LEAVABLE = {
+  error: 'Only a chart that uses a cube or view off the target’s path can be left out.',
+};
+
+/**
+ * A dashboard's body without these charts (T736): no tile showing one, and
+ * none of them in a `charts` list, at any depth.
+ */
+export function withoutCharts(body: unknown, dropped: ReadonlySet<string>, key?: string): unknown {
+  if (dropped.size === 0) return body;
+  if (Array.isArray(body))
+    return body
+      .filter((each: unknown) => {
+        if (typeof each === 'string') return !(key === 'charts' && dropped.has(each));
+        const chartId =
+          each !== null && typeof each === 'object' && !Array.isArray(each)
+            ? (each as { chartId?: unknown }).chartId
+            : undefined;
+        return !(typeof chartId === 'string' && dropped.has(chartId));
+      })
+      .map((each: unknown) => withoutCharts(each, dropped));
+  if (body === null || typeof body !== 'object') return body;
+  return Object.fromEntries(
+    Object.entries(body).map(([name, each]) => [name, withoutCharts(each, dropped, name)]),
+  );
 }
 
 /** Each imported data source's name, and what was decided for it. */
@@ -491,6 +563,13 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
     // Models whose names are held: mapped (T720); the workspace root's paths, for the rest.
     const heldModels = await heldModelsIn(request, access, own, target.id, file);
     const rootPaths = (await access.models?.paths(own)) ?? new Set<string>();
+    // The charts left out, each one that uses an item off the target's path (T736).
+    const leaveOut = leaveOutIn((request.body as { leaveOut?: unknown }).leaveOut);
+    if (leaveOut === undefined)
+      return reply
+        .code(400)
+        .send({ error: 'Send the charts to leave out as a list of their ids.' });
+    if (!leavable(heldModels, leaveOut)) return reply.code(400).send(NOT_LEAVABLE);
     const items = file.items.flatMap((item): ReviewItem[] => {
       if (item.kind === 'dashboard')
         return [
@@ -498,7 +577,9 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
             kind: item.kind,
             key: item.id,
             title: item.title,
-            ownCharts: charts.filter((chart) => chart.dashboardId === item.id).length,
+            ownCharts: charts.filter(
+              (chart) => chart.dashboardId === item.id && !leaveOut.has(chart.id),
+            ).length,
             lands: 'draft',
             warnings: warningsOf({ kind: item.kind, name: item.title, ...holdings }),
           },
@@ -507,29 +588,49 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
       if (item.kind === 'chart')
         return item.dashboardId === undefined
           ? [
-              {
-                kind: item.kind,
-                key: item.id,
-                title: item.title,
-                lands: 'draft',
-                warnings: warningsOf({ kind: item.kind, name: item.title, ...holdings }),
-              },
+              leaveOut.has(item.id)
+                ? {
+                    kind: item.kind,
+                    key: item.id,
+                    title: item.title,
+                    lands: 'left-out',
+                    warnings: [],
+                  }
+                : {
+                    kind: item.kind,
+                    key: item.id,
+                    title: item.title,
+                    lands: 'draft',
+                    warnings: warningsOf({ kind: item.kind, name: item.title, ...holdings }),
+                  },
             ]
           : [];
       if (item.kind === 'model') {
         // One whose name is held: mapped to that one, not imported; off the
-        // target's path, it blocks (T720; AC-357, R73).
-        const holder = heldModels.get(item.path)?.holder;
-        if (holder !== undefined)
+        // target's path, it blocks while a chart that uses it stays in (T720,
+        // T736; AC-357, R73).
+        const mapped = heldModels.get(item.path);
+        if (mapped !== undefined)
           return [
             {
               kind: item.kind,
               key: item.path,
               title: item.path,
               lands: 'not-imported',
-              mappedTo: { name: holder.name, path: holder.path },
+              mappedTo: { name: mapped.holder.name, path: mapped.holder.path },
               held: true,
-              warnings: holder.onPath ? [] : [{ kind: 'off-path' }],
+              warnings: mapped.holder.onPath
+                ? []
+                : [
+                    {
+                      kind: 'off-path',
+                      charts: mapped.using.map((chart) => ({
+                        key: chart.id,
+                        title: chart.title,
+                        leftOut: leaveOut.has(chart.id),
+                      })),
+                    },
+                  ],
             },
           ];
         return [
@@ -610,7 +711,6 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
     const { own, file, target } = prelude;
     const owner = access.owner(request);
     const dashboard = file.items.find((item) => item.kind === 'dashboard')!;
-    const charts = file.items.filter((item): item is ExportedChart => item.kind === 'chart');
 
     /**
      * Each data source in the file given the one chosen for it (T514,
@@ -634,13 +734,27 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
         return reply.code(409).send({
           error: `“${name}” is the name of a data source that isn’t in ${where} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`,
         });
-    // So too a model whose cube or view is held off its path (T720).
+    /**
+     * So too a model whose cube or view is held off its path (T720), while a
+     * chart of the file that uses it is not left out (T736, AC-357). Those
+     * left out go, with their tiles; a chart may be left out only so.
+     */
     const heldModels = await heldModelsIn(request, access, own, target.id, file);
-    for (const { holder, asked } of heldModels.values())
-      if (!holder.onPath)
+    const leaveOut = leaveOutIn((request.body as { leaveOut?: unknown }).leaveOut);
+    if (leaveOut === undefined)
+      return reply
+        .code(400)
+        .send({ error: 'Send the charts to leave out as a list of their ids.' });
+    if (!leavable(heldModels, leaveOut)) return reply.code(400).send(NOT_LEAVABLE);
+    for (const { holder, asked, using } of heldModels.values())
+      if (!holder.onPath && using.some((chart) => !leaveOut.has(chart.id)))
         return reply.code(409).send({
-          error: `“${asked}” is the name of a cube or view that isn’t in ${where} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path.`,
+          error: `“${asked}” is the name of a cube or view that isn’t in ${where} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path, or leave out the charts that use it.`,
         });
+    const charts = file.items.filter(
+      (item): item is ExportedChart => item.kind === 'chart' && !leaveOut.has(item.id),
+    );
+    const boardBody = withoutCharts(dashboard.body, leaveOut);
     // Every other model lands in My workspace's root, where none has its path (T720).
     const landing =
       access.models === undefined
@@ -698,17 +812,17 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
      * available, and names nothing they can't see (AC-263).
      */
     const kept = new Set<string>();
-    for (const id of chartsNamedIn(dashboard.body))
+    for (const id of chartsNamedIn(boardBody))
       if (renamed.has(id)) continue;
       else if (await access.keepsChart(request, id, own)) kept.add(id);
       else renamed.set(id, randomUUID());
     // An image the importer may not see stays behind: its tile shows none (T408).
     const dropped = new Set<string>();
     if (access.keepsImage !== undefined)
-      for (const imageId of imagesNamedIn(dashboard.body))
+      for (const imageId of imagesNamedIn(boardBody))
         if (!(await access.keepsImage(request, imageId))) dropped.add(imageId);
     const board = exportedBodyOf(
-      withoutImages(withChartsRenamed(dashboard.body, renamed), dropped) as Record<string, unknown>,
+      withoutImages(withChartsRenamed(boardBody, renamed), dropped) as Record<string, unknown>,
     );
     // Whatever shape the file gave it, the dashboard names no chart but its
     // own new ones and those the importer may open (AC-263; T513's review).

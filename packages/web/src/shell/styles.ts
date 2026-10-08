@@ -2890,6 +2890,8 @@ main:has(.export-pane--over) { padding-right: 480px; }
   line-height: 18px;
 }
 .import-pane__warning > svg { flex: none; margin-top: 2px; }
+/* Leaving out the charts that use a cube off the target's path (T736). */
+.import-pane__leave { display: flex; align-items: center; gap: 8px; margin: 6px 0 0 26px; font-size: var(--wc-text-xs-size); }
 /* An import's data sources (T514; design 13, states M–P): each mapped or created. */
 .import-sources { display: grid; gap: 12px; }
 .import-source { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--wc-border-subtle); border-radius: 8px; }

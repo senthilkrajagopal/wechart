@@ -61,8 +61,12 @@ let stub: ReturnType<typeof fakeXcube>;
 let failCreate = false;
 const cookies: Record<string, string> = {};
 
-/** A file as an export elsewhere makes it, its models as given; its chart on `<mark>_orders`. */
-const exportFile = (models: readonly { path: string; content: string }[], title = MARK) => {
+/** A file as an export elsewhere makes it, its models as given; its chart on `on`, `<mark>_orders` unless said. */
+const exportFile = (
+  models: readonly { path: string; content: string }[],
+  title = MARK,
+  on = name('orders'),
+) => {
   const [board, own] = [randomUUID(), randomUUID()];
   return {
     format: 'wechart-export',
@@ -95,8 +99,8 @@ const exportFile = (models: readonly { path: string; content: string }[], title 
           schemaVersion: 2,
           title: `Orders ${title}`,
           chart: {
-            source: { cube: name('orders') },
-            wells: { measures: [`${name('orders')}.count`], dimensions: [], timeDimensions: [] },
+            source: { cube: on },
+            wells: { measures: [`${on}.count`], dimensions: [], timeDimensions: [] },
             chartType: 'bar',
           },
         },
@@ -414,16 +418,29 @@ describe('the models of an imported file (T720, AC-357, AC-356)', () => {
   // T720's review (AC-357, AC-424): one in a folder the importer can't see is mapped, its folder unsaid.
   it('maps one whose name is held in a folder the importer can’t see, naming no folder of it', async () => {
     const unseen = [{ path: pathOf('secret_copy'), content: cube(name('secret')) }];
-    const reviewed = await review(exportFile(unseen, `${MARK} unseen`));
+    // Its chart uses it, so it blocks (T736).
+    const file = exportFile(unseen, `${MARK} unseen`, name('secret'));
+    const reviewed = await review(file);
     expect(modelsIn(reviewed.json<Reviewed>())).toEqual([
       expect.objectContaining({
         lands: 'not-imported',
         mappedTo: { name: name('secret'), path: null },
         held: true,
-        warnings: [{ kind: 'off-path' }],
+        warnings: [
+          {
+            kind: 'off-path',
+            charts: [
+              {
+                key: (file.items[1] as { id: string }).id,
+                title: `Orders ${MARK} unseen`,
+                leftOut: false,
+              },
+            ],
+          },
+        ],
       }),
     ]);
-    const answer = await land(exportFile(unseen, `${MARK} unseen`));
+    const answer = await land(file);
     expect(answer.statusCode, answer.body).toBe(409);
     expect(answer.body).not.toContain(`Hidden ${MARK}`);
   });
@@ -436,44 +453,70 @@ describe('the models of an imported file (T720, AC-357, AC-356)', () => {
         content: `${cube(name('orders'))}  - name: ${name('ops')}\n    sql_table: public.${name('ops')}\n`,
       },
     ];
-    const reviewed = await review(exportFile(both, `${MARK} both`));
+    // Its chart uses the one off the path, so it blocks (T736).
+    const file = exportFile(both, `${MARK} both`, name('ops'));
+    const reviewed = await review(file);
     expect(modelsIn(reviewed.json<Reviewed>())).toEqual([
       expect.objectContaining({
         lands: 'not-imported',
         mappedTo: { name: name('ops'), path: [`Ops ${MARK}`] },
         held: true,
-        warnings: [{ kind: 'off-path' }],
+        warnings: [
+          {
+            kind: 'off-path',
+            charts: [
+              {
+                key: (file.items[1] as { id: string }).id,
+                title: `Orders ${MARK} both`,
+                leftOut: false,
+              },
+            ],
+          },
+        ],
       }),
     ]);
     const before = await everything();
-    const answer = await land(exportFile(both, `${MARK} both`));
+    const answer = await land(file);
     expect(answer.statusCode, answer.body).toBe(409);
     expect(answer.json<{ error: string }>().error).toBe(
-      `“${name('ops')}” is the name of a cube or view that isn’t in Sales ${MARK} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path.`,
+      `“${name('ops')}” is the name of a cube or view that isn’t in Sales ${MARK} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path, or leave out the charts that use it.`,
     );
     expect(await everything()).toEqual(before);
   });
 
+  // T736 (AC-357): it blocks while a chart in the file uses it; this file's one does.
   it('blocks it while a landed one of its name is off the target’s path', async () => {
     const off = [{ path: pathOf('ops_copy'), content: cube(name('ops')) }];
-    const reviewed = await review(exportFile(off, `${MARK} off`));
+    const file = exportFile(off, `${MARK} off`, name('ops'));
+    const reviewed = await review(file);
     expect(modelsIn(reviewed.json<Reviewed>())).toEqual([
       expect.objectContaining({
         lands: 'not-imported',
         mappedTo: { name: name('ops'), path: [`Ops ${MARK}`] },
         held: true,
-        warnings: [{ kind: 'off-path' }],
+        warnings: [
+          {
+            kind: 'off-path',
+            charts: [
+              {
+                key: (file.items[1] as { id: string }).id,
+                title: `Orders ${MARK} off`,
+                leftOut: false,
+              },
+            ],
+          },
+        ],
       }),
     ]);
     const before = await everything();
-    const answer = await land(exportFile(off, `${MARK} off`));
+    const answer = await land(file);
     expect(answer.statusCode, answer.body).toBe(409);
     expect(answer.json<{ error: string }>().error).toBe(
-      `“${name('ops')}” is the name of a cube or view that isn’t in Sales ${MARK} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path.`,
+      `“${name('ops')}” is the name of a cube or view that isn’t in Sales ${MARK} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path, or leave out the charts that use it.`,
     );
     expect(await everything()).toEqual(before);
     // On its path it lands, mapped: without the file's data source, which is Sales's.
-    const forOps = exportFile(off, `${MARK} off`);
+    const forOps = exportFile(off, `${MARK} off`, name('ops'));
     const there = await land(
       { ...forOps, items: forOps.items.filter((item) => item.kind !== 'data-source') },
       folders.ops,
@@ -500,5 +543,194 @@ describe('the models of an imported file (T720, AC-357, AC-356)', () => {
       parts: [{ part: `Model ${pathOf('broken')}`, why: 'Broken here' }],
     });
     expect(await everything()).toEqual(before);
+  });
+});
+
+/**
+ * T736 (AC-357; R73): an import whose model is mapped to a landed cube off
+ * the target's path is made once the charts that use it are left out, with
+ * their tiles; until then it blocks. One that no chart uses blocks nothing.
+ *
+ * The file: own charts A (on `<mark>_orders`) and B (on `<mark>_ops`), and a
+ * library chart C (on `<mark>_ops`) on the dashboard's second page; its model
+ * maps `<mark>_ops`, which /Ops publishes, off /Sales's path.
+ */
+describe('leaving out the charts that use an item off the target’s path (T736, AC-357)', () => {
+  const OFF = [{ path: pathOf('ops_again'), content: cube(name('ops')) }];
+  const chartOn = (title: string, on: string) => ({
+    schemaVersion: 2,
+    title,
+    chart: {
+      source: { cube: on },
+      wells: { measures: [`${on}.count`], dimensions: [], timeDimensions: [] },
+      chartType: 'bar',
+    },
+  });
+  const usingFile = () => {
+    const [board, a, b, c] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    return {
+      ids: { board, a, b, c },
+      file: {
+        format: 'wechart-export',
+        version: 1,
+        exportedAt: '2026-10-08T09:00:00.000Z',
+        items: [
+          {
+            kind: 'dashboard',
+            id: board,
+            title: `Leaving ${MARK}`,
+            body: {
+              schemaVersion: 1,
+              title: `Leaving ${MARK}`,
+              pages: [
+                {
+                  id: 'p1',
+                  title: 'One',
+                  items: [
+                    { id: 't1', kind: 'chart', chartId: a, w: 6, h: 30 },
+                    { id: 't2', kind: 'chart', chartId: b, w: 6, h: 30 },
+                  ],
+                },
+                {
+                  id: 'p2',
+                  title: 'Two',
+                  items: [{ id: 't3', kind: 'chart', chartId: c, w: 6, h: 30 }],
+                },
+              ],
+              charts: [a, b],
+            },
+          },
+          {
+            kind: 'chart',
+            id: a,
+            title: `A ${MARK}`,
+            dashboardId: board,
+            body: chartOn(`A ${MARK}`, name('orders')),
+          },
+          {
+            kind: 'chart',
+            id: b,
+            title: `B ${MARK}`,
+            dashboardId: board,
+            body: chartOn(`B ${MARK}`, name('ops')),
+          },
+          { kind: 'chart', id: c, title: `C ${MARK}`, body: chartOn(`C ${MARK}`, name('ops')) },
+          ...OFF.map((model) => ({ kind: 'model', ...model })),
+        ],
+      },
+    };
+  };
+  const reviewLeaving = (file: unknown, leaveOut: readonly string[]) =>
+    as('writer', {
+      method: 'POST',
+      url: REVIEWS,
+      payload: { file, targetFolderId: folders.sales, leaveOut },
+    });
+  const landLeaving = (file: unknown, leaveOut: readonly string[]) =>
+    as('writer', {
+      method: 'POST',
+      url: IMPORTS,
+      payload: { file, targetFolderId: folders.sales, leaveOut },
+    });
+  const offPathOf = (body: Reviewed) =>
+    modelsIn(body)[0]!.warnings.find((warning) => warning.kind === 'off-path');
+
+  it('names the charts that use it, and makes nothing while one of them stays in', async () => {
+    const { ids, file } = usingFile();
+    const reviewed = await review(file);
+    expect(reviewed.statusCode, reviewed.body).toBe(200);
+    expect(offPathOf(reviewed.json<Reviewed>())).toEqual({
+      kind: 'off-path',
+      charts: [
+        { key: ids.b, title: `B ${MARK}`, leftOut: false },
+        { key: ids.c, title: `C ${MARK}`, leftOut: false },
+      ],
+    });
+    const before = await everything();
+    const answer = await landLeaving(file, [ids.b]);
+    expect(answer.statusCode, answer.body).toBe(409);
+    expect(answer.json<{ error: string }>().error).toBe(
+      `“${name('ops')}” is the name of a cube or view that isn’t in Sales ${MARK} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path, or leave out the charts that use it.`,
+    );
+    expect(await everything()).toEqual(before);
+  });
+
+  it('lands without the charts left out and their tiles, Review saying so first', async () => {
+    const { ids, file } = usingFile();
+    const reviewed = await reviewLeaving(file, [ids.b, ids.c]);
+    expect(reviewed.statusCode, reviewed.body).toBe(200);
+    const body = reviewed.json<Reviewed & { items: { ownCharts?: number }[] }>();
+    expect(offPathOf(body)).toEqual({
+      kind: 'off-path',
+      charts: [
+        { key: ids.b, title: `B ${MARK}`, leftOut: true },
+        { key: ids.c, title: `C ${MARK}`, leftOut: true },
+      ],
+    });
+    expect(body.items.find((item) => item.key === ids.board)).toEqual({
+      kind: 'dashboard',
+      key: ids.board,
+      title: `Leaving ${MARK}`,
+      ownCharts: 1,
+      lands: 'draft',
+      warnings: [],
+    });
+    expect(body.items.find((item) => item.key === ids.c)).toEqual({
+      kind: 'chart',
+      key: ids.c,
+      title: `C ${MARK}`,
+      lands: 'left-out',
+      warnings: [],
+    });
+
+    const before = await everything();
+    const answer = await landLeaving(file, [ids.b, ids.c]);
+    expect(answer.statusCode, answer.body).toBe(201);
+    const { dashboard, created } = answer.json<{
+      dashboard: { id: string };
+      created: Record<string, number>;
+    }>();
+    expect(created).toEqual({ dashboards: 1, charts: 1, models: 0, dataSources: 0 });
+    // The dashboard and A alone: no B, no C.
+    const after = await everything();
+    expect(after.filter((each) => before.includes(each))).toEqual(before);
+    expect(after).toHaveLength(before.length + 2);
+    const own = await docs().localTo(dashboard.id);
+    expect(own.map((chart) => chart.body['title'])).toEqual([`A ${MARK}`]);
+    const board = (await docs().get('dashboard', dashboard.id))!.body as {
+      pages: { id: string; items: { id: string; chartId?: string }[] }[];
+      charts: string[];
+    };
+    expect(board.pages.map((page) => [page.id, page.items.map((tile) => tile.id)])).toEqual([
+      ['p1', ['t1']],
+      ['p2', []],
+    ]);
+    expect(board.pages[0]!.items[0]!.chartId).toBe(own[0]!.id);
+    expect(board.charts).toEqual([own[0]!.id]);
+  });
+
+  it('refuses leaving out a chart that uses nothing off the target’s path, making nothing', async () => {
+    const { ids, file } = usingFile();
+    const before = await everything();
+    const answer = await landLeaving(file, [ids.a, ids.b, ids.c]);
+    expect(answer.statusCode, answer.body).toBe(400);
+    expect(answer.json<{ error: string }>().error).toBe(
+      'Only a chart that uses a cube or view off the target’s path can be left out.',
+    );
+    expect(await everything()).toEqual(before);
+  });
+
+  it('blocks nothing for one that no chart in the file uses', async () => {
+    const file = exportFile(OFF, `${MARK} unused`);
+    const reviewed = await review(file);
+    expect(offPathOf(reviewed.json<Reviewed>())).toEqual({ kind: 'off-path', charts: [] });
+    const answer = await land(file);
+    expect(answer.statusCode, answer.body).toBe(201);
+    expect(answer.json<{ created: Record<string, number> }>().created).toEqual({
+      dashboards: 1,
+      charts: 1,
+      models: 0,
+      dataSources: 0,
+    });
   });
 });
