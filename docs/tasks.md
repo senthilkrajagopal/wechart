@@ -13562,7 +13562,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - `picker.spec.ts`'s own `__` names are reworked with T729, whose file it is (T475's and T633's tests to (b), the coordinator's call).
     - This entry names the references fix and AC-141 above, as the coordinator asked: T735 was not made, since the fix landed in the follow-up.
 
-- [x] T729 (AC-272, AC-275, AC-371, AC-425) Rework the tests of T428, T429, T457 and T537 to bindings by name on the path
+- [ ] T729 (AC-272, AC-275, AC-371, AC-425) Rework the tests of T428, T429, T457 and T537 to bindings by name on the path
   - Files: `e2e/security/binding.spec.ts`, `e2e/security/picker.spec.ts` (T429's and T457's binding cases), `e2e/security/copy-on-use.spec.ts`, `packages/api/src/routes/copy-on-use.test.ts`, `packages/api/src/model/references.test.ts`
   - Failing test:
     - `binding.spec.ts` (AC-275):
@@ -13595,8 +13595,19 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - Not run: `xcube-unreachable.spec.ts` (a save refused while xcube can't be reached). It stops compose's Cube, which my brief keeps me from doing. It builds no prefixed name.
     - ACs not ticked:
       - AC-272: its xcube-unreachable case is not run here.
-      - AC-425: its model, data-source and folder moves are T715's.
       - AC-275 and AC-371 stay ticked.
+    - **The review (FAIL, bookkeeping only), fixed:**
+      - **AC-425 ticked.** T715's note said "AC-425 keeps T729", and this note said its moves were T715's, so nothing owned it. Every Fails-when has a passing test:
+        - a published model referring off its path: T713's `reference-paths.test.ts` and `reference-paths.spec.ts`;
+        - a chart's, dashboard's or folder's move stranding a chart or dashboard: T714's `move-paths.test.ts` and `move-paths.spec.ts`, and this task's `copy-on-use.spec.ts`;
+        - a folder's move stranding a model's join or data source: T715's `move-paths.test.ts`, `fake.test.ts` and `move-paths.spec.ts`;
+        - a move changing no binding: `binding.spec.ts` and `copy-on-use.spec.ts` here, and T715's allowed move;
+        - a refusal changing nothing: T714 and T715, and `copy-on-use.spec.ts`;
+        - names where seen and a count for the rest: T714's and T715's `references.test.ts`.
+
+        wechart has no move of a model file or a data source of its own (T715's note).
+      - **T729 is left unticked.** Its listed case "a save while xcube can't be reached is refused, saying so" lives in `xcube-unreachable.spec.ts`, not `picker.spec.ts` as the task text has it. That spec stops compose's Cube, which my brief keeps me from doing, so it wasn't run. It builds no prefixed name. When it passes on the image, T729 and AC-272 can tick: AC-272's every other clause is shown above and by T711 and T714.
+      - `binding.spec.ts`'s old "saved again in place is refused, `shared_in_place`" step went with T428's rebinding. It was the only e2e of that refusal. AC-278 stays shown by `routes/shared-in-place.test.ts`.
 
 - [ ] T730 (AC-273, AC-310, AC-161, AC-353) Rework the tests of T435, T443, T497 and T506 to data sources named once, with `default` at the root only
   - Files: `e2e/security/data-source-binding.spec.ts` (T435), `e2e/security/root-default.spec.ts` and `deploy/helm/verify.sh` (T443), `e2e/security/data-sources.spec.ts` and `e2e/data-source.spec.ts` (T497, T506), `packages/web/src/workspaces/data-sources/{SourceEditor,ConnectionForm}.test.tsx`
