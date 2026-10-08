@@ -13808,6 +13808,12 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - **`e2e/cubePicker.ts`:** `optionOf` no longer skips `.is-hidden` rows, since there are none.
     - **`fieldPicker.test.tsx`:** already reworked by T718, unchanged.
     - **The review (PASS, on the version before the rebuild; its overlap finding is settled by the rebuild):** "Filter on"'s chip is now held to design 03's tree chip style, as the chart editor's is, in both pickers (`chipStyled`: 600 11/16, muted, a 1 px strong border, 3 px corners). This covers AC-428's "not in design 03's tree chip style". 8/8 in Chrome.
+    - **The rebuilt version's review (PASS), its fixes taken:**
+      - **The copy can't pass for the landed one.** The copy's title is changed (`… (mine)`), and both pickers must show it by that title, with the landed title nowhere. Before, "lists the landed one in the copy's place" was shown only through the chip.
+      - **The chart editor's row** shows /A/B's path and can be picked.
+      - **Filter on's row** sits in /A/B's group.
+      - **Clean-up:** the copy's removal is checked.
+      - 8/8 in Chrome.
 
 - [ ] T733 (AC-357, AC-358, AC-361) Rework the tests of T513 and T514 to imports that map landed names
   - Files: `e2e/security/export-import.spec.ts`, `packages/api/src/routes/import.test.ts`, `packages/web/src/workspaces/explore/import/{ImportSources,ImportPane}.test.tsx`

@@ -43,13 +43,13 @@ async function publish(
   folderId: string,
   { name, title }: { name: string; title: string },
 ) {
-  const file = {
-    path: `cubes/${name}.yml`,
-    // A dimension too, for a dashboard filter to pick (T633).
-    content: `cubes:\n  - name: ${name}\n    title: ${title}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n    dimensions:\n      - name: status\n        sql: status\n        type: string\n`,
-  };
+  const file = { path: `cubes/${name}.yml`, content: cubeContent(name, title) };
   expect(await landed(request, folderId, [file])).toEqual([file]);
 }
+
+/** A folder's cube, titled; a dimension too, for a dashboard filter to pick (T633). */
+const cubeContent = (name: string, title: string) =>
+  `cubes:\n  - name: ${name}\n    title: ${title}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n    dimensions:\n      - name: status\n        sql: status\n        type: string\n`;
 
 /** The muted ink a dimmed row is drawn in: direction.md §5's text-muted, as the page has it. */
 const hiddenColour = (page: Page) =>
@@ -296,7 +296,14 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
     expect(copied.status(), await copied.text()).toBe(201);
     const copyFolder = ((await copied.json()) as { folderId: string }).folderId;
     const made = { chart: '', board: '' };
+    // Its title changed, so the copy's row can't pass for the landed one's (T732's review).
+    const mine = `${CUBES.b.title} (mine)`;
     try {
+      const saved = await request.post('/api/model/publish', {
+        data: { folderId: copyFolder, files: [{ path, content: cubeContent(CUBES.b.name, mine) }] },
+        timeout: 90_000,
+      });
+      expect(saved.status(), await saved.text()).toBe(200);
       const chart = await request.post('/api/documents', {
         data: {
           kind: 'chart',
@@ -316,9 +323,18 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
       await expect(
         list.getByRole('group', { name: AB, exact: true }).locator(`[data-cube="${CUBES.b.name}"]`),
       ).toHaveCount(1);
+      // The copy's row, by its title, with its folder's path: the landed one's nowhere.
+      await expect(ofB.locator('.cube-picker__title')).toHaveText(mine);
+      await expect(ofB.locator('.cube-picker__path')).toHaveText(AB);
       await expect(ofB.locator('.cube-picker__chip')).toHaveText('Your copy');
       await chipStyled(page, ofB.locator('.cube-picker__chip'));
+      await expect(
+        list.locator('.cube-picker__title').filter({ hasText: new RegExp(`^${CUBES.b.title}$`) }),
+      ).toHaveCount(0);
       await expect(list.locator('[aria-disabled="true"]')).toHaveCount(0);
+      // Picked as any is.
+      await ofB.click();
+      await expect(picker.button).toHaveAttribute('data-value', CUBES.b.name);
 
       const board = await request.post('/api/documents', {
         data: {
@@ -339,17 +355,24 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
       await expect(fields.list.getByRole('group').first()).toHaveAttribute('aria-label', AB);
       const status = fields.list.locator(`[data-member="${CUBES.b.name}.status"]`);
       await expect(status).toHaveCount(1);
+      await expect(
+        fields.list
+          .getByRole('group', { name: AB, exact: true })
+          .locator(`[data-member="${CUBES.b.name}.status"]`),
+      ).toHaveCount(1);
       await expect(status.locator('.cube-picker__chip')).toHaveText('Your copy');
       await chipStyled(page, status.locator('.cube-picker__chip'));
-      await expect(status).toContainText(`${CUBES.b.title} · ${AB}`);
+      await expect(status).toContainText(`${mine} · ${AB}`);
+      await expect(status).not.toContainText(`${CUBES.b.title} · `);
       await expect(fields.list.locator('[aria-disabled="true"]')).toHaveCount(0);
     } finally {
       if (made.board !== '') await request.delete(`/api/documents/dashboard/${made.board}`);
       if (made.chart !== '') await request.delete(`/api/documents/chart/${made.chart}`);
-      await request.delete(
+      const dropped = await request.delete(
         `/api/model/files?folder=${encodeURIComponent(copyFolder)}&path=${encodeURIComponent(path)}`,
         { timeout: 90_000 },
       );
+      expect(dropped.status(), await dropped.text()).toBeLessThan(300);
       if (copyFolder !== 'mine') await request.delete(`/api/documents/folder/${copyFolder}`);
     }
   });
