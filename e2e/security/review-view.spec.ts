@@ -114,8 +114,10 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
       made.folder = ((await folder.json()) as { id: string }).id;
       expect(
         (
+          // `reader` (`sales-ro`) a read-only member, to be refused a decision
+          // (AC-286).
           await page.request.put(`/api/folders/${made.folder}/access`, {
-            data: { readOnly: [], readWrite: ['sales-rw'] },
+            data: { readOnly: ['sales-ro'], readWrite: ['sales-rw'] },
           })
         ).status(),
       ).toBe(200);
@@ -241,6 +243,33 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
       made.ownProposal = await propose('chart', made.own);
     });
   });
+
+  // AC-286: only its author, a read-write member of the target folder or a
+  // Super-Admin decides a proposal. `reader` is a read-only member of the
+  // folder and `manager` has no access to it: neither finds it to decide,
+  // and what they send lands nothing.
+  for (const role of ['reader', 'manager'] as const) {
+    test.describe(`as ${role}, who may not decide it`, () => {
+      test.use({ role });
+
+      test('finds no proposal to approve, and an approval sent lands nothing (AC-286)', async ({
+        page,
+      }) => {
+        await page.goto(`/reviews/${made.boardProposal}`);
+        await expect(page.getByTestId('review-error')).toHaveText('There is no such proposal.');
+        await expect(page.getByRole('button', { name: /^Approve/ })).toHaveCount(0);
+        for (const decision of ['approve', 'reject'] as const) {
+          const sent = await page.request.post(
+            `/api/proposals/${made.boardProposal}/${decision}`,
+            { data: {} },
+          );
+          expect([decision, sent.status()]).toEqual([decision, 404]);
+        }
+        // The folder's dashboard is as it was: version 2, by its versions kept.
+        expect(versionsOf(made.board)).toEqual([`1:${BOARD}`, `2:${BOARD}`]);
+      });
+    });
+  }
 
   test.describe('as super, who decides', () => {
     test.use({ role: 'super' });

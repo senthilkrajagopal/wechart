@@ -1135,7 +1135,7 @@ Traces to: §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
       Fails when: the folder changes before approval, or a description over 1,000 characters is accepted.
 - [x] AC-285 IF a proposed dashboard's cubes resolve only through models in the author's workspace, THEN THE SYSTEM SHALL put those models in the same proposal, approved or rejected together with the dashboard (`[R18]`).
       Fails when: the dashboard lands without those models, or the models land without the dashboard.
-- [ ] AC-286 THE SYSTEM SHALL let a proposal be approved or rejected only by its author, a read-write member of the target folder or a Super-Admin, and SHALL never let one land without an approval (`[R12, R17, R18]`).
+- [x] AC-286 THE SYSTEM SHALL let a proposal be approved or rejected only by its author, a read-write member of the target folder or a Super-Admin, and SHALL never let one land without an approval (`[R12, R17, R18]`).
       Fails when: a read-only member, or someone without access, can approve; or a proposal lands unapproved.
 - [x] AC-287 THE SYSTEM SHALL show each user, in the app, the proposals they may approve, each with its item, folder, author and description, and their number in the top bar, counted together with the open calculation requests listed to them (AC-050). There are no notices outside the app (`[R12]`; amended 2026-10-04, `[R60]`).
       Fails when: a proposal the user may approve is missing, ~~the number differs from the list~~ the number differs from the rows in To review plus the open calculation requests listed to them (amended 2026-10-04, `[R60]`), or a proposal is shown to someone who may not approve it.
