@@ -38,7 +38,7 @@ docker build -f deploy/Dockerfile --target web -t wechart-web:$TAG .
 
 Cube runs v1.7.45, unmodified, with the user's fork's package xcube. xcube adds the data-source introspection API that wechart generates cubes with (T275, T413–T415, T417; `docs/research/cube/introspection-api.md`). From the fork's commit `83cb9f0888` it also serves the model (T447; `docs/research/xcube-slice-2.md`), and from `c0610bb768` it serves it as items: names resolved in folders, compiled in modules (T449; `docs/research/xcube-slice-3a.md`, `xcube-slice-3b.md`). From `ed08180c37` it carries slices 4–6: the folder gate and RS256 tokens, overlays for previews, and data-source connections (T420, R31; `docs/research/xcube-slice-4.md`, `-5.md`, `-6.md`, `xcube-overlay-data-sources.md`). Each model's rollups built once more on that image's first start, in a schema of the model's own. From `e53cf2a8b8`, `GET …/items` names each cube's bound data source, a cube bound to any data source but `default` gets an SQL alias naming it, and each instance re-reports its connections' health on a heartbeat (T459; `docs/research/xcube-22132c309c.md`, `xcube-e53cf2a8b8.md`). From `919cff8c6e`, a data source changed in place is served from its new target at once, as a new epoch: no answer from its old target's cache or rollups once every Cube instance reports it live. A cube keeps its names, SQL and rollup tables while its data source is at the target it was first served with, and takes an alias only once that target changes (R38, AC-328). A query into a folder the token's groups don't reach answers `403` by `GET /v1/sql` and `/v1/dry-run` too (T501; `docs/research/xcube-4754c2c960.md`, `xcube-bc18f82c01.md`, `xcube-2d5ac86f24.md`, `xcube-919cff8c6e.md`). From `89628a0e88`, xcube runs read-only SQL on a data source's connection, a workspace overlay's own, or Cube Store, and cancels a run on whichever instance runs it (T532, R50; `docs/research/xcube-sql-runner.md`). From `6d9673ccda`, a run stopped at its time cap or cancelled answers the rows it read before the stop (T545; `docs/research/xcube-6d9673ccda.md`). From `93a5f7a73b`, the introspection routes read a workspace overlay's own data source, `?overlay=<id>` under the service credential alone (T547; `docs/research/xcube-93a5f7a73b.md`). From `2099b13f2d`, a Cube Store run stopped at its cap or cancelled answers at once with `stillRunning` and `endsBy`, since Cube Store can't stop a query; xcube follows it to its real end, and `GET …/sql/runs/{runId}` says each run's state (T548, R62; `docs/research/xcube-2099b13f2d.md`). From `46ca0ce708`, a stopped query that Cube Store's router runs, which Cube Store's timeout can't end, answers `endsBy: null` and stays `stopping` until Cube Store answers it, for up to 24 hours (T549; `docs/research/xcube-46ca0ce708.md`). From `74c933bdb8`, a building pre-aggregation build the queue's cancel takes out with `processing: true` is stopped (on PostgreSQL, its query cancelled in the source), none of it is kept, and the cancel answers what came of it: stopped, failed, finished (its version stands) or still stopping (T554; `docs/research/xcube-74c933bdb8.md`). From `256d632371`, names are one per model (R71): cubes and views share one namespace and data sources another, each compared ignoring case, and every route takes and answers bare names, with no `<folderId>__` prefix. Every reference points up its referrer's folder path (R72), and a data source named `default` is the root's alone. A refused name, data-source range or reference range says the caller's item, never where another item is (T701; `docs/research/xcube-256d632371.md`).
 
-**Upgrading to `256d632371`:** no upgrade in place. Its schema 14 has no migration from folder-prefixed names, and the image refuses to start on a schema that holds any (`xcube-256d632371.md`). It is installed only by the fresh start of T702: wechart's metadata and xcube's schema are dropped and seeded again.
+**Upgrading to `256d632371`:** no upgrade in place. Its schema 14 has no migration from folder-prefixed names, and the image refuses to start on a schema that holds any (`xcube-256d632371.md`). It is installed only by the fresh start of T702: wechart's metadata and xcube's schema are dropped and seeded again (R71 9). See "The R71 fresh start" below.
 
 **Cube Store's query timeout:** `endsBy` is a run's start plus xcube's `XCUBE_CUBESTORE_QUERY_TIMEOUT`, which must equal Cube Store's own `CUBESTORE_QUERY_TIMEOUT`: xcube can't read it from Cube Store. Both are 120 s unset, and neither compose nor the chart sets either. A `CUBESTORE_QUERY_TIMEOUT` in the chart's `cubestore.env` is given to xcube's API instances as `XCUBE_CUBESTORE_QUERY_TIMEOUT` too. In compose, set both, or neither. Cube Store's timeout ends the work of its select workers, Cube's own queries' included, but not a query its router runs, such as one over `VALUES` or `information_schema`: only restarting Cube Store stops that (`xcube-46ca0ce708.md`).
 
@@ -241,6 +241,42 @@ At the first install the chart generates these secrets:
 - for sign-in, the session cookie's secret and the OIDC client secret its Dex shares with the API. It keeps them in the Secret `wechart-secrets`. Every upgrade reads them back, so they never change (`docs/research/helm.md`, "Pattern: generate-once Secret").
 
 The Secret is kept on uninstall (`helm.sh/resource-policy: keep`). The metadata database's volume outlives an uninstall too, and its password was set when the database was first initialised, so a new password would lock the API out. A reinstall with the same release name and namespace takes the kept Secret back.
+
+## The R71 fresh start (T702)
+
+xcube `256d632371` holds one name per item and has no migration from folder-prefixed names: its schema 14 refuses to start on a schema holding any (`docs/research/xcube-256d632371.md`, 6.2). So every environment drops what it holds and seeds it again (R71 9). Dropping xcube's schema is enough for correctness. The pre-aggregation schemas and Cube Store's tables go too, since nothing would read or reclaim them again (6.3).
+
+**Docker Compose,** with every wechart API stopped (development, and both e2e suites' servers):
+
+```sh
+COMPOSE_PROJECT_NAME=wechart COMPOSE_FILE=$PWD/docker-compose.yml infra/xcube/fresh-start.sh --yes
+```
+
+In order, it:
+1. stops Cube, its refresh worker and Cube Store;
+2. drops `wechart_meta` (development and the phase-1 suite, with xcube's schema `xcube` and its models `demo`, `e2e` and `e2e-security`), `wechart_test` (the API's unit suite) and `wechart_security` (the security suite), and makes `wechart_meta` again, empty;
+3. drops any `…pre_aggregations…` schema in the sample warehouse;
+4. removes Cube Store's volume, `<project>_wechart-cubestore-data`;
+5. bootstraps xcube's role and schema again (`xcube-db-init`), starts Cube Store, Cube and its worker on the pinned image, and checks they run it and Cube is ready.
+
+Each API then seeds its own database and pushes its model when it starts: development with `WECHART_SEED=1`, and each e2e suite as its configuration does. The unit suite's set-up and the security suite's `prepare-stack.mjs` make their databases again.
+
+**Docker Desktop (Helm).** Build both wechart images at the commit to run first (§1). Then, with the release's data dropped and its generated Secrets and xcube's credential key kept:
+
+```sh
+helm --kube-context docker-desktop -n wechart uninstall wechart --wait
+kubectl --context docker-desktop -n wechart delete pvc data-wechart-meta-0 data-wechart-cubestore-0
+helm upgrade --install wechart deploy/helm/wechart \
+  --kube-context docker-desktop -n wechart \
+  -f deploy/helm/values/docker-desktop.yaml --set-string images.tag=$TAG \
+  --wait --timeout 10m
+IMAGE_TAG=$TAG deploy/helm/verify.sh --no-install
+```
+
+- The metadata database's volume goes, so the database is made again with the kept `wechart-secrets` password; xcube's schema in it goes with it.
+- Cube Store's volume goes, with every rollup table. The chart's rollups are external, so none is in the warehouse.
+- The install is a new release, so its post-install Job seeds the shared root's `default` again (AC-310). `verify.sh` checks it is there, the only `default`, and connects.
+- Kept: `wechart-secrets`, the data source's Secret, and xcube's credential key Secret and ConfigMap (see "xcube's public key"). The key stays the one the seeding seals to.
 
 ## Uninstall
 

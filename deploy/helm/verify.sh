@@ -352,6 +352,14 @@ else
   root_default="$(jq -r '[.[] | select(.folderId == "root" and .name == "default")][0].id // empty' "$body" 2> /dev/null)"
   if [[ "$status" == 200 && -n "$root_default" ]]; then
     pass "4a. the shared root holds its default data source ($(jq -r --arg id "$root_default" '.[] | select(.id == $id) | .driver' "$body"))"
+    # The only one, in any case (T702, R71: xcube 256d632371 keeps `default`
+    # to the root; research xcube-256d632371.md, 4.2).
+    others="$(jq -r '[.[] | select((.name | ascii_downcase) == "default" and .folderId != "root")] | length' "$body")"
+    if [[ "$others" == 0 ]]; then
+      pass '4a. no other folder holds a data source named default'
+    else
+      fail "4a. $others other data source(s) named default"
+    fi
     status="$(fetch -X POST -H 'content-type: application/json' --data '{}' --max-time 90 "$url/api/data-sources/$root_default/test")"
     if [[ "$status" == 200 ]] && jq -e '.ok == true' "$body" > /dev/null; then
       pass '4a. it connects: every check xcube ran passed'
