@@ -55,7 +55,25 @@ export type SyncResult =
 export type SyncReason = 'start' | 'publish' | 'reconcile';
 
 export type TreeResult =
-  { readonly kind: 'sent'; readonly hash: string } | { readonly kind: 'failed' };
+  | { readonly kind: 'sent'; readonly hash: string }
+  | { readonly kind: 'failed' }
+  /**
+   * The tree would strand cubes from their data sources, or items from what
+   * they refer to (T715; `409 data_source_range` / `reference_range`,
+   * research `xcube-256d632371.md`, "On `PUT …/folders`"): by name. The
+   * tree xcube holds is unchanged.
+   */
+  | {
+      readonly kind: 'refused';
+      readonly cubes: readonly string[];
+      readonly items: readonly string[];
+    };
+
+/** A folder's move not yet written: `folder` held by `to` (T715). */
+export interface FolderMove {
+  readonly folder: string;
+  readonly to: string;
+}
 
 /** A tree whose hash xcube answers wrong is put this many more times. */
 const TREE_RETRIES = 1;
@@ -79,8 +97,11 @@ export function modelSync({
   readonly admin: XcubeAdmin;
   /** wechart's published files, as its store holds them now. */
   readonly files: () => Promise<readonly ModelFile[]>;
-  /** The folder tree wechart publishes, by xcube id (T425). */
-  readonly tree: () => Promise<readonly TreeFolder[]>;
+  /**
+   * The folder tree wechart publishes, by xcube id (T425); with a folder's
+   * move not yet written, as it will be (T715).
+   */
+  readonly tree: (moving?: FolderMove) => Promise<readonly TreeFolder[]>;
   /**
    * Each served folder's xcube id, by wechart's (T452): a file is its
    * folder's item. The root alone where not given.
@@ -225,9 +246,12 @@ export function modelSync({
 
   let treeRunning: Promise<TreeResult> | undefined;
   let treeWaiting: Promise<TreeResult> | undefined;
-  const putTree = async (reason: SyncReason | 'folder'): Promise<TreeResult> => {
+  const putTree = async (
+    reason: SyncReason | 'folder',
+    moving?: FolderMove,
+  ): Promise<TreeResult> => {
     try {
-      const folders = await tree();
+      const folders = await tree(moving);
       const expected = treeHashOf(folders);
       let turningOn = security;
       for (let attempt = 0; attempt <= TREE_RETRIES; attempt += 1) {
@@ -235,6 +259,27 @@ export function modelSync({
         try {
           ({ hash } = await admin.folders(folders, turningOn));
         } catch (error) {
+          // A tree that would strand what is published: refused, said by name (T715).
+          if (
+            error instanceof XcubeError &&
+            error.status === 409 &&
+            (error.code === 'data_source_range' || error.code === 'reference_range')
+          ) {
+            const names = (key: string) => {
+              const value = error.details?.[key];
+              return Array.isArray(value)
+                ? value.filter((each): each is string => typeof each === 'string')
+                : [];
+            };
+            const refused = { cubes: names('cubes'), items: names('items') };
+            // Said where it isn't a move's own check: wechart's tree and xcube's then differ (T715's review).
+            if (moving === undefined)
+              log.warn(
+                { model, reason, ...refused },
+                'xcube refused the folder tree: it would leave items using what isn’t in their folder or one of its ancestors',
+              );
+            return { kind: 'refused', ...refused };
+          }
           /**
            * An older xcube is connected, so security can't be turned on yet
            * (`409 older_instances`). The tree and its groups are put without
@@ -319,6 +364,26 @@ export function modelSync({
         return start(reason);
       });
       return treeWaiting;
+    },
+
+    /**
+     * A folder's move asked of xcube before it is written (T715, AC-425):
+     * the tree as it will be, put after whatever push is under way and never
+     * merged with another. `sent` holds it in xcube already; `refused` leaves
+     * xcube's tree as it was.
+     */
+    checkMove(moving: FolderMove): Promise<TreeResult> {
+      const prior = treeRunning ?? Promise.resolve();
+      const run = prior
+        .then(
+          () => putTree('folder', moving),
+          () => putTree('folder', moving),
+        )
+        .finally(() => {
+          if (treeRunning === run) treeRunning = undefined;
+        });
+      treeRunning = run;
+      return run;
     },
   };
 }

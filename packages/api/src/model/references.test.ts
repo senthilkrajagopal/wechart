@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildServer } from '../server';
-import { referencesOf, strandedRefusal, usersOfCubes } from './references';
+import { referencesOf, strandedModelsRefusal, strandedRefusal, usersOfCubes } from './references';
 
 /**
  * T147 / AC-141: WHEN the user edits a member that charts use, THE SYSTEM
@@ -328,6 +328,59 @@ describe('a move’s stranded references, as the mover may see them (T714)', () 
       hidden: 2,
     });
     expect(JSON.stringify(refusal)).not.toMatch(/Secret|Hidden|h_cube/);
+  });
+
+  /**
+   * T715 (AC-425, AC-322, AC-291): a folder move xcube refuses, its cubes and
+   * views that would use a data source, or refer to a cube, off their folder's
+   * path, named where the mover may see their folder's models and counted
+   * where not, never naming what they use or refer to.
+   */
+  it('names each cube or view a folder’s move strands from its data source or a cube it refers to', () => {
+    expect(
+      strandedModelsRefusal(
+        [
+          { kind: 'cube', name: 'lines', folderId: 'b', uses: 'data source' },
+          { kind: 'view', name: 'sales_view', folderId: 'b', uses: 'cube' },
+        ],
+        sees,
+      ),
+    ).toEqual({
+      error:
+        'Moved, “lines” would use a data source that isn’t in its folder or one above it; “sales_view” would refer to a cube that isn’t in its folder or one above it. Nothing was moved.',
+      stranded: [
+        { kind: 'cube', name: 'lines', uses: 'data source' },
+        { kind: 'view', name: 'sales_view', uses: 'cube' },
+      ],
+    });
+  });
+
+  it('counts the cubes and views in folders the mover can’t see', () => {
+    const refusal = strandedModelsRefusal(
+      [
+        { kind: 'cube', name: 'lines', folderId: 'b', uses: 'cube' },
+        { kind: 'cube', name: 'secret', folderId: 'h', uses: 'data source' },
+      ],
+      sees,
+    );
+    expect(refusal).toEqual({
+      error:
+        'Moved, “lines” would refer to a cube that isn’t in its folder or one above it. 1 cube or view in a folder you can’t see would use what isn’t in its folder or one above it. Nothing was moved.',
+      stranded: [{ kind: 'cube', name: 'lines', uses: 'cube' }],
+      hidden: 1,
+    });
+    expect(JSON.stringify(refusal)).not.toContain('secret');
+    expect(
+      strandedModelsRefusal(
+        [
+          { kind: 'cube', name: 'secret', folderId: 'h', uses: 'data source' },
+          { kind: 'view', name: 'hidden_view', folderId: 'h', uses: 'cube' },
+        ],
+        sees,
+      ).error,
+    ).toBe(
+      'Moved, 2 cubes or views in folders you can’t see would use what isn’t in their folders or one above them. Nothing was moved.',
+    );
   });
 
   it('says one it can’t name alone', () => {

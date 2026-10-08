@@ -159,6 +159,61 @@ export function strandedRefusal(
 }
 
 /**
+ * A cube or view a folder's move would leave using a data source, or
+ * referring to a cube, kept off its folder's path (T715, AC-425), as xcube
+ * refuses the tree (`409 data_source_range` / `reference_range`, research
+ * `xcube-256d632371.md`, "On `PUT …/folders`"), which names the referrers
+ * and never what they use.
+ */
+export interface StrandedModel {
+  readonly kind: 'cube' | 'view';
+  readonly name: string;
+  /** Where it is kept: whether the mover may see its folder's models is asked of this. */
+  readonly folderId: string | null;
+  readonly uses: 'data source' | 'cube';
+}
+
+/**
+ * A folder's move refused for the models it strands (T715), said as AC-322
+ * says a break: each cube or view in a folder whose models the mover may see
+ * named, the rest counted.
+ */
+export function strandedModelsRefusal(
+  stranded: readonly StrandedModel[],
+  seesModels: (folderId: string | null) => boolean,
+): {
+  error: string;
+  stranded: Omit<StrandedModel, 'folderId'>[];
+  hidden?: number;
+} {
+  const named = stranded.filter((each) => seesModels(each.folderId));
+  const hidden = stranded.length - named.length;
+  const said = named.map(({ name, uses }) =>
+    uses === 'data source'
+      ? `“${name}” would use a data source that isn’t in its folder or one above it`
+      : `“${name}” would refer to a cube that isn’t in its folder or one above it`,
+  );
+  const counted =
+    hidden === 0
+      ? ''
+      : hidden === 1
+        ? '1 cube or view in a folder you can’t see would use what isn’t in its folder or one above it.'
+        : `${String(hidden)} cubes or views in folders you can’t see would use what isn’t in their folders or one above them.`;
+  const error =
+    said.length === 0
+      ? `Moved, ${counted} Nothing was moved.`
+      : `Moved, ${said.join('; ')}.${counted === '' ? '' : ` ${counted}`} Nothing was moved.`;
+  return {
+    error,
+    stranded: named.map(({ folderId: _folder, ...rest }) => {
+      void _folder;
+      return rest;
+    }),
+    ...(hidden === 0 ? {} : { hidden }),
+  };
+}
+
+/**
  * The items that use any of these cubes, by full name (T428, AC-275): the
  * charts whose query names one, and the dashboards whose own filters do.
  * Read where each keeps references, not from every string in it: a refusal

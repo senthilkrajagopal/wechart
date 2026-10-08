@@ -1050,6 +1050,37 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           instances: ['xcube-v3-old'],
         });
       }
+      // What the new tree strands that the held one didn't (T715; research
+      // `xcube-256d632371.md`, "On `PUT …/folders`"): cubes from their data
+      // sources, items from what they refer to, by name, never a folder.
+      const kept = headOf(model)?.items ?? [];
+      if (held.tree !== undefined && kept.length > 0) {
+        const before = held.tree;
+        const newly = (refused: (tree: readonly TreeFolder[]) => ItemError[]) => {
+          const was = new Set(refused(before).map((error) => error.name));
+          return [
+            ...new Set(
+              refused(folders)
+                .map((error) => error.name)
+                .filter((name) => !was.has(name)),
+            ),
+          ].sort();
+        };
+        const cubes = newly((tree) =>
+          rangeRefused(model, kept, kept, tree).filter(
+            (error) => error.kind === 'data_source_range',
+          ),
+        );
+        const items = newly((tree) => pathRefused(kept, kept, tree));
+        if (cubes.length > 0 || items.length > 0)
+          return answer(409, {
+            error:
+              "The folder tree would leave items using what isn't in their folder or one of its ancestors",
+            code: cubes.length > 0 ? 'data_source_range' : 'reference_range',
+            cubes,
+            items,
+          });
+      }
       held.tree = folders;
       if (security !== undefined) held.security = security;
       const hash = wrongTreeHash > 0 ? 'f'.repeat(64) : treeHashOf(folders);

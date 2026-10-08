@@ -78,13 +78,16 @@ import { cubesUsing, extendsIn } from './xcube/used-by';
 import { landedNamesOf, type Except } from './model/names';
 import { declaredIn } from './model/split';
 import type { PublicationStore } from './xcube/publications';
+import type { FolderMove, TreeResult } from './xcube/snapshot';
 import { registerModelPublishing } from './model/publish';
 import {
   referencesOf,
+  strandedModelsRefusal,
   strandedRefusal,
   usersOfCubes,
   type ReferenceDocument,
   type Stranded,
+  type StrandedModel,
 } from './model/references';
 import { searchable, visibleCounts, type Visibility } from './access/visible';
 import { aliasIn, aliasOut } from './access/workspace-alias';
@@ -195,6 +198,12 @@ export interface BuildOptions {
    * xcube, so a folder made a moment ago is one it holds (T452).
    */
   readonly beforeFolderPublish?: () => Promise<unknown>;
+  /**
+   * A folder's move, put to xcube's tree before it is written (T715,
+   * AC-425): refused where it would leave a cube off its data source's path,
+   * or an item referring off its own; `sent` holds it there already.
+   */
+  readonly checkFolderMove?: (move: FolderMove) => Promise<TreeResult>;
   /** xcube's admin routes, for its check of a publish (T445), where xcube is configured. */
   readonly xcube?: XcubeAdmin;
   /**
@@ -465,6 +474,7 @@ export function buildServer({
   afterFolderChange,
   folders,
   beforeFolderPublish,
+  checkFolderMove,
   xcube,
   serviceToken,
   querySigner,
@@ -505,6 +515,8 @@ export function buildServer({
             config.trustProxy === true ? true : [...(config.trustProxy as readonly string[])],
         }),
   });
+  /** The folder moves whose tree xcube was given before they were written (T715). */
+  const treePutAhead = new WeakSet<FastifyRequest>();
   /**
    * A folder made, changed, moved or removed through any of the document
    * routes: the tree is put to xcube once the answer is sent (T449, AC-333).
@@ -513,6 +525,14 @@ export function buildServer({
    */
   if (afterFolderChange !== undefined)
     app.addHook('onResponse', async (request, reply) => {
+      // A move put to xcube's tree ahead of its write, which then failed:
+      // the tree as wechart has it put back (T715).
+      if (treePutAhead.has(request) && reply.statusCode >= 300) {
+        void afterFolderChange().catch((error: unknown) => {
+          app.log.warn({ err: error }, 'could not put the folder tree to xcube');
+        });
+        return;
+      }
       // A write only: not a read, a HEAD included (T449's review).
       if (reply.statusCode >= 300 || !['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method))
         return;
@@ -3016,6 +3036,32 @@ export function buildServer({
     ];
     return stranded.length === 0 ? undefined : { kind: 'refused', stranded };
   };
+  /**
+   * The cubes and views xcube refused a folder's move for (T715), each with
+   * the folder it is kept in, found among the items xcube holds: none where
+   * it can't be found, so it is counted, never named, where the mover's
+   * sight is asked.
+   */
+  const modelsStrandedBy = async (
+    tree: Extract<TreeResult, { kind: 'refused' }>,
+  ): Promise<StrandedModel[]> => {
+    const held = await xcube?.items().catch(() => undefined);
+    const served = await (folders?.() ?? Promise.resolve(ROOT_ONLY)).catch(() => undefined);
+    const wechartIdOf = new Map([...(served?.ids ?? [])].map(([id, xcubeId]) => [xcubeId, id]));
+    const of = (name: string, uses: StrandedModel['uses']): StrandedModel => {
+      const item = held?.find((each) => each.name.toLowerCase() === name.toLowerCase());
+      return {
+        kind: item?.kind === 'view' ? 'view' : 'cube',
+        name,
+        folderId: item === undefined ? null : (wechartIdOf.get(item.folderId) ?? null),
+        uses,
+      };
+    };
+    return [
+      ...tree.cubes.map((name) => of(name, 'data source')),
+      ...tree.items.map((name) => of(name, 'cube')),
+    ];
+  };
   /** A move refused for what it strands, named as the mover may see it (AC-322). */
   const strandedAnswer = (
     reply: FastifyReply,
@@ -5365,6 +5411,34 @@ export function buildServer({
             : await copiesOnMove({ kind, id, to: body.folderId });
         const refused = strandedOfMove(checked, onMove);
         if (refused !== undefined) return strandedAnswer(reply, found.seen, refused);
+        // Its models' references, asked of xcube's tree as it will be (T715,
+        // AC-425, AC-291), where it holds a model or a data source: only what
+        // is in it can be stranded by its move.
+        if (
+          checkFolderMove !== undefined &&
+          (await modelsBeneath(id)) + (await dataSourcesBeneath(id)) > 0
+        ) {
+          // Put back as wechart has it unless the move is written: a check
+          // that failed may have landed in xcube all the same (T715's review).
+          treePutAhead.add(request);
+          const tree = await checkFolderMove({ folder: id, to: body.folderId });
+          if (tree.kind === 'failed')
+            return reply.code(502).send({
+              error:
+                'xcube could not be asked whether this move leaves a model referring off its folder’s path, so nothing was moved.',
+            });
+          if (tree.kind === 'refused')
+            return reply
+              .code(422)
+              .send(
+                strandedModelsRefusal(
+                  await modelsStrandedBy(tree),
+                  (folderId) =>
+                    found.seen === undefined ||
+                    (folderId !== null && found.seen.rights.get(folderId)?.kinds === 'all'),
+                ),
+              );
+        }
         if (onMove.kind === 'ok' && onMove.dashboards.length > 0) {
           // As `relocate` writes it.
           const { description: _was, ...rest } = stored.body;

@@ -228,6 +228,89 @@ describe('the stub xcube’s data-source rule (T712)', () => {
 });
 
 /**
+ * T715 (AC-425): `PUT …/folders` is refused, `409`, when the new tree would
+ * leave a cube on a data source, or an item referring to a cube, off its
+ * folder's path that wasn't before, naming those cubes and items and never a
+ * folder; the tree held is left as it was (research `xcube-256d632371.md`,
+ * "On `PUT …/folders`").
+ */
+describe('the stub xcube’s folder push (T715)', () => {
+  const DEEP = [
+    { id: 'froot', parentId: null },
+    { id: 'fa', parentId: 'froot' },
+    { id: 'fab', parentId: 'fa' },
+    { id: 'fc', parentId: 'froot' },
+  ];
+  const moved = DEEP.map((folder) =>
+    folder.id === 'fab' ? { ...folder, parentId: 'fc' } : folder,
+  );
+
+  it('refuses a tree stranding a cube from its data source, or a join from its cube, and keeps the one held', async () => {
+    const { stub, admin } = stubbed();
+    const held = await admin.folders(DEEP);
+    stub.holdConnections('dev', [{ folderId: 'fa', name: 'warehouse' }]);
+    stub.holdItems('dev', [
+      cube('fa', 'base'),
+      { ...cube('fab', 'on_wh'), yaml: 'cubes:\n  - name: on_wh\n    data_source: warehouse\n' },
+      {
+        ...cube('fab', 'joiner'),
+        yaml: 'cubes:\n  - name: joiner\n    joins:\n      - name: base\n        sql: "1 = 1"\n        relationship: many_to_one\n',
+      },
+    ]);
+
+    const refused = await admin.folders(moved).catch((error: unknown) => error);
+
+    expect(refused).toMatchObject({
+      status: 409,
+      code: 'data_source_range',
+      details: {
+        error:
+          "The folder tree would leave items using what isn't in their folder or one of its ancestors",
+        cubes: ['on_wh'],
+        items: ['joiner'],
+      },
+    });
+    expect(JSON.stringify((refused as { details: unknown }).details)).not.toMatch(/"f(a|ab|c)"/);
+    // The tree held is the one before: putting it again gives its hash.
+    expect((await admin.folders(DEEP)).hash).toBe(held.hash);
+  });
+
+  it('takes a tree that strands nothing, or only what was already off its path', async () => {
+    const { stub, admin } = stubbed();
+    await admin.folders(DEEP);
+    stub.holdConnections('dev', [{ folderId: 'fc', name: 'lake' }]);
+    stub.holdItems('dev', [
+      cube('fab', 'alone'),
+      // Off its path before the move and after it: not this push's to refuse.
+      {
+        ...cube('fa', 'already'),
+        yaml: 'cubes:\n  - name: already\n    data_source: lake\n',
+      },
+    ]);
+
+    await expect(admin.folders(moved)).resolves.toMatchObject({ hash: expect.any(String) });
+  });
+
+  it('names only references, code reference_range, where no cube leaves its data source', async () => {
+    const { stub, admin } = stubbed();
+    await admin.folders(DEEP);
+    stub.holdItems('dev', [
+      cube('fa', 'base'),
+      {
+        ...cube('fab', 'child'),
+        yaml: 'cubes:\n  - name: child\n    extends: base\n',
+      },
+    ]);
+
+    await expect(admin.folders(moved)).rejects.toMatchObject({
+      status: 409,
+      code: 'reference_range',
+      details: { cubes: [], items: ['child'] },
+    });
+  });
+});
+
+/**
  * T711 (AC-272): `POST …/resolve` answers the one item of a name, in any
  * case and in any folder, by its stored name; the folder asked from is only
  * checked to be in the tree (research `xcube-256d632371.md`, 3.3). Whether

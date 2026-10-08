@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import type { SealedV1 } from '@wechart/core';
 import type { FastifyInstance, InjectOptions } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -7,11 +8,17 @@ import { pgSessionStore } from '../auth/session-store';
 import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
 import { closeDb, getDb } from '../db/client';
 import { catalog } from '../repos/catalog';
+import { dataSourceStore } from '../repos/data-sources';
 import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
+import { modelFileStore } from '../repos/model-files';
 import { buildServer } from '../server';
 import { xcubeAdmin } from '../xcube/client';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
+import { publishedTree, xcubeIdOf } from '../xcube/folders';
+import { itemsOf } from '../xcube/items';
+import { publicationStore } from '../xcube/publications';
+import { modelSync } from '../xcube/snapshot';
 
 /**
  * T714 (AC-425, AC-272, AC-263, AC-371): every cube or view a chart or a
@@ -351,5 +358,228 @@ describe('a move that keeps every cube on the path (T714, AC-272)', () => {
     const [copy] = await docs().localTo(ids.onF);
     expect(copy).toBeDefined();
     expect((await bodyOf('chart', copy!.id))['chart'] as unknown).toEqual(definition('Orders'));
+  });
+});
+
+/**
+ * T715 (AC-425, AC-291, AC-275, AC-322): a folder's move that would leave a
+ * cube on a data source, or a join, `extends` or view to a cube, off its
+ * folder's path is refused as xcube refuses its tree (`409
+ * data_source_range` / `reference_range`; research `xcube-256d632371.md`,
+ * "On `PUT …/folders`"), naming the cubes the mover may see, and nothing
+ * moves, in wechart or in xcube's tree. A move keeping every reference
+ * applies and rebinds nothing.
+ *
+ *   /MA <run>        writer read-write; the data source `<run>_wh` and the cube `<run>_base`
+ *   /MA <run>/MB     `<run>_joiner`, joining `<run>_base`, and `<run>_on_wh`, on `<run>_wh`
+ *   /MA <run>/MK     `<run>_alone`, referring to nothing
+ *   /MA <run>/ME     nothing of a model's
+ *   /MC <run>        writer read-write, beside /MA
+ */
+describe('a folder’s move that would leave a model referring off its path (T715, AC-425)', () => {
+  const RUN = MARK.toLowerCase();
+  const names = {
+    wh: `${RUN}_wh`,
+    base: `${RUN}_base`,
+    joiner: `${RUN}_joiner`,
+    onWh: `${RUN}_on_wh`,
+    alone: `${RUN}_alone`,
+    joinsToo: `${RUN}_joins_too`,
+  };
+  const at = { ma: '', mb: '', mk: '', me: '', mj: '', mc: '' };
+  const files = () => modelFileStore(getDb());
+  const sources = () => dataSourceStore(getDb());
+  const stub = fakeXcube();
+  let models: FastifyInstance;
+  let writer = '';
+  const asWriter = (options: InjectOptions) =>
+    models.inject({ ...options, headers: { ...options.headers, cookie: writer } });
+  const sealed = (tag: string): SealedV1 => ({
+    v: 1,
+    kid: 'kid-1',
+    enc: Buffer.alloc(32, `enc-${tag}`).toString('base64url'),
+    ct: Buffer.alloc(272, `ct-${tag}`).toString('base64url'),
+  });
+  const cubeYaml = (name: string, lines: readonly string[] = []) =>
+    ['cubes:', `  - name: ${name}`, `    sql_table: public.${name}`, ...lines, ''].join('\n');
+  /** Ours, as wechart's store has them now. */
+  const ourFolders = async () =>
+    Promise.all(
+      Object.values(at).map(async (id) => ({
+        id,
+        parentId: ((await docs().get('folder', id))?.body['folderId'] as string) ?? null,
+      })),
+    );
+  const xids = () => new Map(['root', ...Object.values(at)].map((id) => [id, xcubeIdOf(id)!]));
+  const tree = async (moving?: { folder: string; to: string }) =>
+    publishedTree(
+      (await ourFolders()).map((folder) =>
+        folder.id === moving?.folder ? { ...folder, parentId: moving.to } : folder,
+      ),
+      xids(),
+    );
+  const parentOf = async (folderId: string) =>
+    stub.tree('dev')?.find((folder) => folder.id === xcubeIdOf(folderId))?.parentId;
+
+  beforeAll(async () => {
+    const rw = { readOnly: null, readWrite: ['sales-rw'] };
+    at.ma = await doc('folder', { title: `MA ${MARK}`, folderId: 'root', access: rw });
+    at.mb = await doc('folder', { title: `MB ${MARK}`, folderId: at.ma });
+    at.mk = await doc('folder', { title: `MK ${MARK}`, folderId: at.ma });
+    at.me = await doc('folder', { title: `ME ${MARK}`, folderId: at.ma });
+    at.mj = await doc('folder', { title: `MJ ${MARK}`, folderId: at.ma });
+    at.mc = await doc('folder', { title: `MC ${MARK}`, folderId: 'root', access: rw });
+    await sources().create({
+      folderId: at.ma,
+      name: names.wh,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: false },
+      sealed: { password: sealed(names.wh) },
+    });
+    await files().write([
+      { folderId: at.ma, path: `cubes/${names.base}.yml`, content: cubeYaml(names.base) },
+      {
+        folderId: at.mb,
+        path: `cubes/${names.joiner}.yml`,
+        content: cubeYaml(names.joiner, [
+          '    joins:',
+          `      - name: ${names.base}`,
+          `        sql: "{CUBE}.id = {${names.base}}.id"`,
+          '        relationship: many_to_one',
+        ]),
+      },
+      {
+        folderId: at.mb,
+        path: `cubes/${names.onWh}.yml`,
+        content: cubeYaml(names.onWh, [`    data_source: ${names.wh}`]),
+      },
+      { folderId: at.mk, path: `cubes/${names.alone}.yml`, content: cubeYaml(names.alone) },
+      {
+        folderId: at.mj,
+        path: `cubes/${names.joinsToo}.yml`,
+        content: cubeYaml(names.joinsToo, [
+          '    joins:',
+          `      - name: ${names.base}`,
+          `        sql: "{CUBE}.id = {${names.base}}.id"`,
+          '        relationship: many_to_one',
+        ]),
+      },
+    ]);
+
+    const admin = xcubeAdmin({
+      cubeApiUrl: config.cubeApiUrl,
+      model: 'dev',
+      token: FAKE_ADMIN_TOKEN,
+      fetch: stub.fetch,
+    });
+    await admin.folders(await tree());
+    stub.holdConnections('dev', [{ folderId: xcubeIdOf(at.ma)!, name: names.wh }]);
+    stub.holdItems('dev', itemsOf(await files().inFolders(Object.values(at)), xids()));
+    const sync = modelSync({
+      model: 'dev',
+      admin,
+      files: () => files().inFolders(Object.values(at)),
+      tree,
+      publications: publicationStore(getDb()),
+      log: { warn: () => undefined, info: () => undefined },
+    });
+    models = buildServer({
+      config,
+      sessions: pgSessionStore(getDb()),
+      documents: docs(),
+      catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
+      modelFiles: files(),
+      dataSources: sources(),
+      xcube: admin,
+      folders: async () => ({
+        ids: xids(),
+        parents: new Map<string, string | null>([
+          ['root', null],
+          ...(await ourFolders()).map((folder) => [folder.id, folder.parentId] as const),
+        ]),
+      }),
+      checkFolderMove: (move) => sync.checkMove(move),
+      afterFolderChange: () => sync.pushTree('folder'),
+    });
+    writer = await signIn(models, USERS['writer']!);
+  });
+
+  afterAll(async () => {
+    if (models !== undefined) await models.close();
+    const ours = Object.values(at).filter((id) => id !== '');
+    await getDb().deleteFrom('model_files').where('folder_id', 'in', ours).execute();
+    await getDb().deleteFrom('data_sources').where('folder_id', 'in', ours).execute();
+  });
+
+  const moveFolder = (id: string, to: string) =>
+    asWriter({ method: 'PATCH', url: `/api/documents/folder/${id}`, payload: { folderId: to } });
+
+  it('refuses moving /MA/MB under /MC, naming its cubes cut off from their data source and their join, and moves nothing', async () => {
+    const answer = await moveFolder(at.mb, at.mc);
+
+    expect(answer.statusCode, answer.body).toBe(422);
+    expect(answer.json()).toEqual({
+      error: `Moved, “${names.onWh}” would use a data source that isn’t in its folder or one above it; “${names.joiner}” would refer to a cube that isn’t in its folder or one above it. Nothing was moved.`,
+      stranded: [
+        { kind: 'cube', name: names.onWh, uses: 'data source' },
+        { kind: 'cube', name: names.joiner, uses: 'cube' },
+      ],
+    });
+    // Neither what it uses nor where that is.
+    expect(answer.body).not.toContain(names.wh);
+    expect(answer.body).not.toContain(xcubeIdOf(at.ma)!);
+    expect((await bodyOf('folder', at.mb))['folderId']).toBe(at.ma);
+    expect(await parentOf(at.mb)).toBe(xcubeIdOf(at.ma));
+  });
+
+  it('moves /MA/MK under /MC, in wechart and in xcube’s tree, its model as it was (AC-275)', async () => {
+    const before = await files().inFolders([at.mk]);
+
+    const answer = await moveFolder(at.mk, at.mc);
+
+    expect(answer.statusCode, answer.body).toBe(200);
+    expect((await bodyOf('folder', at.mk))['folderId']).toBe(at.mc);
+    expect(await parentOf(at.mk)).toBe(xcubeIdOf(at.mc));
+    expect(await files().inFolders([at.mk])).toEqual(before);
+    expect(stub.head('dev')?.items.find((item) => item.name === names.alone)?.folderId).toBe(
+      xcubeIdOf(at.mk),
+    );
+  });
+
+  it('moves /MA/MJ under /MA/MB, its join still on its path, rebinding nothing (AC-275)', async () => {
+    const before = await files().inFolders([at.mj]);
+    const held = () => stub.head('dev')?.items.find((item) => item.name === names.joinsToo);
+    const was = held();
+    expect(was).toBeDefined();
+
+    const answer = await moveFolder(at.mj, at.mb);
+
+    expect(answer.statusCode, answer.body).toBe(200);
+    expect((await bodyOf('folder', at.mj))['folderId']).toBe(at.mb);
+    expect(await parentOf(at.mj)).toBe(xcubeIdOf(at.mb));
+    expect(await files().inFolders([at.mj])).toEqual(before);
+    expect(held()).toEqual(was);
+  });
+
+  it('refuses a move of a folder holding a model while xcube can’t be asked, and moves nothing', async () => {
+    stub.down(true);
+    try {
+      const answer = await moveFolder(at.mb, at.mc);
+      expect(answer.statusCode, answer.body).toBe(502);
+      expect(answer.json()).toEqual({
+        error:
+          'xcube could not be asked whether this move leaves a model referring off its folder’s path, so nothing was moved.',
+      });
+      expect((await bodyOf('folder', at.mb))['folderId']).toBe(at.ma);
+
+      // One holding no model or data source isn't asked.
+      const plain = await moveFolder(at.me, at.mc);
+      expect(plain.statusCode, plain.body).toBe(200);
+      expect((await bodyOf('folder', at.me))['folderId']).toBe(at.mc);
+    } finally {
+      stub.down(false);
+    }
   });
 });

@@ -147,8 +147,9 @@ async function main(): Promise<void> {
           files: () => modelFiles.all(),
           // Each folder with its allowed groups, which xcube's folder gate
           // admits by, and the gate on with sign-in (T436, AC-320).
-          tree: async () => {
-            const tree = await folderIds.tree();
+          // With a folder's move not yet written, as it will be (T715).
+          tree: async (moving) => {
+            const tree = await folderIds.tree(moving);
             const { ids } = await folderIds.published();
             return withAllowedGroups(tree, ids, await folderAccess.tree(), config.superAdminGroup);
           },
@@ -233,9 +234,11 @@ async function main(): Promise<void> {
           // And before a publish into a folder, which xcube's tree must hold
           // (T452). A push that failed is said, and the check then says why.
           beforeFolderPublish: async () => {
-            if ((await sync.pushTree('publish')).kind === 'failed')
+            if ((await sync.pushTree('publish')).kind !== 'sent')
               throw new Error('xcube’s folder tree could not be put before a publish');
           },
+          // A folder's move asked of xcube's tree before it is written (T715, AC-425).
+          checkFolderMove: (move) => sync.checkMove(move),
         }),
     // Where each folder's model files are published (T452).
     folders: () => folderIds.published(),

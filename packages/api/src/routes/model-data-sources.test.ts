@@ -277,8 +277,9 @@ describe('a model’s data sources, bound by name on its path (T712, AC-273)', (
         ],
       });
       // Never the folder that keeps it.
-      expect(saved.body).not.toContain('fabc');
-      expect(saved.body).not.toContain('fac');
+      // As an id of its own, not inside a random UUID that happens to spell it.
+      expect(saved.body).not.toMatch(/\bfabc\b/);
+      expect(saved.body).not.toMatch(/\bfac\b/);
       const stored = await files().inFolders([ids.project]);
       expect(stored.map((each) => each.path)).not.toContain(`cubes/${name}.yml`);
     }

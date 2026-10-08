@@ -67,9 +67,13 @@ export function folderXcubeIds(db: Kysely<Database>) {
   return {
     /** Each folder's xcube id, given it now if it has none yet. */
     of,
-    /** The tree wechart publishes: the root and every folder reaching it, by xcube id. */
-    async tree(): Promise<TreeFolder[]> {
-      return (await publishedNow()).tree;
+    /**
+     * The tree wechart publishes: the root and every folder reaching it, by
+     * xcube id. With a folder's move not yet written, as it will be once it
+     * is (T715): `moving.folder` held by `moving.to`.
+     */
+    async tree(moving?: { readonly folder: string; readonly to: string }): Promise<TreeFolder[]> {
+      return (await publishedNow(moving)).tree;
     },
 
     /**
@@ -92,7 +96,7 @@ export function folderXcubeIds(db: Kysely<Database>) {
    * with no id yet is found by a join and given one; then every id is read
    * whole, with no list of folders in the statement.
    */
-  async function publishedNow() {
+  async function publishedNow(moving?: { readonly folder: string; readonly to: string }) {
     const missing = await db
       .selectFrom('documents')
       .leftJoin('folder_xcube_ids', 'folder_xcube_ids.folder_id', 'documents.id')
@@ -102,10 +106,13 @@ export function folderXcubeIds(db: Kysely<Database>) {
       .execute();
     for (const folderId of [ROOT_FOLDER_ID, ...missing.map((row) => row.id)])
       if ((await stored([folderId])).length === 0) await give(folderId);
-    const [folders, all] = await Promise.all([
+    const [kept, all] = await Promise.all([
       db.selectFrom('documents').select(['id', 'folder_id']).where('kind', '=', 'folder').execute(),
       db.selectFrom('folder_xcube_ids').select(['folder_id', 'xcube_id']).execute(),
     ]);
+    const folders = kept.map((folder) =>
+      folder.id === moving?.folder ? { ...folder, folder_id: moving.to } : folder,
+    );
     const ids = new Map(all.map((row) => [row.folder_id, row.xcube_id]));
     return {
       tree: publishedTree(

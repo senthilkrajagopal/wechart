@@ -21,7 +21,9 @@ import { changeShared } from './shared-change';
  */
 const RUN = Math.random().toString(36).slice(2, 8);
 const A_CUBE = `mp_a_${RUN}`;
-const ids = { a: '', b: '', c: '', d: '', stranding: '', keeping: '' };
+const ids = { a: '', b: '', c: '', d: '', j: '', stranding: '', keeping: '' };
+// T715's: /MP A/MP J's cube, joining /MP A's.
+const JOINER = `mp_join_${RUN}`;
 const STRANDING = `Stranding ${RUN}`;
 const KEEPING = `Keeping ${RUN}`;
 
@@ -37,11 +39,12 @@ const folderOf = async (request: APIRequestContext, kind: string, id: string) =>
     }
   ).body.folderId;
 
-const cubeYaml = (name: string) =>
+const cubeYaml = (name: string, lines: readonly string[] = []) =>
   [
     'cubes:',
     `  - name: ${name}`,
     '    sql_table: public.orders',
+    ...lines,
     '    dimensions:',
     '      - name: id',
     '        sql: id',
@@ -82,9 +85,9 @@ async function boardOn(request: APIRequestContext, title: string) {
   return id;
 }
 
-/** Moves a dashboard in /MP A/MP B from Explore's row menu to the folder of that path. */
-async function moveFromExplore(page: Page, id: string, title: string, to: string) {
-  await page.goto(`/explore?folder=${ids.b}`);
+/** Moves an item in a folder (/MP A/MP B unless said) from Explore's row menu to the folder of that path. */
+async function moveFromExplore(page: Page, id: string, title: string, to: string, from = ids.b) {
+  await page.goto(`/explore?folder=${from}`);
   const row = page.getByTestId(`item-${id}`);
   await row.getByRole('button', { name: `Actions for ${title}` }).click();
   await page
@@ -118,6 +121,18 @@ test.describe('setting up (T714)', () => {
     expect(await landed(request, ids.a, [file])).toEqual([file]);
     ids.stranding = await boardOn(request, STRANDING);
     ids.keeping = await boardOn(request, KEEPING);
+    // T715's: a folder whose only content is a model joining /MP A's cube.
+    ids.j = await made(request, { kind: 'folder', title: `MP J ${RUN}`, folderId: ids.a });
+    const joiner = {
+      path: `cubes/${JOINER}.yml`,
+      content: cubeYaml(JOINER, [
+        '    joins:',
+        `      - name: ${A_CUBE}`,
+        `        sql: "{CUBE}.id = {${A_CUBE}}.id"`,
+        '        relationship: many_to_one',
+      ]),
+    };
+    expect(await landed(request, ids.j, [joiner])).toEqual([joiner]);
   });
 });
 
@@ -174,6 +189,31 @@ test.describe('moving as a read-write member (T714, AC-425)', () => {
   });
 });
 
+test.describe('moving a folder holding a model (T715, AC-425)', () => {
+  test.use({ role: 'writer' });
+
+  test('one whose cube joins a cube it would leave off its path: refused in Explore, as xcube refuses its tree, and not moved', async ({
+    page,
+  }) => {
+    await moveFromExplore(page, ids.j, `MP J ${RUN}`, `Shared / MP D ${RUN}`, ids.a);
+
+    await expect(
+      page.getByText(
+        `Moved, “${JOINER}” would refer to a cube that isn’t in its folder or one above it. Nothing was moved.`,
+      ),
+    ).toBeVisible();
+    expect(await folderOf(page.request, 'folder', ids.j)).toBe(ids.a);
+  });
+
+  test('the same folder moved beside, under /MP A still: moved', async ({ page }) => {
+    const answer = await page.request.patch(`/api/documents/folder/${ids.j}`, {
+      data: { folderId: ids.c },
+    });
+    expect(answer.status(), await answer.text()).toBe(200);
+    expect(await folderOf(page.request, 'folder', ids.j)).toBe(ids.c);
+  });
+});
+
 test.describe('as a read-only member of /MP A/MP C (T714, AC-263)', () => {
   test.use({ role: 'reader' });
 
@@ -200,11 +240,16 @@ test.describe('cleaning up', () => {
     const request = page.request;
     for (const id of [ids.stranding, ids.keeping])
       if (id !== '') await request.delete(`/api/documents/dashboard/${id}`);
-    if (ids.a !== '')
-      await request.delete(
-        `/api/model/files?folder=${ids.a}&path=${encodeURIComponent(`cubes/${A_CUBE}.yml`)}`,
-      );
-    for (const id of [ids.b, ids.c, ids.a, ids.d])
+    // The joining cube first: /MP A's can't go while it refers to it.
+    for (const [folder, name] of [
+      [ids.j, JOINER],
+      [ids.a, A_CUBE],
+    ] as const)
+      if (folder !== '')
+        await request.delete(
+          `/api/model/files?folder=${folder}&path=${encodeURIComponent(`cubes/${name}.yml`)}`,
+        );
+    for (const id of [ids.b, ids.j, ids.c, ids.a, ids.d])
       if (id !== '') await request.delete(`/api/documents/folder/${id}`);
   });
 });
