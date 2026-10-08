@@ -950,6 +950,14 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R73 — gaps found while planning R71/R72's tasks** (2026-10-07, the coordinator's calls under the standing instruction, overturnable)
+- **An import naming a draft already in the workspace.** One name means one item, so the imported item maps to that draft, as it would map to a landed item (R72). Review lists it as mapped.
+- **An import mapped to a landed item off the target folder's path.** The imported charts couldn't use it (R72's path rule). Review names those items, and the import can't be made until the importer picks a target on that item's path or leaves those charts out.
+- **The use-only copy.** Its dialog no longer asks for a folder to propose to, since the copy can't be proposed. Its page offers "Request a change", which opens the calculation request (AC-050) for its cube.
+- **A landed model file's name.** It is named for its cube (AC-337), and the cube's name is fixed, so a landed model file offers no Rename either. A draft's file name follows its cube's name until it lands.
+- **Generate cubes from a table whose name breaks the grammar** (`user__events`, `class`, `2024_orders`). The cube's name is suggested in the grammar: `__` becomes `_`, and a reserved word or a leading digit gets a `t_` prefix. The user can edit it before saving, and it is checked as any draft name is.
+- **The picker's mark for the user's copy.** A "Your copy" chip, in the existing chip style of design 03's tree.
+
 **R72 — R71's details: references stay on the folder path, imports map by name, the name grammar** (2026-10-07, the user and the coordinator)
 - Q: now that names are global, may an item refer to a cube or data source outside its own folder path? A: "Own folder or above (Recommended)". *Every reference must point to an item in the referrer's own folder or an ancestor:*
   - *a chart or dashboard to a cube or view;*

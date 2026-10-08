@@ -9925,6 +9925,13 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
       - API: `routes/shared-model-in-place.test.ts` (5): refused in place with sign-in on and off, a copy saved and previewed through the overlay, and a generated clash refused.
       - Web: `generateFrom.test.ts` (2), `ModelInFolder.test.tsx` (sign-in off read-only, `modelsAreWorkspaceOnly`), `GenerateCubes.test.tsx` (2).
       - The phase-1 e2e specs that changed a root model in place now copy, save, propose and approve. `e2e/model-files.ts` gains `ownModelCopy` and per-name locks (`holdNames`), since the browsers and workers share the single user's workspace, whose overlay holds a name once. `xcube-cutover.spec.ts` compares xcube with the published folders' files only.
+  - *2026-10-07, R71/R72: what changes for this task.* Its history above stands. What it built changes in these places:
+    - **An approval refused for a name.** An approval is also refused when a name it holds has landed since it was proposed, in any case (AC-422). That refusal comes before anything lands, its data sources included. This is AC-321's new exception to R52's "land data sources first", built by T704.
+    - **`planLanding`'s rename case goes.** It took "a file at the model's path declaring another name … the file the model was copied from" as a rename. A landed cube's or view's name is now fixed (AC-423), and an edit copy keeps its original's name and lands over it. T706 refuses the rename instead. AC-275's "delete or rename of a referenced name" is now its delete only.
+    - **`landedResolver` binds by name, not nearest first.** A name means one item system-wide, held on the item's path (AC-272). Built by T711.
+    - **AC-291's renames and moves.** A landed cube, view or data source is no longer renamed (T706, T722). A move is refused if it would leave any reference off its referrer's path (AC-425). T714 and T715 build that, so AC-291's direct actions are shown there rather than here.
+    - **The dry run's refusals.** At propose and at approval, xcube now also refuses a name in use and a reference off its path. T701 reads those kinds, and T713 words them as AC-322 does.
+    - This task's own remaining ticks (AC-321, AC-291, and AC-288 for the user) wait on those tasks as well.
 - [x] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
   - Files: `packages/api/src/xcube/refusal.ts` (+ test), `packages/web/src/workspaces/reviews/Refusal.tsx` (+ test)
   - Failing test: `refusal.test.ts`:
@@ -11704,11 +11711,23 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - *2026-09-28, R44:* an import always lands in My workspace as new drafts and never replaces anything; it warns of same-named items, cubes and data sources (AC-357 amended), and the usual Propose and Approve takes each draft to its folder. The design agent is redrawing design 13's Import to this.
   - Depends on: the design's approval; T347 for models
   - *2026-09-28, R46: design 13 approved; split into T511 … T514 below.* This entry stays as their umbrella and is ticked with the last of them.
+  - *2026-10-07, R71/R72: what changes for this task.* AC-357 and AC-358 are amended. Its history stands.
+    - **Landed names are mapped, not drafted or renamed** (R72, "Map to existing"). An imported model whose cube or view name has landed, or a data source whose name has landed, in any folder and in any case, is left out of the import and mapped to the landed item. The imported charts use that item, and Review lists what was mapped.
+      - T514's "Create under another name" for a name taken in the target goes. Data-source names are unique system-wide, and fixed once landed.
+    - **The model import in progress.** That is the WIP at `a9f286e` on `group4-close-2`: T670/T671, "import's models in My workspace … paused on data-source naming". It is resumed under these rules as T720 (models: landed names mapped, new ones drafted) and T721 (binding to the data source chosen, from its `importBinding.ts`).
+      - Its "nearest first" wording for where a mapped or created data source binds becomes "the one data source of that name, held on the target's path".
+    - **Tasks.** T719 maps the data sources, and T733 reworks T513's and T514's tests.
+    - **When it is ticked.** This entry stays the umbrella. It is ticked with T720, T721, T733 and T359's sign-in-off parts.
 - [ ] T509 (AC-353) Warn that switching a data source's sign-in to a key or token rebuilds its rollups *(added 2026-09-28, from T506's review)*
   - **Why.** T506 warns when a stored BigQuery key, or a Snowflake or Dremio token, is replaced. Switching the sign-in method to one of them also stores a new key holder, so it rebuilds the rollups in the same way. It said nothing.
   - Files: `packages/web/src/workspaces/data-sources/ConnectionForm.tsx` (+ test)
   - Failing test: `ConnectionForm.test.tsx`: on a saved source, choosing a sign-in method that uses a key or token shows T506's warning before Save; choosing a password method shows none (AC-353).
   - Depends on: T506
+  - *2026-10-07, R70 (applied to AC-353 with R71): what changes for this task.* Its history stands.
+    - **The warning widens.** AC-353 now warns before Save of any change that moves a data source's connection identity: its sign-in method, host, database, user or key holder. Switching to a key or token is no longer the only case.
+    - **This task's failing test no longer holds.** Its "choosing a password method shows none" contradicts the amended AC, since any change of sign-in method moves the identity.
+    - **T725 takes this task over.** It starts from the WIP at `6d5e6a5` on `group4-close-2` ("warn before Save on any change that moves the connection identity"). This task is ticked when T725 is.
+    - **R71 itself** changes nothing here. A landed data source's name is fixed (AC-423), so a name is never part of a change to warn about.
 - [x] T511 (AC-354, AC-355, AC-360) Export a dashboard: the pane, its dependencies ticked with what uses each, the hidden count, and one JSON file without secrets
   - Files: `packages/api/src/routes/export.ts` (+ test), `packages/web/src/dashboard/export/ExportPane.tsx` (+ test), the dashboard header's ⋯ menu, Explore's row menus, `e2e/security/export-import.spec.ts`
   - Failing test:
@@ -12916,6 +12935,467 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
         - the join diagram and the YAML switch in the dialog;
         - Back with unpublished changes brings the pane back with Stay focused.
 
+## Phase 2 — R71/R72: one name per item
+
+*Added 2026-10-07, `[R71, R72]`. The spec amendment is commit `2889984`. xcube's side was asked in `to-xcube/2026-10-07-1900-global-names.md` and `to-xcube/2026-10-07-2100-global-names-choices.md`. xcube answered asks 2.1, 2.2 and 4.4 in `to-wechart/2026-10-07-2005-global-names-grammar-and-extends.md`, and is building R71 now.*
+
+- **xcube's image.** wechart implements R71 only against xcube's R71 image (to be published).
+  - T701 pins that image and writes its research doc.
+  - Every task here that touches xcube depends on T701, directly or through another task.
+  - Only T700, T706 and T725 touch nothing of xcube's, so only they are `[P]`.
+- **R70's rebinding on move was never built.** No code carries it. Its only WIP, `6d5e6a5` on `group4-close-2`, is AC-353's half, which T725 takes up. So nothing has to be removed. T714 and T715 build the rule that replaces it: a move rebinds nothing, and a move that would strand a reference is refused.
+- **Nearest-first resolution and the prefixes** go in T709 (the API), T710 (the web), T711 (charts' and dashboards' bindings), T716 (workspace previews, with `access/rebind.ts`) and T718 (the picker's hidden rows, AC-342 retired).
+- **Done tasks' tests.** Some tasks here break a unit test of a done task, because the test assumed folder-scoped names, prefixes or nearest-first resolution. Each such task brings that test to the new rule in the same commit, so the full unit suite passes at every commit.
+  - T727 … T733 then rework the rest of those done tasks' tests, area by area, their e2e specs included. Each re-demonstrates its ACs on the R71 image.
+
+  | Done tasks | Reworked by |
+  |---|---|
+  | T276, T336, T485, T488 | T727 (names and Generate cubes) |
+  | T341, T425, T450, T452, T460, T501 | T728 (publishing under own names) |
+  | T428, T429, T457, T537 | T729 (bindings and moves) |
+  | T435, T443, T497, T506 | T730 (data sources) |
+  | T345, T347, T363, T471, T542, T543 | T731 (workspaces) |
+  | T475, T633 | T732 (the cube picker) |
+  | T513, T514 | T733 (imports) |
+
+- **Open tasks.** T451, T508 and T509 each carry a note dated 2026-10-07 saying what R71/R72 changes for it.
+
+### Fresh start (R71 9: no migration)
+
+- [ ] T700 [P] (AC-421, AC-426, AC-310) Seed data and shared test fixtures in which no two items share a name: bare names, in the grammar, and only the root's `default`
+  - Files:
+    - `packages/api/src/seed.ts` (+ `seed.test.ts`);
+    - `infra/cube/model/**`, the root model the API seeds at start;
+    - the shared e2e fixtures:
+      - `e2e/model-files.ts`: `landed`, `inMyWorkspace`, `ownCubeFile`, and `holdNames`' per-name locks;
+      - `e2e/security/fixtures.ts`: `testedSource`;
+      - `e2e/security/root-default.ts`;
+    - the specs that make a cube, view or data source of a name another folder or another spec also makes, such as `warehouse` in `e2e/security/folder-data-sources.spec.ts` and `e2e/security/sql-runner.spec.ts`. Each gets a name of its own, unique across the suite's run.
+  - Failing test: `seed.test.ts`. The development seed, with the root model it publishes, satisfies three things:
+    - no two cubes or views, and no two data sources, share a name in any case, in any folder;
+    - every name is in AC-426's grammar;
+    - no folder but the shared root holds a data source named `default` (AC-421, AC-426, AC-310).
+
+    The fixtures' names are shown by both suites passing on the R71 image (T702).
+  - Depends on: none
+
+- [ ] T701 (AC-421, AC-424) Pin xcube's R71 image (to be published), and read its new refusals
+  - Files:
+    - `docs/research/xcube-<commit>.md` (frontmatter: `packages: []`, the image's exact tag and digest as `version:`, `researched:`);
+    - the pin: `docker-compose.yml` (Cube and its refresh worker), `deploy/helm/wechart/values.yaml`, `deploy/helm/values/docker-desktop.yaml`, `docs/deploy.md` (the upgrade is T702's reset), `packages/api/src/deploy/cube-image.test.ts`;
+    - `packages/api/src/xcube/{client,changesets,connections,refusal}.ts` (+ tests): the image's new error kinds;
+    - `packages/api/src/xcube/fake.ts`: the stub answers as the image does.
+  - The research covers each ask of `to-xcube/2026-10-07-1900-global-names.md` (1.1 … 6.3) and R72's addition, from xcube's full answer. Each claim is cited. Corrections to the earlier xcube docs go in those docs as sibling corrections. It covers:
+    - **Names:** bare names on every route; the two namespaces, compared ignoring case, with split views' names counted.
+    - **Refusals:** each new or changed error kind, with its status and body: name in use, the data-source and reference path refusals, and `default` outside the root.
+    - **Concurrency and identity:**
+      - first to land wins under a race, connection PUTs included;
+      - how a connection PUT says create or move (2.5);
+      - an overlay item's identity by name (2.6);
+      - a move inside one changeset (2.7).
+    - **What stays:** whether `bindings`, `dataSource`, `extends` and `POST …/resolve` stay (3.3).
+    - **Aliases:** `sql_alias`es and rollup table names (1.2, and R72's last smaller call).
+    - **Deleted names:** whether a deleted name's cache or rollups can reach a new item of that name (5.2).
+    - **Old schemas:** what the image does on an old schema, and whether the pre-aggregation schema and Cube Store must be cleared too (6.2, 6.3).
+  - Failing test:
+    - `cube-image.test.ts`: compose, both Helm values files and `docs/deploy.md` pin xcube's R71 image by digest.
+    - `refusal.test.ts` and `changesets.test.ts`: xcube's name-in-use refusal of a changeset, and of a connection PUT, is read as a refusal of the caller's item. It says only that the name is in use, and holds no folder id, path or title (AC-421, AC-424).
+  - Depends on: xcube's R71 image (to be published)
+
+- [ ] T702 (AC-328, AC-310, AC-421, AC-424) Fresh start: drop wechart's metadata and xcube's schema in every environment and seed them again under one name per item
+  - Files:
+    - `docs/deploy.md` (the R71 reset, in order);
+    - `docker-compose.yml` (`xcube-db-init`);
+    - `playwright.config.ts`, `playwright.security.config.ts`;
+    - `deploy/helm/verify.sh`, and `deploy/helm/wechart/templates/seed-default.yaml` only if the research shows the seeding's route changed;
+    - `e2e/security/fresh-start.spec.ts` (new), `e2e/security/global-names.spec.ts` (new).
+  - What is dropped and seeded again:
+    - development: `wechart_meta`, with xcube's schema and its `demo` model;
+    - the API suite's `wechart_test`;
+    - the phase-1 suite's xcube model `e2e`;
+    - the security suite's `wechart_security`, and its model `e2e-security`;
+    - the pre-aggregation schema and Cube Store's data, where the research (6.3) says to;
+    - on docker-desktop, an uninstall with its volumes, then a fresh install in namespace `wechart`, whose post-install Job seeds the root's `default`.
+  - Failing test:
+    - `fresh-start.spec.ts`, on the R71 image after the reset: every item xcube lists for the suite's model is published under its own name, with no `f…__` prefix. The shared root holds the only `default`, and it connects (AC-328, AC-310).
+    - `global-names.spec.ts`, asked of xcube directly under wechart's service credential: a cube `Orders` landed in a folder while the root's `orders` has landed is refused. Nothing of it lands, and the answer holds no folder (AC-421, AC-424).
+    - `verify.sh` on docker-desktop: the fresh install's root `default` is there and connects (AC-310).
+  - Depends on: T700, T701
+
+### The API's name rules
+
+- [ ] T703 (AC-426) Accept a cube, view or data source name only in R72's grammar
+  - Files:
+    - `packages/core/src/names.ts` (new, + test): one grammar for the three kinds, with the reserved words;
+    - `packages/core/src/data-sources/validate.ts`: `SHORT_NAME` gives way to it;
+    - `packages/api/src/model/split.ts`: `misnamedIn`'s `ITEM_NAME`;
+    - `packages/api/src/repos/data-sources.ts`: `MAX_NAME`, 64 today, becomes 40;
+    - `packages/api/src/routes/{data-sources,workspace-models}.ts`;
+    - the web's copies, which import core's instead: `NewItemDialog.tsx`, `SourceEditor.tsx`, `NewSourceWizard.tsx`, `ImportSources.tsx`.
+  - Failing test:
+    - `names.test.ts` (core):
+      - `Orders`, `order_items` and `a1` are accepted;
+      - `1orders`, `_orders`, `order items`, `order-items`, `order.items`, `café`, `order__items`, `orders_` and a 41-character name are refused;
+      - `class`, `None`, `true`, `Cube`, `table` and `security_context` are refused for a cube or view;
+      - `table` is accepted for a data source.
+    - `routes/names.test.ts`: the API refuses a workspace model declaring such a cube, and a data source so named, and accepts upper case (AC-426).
+  - Depends on: T701
+
+- [ ] T704 (AC-421, AC-422, AC-424, AC-321) Land each name only once in its namespace: an approval holding a name that has already landed, in any case, is refused before anything of it lands
+  - Files:
+    - `packages/api/src/model/names.ts` (new, + test):
+      - the names a model file declares: its cubes, its views, and each `split: true` view's `<view>_<cube alias>`;
+      - each namespace's landed names, from the shared folders' model files and data sources;
+    - `packages/api/src/routes/proposals.ts`: the approval's name check, made before its data sources land;
+    - `packages/api/src/xcube/refusal.ts`: xcube's name-in-use refusal, as T701 reads it;
+    - `e2e/security/global-names.spec.ts`.
+  - Failing test:
+    - `model/names.test.ts`:
+      - names compare ignoring case;
+      - cubes and views share one namespace and data sources have another, so a cube and a data source may share a name;
+      - a split view's names count.
+    - `routes/landed-names.test.ts` (new), with the stub xcube:
+      - Each of these approvals is refused, saying only that the name is in use, and nothing of it lands, its data sources included (AC-421, AC-422, AC-424, AC-321):
+        - a proposal whose cube `Orders`, view or split view's name is held by a landed `orders` in another folder;
+        - one whose data source `Warehouse` is held by a landed `warehouse`.
+      - A proposal whose clash only xcube sees, as in a race, is refused the same way.
+    - `global-names.spec.ts`, on the image: two workspaces each propose a draft of one new name. The first approval lands it. The second is refused, and nothing of it lands (AC-422).
+  - Depends on: T701, T702
+
+- [ ] T705 (AC-422, AC-424, AC-282, AC-270, AC-271) Check a draft's name when it is made, renamed and proposed: against every landed name and the workspace's other drafts, never another workspace's; an edit copy keeps its original's name
+  - Files:
+    - `packages/api/src/model/names.ts`;
+    - `packages/api/src/routes/workspace-models.ts`: a save declaring a new name;
+    - `packages/api/src/routes/data-sources.ts`: a workspace data source made or renamed;
+    - `packages/api/src/routes/proposals.ts` and `proposal-models.ts`: at propose;
+    - `packages/api/src/server.ts`: `POST /api/documents` in a workspace;
+    - `packages/api/src/routes/names.test.ts`.
+  - Failing test:
+    - `routes/draft-names.test.ts` (new):
+      - A model saved in a workspace declaring `Orders` is refused, saying only that the name is in use, when `orders` has landed in any folder, or another draft in that workspace declares it. So is a data source made or renamed under such a name (AC-422, AC-424, AC-282).
+      - A draft in another workspace holding the name refuses nothing (AC-422).
+      - A name that lands after a draft took it refuses the draft when it is proposed (AC-422).
+      - An edit copy of `orders` saves and proposes under `orders` (AC-422).
+    - `routes/names.test.ts`: model files and dashboards stay unique per folder and free across folders (AC-270, AC-271). A cube's or data source's name is no longer free across folders.
+  - Depends on: T704
+
+- [ ] T706 [P] (AC-423, AC-291, AC-275) Keep a landed cube's, view's or data source's name: no rename through the API or an edit copy's proposal, while titles and drafts' names still change
+  - Files:
+    - `packages/api/src/routes/data-sources.ts`: a change of a landed data source's `name` is refused, and a workspace draft's is taken;
+    - `packages/api/src/routes/workspace-models.ts` and `proposal-models.ts`: an edit copy declaring a name other than its original's;
+    - `packages/api/src/model/landing.ts`: `planLanding`'s rename case goes;
+    - `packages/api/src/model/references.ts`: the refusal of a rename of a referenced name goes, and the delete's stays.
+  - Failing test: `routes/fixed-names.test.ts` (new).
+    - Each of these is refused, and the landed name is unchanged after any approval (AC-423):
+      - renaming a landed data source through its route;
+      - saving an edit copy whose cube or view declares another name;
+      - proposing such a copy.
+    - An edit copy changing only a cube's `title` saves, proposes and lands with it (AC-423).
+    - A draft's name changes before it lands (AC-423).
+    - A delete of a name a chart still uses is still refused, naming that chart (AC-275).
+  - Depends on: none
+
+- [ ] T707 (AC-427) Let a deleted cube's, view's or data source's name be taken again
+  - Files: `packages/api/src/model/names.ts` (landed names read after deletes), `packages/api/src/routes/draft-names.test.ts`, `e2e/security/global-names.spec.ts`
+  - Failing test:
+    - `draft-names.test.ts`: a landed `margin_cube` and a data source `staging` are deleted. Drafts of those names are then made, renamed to, proposed and approved, and they land (AC-427).
+    - `global-names.spec.ts`, on the image: xcube doesn't refuse that landing either.
+    - Whatever the research says of 5.2 (an old cache or rollup reaching the new item) is noted here. If it calls for wechart behaviour, that goes to the user first.
+  - Depends on: T705
+
+- [ ] T708 (AC-310, AC-426) Hold `default` to the shared root
+  - Files: `packages/api/src/routes/data-sources.ts`, `packages/api/src/model/names.ts`, `packages/api/src/routes/proposals.ts`, `e2e/security/root-default.spec.ts`
+  - Failing test:
+    - `routes/root-default-only.test.ts` (new):
+      - a data source named `default`, `Default` or `DEFAULT` is refused when made new in a workspace or going to any folder but the root;
+      - one proposed to another folder is refused at approval;
+      - the workspace's copy of the root's `default` saves and previews (AC-280);
+      - a cube in /A/B naming no data source binds the root's `default` (AC-310).
+    - `root-default.spec.ts`, on the image: that cube queries the root's `default`.
+  - Depends on: T705
+
+### Binding by name, and every reference on its referrer's path
+
+- [ ] T709 (AC-328) Publish and read every cube, view and data source under its own name: the API's `<folderId>__` prefixes and nearest-first lookups go
+  - Files:
+    - `packages/api/src/model/bind.ts`: `FOLDER_PREFIX`, `shortOf` and `xcubeFolderOf` go;
+    - `packages/api/src/xcube/{client,items,snapshot,check,changesets,connections,folders,used-by,fake}.ts`;
+    - `packages/api/src/model/{publish,refreshKeys,rollupReferences}.ts`;
+    - `packages/api/src/access/queries.ts`, `packages/api/src/jobs/scope.ts`, `packages/api/src/repos/calc-resolution.ts`;
+    - `packages/api/src/routes/{calc-requests,proposal-models,proposals,export,sql-runner}.ts`;
+    - `packages/api/src/cube/preaggMatch.ts`, `packages/api/src/server.ts`;
+    - the API's unit tests that read `f…__` names, brought to bare ones.
+  - Failing test:
+    - `xcube/items.test.ts` and `publish.test.ts`: a cube, a view and a data source in /Sales publish under their own names, and are read back under them.
+    - `jobs/scope.test.ts`, `repos/calc-resolution.test.ts` and `xcube/sql-runner.test.ts` read the bare names xcube now returns (AC-328).
+    - `fresh-start.spec.ts`: renaming or moving /Sales changes no published name (AC-328).
+  - Depends on: T701, T702
+
+- [ ] T710 (AC-329, AC-328) The web finds and shows each cube by its one name, with no prefix stripped and no nearest-first lookup
+  - Files: `packages/web/src/editor/pathCubes.ts`, `packages/web/src/shell/globalSearch.ts`, `packages/web/src/workspaces/model/{inFolder,editedMembers}.ts`, `packages/web/src/workspaces/data-sources/cubeSource.ts`, `ModelFilePage.tsx` (`filesBeside`), each with its test
+  - Failing test:
+    - `pathCubes.test.ts`: the cubes on an item's path, each by its title with its folder path, and no row for a cube hidden by a nearer one (AC-329).
+    - `globalSearch.test.ts`, `editedMembers.test.ts` and `cubeSource.test.ts`: a cube a chart names is found by its name in whichever folder of the path keeps it, and is shown under the name xcube gives (AC-328).
+  - Depends on: T709
+
+- [ ] T711 (AC-272, AC-263) Bind a chart's and a dashboard's cubes by name, to the one cube or view of that name on the item's folder path
+  - Files:
+    - `packages/api/src/model/bind.ts`: `bindChart` and `bindNames` bind by name, held on the path;
+    - `packages/api/src/xcube/client.ts`: `POST …/resolve`, kept or removed as the research says;
+    - `packages/api/src/routes/proposals.ts`: `landedResolver` binds by name, not nearest first;
+    - `packages/api/src/xcube/fake.ts`.
+  - Failing test:
+    - `model/bind.test.ts` and `chart-binding.test.ts`, for a chart published in /A/B naming `sales` (AC-272):
+      - it binds and stores `sales` when /A or the root keeps it;
+      - it is refused, naming `sales`, when only /A/B/C or the sibling /A/C keeps it;
+      - a second cube it joins is bound by its own name too;
+      - an approval binds the same way.
+    - `access/queries.test.ts`: a reader of /A/B's dashboard is admitted to each cube its charts bind (AC-263).
+  - Depends on: T709
+
+- [ ] T712 (AC-273) Bind a model's data sources by name, to the one data source of that name on the model's path; a cube that extends another runs on its parent's
+  - Files: `packages/api/src/routes/workspace-models.ts`, `packages/api/src/xcube/refusal.ts` (xcube's data-source path refusal), `packages/api/src/routes/export.ts` (a cube's data source found by name, not nearest first), `packages/api/src/xcube/fake.ts`
+  - Failing test: `routes/model-data-sources.test.ts` (new), with the stub xcube. For a model in /A/B naming `warehouse` (AC-273):
+    - it saves and lands bound to `warehouse` when /A keeps that data source;
+    - it is refused at save, naming `warehouse`, when only /A/B/C or /A/C keeps it;
+    - a cube extending one in /A runs on that cube's data source.
+  - Depends on: T709
+
+- [ ] T713 (AC-425, AC-322, AC-321) Refuse a model whose join, `extends`, view or data source points off its folder's path, when it is proposed and when it is approved
+  - Files: `packages/api/src/xcube/refusal.ts` (xcube's reference-path kind, mapped to its item), `packages/api/src/routes/{proposals,workspace-models}.ts`, `packages/web/src/workspaces/reviews/Refusal.tsx` (only if the new kind needs its own words), `e2e/security/reference-paths.spec.ts` (new)
+  - Failing test:
+    - `refusal.test.ts`: xcube's reference refusal names the referring item where the user sees its folder, and counts the rest. It never names the folder of the item referred to (AC-425, AC-322).
+    - `reference-paths.spec.ts`, on the image:
+      - A model in /A/B is refused when proposed, and again at approval, changing nothing, if its join, `extends` or view names a cube kept in /A/C, or its cube runs on a data source kept in /A/C, named or inherited through `extends` (AC-425, AC-321).
+      - The same references to /A or the root land.
+  - Depends on: T712
+
+- [ ] T714 (AC-425, AC-272, AC-263, AC-371) Refuse a chart's, dashboard's or folder's move that would leave a chart or dashboard using a cube off its new path; a move rebinds nothing
+  - Files:
+    - `packages/api/src/server.ts`: `PATCH /api/documents/:kind/:id`, for a chart's, a dashboard's or a folder's move;
+    - `packages/api/src/model/references.ts`: a move's stranded references, split by what the mover may see;
+    - `packages/api/src/routes/proposals.ts`: `land`'s copy at approval keeps names;
+    - the move dialogs' refusal: `packages/web/src/workspaces/explore/{movedCopies.ts,FolderContents.tsx}`;
+    - `e2e/security/move-paths.spec.ts` (new).
+  - Failing test:
+    - `routes/move-paths.test.ts` (new):
+      - A move is refused, and nothing moves, when a chart on the dashboard uses /A's cube and either the dashboard moves from /A/B to /C or /A/B moves under /C. The refusal names the chart and the cube where the mover sees their folders, and counts the rest (AC-425).
+      - A move that keeps every cube on the path applies, and changes no stored binding (AC-272).
+      - A library chart copied by the move (AC-371) keeps its cube names.
+    - `move-paths.spec.ts`: the move dialog shows the refusal. After an allowed move, a reader granted on the dashboard's new folder still sees its tiles (AC-263).
+  - Depends on: T711
+
+- [ ] T715 (AC-425, AC-291, AC-275, AC-322) Refuse a folder's, model's or data source's move that would leave a model referring off its path, as xcube refuses it
+  - Files: `packages/api/src/xcube/folders.ts` (`PUT …/folders` refused, as the research gives it), `packages/api/src/xcube/connections.ts` (a connection's move), `packages/api/src/server.ts` (the moves of a model file, a data source and a folder), `packages/api/src/xcube/refusal.ts`, the move dialogs, `e2e/security/move-paths.spec.ts`
+  - Failing test:
+    - `routes/move-paths.test.ts`, with the stub xcube:
+      - A folder move is refused, and nothing moves, if it would carry a cube away from its data source, a data source away from its cubes, or a joined cube away from its join. The refusal names the referring items the mover may see, and counts the rest (AC-425, AC-322, AC-291).
+      - A move keeping every reference applies, and rebinds nothing (AC-275).
+    - `move-paths.spec.ts`, on the image: a folder move carrying a joined cube away is refused in the same way (AC-425).
+  - Depends on: T713, T714
+
+### Workspaces
+
+- [ ] T716 (AC-281, AC-323) Answer a workspace's previews from its own cube of a name, and otherwise from the landed cube of that name; stored names are no longer rebound
+  - Files: `packages/api/src/access/rebind.ts` (+ test; removed), `packages/api/src/xcube/overlays.ts`, `packages/api/src/server.ts` (the query route's workspace branch, with no `POST …/resolve` and `overlay`), `packages/api/src/routes/{workspace-overlay,workspace-rebind,proposal-overlay}.test.ts`, `e2e/security/workspace-overlay.spec.ts`
+  - Failing test:
+    - `workspace-overlay.test.ts` (AC-281):
+      - A workspace tile naming `orders` previews from the workspace's copy of `orders`, whether the tile was made before or after the copy.
+      - Once the copy is discarded, it previews from the landed `orders`.
+      - A name the workspace doesn't hold answers from the landed cube of that name.
+    - `proposal-overlay.test.ts`: a proposal's preview resolves in its overlay first, then in the published model (AC-323).
+    - `workspace-overlay.spec.ts`, on the image, shows both (AC-281, AC-323).
+  - Depends on: T709
+
+- [ ] T717 (AC-283) A use-only copy is proposed to no folder: the API refuses it and the UI offers no Propose
+  - Files: `packages/api/src/routes/proposal-models.ts` (a use-only copy refused for every folder), `packages/api/src/routes/workspace-models.ts`, `packages/web/src/workspaces/model/{UseInWorkspaceDialog.tsx,workspaceModels.ts}`, `packages/web/src/workspaces/explore/{FolderContents,ProposeFlow}.tsx`, `packages/api/src/routes/use-only-copy.test.ts`, `e2e/security/use-only-copy.spec.ts`
+  - Failing test:
+    - `use-only-copy.test.ts`: a reader's use-only copy of /Sales's `orders` previews in their workspace. Proposing it is refused through the API, whether to /Sales, to a folder they write, or to any other (AC-283).
+    - `FolderContents.test.tsx`: the copy's row offers no Propose….
+    - `use-only-copy.spec.ts`: neither does its model page. The calculation request (AC-050) is still offered from a chart on it.
+  - *Before this is built, put to the user:* T543's dialog asks for a folder the user writes, where the copy "goes … as a new model". R71 takes that away. The spec doesn't say whether the dialog still asks for a target, or whether the copy's page points to the calculation request.
+  - Depends on: T716
+
+- [ ] T718 (AC-428, AC-329) List the user's workspace copy in the cube picker in place of the landed cube, marked as theirs
+  - Files: `packages/web/src/editor/{PathPicker,CubePicker,FieldList}.tsx`, `packages/web/src/filters/FilterBar.tsx` (the hidden-by rows go: AC-342 is retired), `packages/web/src/shell/styles.ts`, `e2e/security/picker.spec.ts`
+  - Failing test:
+    - `CubePicker.test.tsx` and `fieldPicker.test.tsx`, with a workspace copy of `orders` (AC-428, AC-329):
+      - the picker lists one `orders`, the copy, in the landed one's place;
+      - the copy is marked as the user's copy;
+      - no row is dimmed as hidden;
+      - each cube shows its title, with its folder path.
+    - `picker.spec.ts`, on the image: the same in the chart editor and in a dashboard filter's "Filter on" (AC-428).
+  - Depends on: T710, T716
+
+### Imports (with T508 and its model import in progress)
+
+- [ ] T719 (AC-358) Map an imported data source whose name has landed to that landed data source; create any other under its own name
+  - Files: `packages/api/src/routes/import.ts`, `packages/api/src/model/names.ts`, `packages/web/src/workspaces/explore/import/{ImportSources,ImportPane}.tsx` (+ tests)
+  - Failing test:
+    - `routes/import.test.ts` (AC-358):
+      - A file's data source `Warehouse`, whose name has landed in any folder and in any case, is mapped to the landed one and not imported. Review lists it as mapped.
+      - One whose name hasn't landed is created under its own name, with its secrets entered and tested.
+    - `ImportSources.test.tsx`: the first shows as mapped. It offers no Create and no "Create under another name" (AC-358).
+  - Depends on: T704, T709
+
+- [ ] T720 (AC-357, AC-356) Import a file's models: those of a landed name are mapped to the landed item, and the rest land as drafts in My workspace
+  - Files: from the WIP at `a9f286e` on `group4-close-2` (T670/T671, "paused on data-source naming"): `packages/api/src/routes/import-models.test.ts`, `packages/web/src/workspaces/explore/import/ImportPane.tsx` (+ test); `packages/api/src/routes/import.ts`, `packages/api/src/model/names.ts`, `e2e/security/export-import.spec.ts`
+  - Failing test: `import-models.test.ts` (AC-357, AC-356):
+    - A model whose cube or view name has landed, in any case, is left out and mapped to the landed item, and the imported charts query that item.
+    - A model with a new name lands in My workspace as a draft going to the target, through its overlay.
+    - Review lists every model that was mapped.
+    - The WIP's cases that warn of "a cube the target has" become this mapping.
+  - Depends on: T716, T719
+
+- [ ] T721 (AC-358) Bind an imported model's cubes to the data source chosen for, or mapped to, the file's one
+  - Files: `packages/core/src/importBinding.ts` (+ test, from the same WIP), `packages/api/src/routes/import.ts`
+  - Failing test: `importBinding.test.ts` and `import-models.test.ts` (AC-358):
+    - A cube naming the file's `warehouse` binds to the one chosen for it, by that data source's name, held on the target's path. The one chosen is either the landed `dw_main` it was mapped to, or the new `warehouse` it was created as.
+    - A cube extending another takes its parent's data source.
+  - Depends on: T720
+
+### The UI
+
+- [ ] T722 (AC-423, AC-291) Offer no Rename for a landed cube, view or data source; its title stays editable, and a draft's name too
+  - Files: `packages/web/src/workspaces/data-sources/{SourceSettings,SourceEditor}.tsx` (+ tests), `packages/web/src/workspaces/model/form/ObjectForm.tsx` and `ModelFilePage.tsx` (+ tests), `e2e/security/fixed-names.spec.ts` (new)
+  - Failing test:
+    - `SourceEditor.test.tsx`: a landed data source's name is read-only, and a draft's is editable (AC-423).
+    - `ObjectForm.test.tsx`: in an edit copy, a cube's or view's name is read-only and its title editable. In a draft, both are editable (AC-423).
+    - `fixed-names.spec.ts`: no Rename is offered for a landed data source or for a landed cube's name. A title changed in an edit copy lands through a proposal (AC-423, AC-291).
+  - *Before this is built, put to the user:* whether Explore's Rename on a model file (`FolderContents.tsx`) stays. See the report.
+  - Depends on: T706
+
+- [ ] T723 (AC-424, AC-426, AC-422) Say a refused name in the UI as in use, never where, and refuse a name outside the grammar before it is sent
+  - Files: `packages/web/src/workspaces/model/{publish.ts,ModelFilePage.tsx}`, `packages/web/src/workspaces/data-sources/{NewSourceWizard,SourceEditor}.tsx`, `packages/web/src/workspaces/explore/{NewItemDialog,ProposeDialog}.tsx`, `packages/web/src/workspaces/reviews/Refusal.tsx`, each with its test
+  - Failing test: each surface's test (AC-424, AC-426, AC-422):
+    - the model editor's save, the data source wizard's Create and its rename, the Propose dialog and the review's Approve each show a name-in-use refusal;
+    - that refusal holds no folder, path, workspace, owner or title;
+    - a name outside AC-426's grammar is refused before anything is sent.
+  - Depends on: T703, T705
+
+### Generate cubes
+
+- [ ] T724 (AC-249, AC-424) Refuse a generated cube whose name has landed in any folder, or is another draft's in the workspace, in any case, saying only that it is in use
+  - Files: `packages/api/src/model/clashes.ts`, `packages/api/src/routes/workspace-models.ts` (the generated save), `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test), `e2e/security/generate-in-workspace.spec.ts`
+  - Failing test:
+    - `GenerateCubes.test.tsx` and `routes/generate-names.test.ts` (new), against a landed `orders` in any folder or a draft of it in the workspace:
+      - a generated `Orders` is refused, saying only that the name is in use, and the existing file is unchanged;
+      - a generated file whose file name the target folder holds is refused, naming that file (AC-249, AC-424).
+    - `generate-in-workspace.spec.ts`, on the image: the same in the pane.
+  - Depends on: T705
+
+### AC-353: R70's identity warning (with T509)
+
+- [ ] T725 [P] (AC-353) Warn before Save that any change moving a data source's connection identity rebuilds its pre-aggregations
+  - Files: from the WIP at `6d5e6a5` on `group4-close-2`: `packages/web/src/workspaces/data-sources/{ConnectionForm,SourceEditor}.tsx` (+ tests), `packages/core/src/data-sources/*` (`targetChanges`, the identity); `e2e/security/data-sources.spec.ts`
+  - Failing test: `ConnectionForm.test.tsx` and `SourceEditor.test.tsx` (AC-353):
+    - on a saved data source of any driver, changing its sign-in method, host, database, user or key holder shows the rebuild warning before Save;
+    - changing only its description shows none;
+    - a stored key or token is still kept unless it is replaced.
+
+    Research: `xcube-bc18f82c01.md`, "A connection's identity".
+  - Depends on: none. It takes over T509's narrower test (see the note on T509).
+
+### Refusals that never say where, across the API
+
+- [ ] T726 (AC-424) Every name-in-use refusal the API answers holds nothing of where the name is held
+  - Files: `packages/api/src/routes/name-refusals.test.ts` (new), and any route whose refusal says where
+  - Failing test: `name-refusals.test.ts`. The user asking can't see the folder that holds the name. Each name-in-use refusal is read for the holder's folder id or path, workspace, owner and item title, and holds none (AC-424). It covers the refusals of:
+    - a model save;
+    - a data source made or renamed;
+    - a proposal;
+    - an approval;
+    - a generated cube (AC-249);
+    - an import.
+  - Depends on: T704, T705, T708, T719, T720, T724
+
+### Done tasks' tests, reworked by area
+
+- [ ] T727 (AC-249, AC-270, AC-271) Rework the tests of T276, T336, T485 and T488 to names held once across the system
+  - Files: `e2e/generate-cubes.spec.ts`, `e2e/model-design.spec.ts` (MW-20 … MW-25), `packages/web/src/workspaces/model/GenerateCubes.test.tsx`, `packages/api/src/routes/names.test.ts`, `packages/api/src/publish.test.ts` (T488's drafts)
+  - Failing test, on the R71 image in Chrome:
+    - T276's clash: generating `orders` is refused while the root's `orders` has landed. The refusal says the name is in use, and the file is unchanged (AC-249).
+    - T336's: model files and dashboards are unique per folder and free across folders; cubes and data sources never are (AC-270, AC-271).
+    - T485's design 11 states show the global check.
+    - T488's drafts publish, with the drafts they join, under their own names (AC-249).
+  - Depends on: T705, T724
+
+- [ ] T728 (AC-328, AC-271, AC-273, AC-161, AC-329) Rework the tests of T341, T425, T450, T452, T460 and T501 to items published under their own names
+  - Files:
+    - `e2e/security/isolation.spec.ts`. T341's two same-named cubes went with AC-274. It now shows one cube per name, its rollup table within 63 bytes, and no published name changed by a folder's rename or move.
+    - `e2e/folder-models.spec.ts`, `e2e/security/changed-in-place.spec.ts`, `e2e/xcube-cutover.spec.ts`;
+    - `packages/api/src/xcube/{folders,publish-serial}.test.ts`;
+    - T450's modules' tests: `rollupReferences`, `refreshKeys`, `clashes`, `globalSearch` and `ModelFilePage`.
+  - Failing test: each spec and test reads bare names from the image.
+    - Folder ids stay stored and never reused (AC-328).
+    - `sql_alias`es and rollup table names are as the research gives them (AC-328).
+    - Model files publish into any folder (AC-271).
+    - Publishes go one at a time (AC-273).
+    - A data source changed in place is served from its new target (AC-161).
+    - Members are shown by title (AC-329).
+  - Depends on: T709, T710
+
+- [ ] T729 (AC-272, AC-275, AC-371, AC-425) Rework the tests of T428, T429, T457 and T537 to bindings by name on the path
+  - Files: `e2e/security/binding.spec.ts`, `e2e/security/picker.spec.ts` (T429's and T457's binding cases), `e2e/security/copy-on-use.spec.ts`, `packages/api/src/routes/copy-on-use.test.ts`, `packages/api/src/model/references.test.ts`
+  - Failing test:
+    - `binding.spec.ts` (AC-275):
+      - a published chart keeps querying its cube through any landing, a move included;
+      - a delete of a referenced cube is refused, naming the charts;
+      - T428's rename case goes, by AC-423.
+    - `picker.spec.ts` (AC-272):
+      - a chart's second cube is bound by its own name;
+      - a save while xcube can't be reached is refused, saying so.
+    - `copy-on-use.spec.ts` (AC-371, AC-425):
+      - a move or an approval still copies a library chart that would sit off the dashboard's path, and the copy keeps its cube names;
+      - a move that would strand a cube is refused.
+  - Depends on: T706, T711, T714
+
+- [ ] T730 (AC-273, AC-310, AC-161, AC-353) Rework the tests of T435, T443, T497 and T506 to data sources named once, with `default` at the root only
+  - Files: `e2e/security/data-source-binding.spec.ts` (T435), `e2e/security/root-default.spec.ts` and `deploy/helm/verify.sh` (T443), `e2e/security/data-sources.spec.ts` and `e2e/data-source.spec.ts` (T497, T506), `packages/web/src/workspaces/data-sources/{SourceEditor,ConnectionForm}.test.tsx`
+  - Failing test:
+    - `data-source-binding.spec.ts` (AC-273, AC-310):
+      - /A/B's model binds `warehouse` in /A by name;
+      - it is refused a `warehouse` kept only in /A/B/C or /A/C;
+      - a cube naming none binds the root's `default`, with no nearest `default`.
+    - `root-default.spec.ts` and `verify.sh` (AC-310):
+      - a fresh install's root `default` is there, connects, and is changed in Data sources;
+      - its password reaches no request, row or log of wechart's.
+    - `data-sources.spec.ts`:
+      - a change is saved only after a passing test (AC-161);
+      - the rebuild warning shows on an identity change and on a replaced key (AC-353).
+  - Depends on: T708, T712, T722, T725
+
+- [ ] T731 (AC-281, AC-282, AC-283, AC-323, AC-280) Rework the tests of T345, T347, T363, T471, T542 and T543 to workspaces under one name per item
+  - Files:
+    - `packages/web/src/workspaces/explore/NewItemDialog.test.tsx` and T345's `targets.test.ts`;
+    - `e2e/security/workspace-overlay.spec.ts`: T347's along-the-path cases give way to the landed cube of the name;
+    - `e2e/security/workspace-rebind.spec.ts`: T542's spec now shows overlay-first, with no stored name rebound;
+    - `e2e/security/data-sources.spec.ts` and `e2e/security/new-data-source.spec.ts` (T363, T471): the Name step's check is AC-422's;
+    - `e2e/security/use-only-copy.spec.ts` (T543): the copy is proposed nowhere.
+  - Failing test, on the R71 image in Chrome:
+    - items are made with a target among the folders the user writes, and a cube or data source made new is held to AC-422 (AC-282);
+    - previews come from the workspace's cube of the name, or else the landed one (AC-281, AC-323);
+    - the workspace's copy of a data source answers in place of the original (AC-280);
+    - a use-only copy previews and is proposed nowhere (AC-283).
+  - Depends on: T705, T716, T717
+
+- [ ] T732 (AC-329, AC-428) Rework the tests of T475 and T633 to a picker with no hidden cubes and the user's copy in place
+  - Files: `e2e/security/picker.spec.ts` (T475's dimmed hidden cube goes, AC-342 being retired), `packages/web/src/filters/fieldPicker.test.tsx`, `e2e/cubePicker.ts`
+  - Failing test: in both the chart editor and the "Filter on" picker (AC-329, AC-428), design 10's picker:
+    - groups the cubes on the item's path by folder, by title;
+    - has no hidden row;
+    - lists a workspace copy in the landed cube's place, marked.
+  - Depends on: T718
+
+- [ ] T733 (AC-357, AC-358, AC-361) Rework the tests of T513 and T514 to imports that map landed names
+  - Files: `e2e/security/export-import.spec.ts`, `packages/api/src/routes/import.test.ts`, `packages/web/src/workspaces/explore/import/{ImportSources,ImportPane}.test.tsx`
+  - Failing test: `export-import.spec.ts`. T514's case that "renames the data source past Name taken" becomes:
+    - the file's data source whose name has landed is mapped, with no Create (AC-358);
+    - a new one is created under its own name and tested (AC-358);
+    - a MySQL one mapped to Sales's PostgreSQL one warns (AC-361);
+    - Review warns of same-named dashboards and charts in the target or the workspace without blocking, and lists what was mapped (AC-357).
+  - Depends on: T719, T720, T721
+
 ## Phase 2 coverage: acceptance criterion → task
 
 | AC | Tasks | AC | Tasks | AC | Tasks |
@@ -12929,34 +13409,34 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-150 | T372, ~~T373~~ (next phase, R41), T374, T376, T504 | AC-151 | T376, T504 | AC-153 | T377 |
 | AC-154 | ~~T377~~ T551, T552 | AC-155 | T379, T504 | AC-157 | T364, T459 |
 | AC-158 | T363, T461, T497 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
-| AC-161 | T335, T363, T365, T435, T442, T462, T497, T501 | AC-163 | T362, T363, T461, T462 | AC-164 | T335, T497 |
+| AC-161 | T335, T363, T365, T435, T442, T462, T497, T501, T728, T730 | AC-163 | T362, T363, T461, T462 | AC-164 | T335, T497 |
 | AC-176 | T405, T640 | AC-180 | T407 | AC-187 | T406, T466–T470, T476–T478 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
-| AC-234 | T378, T552, T504 | AC-246 | T404 | AC-249 | T336, T450 |
+| AC-234 | T378, T552, T504 | AC-246 | T404 | AC-249 | T336, T450, T724, T726, T727 |
 | AC-251 | T318, T321, T324, T431 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323, T325, T326 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330, T473 |
 | AC-260 | T312, T314, T330, T473 | AC-261 | T312, T325, T408 | AC-262 | T313, T327, T334, T335 |
-| AC-263 | T313, T326, T334, T335, T436 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371, T473 |
+| AC-263 | T313, T326, T334, T335, T436, T711, T714 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371, T473 |
 | AC-266 | T326, T340, T334 | AC-267 | T328, T334, T335, T343, T408, T473 | AC-268 | T340, T408 |
-| AC-269 | T334, T335, T462 | AC-270 | T336 | AC-271 | T336, T452 |
-| AC-272 | ~~T337, T339, T340~~ T429, T457 | AC-273 | ~~T338~~ T435 | AC-274 | T341 |
-| AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |
-| AC-278 | T344, T348, T502 | AC-279 | T344 | AC-280 | T346, T347 |
-| AC-281 | T347 | AC-282 | T345, T347, T363 | AC-283 | T347 |
+| AC-269 | T334, T335, T462 | AC-270 | T336, T705, T727 | AC-271 | T336, T452, T705, T727, T728 |
+| AC-272 | ~~T337, T339, T340~~ T429, T457, T711, T714, T729 | AC-273 | ~~T338~~ T435, T712, T728, T730 | ~~AC-274~~ | retired 2026-10-07, `[R71]` (was T341; its spec reworked by T728) |
+| AC-275 | ~~T337, T352~~ T428, T706, T715, T729 | AC-276 | T343 | AC-277 | T343 |
+| AC-278 | T344, T348, T502 | AC-279 | T344 | AC-280 | T346, T347, T731 |
+| AC-281 | T347, T716, T731 | AC-282 | T345, T347, T363, T705, T731 | AC-283 | T347, T717, T731 |
 | AC-284 | T349, T358 | AC-285 | T350, T451 | AC-286 | T351 |
 | AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357, T515 |
-| AC-290 | T353, T358 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |
+| AC-290 | T353, T358 | AC-291 | T329, ~~T426~~ T451, T706, T715, T722 | AC-292 | T366 |
 | AC-293 | T367, T580 | AC-294 | T368, T505, T554, T555, T556 | AC-295 | T369 |
-| AC-353 | T506, T509 | AC-096 | T507 | | |
-| AC-354 | T508, T511 | AC-355 | T508, T511 | AC-356 | T508, T513 |
-| AC-357 | T508, T513 | AC-358 | T508, T514 | AC-359 | T508, T512 |
-| AC-360 | T511 | AC-361 | T514 | | |
+| AC-353 | T506, T509, T725, T730 | AC-096 | T507 | | |
+| AC-354 | T508, T511 | AC-355 | T508, T511 | AC-356 | T508, T513, T720 |
+| AC-357 | T508, T513, T720, T733 | AC-358 | T508, T514, T719, T721, T733 | AC-359 | T508, T512 |
+| AC-360 | T511 | AC-361 | T514, T733 | | |
 | AC-362 | T517 | AC-363 | T518 | AC-364 | T519, T526 |
 | AC-365 | T520, T526 | AC-366 | T521 | AC-367 | T522 |
 | AC-368 | T523 | AC-369 | T524 | AC-370 | T525 |
-| AC-371 | T527, T537 | AC-372 | T528 | | |
+| AC-371 | T527, T537, T714, T729 | AC-372 | T528 | | |
 | AC-373 | T531, T532, T535 | AC-374 | T531, T536 | AC-375 | T532 |
 | AC-376 | T532 | AC-377 | T532, T535 | AC-378 | T532, T535, T545, T548, T549 |
 | AC-379 | T533, T535, T545, T548, T549 | AC-380 | T535 | AC-381 | T534, T535 |
@@ -12972,25 +13452,28 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
 | AC-305 | T398 | AC-306 | T399 | AC-307 | T409, T444 |
-| AC-308 | T410 | ~~AC-309~~ | retired 2026-09-25 (was T337) | AC-310 | ~~T338~~ T435, T443, T497 |
+| AC-308 | T410 | ~~AC-309~~ | retired 2026-09-25 (was T337) | AC-310 | ~~T338~~ T435, T443, T497, T700, T702, T708, T730 |
 | ~~AC-311~~ | retired 2026-09-25 (T333 now serves AC-324) | AC-312 | T335, T454, T361, T497 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
 | AC-317 | T412 | AC-318 | T416 | AC-139 | T413, T417 |
 | AC-248 | T414, T415, T417 | AC-250 | T413, T420 | AC-009 | T447, T432 |
 | AC-136 | T445, T447, T426 | AC-137 | T447, ~~T432~~ T426 | AC-166 | T438 |
 | AC-332 (again) | T426 | AC-235 (again) | T445, T447 | AC-140 (again) | T446 |
-| AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | ~~T426~~ T451, T436, T456 |
-| AC-322 | T427, T451 | AC-323 | T347, T440 | AC-324 | T333, T455 |
+| AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | ~~T426~~ T451, T436, T456, T704, T713 |
+| AC-322 | T427, T451, T713, T715 | AC-323 | T347, T440, T716, T731 | AC-324 | T333, T455 |
 | AC-325 | T441, T363, T581 | AC-326 | T420, T437 | AC-327 | T431, T442, T458 |
-| AC-328 | T341, T425, T449, T452, T435, T501 | AC-329 | T429, T450, T342, T347 | AC-330 | T419, T447, T425, T449, T436, T442 |
+| AC-328 | T341, T425, T449, T452, T435, T501, T702, T709, T710, T728 | AC-329 | T429, T450, T342, T347, T710, T718, T728, T732 | AC-330 | T419, T447, T425, T449, T436, T442 |
 | ~~AC-331~~ (retired, `[R30]`) | ~~T430~~ | AC-332 | T433 | AC-333 | T419, T447, T449, T425, T420 |
 | AC-334 | T421, T447 | AC-335 | T446, T447 | AC-336 | T430, T449 |
 | AC-337 | T448 | AC-009 (again) | T426 | AC-189, AC-249 (again, folder items) | T450 |
 | AC-338 | T472 | AC-339 | T471 | AC-340 | T471 |
-| AC-341 | T356 | AC-342 | T475 | AC-343 | T471, T473, T474, T475, T462, T331, T348, T356, T357, T358, T367, T369, T371 |
+| AC-341 | T356 | ~~AC-342~~ | retired 2026-10-07, `[R71]` (was T475, T633; their tests reworked by T732) | AC-343 | T471, T473, T474, T475, T462, T331, T348, T356, T357, T358, T367, T369, T371 |
 | AC-344 | T470, T479–T487, T493, T494 | AC-345 | T488 | AC-346 | T488 |
 | AC-347 | T489 | AC-348 | T490 | AC-349 | T491 |
 | AC-350 | T492 | AC-351 | T493 | AC-249 (again, drafts) | T488 |
 | AC-420 | T600 | AC-189, AC-235 (again, amended `[R60]`) | T451 | AC-254 (again, models) | T451 |
+| AC-421 | T700, T701, T702, T704 | AC-422 | T704, T705, T723 | AC-423 | T706, T722 |
+| AC-424 | T701, T702, T704, T705, T723, T724, T726 | AC-425 | T713, T714, T715, T729 | AC-426 | T700, T703, T708, T723 |
+| AC-427 | T707 | AC-428 | T718, T732 | | |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.
