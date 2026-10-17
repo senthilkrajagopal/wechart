@@ -77,7 +77,7 @@ export interface Candidate {
 }
 
 export interface RuleOutcome {
-  /** The rule's name, quoted in the "Why this chart?" trace (AC-029). */
+  /** The rule's name, quoted in "Why this recommendation?"'s full table (AC-029). */
   readonly rule: string;
   readonly passed: boolean;
   /** Present when the rule rejected the candidate. */

@@ -72,6 +72,31 @@ export function joinsQueryOf(workspace: WorkspaceItem | undefined): {
   };
 }
 
+/** Each measure's siblings, by name (T689): the others over the same `sql` on its cube. */
+export type Siblings = Readonly<Record<string, readonly string[]>>;
+
+/**
+ * Each measure's siblings (T689, chart-editor-Q6; `GET /api/meta/siblings`),
+ * the aggregations its tag offers, as the open item reads its model. Under
+ * `['meta']`, so a publish's invalidation reaches it too.
+ */
+export function siblingsQueryOf(workspace: WorkspaceItem | undefined): {
+  readonly queryKey: readonly string[];
+  readonly queryFn: () => Promise<Siblings>;
+} {
+  const url =
+    workspace === undefined
+      ? '/api/meta/siblings'
+      : `/api/meta/siblings?for=${encodeURIComponent(`${workspace.item.kind}:${workspace.item.id}`)}`;
+  return {
+    queryKey:
+      workspace === undefined
+        ? ['meta', 'siblings']
+        : ['meta', 'siblings', workspace.item.kind, workspace.item.id],
+    queryFn: async () => ((await metaAt(url)) as { siblings?: Siblings } | null)?.siblings ?? {},
+  };
+}
+
 /**
  * The cubes a cube reaches by its joins, nearest first: those it names, then
  * theirs (Cube joins along the declared direction; research

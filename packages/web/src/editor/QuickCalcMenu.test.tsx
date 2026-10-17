@@ -166,3 +166,73 @@ describe('asking for a calculation the menu can’t express (T383, AC-050)', () 
     expect(within(menu).queryByRole('menuitem', { name: 'Request a calculation…' })).toBeNull();
   });
 });
+
+/**
+ * T689 (EDI-10; design 01 pin 6; chart-editor-Q6): the tag's one menu offers
+ * first the aggregations the model allows — the sibling measures over the
+ * same `sql` — the current one checked, then a divider, then AC-047's six.
+ */
+describe('the aggregations the model allows (T689, chart-editor-Q6)', () => {
+  const AGGREGATIONS = [
+    { member: 'orders.total_amount', aggregation: 'sum', title: 'Total Amount', current: true },
+    {
+      member: 'orders.average_amount',
+      aggregation: 'avg',
+      title: 'Average Amount',
+      current: false,
+    },
+  ];
+
+  it('lists them first, the current one checked, then a divider and the six', async () => {
+    render(
+      <QuickCalcMenu
+        title="Count"
+        tag="sum"
+        onApply={vi.fn()}
+        aggregations={AGGREGATIONS}
+        onAggregation={vi.fn()}
+      />,
+    );
+    const menu = await open();
+    const radios = within(menu).getAllByRole('menuitemradio');
+    // Each said apart, by its aggregation and its title (T689's review).
+    expect(radios).toEqual([
+      within(menu).getByRole('menuitemradio', { name: 'sum Total Amount' }),
+      within(menu).getByRole('menuitemradio', { name: 'avg Average Amount' }),
+    ]);
+    expect(radios.map((item) => item.getAttribute('aria-checked'))).toEqual(['true', 'false']);
+    // The current one's ✓ is seen, not only said (T689's review).
+    expect(radios.map((item) => item.querySelector('.menu-button__check')?.textContent)).toEqual([
+      '✓',
+      '',
+    ]);
+    const [firstRule] = within(menu).getAllByRole('separator');
+    // The divider sits between the aggregations and the first calculation.
+    expect(firstRule?.previousElementSibling).toBe(radios[1]);
+    expect(firstRule?.nextElementSibling?.textContent).toBe('% of total');
+  });
+
+  it('swaps to the one chosen, and nothing for the current one', async () => {
+    const onAggregation = vi.fn();
+    render(
+      <QuickCalcMenu
+        title="Count"
+        tag="sum"
+        onApply={vi.fn()}
+        aggregations={AGGREGATIONS}
+        onAggregation={onAggregation}
+      />,
+    );
+    await userEvent.click(within(await open()).getByRole('menuitemradio', { name: /^avg/ }));
+    expect(onAggregation).toHaveBeenCalledWith('orders.average_amount');
+    await userEvent.click(within(await open()).getByRole('menuitemradio', { name: /^sum/ }));
+    expect(onAggregation).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the section out where the model declares no sibling', async () => {
+    menuFor();
+    const menu = await open();
+    expect(within(menu).queryAllByRole('menuitemradio')).toEqual([]);
+    expect(within(menu).queryAllByRole('separator')).toEqual([]);
+  });
+});

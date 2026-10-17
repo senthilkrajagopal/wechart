@@ -5,7 +5,7 @@ import type { ChartType } from '@wechart/recommender';
  * (AC-032).
  *
  * The rule is one-directional: a field change never clears a manual choice.
- * Only "Back to recommended" does. Re-recommending over someone's explicit
+ * Only Auto, or the Recommended card's Use, does (R76). Re-recommending over someone's explicit
  * decision every time they add a field is the behaviour the criterion exists
  * to forbid — it looks like the application arguing with them.
  */

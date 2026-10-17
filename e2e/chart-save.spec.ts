@@ -791,8 +791,12 @@ test.describe('a chart handed back to the recommender is saved with the type it 
     // cardinalities to go on, and its pick is not the one the rows give.
     const preview = editor(page).getByTestId('chart-canvas');
     await expect(preview).toHaveAttribute('data-chart-type', 'bar');
-    await editor(page).getByTestId('back-to-recommended').click();
-    await expect(editor(page).getByTestId('back-to-recommended')).toHaveCount(0);
+    // Auto, the way back since T689 (AC-217 as amended), pressed once taken.
+    const auto = editor(page)
+      .getByRole('group', { name: 'Quick picks' })
+      .getByRole('button', { name: 'Auto', exact: true });
+    await auto.click();
+    await expect(auto).toHaveAttribute('aria-pressed', 'true');
     // What the editor now draws, the card and the preview agreeing.
     let drawn = '';
     await expect

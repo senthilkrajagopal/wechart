@@ -9,6 +9,7 @@ import {
   isEmpty,
   onOneScale,
   removeFromWell,
+  swapMeasure,
   granularitiesOf,
   seriesOf,
   toCubeQuery,
@@ -22,6 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import {
+  dataReasonFor,
   describeMissing,
   explain,
   recommend,
@@ -55,7 +57,7 @@ import {
 import { OPENED_WITH, type EditorState } from './openChart';
 import { PreviewFrame, type TileSize } from './PreviewFrame';
 import { drawnSizeIn, hiddenLabelsAt } from './hiddenLabels';
-import { metaQueryOf, useWorkspaceItem } from '../query/meta';
+import { metaQueryOf, siblingsQueryOf, useWorkspaceItem } from '../query/meta';
 import { countryMarkingsOf, signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { CubeSourcePicker, FieldList, membersWithJoins, useJoined } from './FieldList';
@@ -316,7 +318,10 @@ function EditorBody({
 
   // Shared with the dashboard, which takes its number formats from it (AC-046).
   // A workspace item's from its overlay (T347, AC-323).
-  const meta = useQuery(metaQueryOf(useWorkspaceItem()));
+  const workspaceItem = useWorkspaceItem();
+  const meta = useQuery(metaQueryOf(workspaceItem));
+  /** Each measure's siblings, the aggregations its tag offers (T689, chart-editor-Q6). */
+  const siblings = useQuery({ ...siblingsQueryOf(workspaceItem), enabled: cubeName !== '' });
 
   /** The cubes the chosen one joins to, whose fields the chart may use too (T688, EDI-03). */
   const joined = useJoined(cubeName);
@@ -538,12 +543,27 @@ function EditorBody({
 
   /**
    * AC-032: a manual choice survives field changes. Nothing here resets it on
-   * a spec change — only "Back to recommended" does.
+   * a spec change — only Auto, or the Recommended card's Use, does (R76).
    */
   // Read exactly as the dashboard reads it (T193), so a chart is drawn with
   // the same type on a tile as here.
   const recommended = topTypeOf(recommendation);
   const shownType = effectiveType(chartTypeState, recommended);
+  /**
+   * The pick's reason built from the data (T689, EDI-07): "8 Customers
+   * Country values × 1 measure → Bar", each field by its title (AC-220).
+   */
+  const pickReason =
+    recommendation.top === null
+      ? undefined
+      : dataReasonFor(recommendation.top.candidate, (name) => titles[name] ?? name);
+  /** The quick picks (EDI-06): the top pick and runners-up, each with its reason (AC-028). */
+  const picks = [...(recommendation.top ? [recommendation.top] : []), ...recommendation.runnersUp]
+    .filter(
+      (each, at, all) =>
+        all.findIndex((other) => other.candidate.chartType === each.candidate.chartType) === at,
+    )
+    .map((each) => ({ type: each.candidate.chartType, reason: each.reason }));
   /** The recommender's pick and runners-up, suggested in the gallery (AC-217). */
   const suggested = [
     ...new Set(
@@ -965,14 +985,20 @@ function EditorBody({
                   shown={shownType}
                   manual={isManual(chartTypeState)}
                   recommended={recommended}
+                  recommendedReason={pickReason}
+                  picks={picks}
                   warnings={typeWarnings}
                   changeRef={changeType}
                   onChange={() => setGallery(true)}
-                  onBack={() => {
+                  // Auto, or the Recommended card's Use (AC-217, AC-032).
+                  onAuto={(from) => {
                     setChartTypeState(backToRecommended());
-                    // The button pressed goes with the manual choice: to Change.
-                    changeType.current?.focus();
+                    // Use goes with the manual choice: to Change. Auto stays,
+                    // and keeps focus (T689's review).
+                    if (from === 'use') changeType.current?.focus();
                   }}
+                  // A quick pick: that type, by hand (EDI-06).
+                  onPick={(type) => setChartTypeState(chooseType(type))}
                 />
               </div>
               <div className="inspector-section" data-testid="inspector-wells">
@@ -1001,6 +1027,9 @@ function EditorBody({
                   }
                   // Anything else, asked of whoever may change the model (T383, AC-050).
                   onRequest={chartId === undefined ? undefined : setRequesting}
+                  // Another aggregation the model allows, from the tag (T689, chart-editor-Q6).
+                  siblings={siblings.data ?? {}}
+                  onSwap={(from, to) => setSpec((current) => swapMeasure(current, from, to))}
                   // The last filter removed leaves none stored, as there were.
                   onFilters={(filters) =>
                     setSpec((current) => {
@@ -1070,26 +1099,20 @@ function EditorBody({
                 />
               </div>
               {recommendation.top ? (
+                // "Why this recommendation?", the last section, collapsed (EDI-12, pin 9).
                 <div className="inspector-section chart-editor__type" data-testid="recommendation">
-                  {/* Each type by its name (AC-217), never its id. */}
-                  <p data-testid="recommended-type" data-chart-type={recommended ?? undefined}>
-                    Recommended: {recommended === null ? '' : CHART_TYPE_NAMES[recommended]}
-                  </p>
-                  <p data-testid="recommended-reason">{recommendation.top.reason}</p>
-
-                  <h4>Or</h4>
-                  <ul>
-                    {recommendation.runnersUp.map((runnerUp) => (
-                      <li
-                        key={runnerUp.candidate.chartType}
-                        data-testid={`runner-up-${runnerUp.candidate.chartType}`}
-                      >
-                        {CHART_TYPE_NAMES[runnerUp.candidate.chartType]} — {runnerUp.reason}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <WhyThisChart explanation={explanation} titles={titles} />
+                  <WhyThisChart
+                    explanation={explanation}
+                    titles={titles}
+                    picked={{
+                      type: recommendation.top.candidate.chartType,
+                      reason: pickReason ?? recommendation.top.reason,
+                      runnersUp: recommendation.runnersUp.map((runnerUp) => ({
+                        type: runnerUp.candidate.chartType,
+                        reason: runnerUp.reason,
+                      })),
+                    }}
+                  />
                 </div>
               ) : null}
             </>

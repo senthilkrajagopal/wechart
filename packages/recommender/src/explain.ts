@@ -3,7 +3,7 @@ import { enumerate, score } from './recommend';
 import type { Candidate, RuleOutcome, Signature } from './types';
 
 /**
- * The trace behind "Why this chart?" (AC-029).
+ * The trace behind "Why this recommendation?" and its full table (AC-029, as amended by R76).
  *
  * It includes the candidates that were **rejected**, with the rules that
  * rejected them. A trace of only the winner answers "what did you pick" and

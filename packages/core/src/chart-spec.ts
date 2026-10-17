@@ -5,12 +5,7 @@
  */
 
 import type { MemberGranularities, TimeGranularity } from './format';
-import {
-  calculationBlock,
-  calculationsInEffect,
-  periodGrainOf,
-  type QuickCalc,
-} from './quickCalc';
+import { calculationBlock, calculationsInEffect, periodGrainOf, type QuickCalc } from './quickCalc';
 import type { ChartType } from './render-spec';
 
 export type WellName = 'measures' | 'dimensions' | 'timeDimensions';
@@ -87,6 +82,21 @@ export function removeFromWell(spec: ChartSpec, well: WellName, member: string):
   // lingers in what is saved (T229's review) and the field comes back plain
   // if added again.
   return forget(forget(removed, 'granularities', member), 'calculations', member);
+}
+
+/**
+ * Another aggregation the model allows, chosen from a measure's tag (T689,
+ * chart-editor-Q6): `to` takes `from`'s place in Metrics, in its position,
+ * plain — a calculation chosen for `from` goes with it, as on removal. No
+ * change where the chart doesn't hold `from`, or holds `to` already.
+ */
+export function swapMeasure(spec: ChartSpec, from: string, to: string): ChartSpec {
+  if (!spec.measures.includes(from) || spec.measures.includes(to)) return spec;
+  return forget(
+    { ...spec, measures: spec.measures.map((each) => (each === from ? to : each)) },
+    'calculations',
+    from,
+  );
 }
 
 /** `spec` with `member`'s entry in one of its per-member maps dropped, and the map with its last. */

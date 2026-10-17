@@ -1232,6 +1232,17 @@ const CASES: Record<string, Case> = {
         fullName(place),
       );
   },
+  // Each measure's siblings, for its aggregation menu (T689): scoped as the
+  // joins are; for an item, refused to whoever may not open it. The places'
+  // cubes declare one measure each, so there are none to name.
+  'GET /api/meta/siblings': async () => {
+    for (const who of WHO)
+      answered(await ask(who, { method: 'GET', url: '/api/meta/siblings' }), `${who} siblings`);
+    for (const place of PLACES)
+      await openedOnlyBy(`/api/meta/siblings?for=dashboard:${at[place].dashboard}`, (who) =>
+        opens(who, place),
+      );
+  },
   'POST /api/load': () => queries('/api/load'),
   'POST /api/sql': () => queries('/api/sql'),
   'POST /api/acceleration': () => queries('/api/acceleration'),

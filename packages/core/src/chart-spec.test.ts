@@ -8,6 +8,7 @@ import {
   granularitiesOf,
   isEmpty,
   removeFromWell,
+  swapMeasure,
   toCubeQuery,
   toUnderlyingQuery,
   wellFor,
@@ -69,6 +70,31 @@ describe('wells', () => {
   it('reports an untouched spec as empty', () => {
     expect(isEmpty(emptySpec('orders'))).toBe(true);
     expect(isEmpty(addToWell(emptySpec('orders'), 'measures', 'orders.count'))).toBe(false);
+  });
+});
+
+/**
+ * T689 (chart-editor-Q6): another aggregation the model allows, chosen from a
+ * measure's tag, takes that measure's place in Metrics, in the same position,
+ * plain: a calculation chosen for the one it replaces goes with it, as on
+ * removal, since it was chosen for that aggregation.
+ */
+describe('swapping a measure for a sibling (T689)', () => {
+  const spec = {
+    ...emptySpec('orders'),
+    measures: ['orders.count', 'orders.total_amount'],
+    calculations: { 'orders.total_amount': { kind: 'runningTotal' as const } },
+  };
+
+  it('puts the sibling in its place, and its calculation goes', () => {
+    const swapped = swapMeasure(spec, 'orders.total_amount', 'orders.average_amount');
+    expect(swapped.measures).toEqual(['orders.count', 'orders.average_amount']);
+    expect(swapped).not.toHaveProperty('calculations');
+  });
+
+  it('changes nothing for a sibling the chart already holds, or a measure it doesn’t', () => {
+    expect(swapMeasure(spec, 'orders.total_amount', 'orders.count')).toBe(spec);
+    expect(swapMeasure(spec, 'orders.average_amount', 'orders.largest')).toBe(spec);
   });
 });
 

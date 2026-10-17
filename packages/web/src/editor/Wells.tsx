@@ -266,6 +266,14 @@ export interface WellsProps {
    * AC-050). Given, each measure's menu ends with "Request a calculation…".
    */
   readonly onRequest?: ((member: string) => void) | undefined;
+  /**
+   * Each measure's siblings, the other measures the model declares on its
+   * cube over the same `sql` (T689, chart-editor-Q6; `/api/meta/siblings`):
+   * the aggregations its tag offers.
+   */
+  readonly siblings?: Readonly<Record<string, readonly string[]>>;
+  /** Another aggregation chosen from a measure's tag: `to` in `from`'s place. */
+  readonly onSwap?: ((from: string, to: string) => void) | undefined;
   /** The chart's own filters, changed in the Filters well (AC-216). */
   readonly onFilters?: (filters: readonly ChartFilter[]) => void;
   /** How many categories are kept before the rest fold into Other (AC-216, AC-041). */
@@ -321,6 +329,8 @@ export function Wells({
   onGranularity,
   onCalculation,
   onRequest,
+  siblings = {},
+  onSwap,
   onFilters,
   topN,
   onTopN,
@@ -379,6 +389,20 @@ export function Wells({
     return (calc: QuickCalcKind) =>
       quickCalcUnavailable(calc, spec, timeFields, { measure: kind, titleOf });
   };
+  /**
+   * The aggregations a measure's tag offers (T689, chart-editor-Q6): itself
+   * and its siblings the chart doesn't hold already, each by its aggregation.
+   */
+  const aggregationsOf = (measure: string) =>
+    [measure, ...(siblings[measure] ?? []).filter((other) => !spec.measures.includes(other))]
+      .map((name) => available.find((member) => member.name === name))
+      .filter((member): member is Member => member?.aggType !== undefined)
+      .map((member) => ({
+        member: member.name,
+        aggregation: member.aggType ?? '',
+        title: titleOf(member.name),
+        current: member.name === measure,
+      }));
   /**
    * Each calculation over time still chosen while the chart can't run it
    * (R45.4): paused, its measure drawn plain, and why.
@@ -569,6 +593,10 @@ export function Wells({
                               : () => {
                                   onRequest(member);
                                 }
+                          }
+                          aggregations={aggregationsOf(member)}
+                          onAggregation={
+                            onSwap === undefined ? undefined : (to) => onSwap(member, to)
                           }
                           testId={`calcs-${member}`}
                         />

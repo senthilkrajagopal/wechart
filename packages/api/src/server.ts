@@ -820,13 +820,14 @@ export function buildServer({
   });
 
   /**
-   * Each cube's joins, for the field list's "· via join" groups (T688,
-   * EDI-03): from Cube's extended metadata, as the user's token sees it, or
-   * the item's overlay's. Each join's target and relationship only, never its
-   * SQL, and no target the answer doesn't hold (research
-   * `cube/meta-extended-joins.md`).
+   * Cube's extended metadata's cubes as the user's token sees them, or, for
+   * `?for=` an item, as its overlay does and only for whoever may open it
+   * (T688, T689). Undefined where the reply has been sent, refused.
    */
-  app.get('/api/meta/joins', USER, async (request, reply) => {
+  const extendedCubesFor = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<{ name: string; joins?: unknown; measures?: unknown }[] | undefined> => {
     const raw = (request.query as { for?: unknown } | undefined)?.for;
     let cube = cubeFor(request);
     let allowed: ReadonlySet<string> | 'all' = 'all';
@@ -834,16 +835,28 @@ export function buildServer({
       const item = queryItemOfParam(raw);
       if (item === null || item === undefined) throw new BadRequest();
       const scope = await queryScope(request, reply, item);
-      if (scope === undefined) return reply;
+      if (scope === undefined) return undefined;
       cube = cubeIn(request, scope);
       allowed = scope.allowed;
     }
     const extended = (await cube.metaExtended()) as { cubes?: unknown } | null;
-    const cubes = (Array.isArray(extended?.cubes) ? extended.cubes : []).filter(
-      (each): each is { name: string; joins?: unknown } =>
+    return (Array.isArray(extended?.cubes) ? extended.cubes : []).filter(
+      (each): each is { name: string; joins?: unknown; measures?: unknown } =>
         typeof (each as { name?: unknown } | null)?.name === 'string' &&
         (allowed === 'all' || allowed.has((each as { name: string }).name)),
     );
+  };
+
+  /**
+   * Each cube's joins, for the field list's "· via join" groups (T688,
+   * EDI-03): from Cube's extended metadata, as the user's token sees it, or
+   * the item's overlay's. Each join's target and relationship only, never its
+   * SQL, and no target the answer doesn't hold (research
+   * `cube/meta-extended-joins.md`).
+   */
+  app.get('/api/meta/joins', USER, async (request, reply) => {
+    const cubes = await extendedCubesFor(request, reply);
+    if (cubes === undefined) return reply;
     const held = new Set(cubes.map((each) => each.name));
     return {
       joins: Object.fromEntries(
@@ -864,6 +877,33 @@ export function buildServer({
         ]),
       ),
     };
+  });
+
+  /**
+   * Each measure's siblings, for its aggregation menu (T689, chart-editor-Q6):
+   * the other measures the model declares on the same cube over the same
+   * `sql`, from Cube's extended metadata, scoped as the joins are. Which
+   * measures are siblings only, never the SQL they share; a measure with no
+   * `sql` (a plain count) has none (research `cube/meta-extended-joins.md`).
+   */
+  app.get('/api/meta/siblings', USER, async (request, reply) => {
+    const cubes = await extendedCubesFor(request, reply);
+    if (cubes === undefined) return reply;
+    const siblings: Record<string, string[]> = {};
+    for (const each of cubes) {
+      const bySql = new Map<string, string[]>();
+      for (const measure of Array.isArray(each.measures)
+        ? (each.measures as { name?: unknown; sql?: unknown }[])
+        : []) {
+        if (typeof measure.name !== 'string' || typeof measure.sql !== 'string') continue;
+        if (measure.sql === '') continue;
+        bySql.set(measure.sql, [...(bySql.get(measure.sql) ?? []), measure.name]);
+      }
+      for (const names of bySql.values())
+        for (const name of names)
+          if (names.length > 1) siblings[name] = names.filter((other) => other !== name);
+    }
+    return { siblings };
   });
 
   /**

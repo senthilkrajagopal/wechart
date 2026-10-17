@@ -282,17 +282,34 @@ test('recommends a chart with a runner-up, and explains why', async ({ page }) =
   await wellPicker(page, 'dimensions').selectOption('orders.status');
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
 
-  // Three statuses is a small category: a bar.
-  // By its name (AC-217), carrying its id.
-  await expect(page.getByTestId('recommended-type')).toHaveText('Recommended: Bar');
-  await expect(page.getByTestId('recommended-type')).toHaveAttribute('data-chart-type', 'bar');
-  await expect(page.getByTestId('recommended-reason')).not.toBeEmpty();
-  // AC-028: at least one runner-up, and it is a different chart.
+  // Three statuses is a small category: a bar, in Auto.
+  await expectChartType(page, 'bar');
+  await expect(page.getByRole('button', { name: 'Auto', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+
+  // "Why this recommendation?" (AC-029 as amended; T689): collapsed, then the
+  // checklist, the pick by its name (AC-217) with a reason from the data.
+  await page.getByRole('button', { name: 'Why this recommendation?' }).click();
+  const checklist = page.getByTestId('why-checklist');
+  await expect(checklist).toContainText('Orders Status: 3 distinct values in this result');
+  await expect(page.getByTestId('picked-type')).toHaveAttribute('data-chart-type', 'bar');
+  await expect(page.getByTestId('picked-type')).toHaveText(
+    'Picked Bar: 3 Orders Status values × 1 measure → Bar',
+  );
+  // AC-028: at least one runner-up, a different chart, each with its reason
+  // of at most 80 characters.
   const runnersUp = page.locator('[data-testid^="runner-up-"]');
   await expect(runnersUp.first()).toBeVisible();
+  for (const runnerUp of await runnersUp.all()) {
+    const [, reason] = ((await runnerUp.textContent()) ?? '').split(' — ');
+    expect(reason?.length ?? 0).toBeGreaterThan(0);
+    expect(reason!.length).toBeLessThanOrEqual(80);
+  }
 
-  await page.getByRole('button', { name: 'Why this chart?' }).click();
-
+  // Every rule for every type, one link away.
+  await page.getByRole('button', { name: /^Show every rule for every type/ }).click();
   const trace = page.getByTestId('why-this-chart');
   // The signature, with the cardinality that came from the data.
   await expect(trace.getByTestId('trace-field-orders.status')).toContainText('3');
@@ -308,7 +325,11 @@ test('the trace names the rule that rejected a candidate (AC-029)', async ({ pag
   await wellPicker(page, 'dimensions').selectOption('orders.id');
   await expect(page.getByTestId('result-row-count')).toHaveText('240 rows');
 
-  await page.getByRole('button', { name: 'Why this chart?' }).click();
+  await page.getByRole('button', { name: 'Why this recommendation?' }).click();
+  // The rule that decided, in the checklist with its ⚠ (T689).
+  await expect(page.getByTestId('check-pie')).toContainText('6 slices');
+  await expect(page.getByTestId('check-pie').locator('svg[data-icon="warn"]')).toHaveCount(1);
+  await page.getByRole('button', { name: /^Show every rule for every type/ }).click();
   const trace = page.getByTestId('why-this-chart');
 
   await expect(trace.getByTestId('trace-pie')).toContainText('rejected');
@@ -316,9 +337,9 @@ test('the trace names the rule that rejected a candidate (AC-029)', async ({ pag
 });
 
 /**
- * AC-032: WHEN the user picks a chart type manually, THE SYSTEM SHALL keep that
- * type through later field changes until the user chooses "Back to
- * recommended".
+ * AC-032 as amended by R76: WHEN the user picks a chart type manually, THE
+ * SYSTEM SHALL keep that type through later field changes until the user
+ * chooses Auto, or Use on the Recommended card.
  * Fails when: the type reverts to the recommendation after a field change.
  */
 test('a manually chosen chart type survives field changes', async ({ page }) => {
@@ -333,37 +354,103 @@ test('a manually chosen chart type survives field changes', async ({ page }) => 
 
   // A field change moves the recommendation on; the chart must not follow.
   await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+  // The Recommended card names the new pick, and it isn't the pie (T689's review).
+  await expect(page.getByTestId('recommended-card')).toBeVisible();
   await expect(page.getByTestId('recommended-type')).not.toHaveAttribute('data-chart-type', 'pie');
   await expectChartType(page, 'pie');
 });
 
-test('"Back to recommended" hands the choice back', async ({ page }) => {
+/** AC-217 and AC-032 as amended (T689): Auto hands the choice back. */
+test('Auto hands the choice back, and is pressed only in Auto', async ({ page }) => {
   await openEditorOnOrders(page);
   await wellPicker(page, 'measures').selectOption('orders.count');
   await wellPicker(page, 'dimensions').selectOption('orders.status');
+  const auto = page.getByRole('group', { name: 'Quick picks' }).getByRole('button', {
+    name: 'Auto',
+    exact: true,
+  });
+  await expect(auto).toHaveAttribute('aria-pressed', 'true');
 
   await chooseChartType(page, 'pie');
   await expectChartType(page, 'pie');
+  await expect(auto).toHaveAttribute('aria-pressed', 'false');
 
-  await page.getByTestId('back-to-recommended').click();
+  await auto.click();
 
   await expectChartType(page, 'bar');
+  await expect(auto).toHaveAttribute('aria-pressed', 'true');
+  // Auto stays where it was, and so does focus (T689's review).
+  await expect(auto).toBeFocused();
   // And it follows the recommendation again from here on.
   await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
-  const recommended = await page.getByTestId('recommended-type').getAttribute('data-chart-type');
-  await expectChartType(page, recommended!);
+  await expect(page.getByTestId('chart-type')).toHaveText(/^Auto · /);
+  await expect(page.getByTestId('recommended-card')).toHaveCount(0);
 });
 
-test('the option to go back appears only after a manual choice', async ({ page }) => {
+/** EDI-07 (T689): the Recommended card, only while a manual pick differs, and its Use. */
+test('the Recommended card shows only after a differing manual choice, and Use hands it back', async ({
+  page,
+}) => {
   await openEditorOnOrders(page);
   await wellPicker(page, 'measures').selectOption('orders.count');
   await wellPicker(page, 'dimensions').selectOption('orders.status');
 
-  await expect(page.getByTestId('back-to-recommended')).toBeHidden();
+  await expect(page.getByTestId('recommended-card')).toHaveCount(0);
 
-  await chooseChartType(page, 'pie');
+  // A quick pick, by hand: Auto, the top pick (Bar), then the first runner-up.
+  const picks = page.getByRole('group', { name: 'Quick picks' }).getByRole('button');
+  await expect(picks.nth(1)).toHaveAccessibleName('Bar');
+  const runnerUp = picks.nth(2);
+  await runnerUp.click();
+  await expect(runnerUp).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('chart-type')).toHaveText(
+    (await runnerUp.getAttribute('aria-label'))!,
+  );
 
-  await expect(page.getByTestId('back-to-recommended')).toBeVisible();
+  const card = page.getByTestId('recommended-card');
+  await expect(card.getByTestId('recommended-type')).toHaveText('Recommended: Bar');
+  await expect(card.getByTestId('recommended-reason')).toHaveText(
+    '3 Orders Status values × 1 measure → Bar',
+  );
+  await card.getByRole('button', { name: 'Use Bar' }).click();
+  await expectChartType(page, 'bar');
+  await expect(card).toHaveCount(0);
+});
+
+/**
+ * EDI-10 (T689; design 01 pin 6; chart-editor-Q6): a measure's tag offers the
+ * aggregations the model allows, its siblings over the same `sql` — Orders'
+ * Total Amount (sum) and Average Amount (avg), both over `amount` — the
+ * current one checked; one chosen takes its place and is asked of Cube.
+ */
+test('a measure’s tag offers the aggregations the model allows, and swaps to one', async ({
+  page,
+}) => {
+  await openEditorOnOrders(page);
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await page.getByRole('button', { name: 'Calculations on Total Amount' }).click();
+  const menu = page.getByRole('menu', { name: 'Calculations on Total Amount' });
+  const radios = menu.getByRole('menuitemradio');
+  await expect(radios.nth(0)).toHaveAccessibleName('sum Total Amount');
+  await expect(radios.nth(1)).toHaveAccessibleName('avg Average Amount');
+  await expect(radios).toHaveCount(2);
+  await expect(radios.first()).toHaveAttribute('aria-checked', 'true');
+  // Its ✓ seen, not only said (T689's review).
+  await expect(radios.first().locator('.menu-button__check')).toHaveText('✓');
+  await expect(radios.first().locator('.menu-button__check')).toBeVisible();
+  // Then a divider, then AC-047's six.
+  await expect(menu.getByRole('menuitem', { name: '% of total' })).toBeVisible();
+
+  const asked = page.waitForRequest((request) => {
+    if (!request.url().endsWith('/api/load')) return false;
+    const { query } = request.postDataJSON() as { query: { measures?: string[] } };
+    return query.measures?.includes('orders.average_amount') === true;
+  });
+  await radios.nth(1).click();
+  await asked;
+  await expect(page.getByTestId('in-measures-orders.average_amount')).toBeVisible();
+  await expect(page.getByTestId('in-measures-orders.total_amount')).toHaveCount(0);
 });
 
 /**
@@ -701,9 +788,11 @@ test('draws metrics on different scales a panel each, and says what a bar leaves
   await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
 
   // Auto: small multiples, a panel per metric, each titled by it.
-  await expect(page.getByTestId('recommended-type')).toHaveAttribute('data-chart-type', 'trellis');
-  await expect(page.getByTestId('recommended-reason')).toHaveText(
-    'One small chart per metric, each on its own scale.',
+  await expectChartType(page, 'trellis');
+  await page.getByRole('button', { name: 'Why this recommendation?' }).click();
+  await expect(page.getByTestId('picked-type')).toHaveAttribute('data-chart-type', 'trellis');
+  await expect(page.getByTestId('picked-type')).toHaveText(
+    'Picked Small multiples: 3 Orders Status values × 2 measures → Small multiples',
   );
   await expect.poll(texts).toEqual(expect.arrayContaining(['Count', 'Total Amount']));
   // Revenue's own axis is in its own format.
@@ -1025,11 +1114,16 @@ test.describe('opening a saved chart (AC-182)', () => {
     /**
      * A saved type is a choice the user made, so it must load as manual.
      * Loaded as the recommendation it would be silently replaced the next
-     * time a field changed — AC-032's forbidden behaviour. "Back to
-     * recommended" is offered only while the type is manual, so its presence
+     * time a field changed — AC-032's forbidden behaviour. Auto is pressed
+     * only while no type is chosen by hand (T689), so its not being pressed
      * is the witness.
      */
-    await expect(page.getByTestId('back-to-recommended')).toBeVisible();
+    await expect(
+      page.getByRole('group', { name: 'Quick picks' }).getByRole('button', {
+        name: 'Auto',
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-pressed', 'false');
   });
 
   test('opens with the chart’s saved axis settings', async ({ page }) => {
@@ -1483,8 +1577,10 @@ test('a two-measure legend, the results headers and the trace read the members�
   const headers = page.getByTestId('drawer-result-rows').getByRole('columnheader');
   await expect(headers).toHaveText(['Orders Status', 'Orders Count', 'Orders Total Amount']);
 
-  // The trace.
-  await page.getByRole('button', { name: 'Why this chart?' }).click();
+  // The checklist and its full table (T689).
+  await page.getByRole('button', { name: 'Why this recommendation?' }).click();
+  await expect(page.getByTestId('why-checklist')).not.toContainText(/orders\.(count|status)/);
+  await page.getByRole('button', { name: /^Show every rule for every type/ }).click();
   await expect(page.getByTestId('trace-field-orders.count').getByRole('rowheader')).toHaveText(
     'Orders Count',
   );
@@ -1542,11 +1638,18 @@ test('the type reads by name; Change opens a gallery that greys what these field
 
   await expect(page.getByTestId('chart-type')).toHaveText('Auto · Bar');
   await expect(page.getByTestId('chart-type-change')).toContainText('Picked by the recommender');
-  await expect(page.getByTestId('back-to-recommended')).toHaveCount(0);
+  // Auto pressed while in Auto (AC-217 as amended; T689).
+  const auto = page.getByRole('group', { name: 'Quick picks' }).getByRole('button', {
+    name: 'Auto',
+    exact: true,
+  });
+  await expect(auto).toHaveAttribute('aria-pressed', 'true');
   // The trace names its candidates by name too (T230's review).
-  await page.getByRole('button', { name: 'Why this chart?' }).click();
+  await page.getByRole('button', { name: 'Why this recommendation?' }).click();
+  await page.getByRole('button', { name: /^Show every rule for every type/ }).click();
   await expect(page.getByTestId('trace-hbar')).toContainText('Bar, horizontal');
   await expect(page.getByTestId('why-this-chart')).not.toContainText(/\bhbar\b/);
+  await expect(page.getByTestId('why-checklist')).not.toContainText(/\bhbar\b/);
 
   const change = page.getByTestId('chart-type-change');
   await change.click();
@@ -1575,9 +1678,10 @@ test('the type reads by name; Change opens a gallery that greys what these field
   await expect(change).toBeFocused();
   await expect(page.getByTestId('chart-type')).toHaveText('Grouped bar');
   await expect(change).toContainText('Chosen manually');
-  await page.getByTestId('back-to-recommended').click();
+  await expect(auto).toHaveAttribute('aria-pressed', 'false');
+  await auto.click();
   await expect(page.getByTestId('chart-type')).toHaveText('Auto · Bar');
-  await expect(page.getByTestId('back-to-recommended')).toHaveCount(0);
+  await expect(auto).toHaveAttribute('aria-pressed', 'true');
 });
 
 /**
@@ -1601,9 +1705,9 @@ test('a manual combo, or a pie of too many slices, warns why and offers the reco
   const warning = page.getByTestId('type-warning');
   await expect(warning).toContainText('Two value axes');
   await expect(warning.locator('svg[data-icon="warn"]')).toHaveCount(1);
-  // Switching back is offered, and taken.
+  // Switching back is offered, on the Recommended card under it (T689), and taken.
   const recommended = await page.getByTestId('recommended-type').getAttribute('data-chart-type');
-  await warning.getByRole('button', { name: /^Use / }).click();
+  await page.getByTestId('recommended-card').getByRole('button', { name: /^Use / }).click();
   await expectChartType(page, recommended!);
   await expect(page.getByTestId('type-warning')).toHaveCount(0);
 

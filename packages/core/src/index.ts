@@ -12,6 +12,7 @@ export {
   isEmpty,
   QUERY_GRANULARITY,
   removeFromWell,
+  swapMeasure,
   toCubeQuery,
   toUnderlyingQuery,
   wellFor,

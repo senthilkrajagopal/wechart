@@ -117,8 +117,10 @@ test('a one-source chart’s legend and pills read short titles, the rest of the
   );
   await expect(miss).not.toContainText(INTERNAL);
 
-  // The trace.
-  await page.getByRole('button', { name: 'Why this chart?' }).click();
+  // The checklist and its full table (T689).
+  await page.getByRole('button', { name: 'Why this recommendation?' }).click();
+  await expect(page.getByTestId('why-checklist')).not.toContainText(INTERNAL);
+  await page.getByRole('button', { name: /^Show every rule for every type/ }).click();
   await expect(page.getByTestId('why-this-chart')).toBeVisible();
   await expect(page.getByTestId('why-this-chart')).not.toContainText(INTERNAL);
 });

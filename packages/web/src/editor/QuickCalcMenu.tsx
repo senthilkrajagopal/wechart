@@ -36,6 +36,23 @@ export interface QuickCalcMenuProps {
    * menu ends with "Request a calculation…".
    */
   readonly onRequest?: (() => void) | undefined;
+  /**
+   * The aggregations the model allows (T689, chart-editor-Q6): the sibling
+   * measures it declares on the same cube over the same `sql`, this one
+   * among them and `current`. Listed first, checked as chosen, then a
+   * divider; none, and the section is left out.
+   */
+  readonly aggregations?:
+    | readonly {
+        readonly member: string;
+        /** Its aggregation, "sum", "avg". */
+        readonly aggregation: string;
+        readonly title: string;
+        readonly current: boolean;
+      }[]
+    | undefined;
+  /** Another aggregation chosen: the chart takes that measure in this one's place. */
+  readonly onAggregation?: ((member: string) => void) | undefined;
   readonly testId?: string;
 }
 
@@ -56,11 +73,33 @@ export function QuickCalcMenu({
   onApply,
   whyNot,
   onRequest,
+  aggregations = [],
+  onAggregation,
   testId,
 }: QuickCalcMenuProps) {
   const label = `Calculations on ${title}`;
   const current = applied === undefined ? undefined : keyOf(applied);
+  // Design 01 pin 6's "sum, avg… where the model allows", first (EDI-10).
+  const swaps: MenuItem[] =
+    onAggregation === undefined || aggregations.length < 2
+      ? []
+      : aggregations.map((each) => ({
+          key: `agg-${each.member}`,
+          testId: `agg-${each.member}`,
+          checked: each.current,
+          label: (
+            <span className="quick-calc__item">
+              <span>{each.aggregation}</span>
+              {/* Said apart, "sum Total Amount", not run together (T689's review). */}{' '}
+              <span className="quick-calc__why">{each.title}</span>
+            </span>
+          ),
+          onSelect: () => {
+            if (!each.current) onAggregation(each.member);
+          },
+        }));
   const items: MenuItem[] = [
+    ...swaps,
     ...(applied === undefined
       ? []
       : [
@@ -68,6 +107,7 @@ export function QuickCalcMenu({
             key: 'none',
             testId: 'calc-none',
             label: 'No calculation',
+            separatorBefore: swaps.length > 0,
             onSelect: () => onApply(undefined),
           },
         ]),
@@ -91,7 +131,7 @@ export function QuickCalcMenu({
             </span>
           ),
         ...(why === undefined ? {} : { disabled: true, title: why }),
-        separatorBefore: applied !== undefined && index === 0,
+        separatorBefore: (applied !== undefined || swaps.length > 0) && index === 0,
         onSelect: () => {
           // The one already applied, chosen again, is no change (and no undo step).
           if (keyOf(calc) !== current) onApply(calc);

@@ -27,6 +27,11 @@ export interface MenuItem {
   readonly testId?: string;
   /** Set apart from the items before it by a rule (design 12 state A: Generate). */
   readonly separatorBefore?: boolean;
+  /**
+   * One of a set of choices, checked or not (a `menuitemradio`, T689): an
+   * aggregation the model allows, the measure's own checked.
+   */
+  readonly checked?: boolean;
 }
 
 export interface MenuButtonProps {
@@ -181,7 +186,8 @@ export function MenuButton({
                 itemRefs.current[index] = element;
               }}
               type="button"
-              role="menuitem"
+              role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
+              aria-checked={item.checked}
               // The menu owns focus; Tab leaves it rather than walking items.
               tabIndex={-1}
               className={item.danger === true ? 'menu-button__item is-danger' : 'menu-button__item'}
@@ -202,6 +208,12 @@ export function MenuButton({
                 item.onSelect();
               }}
             >
+              {item.checked === undefined ? null : (
+                // The chosen one's ✓, seen as well as said (T689's review).
+                <span className="menu-button__check" aria-hidden="true">
+                  {item.checked ? '✓' : ''}
+                </span>
+              )}
               {item.label}
             </button>,
           ])}

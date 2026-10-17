@@ -16,6 +16,7 @@ export {
   type Recommendation,
   type Recommendations,
 } from './recommend';
+export { dataReasonFor } from './reason';
 export { explain, type CandidateTrace, type Explanation, type FieldTrace } from './explain';
 export {
   REQUIREMENTS,

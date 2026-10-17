@@ -382,6 +382,69 @@ describe('joined cubes’ fields, named and grouped (T688’s review)', () => {
   });
 });
 
+/**
+ * T689 (EDI-10; design 01 pin 6; chart-editor-Q6): a measure's tag offers the
+ * aggregations the model allows — its siblings over the same `sql` — the
+ * current one checked; one chosen takes its place. A sibling the chart holds
+ * already isn't offered.
+ */
+describe('a measure’s aggregations (T689, chart-editor-Q6)', () => {
+  const total: Member = {
+    name: 'orders.total_amount',
+    title: 'Orders Total Amount',
+    shortTitle: 'Total Amount',
+    kind: 'measure',
+    type: 'number',
+    cube: 'orders',
+    aggType: 'sum',
+  };
+  const average: Member = {
+    ...total,
+    name: 'orders.average_amount',
+    title: 'Orders Average Amount',
+    shortTitle: 'Average Amount',
+    aggType: 'avg',
+  };
+  const largest: Member = {
+    ...total,
+    name: 'orders.largest_amount',
+    title: 'Orders Largest Amount',
+    shortTitle: 'Largest Amount',
+    aggType: 'max',
+  };
+
+  it('lists the siblings by aggregation, the current one checked, and swaps to one chosen', async () => {
+    const onSwap = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Wells
+          spec={{
+            ...emptySpec('orders'),
+            measures: ['orders.total_amount', 'orders.largest_amount'],
+          }}
+          available={[total, average, largest]}
+          siblings={{
+            'orders.total_amount': ['orders.average_amount', 'orders.largest_amount'],
+          }}
+          onSwap={onSwap}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+          onCalculation={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Calculations on Total Amount' }));
+    const radios = screen.getAllByRole('menuitemradio');
+    expect(radios).toEqual([
+      screen.getByRole('menuitemradio', { name: 'sum Total Amount' }),
+      screen.getByRole('menuitemradio', { name: 'avg Average Amount' }),
+    ]);
+    expect(radios[0]?.getAttribute('aria-checked')).toBe('true');
+    await userEvent.click(radios[1]!);
+    expect(onSwap).toHaveBeenCalledWith('orders.total_amount', 'orders.average_amount');
+  });
+});
+
 describe('rejectionReason', () => {
   const measuresWell = WELLS.find((well) => well.name === 'measures')!;
 

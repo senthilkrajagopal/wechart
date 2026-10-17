@@ -4023,33 +4023,70 @@ test.describe('T310: the chart editor’s remaining controls', () => {
     });
   });
 
-  test('“Why this chart?” is a ghost .btn.sm, the type card a .reco-row, the title bare when pointed at', async ({
+  test('“Why this recommendation?” is design 01’s .whybtn, the type card a .reco-row with its quick picks, the title bare when pointed at', async ({
     page,
   }) => {
-    // .btn.ghost.sm { height: 24px; padding: 0 8px; border-color: transparent;
-    //   font-size: 12px; background: none }
-    const why = page.getByRole('button', { name: 'Why this chart?' });
+    // Design 01's .whybtn (pin 9; T689, EDI-12): { height: 24px; padding: 0
+    //   6px; font-size: 12px }, no ground, its caret in text-muted.
+    const why = page.getByRole('button', { name: 'Why this recommendation?' });
     expect(
       await style(
         why,
         'height',
         'padding-left',
-        'border-top-color',
+        'border-top-width',
         'font-size',
         'background-color',
       ),
     ).toEqual({
       height: '24px',
-      'padding-left': '8px',
-      'border-top-color': 'rgba(0, 0, 0, 0)',
+      'padding-left': '6px',
+      'border-top-width': '0px',
       'font-size': '12px',
       'background-color': 'rgba(0, 0, 0, 0)',
     });
-    // .reco-row { padding: 8px } .reco-name { font-size: 12px; font-weight: 600 }
+    expect(await style(why.locator('.why-chart__caret'), 'color')).toEqual({
+      color: await token(page, 'text-muted'),
+    });
+    // The checklist's .check rows at 12/16, and the link in the accent at 600.
+    await why.click();
+    const check = page.getByTestId('why-checklist').getByRole('listitem').first();
+    expect(await style(check, 'font-size', 'line-height')).toEqual({
+      'font-size': '12px',
+      'line-height': '16px',
+    });
+    expect(
+      await style(
+        page.getByRole('button', { name: /^Show every rule for every type/ }),
+        'color',
+        'font-weight',
+      ),
+    ).toEqual({ color: await token(page, 'accent'), 'font-weight': '600' });
+    // .reco-row { grid: 28px 1fr; padding: 8px } with its 28 px .ico, and
+    // .reco-name { font-size: 12px; font-weight: 600 }; .reco-why u in the
+    // accent at 600 (pin 4; EDI-06).
     const card = page.getByTestId('chart-type-change');
     expect(await style(card, 'padding-top', 'padding-left')).toEqual({
       'padding-top': '8px',
       'padding-left': '8px',
+    });
+    expect(await style(card.locator('.type-card-field__icon'), 'width', 'height')).toEqual({
+      width: '28px',
+      height: '28px',
+    });
+    expect(
+      await style(card.locator('.type-card-field__change-word'), 'color', 'font-weight'),
+    ).toEqual({ color: await token(page, 'accent'), 'font-weight': '600' });
+    // .qb { height: 24px; border: 1px solid border-strong; border-radius: 6px }:
+    // a saved chart opens chosen by hand, so Auto isn't pressed.
+    const auto = page
+      .getByRole('group', { name: 'Quick picks' })
+      .getByRole('button', { name: 'Auto', exact: true });
+    await expect(auto).toHaveAttribute('aria-pressed', 'false');
+    expect(await style(auto, 'height', 'border-top-left-radius', 'border-top-color')).toEqual({
+      height: '24px',
+      'border-top-left-radius': '6px',
+      'border-top-color': await token(page, 'border-strong', 'background-color'),
     });
     expect(await style(card.locator('.type-card-field__name'), 'font-size', 'font-weight')).toEqual(
       {

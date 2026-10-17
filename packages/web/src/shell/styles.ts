@@ -5496,8 +5496,108 @@ main:has(.review-view) {
   cursor: pointer;
 }
 .type-card-field__change:hover { border-color: var(--wc-accent); }
-.type-card-field__name { font-size: 12px; font-weight: var(--wc-text-sm-strong-weight); }
+/* Design 01's .reco-row (pin 4; T689, EDI-06): a 28 px icon tile, then the
+   name over "Chosen manually · Change…", Change in the accent at 600. */
+.type-card-field__change { grid-template-columns: 28px 1fr; gap: 8px; align-items: center; }
+.type-card-field__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+}
+.type-card-field__text { display: grid; }
+.type-card-field__name { font-size: 12px; line-height: 16px; font-weight: var(--wc-text-sm-strong-weight); }
 .type-card-field__why { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.type-card-field__change-word { color: var(--wc-accent); font-weight: 600; }
+/* Design 01's .quick and .qb: Auto, then 24 px picks; the pressed one in the accent. */
+.type-card-field__quick { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: -4px; }
+.type-card-field__pick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  min-width: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.type-card-field__pick[aria-pressed='true'] {
+  border-color: var(--wc-accent);
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+}
+.type-card-field__suggested { margin-left: 4px; font-size: 12px; line-height: 16px; color: var(--wc-text-muted); }
+/* Design 01's .pinned (pin 5; EDI-07): the recommendation, on bg-subtle, with Use. */
+.type-card-field__recommended {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  gap: 8px;
+  align-items: start;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--wc-bg-subtle);
+  font-size: 12px;
+  line-height: 16px;
+}
+.type-card-field__recommended b { font-weight: 600; }
+.type-card-field__recommended-icon { padding-top: 1px; color: var(--wc-text-secondary); }
+.type-card-field__recommended-why { color: var(--wc-text-secondary); }
+/* "Why this recommendation?" (pin 9, state C; EDI-12): design 01's .whybtn,
+   its caret muted; the checklist's .check rows, 12/16, an icon column of 20;
+   and the link to every rule in the accent at 600. */
+.why-chart { display: grid; gap: 2px; }
+.why-chart__toggle {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--wc-text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.why-chart__toggle:hover { background: var(--wc-bg-hover); }
+.why-chart__caret { color: var(--wc-text-muted); }
+.why-chart__checks { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.why-chart__check {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 6px;
+  align-items: start;
+  padding: 3px 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+.why-chart__check > svg { margin-top: 1px; }
+.why-chart__check > svg[data-icon='ok'] { color: var(--wc-status-success-icon); }
+.why-chart__check > svg[data-icon='warn'] { color: var(--wc-status-warning-icon); }
+.why-chart__check b { font-weight: 600; }
+.why-chart__runners { color: var(--wc-text-muted); }
+.why-chart__every {
+  justify-self: start;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wc-accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
 .type-card-field > .btn-sm { justify-self: start; }
 .type-card-field__warning {
   flex-wrap: wrap;
@@ -6281,6 +6381,8 @@ main:has(.dashboard) {
 /* Its menu as wide as its longest item, on one line (design 10 draws 318 px). */
 .bookmarks__row .menu-button__menu { width: max-content; max-width: calc(100vw - 32px); }
 .bookmarks__row .menu-button__item { white-space: nowrap; }
+/* A menuitemradio's ✓ column (T689's review): the chosen one marked in the accent. */
+.menu-button__check { flex: none; width: 12px; color: var(--wc-accent); font-weight: 600; }
 .bookmarks__foot { margin-top: 4px; padding: 8px 12px 4px; border-top: 1px solid var(--wc-border-subtle); }
 .dialog.share-bookmark { width: min(440px, calc(100vw - 32px)); }
 .share-bookmark__who { margin: 0 0 12px; color: var(--wc-text-secondary); }
