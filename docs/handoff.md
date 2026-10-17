@@ -90,7 +90,20 @@ The user wants "two more things" built. Only one is named so far:
     - The copilot never approves anything.
     - It lists 18 open questions as candidate answers, and extends direction.md's checklist.
   - **Shared design point:** the MCP server and the copilot share one set of typed operations in the wechart API, run as the signed-in user, with the same permission checks and audit.
-- **Interview R78 covers both**, using the 18 questions in references-copilot.md plus the MCP ones:
+- **SQL runner additions** (`docs/inputs/2026-10-17-sql-runner-and-ask-key.md`): templating; making a chart or a cube from a run's results; saved queries, personal only. These lift part of R50's non-goals.
+- **The SQL runner becomes its own workspace, "SQL runner"**, next to Jobs and Schedules, instead of living inside a data source.
+  - In it: pick a data source, introspect it, and browse its tables and columns.
+  - Model the experience on Superset's SQL Lab and other SQL tools. Before planning, have a UI expert study SQL Lab (Superset runs locally at :8088, but read only its definitions and docs; no login), DBeaver, DataGrip, Metabase's native editor and Hex.
+- **"Yes, add the other pending items"** (the user, 2026-10-17):
+  - a read-only login per data source;
+  - Cube's semantic SQL API;
+  - the phase 3 keyboard items (backlog §7);
+  - the refresh worker's build history (R41, which needs xcube work via the Cube-expert session);
+  - xcube's slice 7;
+  - the 4 Northwind bugs.
+  - These are no longer deferred: interview R78 brings them into scope.
+- **An "ask" shortcut, ⌘J / Ctrl+J**, opening the copilot, as in the user's other app. The user asked for it, so R75 allows it. Confirm the key.
+- **Interview R78 covers all of these**, using the 18 questions in references-copilot.md plus the MCP ones:
   - how an outside client signs in;
   - whether MCP may approve;
   - which operations come first.
