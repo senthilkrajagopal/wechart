@@ -432,16 +432,18 @@ test('the preview’s status, and the drawer as design 02 draws it (T690)', asyn
   await drawer.getByRole('button', { name: 'SQL', exact: true }).click();
   await expect(drawer.getByTestId('drawer-sql')).toContainText('SELECT', { timeout: 30_000 });
 
-  // The grip: dragged up 100 px, the drawer is 100 px taller; a double-click puts it back.
+  // The grip: dragged up 60 px, the drawer is 60 px taller; a double-click puts it back.
+  // 60, not more: the drawer stops at half the editor (EDI-15), 312 px in the
+  // default 1280×720 viewport, so a longer drag would measure the cap instead.
   const grip = drawer.locator('.results-drawer__grip');
   const before = (await drawer.boundingBox())!.height;
   expect(before).toBe(240);
   const at = (await grip.boundingBox())!;
   await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
   await page.mouse.down();
-  await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2 - 100, { steps: 5 });
+  await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2 - 60, { steps: 5 });
   await page.mouse.up();
-  expect((await drawer.boundingBox())!.height).toBe(340);
+  expect((await drawer.boundingBox())!.height).toBe(300);
   await grip.dblclick();
   expect((await drawer.boundingBox())!.height).toBe(240);
 
@@ -661,24 +663,27 @@ test('the drawer shows result rows, underlying rows and the query', async ({ pag
 
   // A row count alone would pass for the wrong query — a different cube, or
   // the chart's members dropped — so tie the rows to the chart's own query.
-  // Same columns as the chart asked for, by their titles (AC-220):
+  // Same columns as the chart asked for, by their titles (AC-220), after the
+  // row's "#" and each with its type glyph, as design 02 draws the drawer (T690):
   expect(await underlying.locator('thead th').allTextContents()).toEqual([
-    'Orders Status',
-    'Orders Count',
+    '#',
+    'AaOrders Status',
+    'ΣOrders Count',
   ]);
 
-  // ...ungrouped, so each row carries a single order rather than a total...
-  const counts = await underlying.locator('tbody tr td:nth-child(2)').allTextContents();
+  // ...ungrouped, so each row carries a single order rather than a total
+  // (column 1 is the row's "#", so the count is column 3)...
+  const counts = await underlying.locator('tbody tr td:nth-child(3)').allTextContents();
   expect(new Set(counts)).toEqual(new Set(['1']));
 
   // ...and every status is one the chart itself showed.
   await page.getByTestId('drawer-tab-result').click();
   const charted = await page
     .getByTestId('drawer-result-rows')
-    .locator('tbody tr td:nth-child(1)')
+    .locator('tbody tr td:nth-child(2)')
     .allTextContents();
   await page.getByTestId('drawer-tab-underlying').click();
-  const beneath = await underlying.locator('tbody tr td:nth-child(1)').allTextContents();
+  const beneath = await underlying.locator('tbody tr td:nth-child(2)').allTextContents();
   expect(new Set(beneath)).toEqual(new Set(charted));
 });
 
@@ -707,8 +712,9 @@ test('the underlying rows work on a cube that publishes no primary key', async (
   const underlying = page.getByTestId('drawer-underlying-rows');
   await expect(underlying).toBeVisible();
   expect(await underlying.locator('thead th').allTextContents()).toEqual([
-    'Customers Country',
-    'Customers Count',
+    '#',
+    'AaCustomers Country',
+    'ΣCustomers Count',
   ]);
   await expect(underlying.locator('tbody tr')).toHaveCount(4);
 });
