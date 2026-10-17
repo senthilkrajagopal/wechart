@@ -245,7 +245,7 @@ Decisions taken in R7:
 
 ## 9. Interview log
 
-Phase 1's interview log (rounds R1–R10) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R77]`; search that file for the round.
+Phase 1's interview log (rounds R1–R10) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R78]`; search that file for the round.
 
 # Part 2 — Phase 2 requirements (2026-09-25)
 
@@ -616,6 +616,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **What it is.** Read-only SQL run on a data source's own connection, as Cube Cloud's SQL Runner does, through a guarded xcube admin route `[R50]`. Only xcube opens a data source's sealed secret, so only xcube runs the SQL `[AD 7]`, at the request of wechart's server, which decides who may and records it `[AD 10]`. It is raw SQL on the database's tables, not Cube's semantic SQL API: it bypasses the folder gate and every access policy, which the page says plainly (research §5 S3).
 - **Who may run it** `[R50-1]`: Super-Admins, and the read-write members of the data source's own folder (not members who see it only as an ancestor's), on a data source a Super-Admin has switched the runner on for. Off by default.
 - **Which credential** `[R50-2]`: the data source's own serving credential, with the Super-Admin who switches the runner on attesting that it is read-only. A separate read-only login per data source is for phase 3.
+  - **Superseded** `[R78]`: the read-only login per data source is brought into scope, to be specified later (§P2.6 M).
 - **Read-only, enforced in layers** `[R50-2, R50-4]`:
   - **Only SELECT and EXPLAIN run**: a statement must parse as a single `SELECT` (or `WITH … SELECT`) or an `EXPLAIN` without `ANALYZE`. Everything else is refused before it runs: INSERT, UPDATE, DELETE, MERGE, CREATE TABLE or VIEW, `SELECT … INTO`, `SELECT … FOR UPDATE`, and a `WITH` holding a write.
   - **One statement per run**, so nothing can end the transaction around it.
@@ -634,6 +635,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **History** `[R50-12]`: each user sees their own past runs, kept in wechart.
 - **Audit** `[R50-13]`: every run is an audit event: who, which data source and folder, when, the outcome, the row count and the duration, with the SQL, its literals redacted.
 - **Where** `[R50-14]`: a tab on each data source's page, in Explore and in Data sources, beside its settings, test and history.
+  - **Superseded** `[R78]`: the runner moves into its own workspace, "SQL runner" (§P2.6 L). The data source's page keeps a tab named "SQL runner" holding only the switch and "Open in SQL runner".
 - *Claude's calls, under the standing instruction for small decisions:*
   - **With security off,** the single user holds every permission, as a Super-Admin does (AC-254), so the runner is offered to them on any data source switched on.
   - **The attestation** is part of switching the runner on: the Super-Admin confirms the credential is read-only, and the switch records who confirmed it and when.
@@ -658,7 +660,68 @@ With security on, a deployment that names no Super-Admin group refuses to start 
     - columns are headed by the database's own type names (Q5);
     - rows that arrived before a run was stopped at 30 seconds, or cancelled, are shown, marked as cut (Q6).
   - **My runs** shows this data source's runs by default, with All, newest first, 50 at a time (Q2).
+    - **Superseded** `[R78]`: in the workspace, History lists all of a user's runs by default, each naming its data source and folder, with a "This data source" filter (§P2.6 L).
   - **The warning** is always shown above the editor, and can't be hidden (Q3).
+- **Superseded in part** `[R78]`: the editor, the schema browser, the results and My runs move into the SQL runner workspace (§P2.6 L). With nothing selected, ⌘/Ctrl+Enter runs the statement at the cursor, not the whole text. The safety rules above (the switch, SELECT and EXPLAIN only, the read-only transaction, the caps, one run per user, the audit, the warning) are unchanged.
+
+**K. The MCP server** `[R78]` *(added 2026-10-17; input `docs/inputs/2026-10-17-mcp-server.md`; research `docs/research/mcp-typescript-sdk.md`; its open questions are in §P2.8)*
+- **What it is.** A server speaking the Model Context Protocol, so that Claude Code and other LLM clients can work in wechart: "manage datasources, dashboards, cubes, approval and review flows and anything else that i missed out" `[docs/inputs/2026-10-17-mcp-server.md]`. The first release takes the operations below `[R78]`.
+- **Order.** The MCP server and the SQL runner workspace come first; the copilot and the ask shortcut wait `[R78]`.
+- **Signing in: personal access tokens** `[R78]`. Each user creates a scoped, expiring, revocable access token in wechart. A client using it acts as that user, with that user's own folder permissions. Signing in through OAuth (the research's options A and B) was not chosen.
+- **Clients on day one** `[R78]`: Claude Code, and Claude.ai and Claude Desktop custom connectors.
+  - Claude.ai and Desktop connectors call from Anthropic's cloud, so `/mcp` must be reachable from the public internet (research, "Remote support by client"). How it is exposed is open (§P2.8, R78-7).
+  - Both client kinds accept a fixed credential that they send on every request (research, option C).
+- **Operations in the first release** `[R78]`:
+  - **read and explore;**
+  - **edit in My workspace;**
+  - **proposals and jobs.**
+  - Data sources were not chosen, so the MCP server doesn't create, change, test or delete them.
+- **Never approve or reject** a proposal `[R78]`.
+- **What the MCP specification asks of a server**, taken in as requirements (research, "Transports", "Authorization" and "Gotchas"):
+  - one endpoint, `/mcp`, over Streamable HTTP at the 2026-07-28 revision, with the SDK's stateless fallback for 2025-era clients;
+  - tool calls rate-limited: servers "MUST … Rate limit tool invocations" (Gotcha 9). How, and the numbers, are open (§P2.8, R78-5). Whatever is chosen, a request over the limit must be answered 429: wechart's global error handler today turns the limiter's 429 into a 500 (the coordinator, from `docs/research/fastify-rate-limit.md`, 2026-10-17);
+  - the `Origin` header validated on every request, and the `Host` header checked, since wechart mounts the handler in its own Fastify app (Gotchas 3 and 4);
+  - the token accepted only in the `Authorization` header, never in the query string (the spec), and the web app's session cookie not accepted on `/mcp` (Gotcha 6, a design inference);
+  - tool outputs treated as untrusted data: titles, descriptions, markdown and query rows are written by users and reach the model (Gotcha 12).
+- *The coordinator's calls (2026-10-17), overturnable:*
+  - **The audit marks MCP actions.** Each event AC-294 records says when it was done through MCP, and names the token. Making and revoking a token are audit events too. Whether every MCP tool call is also audited is open (§P2.8, R78-9).
+  - **A token is shown once,** when it is made, and wechart keeps only what is needed to check it (the handoff's research item "personal-token hashing and storage").
+  - **A token works only on `/mcp`,** not on the web app's API.
+
+**L. The SQL runner workspace** `[R78]` *(added 2026-10-17; input `docs/inputs/2026-10-17-sql-runner-and-ask-key.md`; design study `docs/design/references-sql-runner.md`; extends §P2.6 J)*
+- **Its own workspace.** "a seperate tab.. next to jobs, schedules called SQL runner that lets you see and select the datasource, introspect the datasource see the tables, columns.. check superset for the experience" `[docs/inputs/2026-10-17-sql-runner-and-ask-key.md]`. It follows the design study's direction: a data source picker and schema browser on the left, tabs bound to a data source in the centre, Saved and History on the right `[R78]`.
+- **Every safety rule of §P2.6 J stands,** per run: the switch and its confirmation, SELECT and EXPLAIN only, the read-only transaction, the caps, one run per user, the audit and the warning (design study, "Reasoning").
+- **Typed parameters** `[R78]`: `{{name}}`, typed Text, Number, Date or Boolean, filled in a strip under the editor and bound as database parameters, never written into the SQL text.
+- **Cube's semantic SQL API** in the runner, as a separate "Cube" group in the picker `[R78]`. It runs through Cube with the user's folder access and policies, so it has no bypass warning (design study Q13a).
+- **Keyboard** `[R78]`, approved under R75: run the statement at the cursor; Save and Find; autocomplete from the introspected catalog; tab shortcuts. Which keys the tab shortcuts use is open (§P2.8, R78-12).
+- **Tabs are kept in the browser only** `[R78]`.
+- **Saved queries, personal only** `[docs/inputs/2026-10-17-sql-runner-and-ask-key.md]`: "saved queries (no sharing)".
+- **Making a cube or a chart from a run's results** `[docs/inputs/2026-10-17-sql-runner-and-ask-key.md]`. Both land as drafts in My workspace (design study §6, F29).
+- **The design study's other questions take its recommended answers** `[R78]`. They are the coordinator's call, overturnable:
+  - no optional clauses;
+  - parameters stand for values only, never a table or column name;
+  - no snippets;
+  - parameter values kept in History and saved queries for their owner only, with the audit keeping the names only;
+  - Make a cube writes the run's parameter values into its SQL as literals;
+  - Make a chart starts with the new cube chosen and nothing placed;
+  - History shows all of a user's runs by default;
+  - saved queries appear in ⌘K for their owner;
+  - the data source's page keeps a "SQL runner" tab with the switch and "Open in SQL runner";
+  - the workspace is shown to Super-Admins and read-write members;
+  - CSV only, with no copy to the clipboard;
+  - no "Open in SQL runner" from a chart's View SQL;
+  - "Preview 100 rows" only on request, as an ordinary, audited run.
+
+**M. Brought into scope by R78, to be specified later** `[R78]`
+- The copilot (chat) panel, editing in My workspace, with a Super-Admin setting the provider, models and keys globally `[docs/inputs/2026-10-17-copilot-chat.md]`. It lifts phase 1's non-goal "AI and chat authoring" when it is taken up.
+- The ask shortcut, read as ⌘J / Ctrl+J, opening the copilot `[docs/inputs/2026-10-17-sql-runner-and-ask-key.md]`.
+- A read-only login per data source.
+- The refresh worker's build history `[R41]`.
+- xcube's slice 7.
+- The phase 3 keyboard items (backlog §7).
+- The four Northwind demo bugs: colours past 8 series, marked pivot overflow, pivot column order, and the single-level treemap.
+
+No criteria are written for these yet. Each gets its own questions where it is open.
 
 ## P2.7 Non-goals for phase 2
 
@@ -670,6 +733,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **Cube Store beyond one node** `[AD 11]`.
 - **Anything but wechart's server calling Cube or xcube**, for now `[AD 10]`.
 - **xcube's slice 7**, and **aliasing a file-set model's JavaScript, Jinja and Python cubes when their data source's target changes** `[R39]`.
+  - **Superseded in part** `[R78]`: xcube's slice 7 is brought into scope, to be specified later (§P2.6 M). The aliasing stays out.
 - **Around the SQL runner** `[R50]`:
   - a separate read-only login per data source, which is phase 3 `[R50-2]`;
   - Cube's semantic SQL API (`/v1/cubesql`), still deferred from Part 1;
@@ -677,16 +741,32 @@ With security on, a deployment that names no Super-Admin group refuses to start 
   - templating in the SQL;
   - making a cube or a chart from a run's results.
   - *The last four weren't asked for, so they stay out until asked.*
+  - **Superseded** `[R78]`: all five are lifted. Templating, Cube's SQL API in the runner, personal saved queries, and making a cube or a chart from a run are in §P2.6 L. The read-only login is in §P2.6 M, to be specified later. **Shared** queries stay out: "saved queries (no sharing)" `[docs/inputs/2026-10-17-sql-runner-and-ask-key.md]`.
+- **Around the SQL runner workspace** `[R78]`, the design study's recommended answers:
+  - optional clauses (`[[ … ]]`), parameters standing for a table or column name, and snippets;
+  - parameter values in the audit trail;
+  - copying results to the clipboard: CSV only, as R50-11 decided;
+  - "Open in SQL runner" from a chart's View SQL;
+  - tabs kept on wechart's server or shared across devices;
+  - a table preview that runs when a table is opened.
+- **Around the MCP server** `[R78]`:
+  - approving or rejecting a proposal through MCP, ever;
+  - creating, changing, testing or deleting data sources through MCP, in the first release;
+  - signing in through OAuth, so clients that need it (ChatGPT, per the research) aren't served in the first release.
 
 Phase 1's non-goals still stand, except two that phase 2 brings into scope:
 - **Users, groups, roles and SSO** (§P2.6 A–B).
 - **Maps and geo charts:** the country map, from R8 and the backlog (§P2.6 H).
 
-The rest still apply: AI and chat authoring, scheduled delivery and alerts, embedding, `.dxp` migration tooling, Spotfire Subsets, Tags and Lists and data functions, touch, controls inside text tiles, and selling wechart `[Part 1 §7]`.
+R78 brings in two more:
+- **Cube's SQL API**, in the SQL runner workspace only (§P2.6 L). Connecting external BI tools to it stays out.
+- **AI and chat authoring**, for the copilot, when it is taken up (§P2.6 M). The MCP server serves outside LLM clients; it adds no chat to wechart.
+
+The rest still apply: scheduled delivery and alerts, embedding, `.dxp` migration tooling, Spotfire Subsets, Tags and Lists and data functions, touch, controls inside text tiles, and selling wechart `[Part 1 §7]`.
 
 ## P2.8 Open questions
 
-**None.** All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way. The four xcube's slice 2 left open were settled in round R29, and are in §P2.4, "Slice 2 as built". The six xcube's slice 3 left open were settled in round R30, after xcube answered the questions they raised, and are in §P2.4, "Relaxed from phase 1" and "Slice 3 as built". The nine that slices 4–6 left open were settled in round R31, and are in §P2.4, "Slices 4–6 as built".
+**Only R78's, below, are open.** Every earlier round's were resolved. All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way. The four xcube's slice 2 left open were settled in round R29, and are in §P2.4, "Slice 2 as built". The six xcube's slice 3 left open were settled in round R30, after xcube answered the questions they raised, and are in §P2.4, "Relaxed from phase 1" and "Slice 3 as built". The nine that slices 4–6 left open were settled in round R31, and are in §P2.4, "Slices 4–6 as built".
 
 | # | Question | Decision |
 |---|---|---|
@@ -731,8 +811,30 @@ Round R50's fourteen questions on the SQL runner were answered by the user. The 
 | R50-11 | Results | **CSV up to the row cap** |
 | R50-12 | History | **Each user's own run history** |
 | R50-13 | Audit | **The event, with the SQL's literals redacted** |
-| R50-14 | Where in the UI | **A tab on each data source** |
+| R50-14 | Where in the UI | **A tab on each data source** (superseded by R78: its own workspace, §P2.6 L) |
+
+### Round R78 (2026-10-17): open
+
+Values R78 and the design study leave open, found while writing the spec. The spec holds no criterion that depends on them; each is written once the user answers. The candidate answers are in the coordinator's report.
+
+| # | Question | Waits in the spec |
+|---|---|---|
+| R78-1 | A token's lifetime: chosen when it is made or fixed, and its maximum | the expiry values (F41) |
+| R78-2 | A token's scopes: which set is offered | the scope list (F41; AC-433 holds for any set) |
+| R78-3 | Which groups a token's calls use, since groups arrive only with a sign-in | the group source (F41) |
+| R78-4 | Whether Super-Admins may list and revoke other users' tokens | F41 |
+| R78-5 | The rate limit (research `docs/research/fastify-rate-limit.md`): its store (in memory per replica, a Postgres store on wechart-meta, or Redis); per token or per user; every MCP POST or only `tools/call`; open or closed when the store fails; whether unauthenticated (401) traffic is limited by IP; the maximum and the window | the rate-limit criteria (F41) |
+| R78-6 | The size caps on what a tool returns, query rows above all | the output-cap criterion (F41) |
+| R78-7 | How `/mcp` is exposed to the public internet: its own ingress, an allow-list of Anthropic's IP ranges, or both | the exposure criterion (F41) |
+| R78-8 | Which jobs operations MCP offers | the jobs criterion (F41) |
+| R78-9 | Whether every MCP tool call is audited, reads included | F41 |
+| R78-10 | Whether MCP works with sign-in off | F41 |
+| R78-11 | Whether MCP may run SQL in the SQL runner | F41 |
+| R78-12 | Which keys the SQL runner's tab shortcuts use | the tab-shortcut criterion (F42) |
+| R78-13 | The "Cube" group: who sees it, whether it needs a switch, its caps, audit and History, and Make a cube from it | F42 (AC-467 holds for any answer) |
+| R78-14 | Parameters on Cube Store and in the "Cube" group | F42 (AC-454 covers data sources) |
+| R78-15 | A saved query's name and description: required, unique, and their lengths | F42 |
 
 ## P2.9 Interview log
 
-Phase 2's interview log (rounds R11 onward, the user's later decisions included) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R77]`; search that file for the round.
+Phase 2's interview log (rounds R11 onward, the user's later decisions included) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R78]`; search that file for the round.
