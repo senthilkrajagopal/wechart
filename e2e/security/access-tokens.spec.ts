@@ -1,0 +1,78 @@
+import type { APIRequestContext } from '@playwright/test';
+
+import { expect, test } from './fixtures';
+
+/**
+ * T769 (AC-430, AC-468, AC-469; design 18, screens 1 and 2, state A1):
+ * "Access tokens" in the account menu opens the user's own page at
+ * `/account/tokens`, and a token made there is listed, without its text.
+ */
+const RUN = Math.random().toString(36).slice(2, 8);
+
+/** Revokes, then removes, every token of this run: none is left working. */
+async function tidy(request: APIRequestContext) {
+  const answer = await request.get('/api/account/tokens');
+  if (!answer.ok()) return;
+  const { tokens, stopped } = (await answer.json()) as {
+    tokens: { id: string; name: string }[];
+    stopped: { id: string; name: string }[];
+  };
+  for (const token of tokens.filter((each) => each.name.includes(RUN)))
+    await request.delete(`/api/account/tokens/${token.id}`);
+  for (const token of [...tokens, ...stopped].filter((each) => each.name.includes(RUN)))
+    await request.post(`/api/account/tokens/${token.id}/remove`);
+}
+
+test.describe('Access tokens, signed in (T769, AC-430)', () => {
+  // One with a My workspace, so Workspace edit is on offer: a Super-Admin
+  // always has one, where `writer` has one only in a folder granting it.
+  test.use({ role: 'super' });
+
+  test.afterEach(async ({ page }) => {
+    await tidy(page.request);
+  });
+
+  test('the account menu opens the page, and a token made there is listed', async ({ page }) => {
+    await page.goto('/explore');
+    await page.getByRole('button', { name: 'Account: Super Admin' }).click();
+    await page.getByRole('menuitem', { name: 'Access tokens' }).click();
+    await expect(page).toHaveURL(/\/account\/tokens$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Access tokens' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'New token' }).click();
+    const dialog = page.getByRole('dialog', { name: 'New access token' });
+    await expect(dialog.getByRole('checkbox', { name: /^Read/ })).toBeChecked();
+    await expect(dialog.getByRole('checkbox', { name: /^Read/ })).toBeDisabled();
+    await expect(dialog.getByRole('radio', { name: '30 days' })).toBeChecked();
+    const name = `Claude Code · desktop ${RUN}`;
+    await dialog.getByRole('textbox', { name: /^Name/ }).fill(name);
+    await dialog.getByRole('checkbox', { name: /^Workspace edit/ }).check();
+    await dialog.getByRole('button', { name: 'Create token' }).click();
+
+    const row = page.getByRole('table', { name: 'Your tokens' }).getByRole('row', { name });
+    await expect(row).toBeVisible();
+    await expect(row.getByRole('listitem')).toHaveText(['Read', 'Workspace edit']);
+    await expect(row.getByRole('cell').nth(3)).toContainText('in 30 days');
+    await expect(row.getByRole('cell').nth(4)).toHaveText('Never');
+    await expect(page.locator('body')).not.toContainText('wct_');
+  });
+});
+
+test.describe('Access tokens, read-only everywhere (T769, AC-469; design 18, A5)', () => {
+  test.use({ role: 'reader' });
+
+  test('offers only Read, the other two disabled with the reason', async ({ page }) => {
+    await page.goto('/account/tokens');
+    await page.getByRole('button', { name: 'New token' }).click();
+    const dialog = page.getByRole('dialog', { name: 'New access token' });
+    for (const scope of ['Workspace edit', 'Proposals and jobs']) {
+      const box = dialog.getByRole('checkbox', { name: new RegExp(`^${scope}`) });
+      await expect(box).toBeDisabled();
+      await expect(box).toHaveAccessibleDescription(
+        'You have no My workspace, so this wouldn’t let a client do anything.',
+      );
+    }
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
+  });
+});

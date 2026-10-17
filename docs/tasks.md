@@ -1588,11 +1588,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T768 (AC-431, AC-442) Revoke your own token through the API, keep a token that stops working under "No longer working" with its state, when and who revoked it, and Remove it from there; "Token revoked" in the audit trail
 
-- [ ] T769 (AC-430, AC-468, AC-469, AC-479) The Access tokens page at `/account/tokens`, from the account menu and the single-user chip, with its list and the New token dialog, as design 18 screens 1 and 2 draw them
-  - Lane: MCP
-  - Files: `packages/web/src/account/AccessTokensPage.tsx` (+ test), `packages/web/src/account/NewTokenDialog.tsx` (+ test), `packages/web/src/account/tokensApi.ts`, `packages/web/src/shell/AccountMenu.tsx` (+ test), `packages/web/src/router/routes.tsx`, `e2e/security/access-tokens.spec.ts`, `e2e/access-tokens-single-user.spec.ts`.
-  - Failing test: `NewTokenDialog.test.tsx`: the dialog offers a name, Read checked and locked, Workspace edit and Proposals and jobs, and 7, 30 or 90 days with 30 chosen at the start; for a user read-only in every folder, Workspace edit and Proposals and jobs are disabled with the reason (AC-468, AC-469); a refusal from the API is shown with its reason. `AccessTokensPage.test.tsx`: each working token's row shows its name, scopes as text tags, made, expires and last used, and never any part of its text (AC-430). `e2e/security/access-tokens.spec.ts`: "Access tokens" in the account menu opens the page, and a token made there is listed. `e2e/access-tokens-single-user.spec.ts`: with sign-in off, the single-user chip's menu opens the same page and a token can be made (AC-479).
-  - Depends on: T767
+- [x] T769 (AC-430, AC-468, AC-469, AC-479) The Access tokens page at `/account/tokens`, from the account menu and the single-user chip, with its list and the New token dialog, as design 18 screens 1 and 2 draw them
 
 - [ ] T770 (AC-430) Show a new token's text once, with Copy and the filled-in Claude Code command, and ask before closing it uncopied, as design 18 screen 3 and state C draw it
   - Lane: MCP

@@ -22,6 +22,7 @@ import { loadTile } from '../query/loadTile';
 import type { FilterValues } from '../filters/model';
 import { valuesFromSearch, valuesToSearch, type SearchFilter } from '../filters/url';
 import { previewClaimsOf } from '../query/securityPreview';
+import { AccessTokensPage } from '../account/AccessTokensPage';
 import { AppShell } from '../shell/AppShell';
 import { NotFound } from '../shell/NotFound';
 import { StateLine } from '../shell/StatusIcon';
@@ -92,6 +93,20 @@ const securityTabRoute = createRoute({
       />
     );
   },
+});
+
+/**
+ * The user's own access tokens (T769, AC-430; design 18, screen 1): under
+ * their account, in no workspace, for everyone signed in or the single user.
+ */
+const accessTokensRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/account/tokens',
+  component: () => (
+    <AppShell>
+      <AccessTokensPage />
+    </AppShell>
+  ),
 });
 
 /**
@@ -810,6 +825,7 @@ const routeTree = rootRoute.addChildren([
   ...workspaceRoutes,
   buildLogRoute,
   securityTabRoute,
+  accessTokensRoute,
   reviewsRoute,
   reviewRoute,
   dashboardRoute,

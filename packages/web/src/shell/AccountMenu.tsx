@@ -123,6 +123,18 @@ export function AccountMenu({
         navigate(typeof redirectTo === 'string' ? redirectTo : '/');
       });
   };
+  // The user's own personal access tokens, for everyone (T769, AC-430,
+  // AC-479; design 18, A1–A3): above Sign out, and in the chip's menu.
+  const accessTokens: MenuEntry = {
+    kind: 'item',
+    key: 'access-tokens',
+    label: 'Access tokens',
+    icon: <KeyIcon />,
+    onSelect: () => {
+      setOpen(false);
+      navigate('/account/tokens');
+    },
+  };
   const entries: MenuEntry[] = single
     ? [
         {
@@ -132,8 +144,10 @@ export function AccountMenu({
           heading: true,
           sub: SINGLE_USER_NOTE,
         },
+        accessTokens,
       ]
     : [
+        accessTokens,
         // A 30/14 item with its icon (design 09, pin 5; T696, EXP-18).
         {
           kind: 'item',
@@ -242,6 +256,21 @@ function SignOutIcon() {
         fill="none"
         stroke="currentColor"
         strokeWidth="1.4"
+      />
+    </svg>
+  );
+}
+
+/** Design 18's i-key. */
+function KeyIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" data-icon="key">
+      <circle cx="5" cy="10.5" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M7 8.5l6-6M11 4.5l1.8 1.8M9.4 6.1l1.4 1.4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
       />
     </svg>
   );

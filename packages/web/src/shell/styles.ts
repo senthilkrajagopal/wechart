@@ -10020,6 +10020,59 @@ nav.outline :focus-visible,
 /* A list filter's chosen value is filled in the accent: its ring, inside it,
    in the ink on the accent (T638). */
 .filter-widget__options button[aria-pressed='true']:focus-visible { outline-color: var(--wc-text-on-accent); }
+
+/* Access tokens, the user's own (T769; design 18, screen 1): a page in no
+   workspace, its head with New token at the right. */
+.account-page { display: grid; gap: 12px; max-width: 960px; padding: 20px 24px; align-content: start; }
+.account-page__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.account-page__lead,
+.account-page__note,
+.account-page__once { margin: 0; font-size: 13px; color: var(--wc-text-secondary); }
+.account-page__empty { margin: 0; padding: 16px 0; color: var(--wc-text-secondary); }
+.account-page__error { display: flex; align-items: center; gap: 12px; }
+.account-page__section h2 { margin: 8px 0 4px; font-size: 14px; font-weight: 600; }
+.account-page__can { margin: 0; padding-left: 18px; font-size: 13px; color: var(--wc-text-secondary); }
+.tokens-table__name { font-weight: 600; }
+/* Scopes as text tags (pin 5): 12 px in a 3 px-radius outline, never colour alone. */
+.token-scopes { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.token-scope {
+  padding: 0 5px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--wc-text-secondary);
+}
+/* New token (screen 2): a 520 px dialog, as the workspace dialogs are. */
+.dialog.new-token { width: min(520px, calc(100vw - 32px)); max-width: none; gap: 12px; }
+.new-token__form { display: grid; gap: 12px; }
+.new-token__field { display: grid; gap: 4px; }
+.new-token__label { font-size: 12px; font-weight: 600; }
+.new-token__hint { font-weight: 400; color: var(--wc-text-secondary); }
+.new-token__scopes { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.new-token__scope { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 2px; }
+.new-token__scope-name { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.new-token__always {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--wc-text-secondary);
+}
+/* Under the name, in line with it past the box. */
+.new-token__scope-says { flex-basis: 100%; padding-left: 21px; font-size: 12px; color: var(--wc-text-secondary); }
+.new-token__expiry { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.new-token__days { width: 240px; }
+.new-token__days > .choice__option { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.new-token__days > .choice__option:has(input:checked) {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: 600;
+}
+.new-token__days > .choice__option:has(input:focus-visible) { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
+.new-token__on { font-size: 12px; color: var(--wc-text-secondary); }
+.new-token__note,
+.new-token__acts { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
 `;
 
 export function installStyles(doc: Document = document): void {

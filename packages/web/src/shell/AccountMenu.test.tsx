@@ -68,9 +68,30 @@ describe('the account button, signed in (AC-252)', () => {
     // The menu is named by who it is for, so a screen reader entering it
     // hears the identity before Sign out (T319's review).
     const menu = within(panel).getByRole('menu', { name: /^Wren Writer\s+writer@example\.com$/ });
-    const signOut = within(menu).getByRole('menuitem', { name: 'Sign out' });
-    // Opening moves focus into the menu (APG menu button).
-    expect(document.activeElement).toBe(signOut);
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Access tokens', 'Sign out']);
+    // Opening moves focus into the menu (APG menu button), onto its first
+    // item: Access tokens, above Sign out since T769 (design 18, A1).
+    const tokens = within(menu).getByRole('menuitem', { name: 'Access tokens' });
+    expect(document.activeElement).toBe(tokens);
+  });
+
+  /** T769 (AC-430; design 18, A1 and A2): every signed-in user's own tokens, above Sign out. */
+  it('offers Access tokens above Sign out, which opens /account/tokens', async () => {
+    serve(writer);
+    const go = vi.fn();
+    render(<AccountMenu navigate={go} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Account: Wren Writer' }));
+    const items = screen.getAllByRole('menuitem').map((item) => item.textContent);
+    expect(items).toEqual(['Access tokens', 'Sign out']);
+    const tokens = screen.getByRole('menuitem', { name: 'Access tokens' });
+    expect(tokens.querySelectorAll('.menu__icon svg[data-icon="key"]')).toHaveLength(1);
+    await userEvent.click(tokens);
+    expect(go).toHaveBeenCalledWith('/account/tokens');
+    expect(screen.queryByTestId('account-panel')).toBeNull();
   });
 
   it('labels a Super-Admin as one, in the menu’s name too', async () => {
@@ -177,6 +198,22 @@ describe('with security off (AC-254)', () => {
     );
     expect(screen.queryByRole('menuitem', { name: 'Sign out' })).toBeNull();
     expect(screen.queryByText('Sign out')).toBeNull();
+  });
+
+  /** T769 (AC-479; design 18, A3): the chip's menu gains Access tokens. */
+  it('offers Access tokens in the chip’s menu, which opens /account/tokens', async () => {
+    serve(single);
+    const go = vi.fn();
+    render(<AccountMenu navigate={go} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Single-user mode' }));
+    // After the heading and its sentence (design 18, A3).
+    const items = screen.getAllByRole('menuitem').map((item) => item.textContent);
+    expect(items).toEqual([
+      'Sign-in is off wechart runs as one user with every permission. Your proposals still wait for your approval in Reviews.',
+      'Access tokens',
+    ]);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Access tokens' }));
+    expect(go).toHaveBeenCalledWith('/account/tokens');
   });
 
   it('holds a person in the avatar’s place until it knows who is asking', () => {
