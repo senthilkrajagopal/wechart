@@ -83,6 +83,22 @@ describe('the account button, signed in (AC-252)', () => {
     ).toBeTruthy();
   });
 
+  /** T696 (EXP-17, EXP-18; design 09, pins 3–6). */
+  it('draws design 09’s account button and menu: a chevron, the accent badge, Sign out with its icon', async () => {
+    serve({ ...writer, name: 'Sam Super', superAdmin: true });
+    render(<AccountMenu />);
+    const button = await screen.findByRole('button', { name: 'Account: Sam Super' });
+    expect(button.lastElementChild?.getAttribute('data-testid')).toBe('account-chevron');
+    await userEvent.click(button);
+    const panel = screen.getByTestId('account-panel');
+    expect(within(panel).getByText('writer@example.com').className).toBe('account-panel__identity');
+    expect(within(panel).getByText('Super-Admin').className).toBe(
+      'badge badge--accent account-panel__badge',
+    );
+    const signOut = within(panel).getByRole('menuitem', { name: 'Sign out' });
+    expect(signOut.querySelectorAll('.menu__icon svg[data-icon="sign-out"]')).toHaveLength(1);
+  });
+
   it('shows an identity that is the name only once', async () => {
     serve({ ...writer, name: 'writer@example.com' });
     render(<AccountMenu />);
@@ -134,28 +150,39 @@ describe('the account button, signed in (AC-252)', () => {
 describe('with security off (AC-254)', () => {
   const single: Me = { name: 'admin', groups: [], superAdmin: true, security: 'off' };
 
-  it('shows a "Single-user mode" chip, whose menu explains it and has no Sign out', async () => {
+  /**
+   * T696 (AC-190 as amended, AC-254; design 09 state B; R76 explore-Q1): the
+   * chip takes the avatar's place, with no avatar beside it; an open padlock,
+   * its words and a chevron; its menu a heading and one sentence.
+   */
+  it('shows a "Single-user mode" chip in the avatar’s place, whose menu explains it and has no Sign out', async () => {
     serve(single);
     render(<AccountMenu />);
     const chip = await screen.findByRole('button', { name: 'Single-user mode' });
-    expect(within(chip).getByTestId('single-user-icon')).toBeTruthy();
-    // Icon and words (rule 59), the words its tooltip too.
+    expect(within(chip).getAllByTestId('single-user-icon')).toHaveLength(1);
+    // Icon and words (rule 59), the words its tooltip too, then its chevron.
     expect(chip.getAttribute('title')).toBe('Single-user mode');
-    expect(within(chip).getByText('Single-user mode')).toBeTruthy();
-    // Phase 1's identity avatar stays at the far right, after the chip (AC-190).
-    const avatar = screen.getByRole('img', { name: 'Signed in as admin' });
-    expect(avatar.textContent).toBe('AD');
-    expect(chip.compareDocumentPosition(avatar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(chip).getAllByText('Single-user mode')).toHaveLength(1);
+    expect(chip.lastElementChild?.getAttribute('data-testid')).toBe('account-chevron');
+    // No avatar beside it (AC-190, amended).
+    expect(screen.queryByRole('img', { name: /^Signed in/ })).toBeNull();
 
     await userEvent.click(chip);
     const panel = screen.getByTestId('account-panel');
-    // Its second sentence once proposals and Reviews are there (T359, AC-254;
-    // references.md, Surface 1).
-    expect(panel.textContent).toContain(
-      'Sign-in is off, so wechart runs as one user with every permission. Your proposals still wait for your approval in Reviews.',
+    expect(panel.classList).toContain('account-panel--single');
+    // Its heading, then its sentence (design 09 state B; T359's second sentence).
+    expect(panel.querySelector('.menu__main')?.textContent).toBe('Sign-in is off');
+    expect(panel.querySelector('.menu__sub-line')?.textContent).toBe(
+      'wechart runs as one user with every permission. Your proposals still wait for your approval in Reviews.',
     );
     expect(screen.queryByRole('menuitem', { name: 'Sign out' })).toBeNull();
     expect(screen.queryByText('Sign out')).toBeNull();
+  });
+
+  it('holds a person in the avatar’s place until it knows who is asking', () => {
+    serve(single);
+    render(<AccountMenu />);
+    expect(screen.getAllByRole('img', { name: 'Signed in' })).toHaveLength(1);
   });
 });
 

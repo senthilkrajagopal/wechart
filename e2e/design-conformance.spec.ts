@@ -1376,24 +1376,20 @@ test.describe('T245: the app bar’s search and avatar, the palette, and a new d
     expect((await trigger(page).locator('kbd').boundingBox())?.height).toBeLessThan(18);
   });
 
-  test('the avatar: the dimension role on its tint', async ({ page }) => {
+  /**
+   * With sign-in off the chip takes the avatar's place (AC-190 as amended;
+   * T696), so the avatar's colours are checked signed in, on the account
+   * button: `security/sign-in.spec.ts`, "the avatar: the dimension role on
+   * its tint".
+   */
+  test('the avatar: none with sign-in off, the chip in its place', async ({ page }) => {
     await page.goto('/explore');
-    // .avatar { background: var(--role-dim-soft); color: var(--role-dim) } (N7, mismatch 3)
-    const avatar = page.getByRole('banner').getByRole('img', { name: /^Signed in/ });
-    // In both themes, and painted at all: a token the sheet never emitted
-    // would read as transparent on both sides of the comparison (T245's review).
-    for (const theme of ['light', 'dark'] as const) {
-      if (theme === 'dark') {
-        await page.getByRole('button', { name: /theme/i }).click();
-        await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-      }
-      const painted = await style(avatar, 'background-color', 'color');
-      expect(painted).toEqual({
-        'background-color': await token(page, 'bg-role-dimension-soft', 'background-color'),
-        color: await token(page, 'role-dimension'),
-      });
-      expect(painted['background-color']).not.toBe('rgba(0, 0, 0, 0)');
-    }
+    const bar = page.getByRole('banner');
+    const chip = bar.getByRole('button', { name: 'Single-user mode' });
+    await expect(chip).toBeVisible();
+    await expect(bar.getByRole('img', { name: /^Signed in/ })).toHaveCount(0);
+    // In the warning ink, as design 09 state B's .chipwarn.
+    expect(await style(chip, 'color')).toEqual({ color: await token(page, 'status-warning') });
   });
 
   test('the palette: over the app bar, lifted by the pop shadow, a 6 px Close, and a fresh query each time', async ({

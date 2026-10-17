@@ -229,6 +229,13 @@ textarea { height: auto; padding: 6px 8px; }
   color: var(--wc-text-secondary);
   text-decoration: none;
   border-bottom: 2px solid transparent;
+  /* Never on two lines (T696, CMP-07). */
+  white-space: nowrap;
+}
+/* Between 1,024 and 1,279 px, which no design draws, the tabs pad 8 a side,
+   so a Super-Admin's five fit beside the 260 px search (T696-3). */
+@media (max-width: 1279.98px) {
+  .workspace-switcher a { padding: 0 8px; }
 }
 .workspace-switcher a:hover { color: var(--wc-text-primary); }
 .workspace-switcher a[aria-current='page'] {
@@ -281,45 +288,59 @@ textarea { height: auto; padding: 6px 8px; }
 /* The top bar's Reviews control (T355; design 05, state C): an icon, its
    word and the count waiting, after search. Below 1,024 px, the icon and the
    count alone. */
+/* At the body's 14/400 in text-secondary; on its own page, design 05's
+   .reviews.on: the accent's soft ground, accent ink, 600 (T696, CMP-05). */
 .app-reviews {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 6px;
   height: 32px;
   padding: 0 8px;
   border-radius: 6px;
   color: var(--wc-text-secondary);
-  font-size: var(--wc-text-xs-size);
-  font-weight: 600;
+  font-size: var(--wc-text-sm-size);
+  line-height: var(--wc-text-sm-line);
+  font-weight: 400;
   text-decoration: none;
   white-space: nowrap;
 }
 .app-reviews:hover { color: var(--wc-text-primary); background: var(--wc-bg-hover); }
-.app-reviews[aria-current='page'] { color: var(--wc-accent); }
+.app-reviews[aria-current='page'] {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: 600;
+}
+/* Design 09's .count: 18 high, 600 12/18, filled with the accent (CMP-04;
+   12 px, never below the floor, AC-004). */
 .app-reviews__count {
   min-width: 18px;
+  height: 18px;
   padding: 0 5px;
-  border-radius: 9px;
+  border-radius: 999px;
   background: var(--wc-accent);
   color: var(--wc-text-on-accent);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 18px;
+  font-weight: 600;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+/* Icon buttons and the search never shrink (design 09's .iconbtn, CMP-07). */
+.app-bar > .icon-button,
+.app-bar__menu .icon-button { flex: none; }
 @media (max-width: 1023.98px) {
   .app-reviews__label { display: none; }
 }
 /* The top bar's search field (AC-190), the prototype's .search. */
 .app-search {
   display: flex;
+  /* 260 px always: below 1,280 px the single-user chip is its icon alone, so
+     the bar has the room (T696, CMP-07; components-Q4). */
+  flex: none;
   align-items: center;
   gap: 8px;
   width: 260px;
-  /* Narrower, its words ellipsed, where the bar runs out of room: at 900 px
-     with security off's Single-user mode chip in words beside the avatar
-     (rule 59, AC-190), rather than the page scrolling sideways (T319). */
-  min-width: 0;
   height: 32px;
   padding: 0 10px;
   border: 1px solid var(--wc-border-subtle);
@@ -362,19 +383,23 @@ textarea { height: auto; padding: 6px 8px; }
 /* The account button and its menu (T319, rule 59; references.md › Phase 2 ›
    Surface 1): the avatar and the name, 12/16 600, truncated at 160 px and
    hidden below 1,280 px; security off, the Single-user mode chip. */
-.account { position: relative; display: inline-flex; align-items: center; gap: 8px; }
+.account { position: relative; display: inline-flex; flex: none; align-items: center; gap: 8px; }
+/* Design 09's .acct: 36 high, padding 0 8 0 4, with its chevron (T696, EXP-17). */
 .account-button {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 8px;
-  height: 32px;
-  padding: 0 6px 0 2px;
+  height: 36px;
+  padding: 0 8px 0 4px;
   border-color: transparent;
   background: transparent;
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
   font-weight: var(--wc-text-xs-strong-weight);
 }
+.account-button[aria-expanded='true'] { background: var(--wc-bg-hover); }
+.account-button__chevron { flex: none; color: var(--wc-text-secondary); }
 .account-button__name {
   max-width: 160px;
   overflow: hidden;
@@ -384,23 +409,37 @@ textarea { height: auto; padding: 6px 8px; }
 @media (max-width: 1279.98px) {
   .account-button__name { display: none; }
 }
-.account-button--single {
+/* Design 09 state B's .chipwarn: 28 high, padding 0 10, gap 6, 12/600 in
+   the warning ink, an open padlock, its words and a chevron (T696, CMP-06,
+   EXP-16). Below 1,280 px its padlock alone, its words its name and tooltip
+   (components-Q4). */
+.account-button.account-button--single {
   gap: 6px;
-  padding: 0 8px;
+  height: 28px;
+  padding: 0 10px;
   border-color: var(--wc-border-strong);
   border-radius: 999px;
+  background: var(--wc-bg-surface);
   color: var(--wc-status-warning);
+  white-space: nowrap;
 }
+.account-button--single .account-button__chevron { color: inherit; }
+.account-button.account-button--single[aria-expanded='true'] { background: var(--wc-bg-hover); }
+@media (max-width: 1279.98px) {
+  .account-button--single .account-button__label,
+  .account-button--single .account-button__chevron { display: none; }
+}
+/* Design 09's menu: 280 wide on a border-subtle edge (EXP-18). */
 .account-panel {
   position: absolute;
   top: 100%;
   right: 0;
   z-index: 20;
   margin-top: 4px;
-  width: 260px;
+  width: 280px;
   padding: 4px;
   background: var(--wc-bg-raised);
-  border: 1px solid var(--wc-border-strong);
+  border: 1px solid var(--wc-border-subtle);
   border-radius: 6px;
   box-shadow: var(--wc-shadow-pop);
 }
@@ -408,7 +447,7 @@ textarea { height: auto; padding: 6px 8px; }
   display: grid;
   justify-items: start;
   gap: 2px;
-  padding: 6px 6px 8px;
+  padding: 8px 8px 6px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--wc-border-subtle);
 }
@@ -418,13 +457,35 @@ textarea { height: auto; padding: 6px 8px; }
   font-weight: var(--wc-text-sm-strong-weight);
   overflow-wrap: anywhere;
 }
+/* The identity in the code face, xs and secondary (pin 4). */
 .account-panel__identity {
   color: var(--wc-text-secondary);
+  font-family: var(--wc-font-code);
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
   overflow-wrap: anywhere;
 }
-.account-panel__badge { gap: 4px; margin-top: 4px; }
+/* Design 09's .badge.accent: 22 high, the accent's soft ground, accent ink, 600. */
+.badge.badge--accent {
+  border-color: transparent;
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: 600;
+}
+/* Two classes: .badge, later in the sheet, sets 20. */
+.badge.account-panel__badge { gap: 4px; height: 22px; margin-top: 6px; }
+/* Sign out a 30/14 item with its icon (design 09's .mi; pin 5). */
+.account-panel .menu__item { gap: 8px; height: 30px; padding: 0 8px; font-size: var(--wc-text-sm-size); }
+/* Sign-in off: 320 wide, padding 12, a bold heading, then its sentence at 14/20 (state B). */
+.account-panel.account-panel--single { width: 320px; padding: 12px; }
+.account-panel--single .menu__item { height: auto; padding: 0; }
+.account-panel--single .menu__lines { display: grid; gap: 6px; }
+.account-panel--single .menu__main { font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); }
+.account-panel--single .menu__sub-line {
+  font-size: var(--wc-text-sm-size);
+  line-height: 20px;
+  white-space: normal;
+}
 
 /* A sign-in state (T321, rule 60): the product mark, one sentence, one
    action, on the page's own ground, with nothing of wechart behind it. */

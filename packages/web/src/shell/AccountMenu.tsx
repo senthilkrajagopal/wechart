@@ -10,10 +10,9 @@ import { Menu, type MenuEntry } from './Menu';
  *   1,280 px and truncates at 160 px (the whole name as its tooltip). Its menu
  *   holds the name, the identity as the provider sent it, a Super-Admin label
  *   for Super-Admins, and Sign out.
- * - Security off: a "Single-user mode" chip, whose menu says what that means,
- *   and no Sign out: there is no one to sign out. Phase 1's identity avatar
- *   stays after it, at the far right (AC-190), so phase 1 is unchanged but for
- *   the chip.
+ * - Security off: a "Single-user mode" chip in the avatar's place, with no
+ *   avatar beside it (AC-190 as amended; R76 explore-Q1; T696), whose menu
+ *   says what that means, and no Sign out: there is no one to sign out.
  *
  * The button opens on Enter, Space or a click; the menu is the shell's APG
  * menu, so the arrows move in it and Escape closes it, back to the button.
@@ -37,9 +36,13 @@ export function initialsOf(name: string): string {
   return `${words[0]![0]!}${words[words.length - 1]![0]!}`.toUpperCase();
 }
 
-/** references.md, Surface 1: its second sentence came with the single user's Reviews (T359, AC-254). */
+/**
+ * references.md, Surface 1: its second sentence came with the single user's
+ * Reviews (T359, AC-254); design 09 state B heads it "Sign-in is off" (T696).
+ */
+const SINGLE_USER_HEADING = 'Sign-in is off';
 const SINGLE_USER_NOTE =
-  'Sign-in is off, so wechart runs as one user with every permission. Your proposals still wait for your approval in Reviews.';
+  'wechart runs as one user with every permission. Your proposals still wait for your approval in Reviews.';
 
 function isMe(value: unknown): value is Me {
   const me = value as Partial<Me> | null;
@@ -121,11 +124,29 @@ export function AccountMenu({
       });
   };
   const entries: MenuEntry[] = single
-    ? [{ kind: 'text', key: 'single-user', text: SINGLE_USER_NOTE }]
-    : [{ kind: 'item', key: 'sign-out', label: 'Sign out', onSelect: signOut }];
+    ? [
+        {
+          kind: 'text',
+          key: 'single-user',
+          text: SINGLE_USER_HEADING,
+          heading: true,
+          sub: SINGLE_USER_NOTE,
+        },
+      ]
+    : [
+        // A 30/14 item with its icon (design 09, pin 5; T696, EXP-18).
+        {
+          kind: 'item',
+          key: 'sign-out',
+          label: 'Sign out',
+          icon: <SignOutIcon />,
+          onSelect: signOut,
+        },
+      ];
 
-  // The same slots in every state — button, menu, avatar — so the avatar
-  // stays one element from loading to answered with security off (T319).
+  // Until the API answers, a person in the avatar's place (T211's review);
+  // then the account button, or with sign-in off the chip in its place and
+  // no avatar beside it (T696; AC-190 as amended, R76 explore-Q1).
   return (
     <span ref={box} className="account">
       {me === null ? null : (
@@ -156,10 +177,15 @@ export function AccountMenu({
               </span>
             </>
           )}
+          {/* Design 09's chevron, on the button and on the chip (pins 3; state B). */}
+          <ChevronIcon />
         </button>
       )}
       {open && me !== null ? (
-        <div className="account-panel" data-testid="account-panel">
+        <div
+          className={single ? 'account-panel account-panel--single' : 'account-panel'}
+          data-testid="account-panel"
+        >
           {single ? null : (
             // The menu is named by this, so entering it says who it is for
             // before Sign out (T319's review).
@@ -170,7 +196,7 @@ export function AccountMenu({
                 <span className="account-panel__identity">{me.identity}</span>
               )}{' '}
               {me.superAdmin ? (
-                <span className="badge account-panel__badge">
+                <span className="badge badge--accent account-panel__badge">
                   <ShieldIcon />
                   Super-Admin
                 </span>
@@ -187,9 +213,37 @@ export function AccountMenu({
           />
         </div>
       ) : null}
-      {/* Phase 1's identity avatar keeps its place at the far right (AC-190). */}
-      {me === null || single ? identityAvatar : null}
+      {me === null ? identityAvatar : null}
     </span>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="account-button__chevron"
+      data-testid="account-chevron"
+    >
+      <path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
+/** Design 09's i-signout. */
+function SignOutIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" data-icon="sign-out">
+      <path
+        d="M7 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H7M14 8H6M11 5l3 3-3 3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+    </svg>
   );
 }
 
@@ -212,13 +266,18 @@ function OpenPadlockIcon() {
       aria-hidden="true"
       data-testid="single-user-icon"
     >
-      <rect x="3" y="7" width="10" height="7.5" rx="1.5" fill="currentColor" />
-      <path
-        d="M5.5 7V4.5a2.5 2.5 0 0 1 5-0.5"
+      {/* An outline, design 09's i-unlock (T696, EXP-16). */}
+      <rect
+        x="3"
+        y="7"
+        width="10"
+        height="7"
+        rx="1.5"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"
       />
+      <path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-.7" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   );
 }

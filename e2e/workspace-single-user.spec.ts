@@ -62,8 +62,12 @@ test.describe('the single user, with security off (T359, AC-254)', () => {
     // The chip says where their proposals wait.
     await page.goto(`/explore/dashboards/${made.board}`);
     await page.getByRole('button', { name: 'Single-user mode' }).click();
+    // Headed "Sign-in is off", then the sentence (design 09 state B; T696).
     await expect(page.getByTestId('account-panel')).toContainText(
-      'Sign-in is off, so wechart runs as one user with every permission. Your proposals still wait for your approval in Reviews.',
+      'wechart runs as one user with every permission. Your proposals still wait for your approval in Reviews.',
+    );
+    await expect(page.getByTestId('account-panel').locator('.menu__main')).toHaveText(
+      'Sign-in is off',
     );
     await page.keyboard.press('Escape');
 

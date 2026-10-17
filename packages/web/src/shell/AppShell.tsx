@@ -182,11 +182,14 @@ export function AppShell({ workspace, reviews = false, children }: AppShellProps
           wechart
         </span>
         <WorkspaceSwitcher current={workspace} hidden={hidden} />
+        {/* Below 1,024 px, in the switcher's place, after the brand: design 09
+            state H's order, brand, menu, spacer, Reviews, theme, avatar (T696,
+            CMP-07). Hidden wider. */}
+        <NarrowMenu workspace={workspace} hidden={hidden} />
         <span className="app-bar__spacer" />
         <SearchTrigger />
         {/* After search, for those who may decide something (T355, rule 76). */}
         <ReviewsControl current={reviews} />
-        <NarrowMenu workspace={workspace} hidden={hidden} />
         <ThemeToggle />
         {/* Who is signed in, at the far right (AC-190, AC-252, AC-254). */}
         <AccountMenu />

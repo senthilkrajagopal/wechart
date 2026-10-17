@@ -52,6 +52,8 @@ describe('the Reviews control (T355, AC-287)', () => {
     const link = await screen.findByRole('link', { name: 'Reviews, 3 waiting' });
     expect(link.getAttribute('href')).toBe('/reviews');
     expect(screen.getByTestId('reviews-count').textContent).toBe('3');
+    // The inbox, as design 09 and 05 state C draw it (T696, SEC-19).
+    expect(link.querySelector('svg')?.getAttribute('data-icon')).toBe('inbox');
   });
 
   it('hides the count when nothing is waiting', async () => {

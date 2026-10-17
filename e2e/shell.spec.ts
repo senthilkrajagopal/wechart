@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /**
  * T396, AC-304: WHILE the window is narrower than 1,024 pixels, THE SYSTEM
@@ -125,6 +125,9 @@ test.describe('at 390 pixels wide', () => {
     // Open when the window widens past 1,024 px: closed, not left to come back.
     await menu.click();
     await page.setViewportSize({ width: 1280, height: 844 });
+    // Closed once wide (T696): narrowed again before a frame has drawn the
+    // wide window, the page never sees it wide at all.
+    await expect(page.locator('.app-bar__menu-button')).toHaveAttribute('aria-expanded', 'false');
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(menu).toHaveAttribute('aria-expanded', 'false');
 
@@ -174,6 +177,137 @@ test('at 390 pixels the query log fits the page, its header in view as the page 
   const top = (await header.boundingBox())?.y ?? 0;
   expect(top).toBeGreaterThanOrEqual(47);
   expect(top).toBeLessThanOrEqual(50);
+});
+
+/**
+ * T696 (AC-190 as amended, AC-004, AC-254, AC-287, AC-304; design 09 states
+ * B and H; R76 explore-Q1, components-Q4 and Q5): with sign-in off, the
+ * "Single-user mode" chip in the avatar's place, 28 px with its chevron, its
+ * menu a heading and a sentence; Reviews at 14/400 with the inbox and its
+ * count 12/18/600 in the accent; the search and icon buttons never shrink;
+ * below 1,280 the chip its icon alone; below 1,024 state H's order.
+ */
+test.describe('the app bar as design 09 draws it, sign-in off (T696)', () => {
+  const styleOf = (locator: Locator, ...names: string[]) =>
+    locator.evaluate(
+      (each, keys) => keys.map((key) => getComputedStyle(each).getPropertyValue(key)),
+      names,
+    );
+  const accentOf = (page: Page) =>
+    page.getByTestId('brand-mark').evaluate((each) => getComputedStyle(each).backgroundColor);
+
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/api/reviews/count', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{"waiting":3}' }),
+    );
+  });
+
+  test('at 1,280: the chip in the avatar’s place, Reviews and its count, nothing shrinking', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/explore');
+    const bar = page.getByRole('banner');
+    const reviews = bar.getByRole('link', { name: 'Reviews, 3 waiting' });
+    expect(await styleOf(reviews, 'font-size', 'font-weight')).toEqual(['14px', '400']);
+    await expect(reviews.locator('svg[data-icon="inbox"]')).toHaveCount(1);
+    const count = reviews.getByTestId('reviews-count');
+    expect(
+      await styleOf(count, 'font-size', 'line-height', 'font-weight', 'height', 'background-color'),
+    ).toEqual(['12px', '18px', '600', '18px', await accentOf(page)]);
+
+    const chip = bar.getByRole('button', { name: 'Single-user mode' });
+    expect(Math.round((await chip.boundingBox())!.height)).toBe(28);
+    await expect(chip.getByText('Single-user mode')).toBeVisible();
+    await expect(chip.getByTestId('account-chevron')).toBeVisible();
+    // No avatar beside it (AC-190 as amended), and it is at the far right, after search.
+    await expect(bar.getByRole('img', { name: /^Signed in/ })).toHaveCount(0);
+    const search = bar.getByRole('button', { name: /^Search wechart/ });
+    expect((await chip.boundingBox())!.x).toBeGreaterThan((await search.boundingBox())!.x);
+    for (const each of [search, bar.getByRole('button', { name: /theme/i }), chip, reviews])
+      expect(await styleOf(each, 'flex-shrink')).toEqual(['0']);
+
+    await chip.click();
+    const panel = page.getByTestId('account-panel');
+    expect(Math.round((await panel.boundingBox())!.width)).toBe(320);
+    const heading = panel.locator('.menu__main');
+    await expect(heading).toHaveText('Sign-in is off');
+    expect(await styleOf(heading, 'font-weight')).toEqual(['600']);
+    const sentence = panel.locator('.menu__sub-line');
+    await expect(sentence).toHaveText(
+      'wechart runs as one user with every permission. Your proposals still wait for your approval in Reviews.',
+    );
+    expect(await styleOf(sentence, 'font-size', 'line-height')).toEqual(['14px', '20px']);
+  });
+
+  test('on Reviews, its control is marked in the accent', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/reviews');
+    const reviews = page.getByRole('banner').getByRole('link', { name: 'Reviews, 3 waiting' });
+    await expect(reviews).toHaveAttribute('aria-current', 'page');
+    expect(await styleOf(reviews, 'color', 'font-weight')).toEqual([await accentOf(page), '600']);
+    // On the accent's soft ground, design 05's .reviews.on.
+    expect((await styleOf(reviews, 'background-color'))[0]).not.toBe('rgba(0, 0, 0, 0)');
+  });
+
+  test('below 1,280 the chip is its icon alone, named and titled', async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.goto('/explore');
+    const chip = page.getByRole('banner').getByRole('button', { name: 'Single-user mode' });
+    await expect(chip.getByTestId('single-user-icon')).toBeVisible();
+    await expect(chip.getByText('Single-user mode')).toBeHidden();
+    await expect(chip.getByTestId('account-chevron')).toBeHidden();
+    await expect(chip).toHaveAttribute('title', 'Single-user mode');
+    // The search and Reviews keep their words (components-Q4).
+    await expect(page.locator('.app-bar > .app-search')).toContainText('Search wechart');
+    await expect(page.locator('.app-bar > .app-search')).toBeVisible();
+    await expect(page.locator('.app-bar .app-reviews__label')).toBeVisible();
+  });
+
+  test('at 1,024 the bar fits: every workspace on one line, the search at 260', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await page.goto('/explore');
+    const bar = page.getByRole('banner');
+    const links = bar.getByRole('navigation', { name: 'Workspaces' }).getByRole('link');
+    // One line each: its words' boxes all on one row, never wrapped (CMP-07).
+    for (const link of await links.all())
+      expect(
+        await link.evaluate((each) => {
+          const words = document.createRange();
+          words.selectNodeContents(each);
+          return new Set([...words.getClientRects()].map((box) => Math.round(box.top))).size;
+        }),
+        await link.innerText(),
+      ).toBe(1);
+    const search = (await page.locator('.app-bar > .app-search').boundingBox())!;
+    expect(Math.round(search.width)).toBe(260);
+    expect(
+      await page.locator('.app-bar').evaluate((each) => each.scrollWidth - each.clientWidth),
+    ).toBe(0);
+  });
+
+  test('below 1,024, state H’s order: brand, menu, then Reviews, theme and the chip', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 900, height: 800 });
+    await page.goto('/explore');
+    const bar = page.getByRole('banner');
+    const xs: number[] = [];
+    for (const each of [
+      bar.getByTestId('brand-mark'),
+      bar.getByRole('button', { name: 'Menu' }),
+      bar.getByRole('link', { name: 'Reviews, 3 waiting' }),
+      bar.getByRole('button', { name: /theme/i }),
+      bar.getByRole('button', { name: 'Single-user mode' }),
+    ])
+      xs.push((await each.boundingBox())!.x);
+    expect(xs).toEqual([...xs].sort((a, b) => a - b));
+    // The menu straight after the brand, the spacer after it.
+    const brand = (await bar.locator('.app-bar__product').boundingBox())!;
+    expect(Math.round(xs[1]! - (brand.x + brand.width))).toBeLessThanOrEqual(16);
+  });
 });
 
 test('at 1,280 pixels the bar keeps navigation and search in view, with no menu', async ({

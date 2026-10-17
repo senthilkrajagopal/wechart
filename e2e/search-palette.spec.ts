@@ -77,11 +77,16 @@ test('typing into the palette does not trigger the shortcut again', async ({ pag
 /**
  * T211 / AC-190: THE SYSTEM SHALL show at the right of the top bar a search
  * field that names the platform's shortcut (⌘K or Ctrl+K) and opens the
- * search palette when clicked, and an identity avatar at the far right.
- * `Fails when: the top bar offers no visible way to open search, or the
- * avatar is missing.`
+ * search palette when clicked, and at the far right an identity avatar while
+ * sign-in is on, or, while sign-in is off, the "Single-user mode" chip in its
+ * place (amended 2026-10-08, R76; T696). `Fails when: the top bar offers no
+ * visible way to open search; with sign-in on, the avatar is missing; or with
+ * sign-in off, the chip is missing or an avatar shows beside it.` Sign-in on:
+ * `security/sign-in.spec.ts`.
  */
-test('the top bar shows a search field naming the shortcut, and the avatar', async ({ page }) => {
+test('the top bar shows a search field naming the shortcut, and the chip in the avatar’s place', async ({
+  page,
+}) => {
   await page.goto('/explore');
   const bar = page.getByRole('banner');
 
@@ -93,11 +98,16 @@ test('the top bar shows a search field naming the shortcut, and the avatar', asy
   // Back where it was: on the field that opened it.
   await expect(trigger).toBeFocused();
 
-  // Phase 1's one user, named by the API, at the far right.
-  const avatar = bar.getByRole('img', { name: 'Signed in as admin' });
-  await expect(avatar).toHaveText('AD');
-  const right = async (locator: typeof avatar) => (await locator.boundingBox())?.x ?? 0;
-  expect(await right(avatar)).toBeGreaterThan(await right(trigger));
+  // Sign-in off: the chip at the far right, and no avatar beside it.
+  const chip = bar.getByRole('button', { name: 'Single-user mode' });
+  await expect(chip).toBeVisible();
+  await expect(bar.getByRole('img', { name: /^Signed in/ })).toHaveCount(0);
+  const right = async (locator: typeof chip) => (await locator.boundingBox())?.x ?? 0;
+  expect(await right(chip)).toBeGreaterThan(await right(trigger));
+  const last = await bar.evaluate((each) =>
+    each.lastElementChild?.contains(each.querySelector('[aria-label="Single-user mode"]')),
+  );
+  expect(last).toBe(true);
 });
 
 test('focus goes back where it was after ⌘K pressed twice, and after Close', async ({ page }) => {

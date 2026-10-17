@@ -14598,3 +14598,27 @@ Search this file by task ID (`T123`) or AC ID.
     - The panel is design 06's `.pane`: docked from under the app bar to the window's foot at its right edge (on a dashboard it fills the row beside it), a 44 px head with h2 16/22 and the 32 px close, the list scrolling between it and the limit note at the foot. Rows sit under rules with the time at the right of the first line, "by … · approved by …" on the second, the description at 12/16, and View · More · Propose restoring… as link buttons.
     - **Tests.** API: `routes/history.test.ts` (T695). Unit: `HistoryPanel.test`. e2e: `security/history.spec.ts` (a new T695 test; the writer's rows split into time and who), `security/data-sources.spec.ts` and `security/workspace-edit.spec.ts` (the pane docked on a data source's and a chart's page).
     - **The review (one round):** no bugs. Fixed: an assertion that could pass on an empty list. Left: T695-1 (the unkept Current row has no View, where R76 says "View only") is for the user to confirm; the unkept row's time is the item's last save, which a rename also moves.
+
+- [x] T696 (AC-187, AC-004, AC-252, AC-254, AC-287, AC-304, AC-190) The app bar, the account menu and the single-user chip as design 09 draws them *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/shell/{AppShell,AccountMenu}.tsx`, `packages/web/src/workspaces/reviews/ReviewsControl.tsx`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/shell.spec.ts`, `e2e/consistency.spec.ts`, `docs/phase-2/backlog.md` §6(a) (its "Explore and the top bar below 1,024 px: neither review designs them" is half answered: design 09 state H draws the top bar)
+  - Findings: CMP-04, CMP-05, CMP-06, CMP-07, EXP-16, EXP-17, EXP-18, SEC-18, SEC-19, SRC-23.
+  - Failing test:
+    - Reviews at 14/400, with the inbox icon, its count pill at 12/18/600 filled with the accent, and `.reviews.on` on its page;
+    - the chip at 28 px with its chevron, and its menu's heading and sentence;
+    - the account button 36 px, and its menu at 280 with the identity in the code face, the accent Super-Admin badge, and Sign out as a 30/14 item with its icon;
+    - icon buttons and the search never shrink;
+    - below 1,024, state H's order.
+  - ~~Waits on: the Explore critique's Q1 (the avatar beside the chip), Q8 (the access chip with sign-in off); the components critique's Q4 (1,024–1,279) and Q5 (11 px against the floor).~~
+  - **Settled 2026-10-08 (R76: explore-Q1, explore-Q8, components-Q4, components-Q5).** AC-190 is amended and unticked, and this task's tests tick it again. Build:
+    - **explore-Q1 (AC-190):** with sign-in off, the "Single-user mode" chip takes the avatar's place, and no avatar shows beside it.
+    - **explore-Q8:** with sign-in off, a folder's header shows no access chip, as built.
+    - **components-Q4:** below 1,280 px the single-user chip shows its icon only, the warning-coloured open padlock. Its label moves to its accessible name and tooltip, and "Sign-in is off" stays one click away in its menu. The search and Reviews keep their labels.
+    - **components-Q5:** every 11 px text in the bar and its menus goes to 12 px; the floor is absolute (direction §3).
+  - Depends on: none
+  - **Built 2026-10-17** (lane C). SEC-18 was dropped: T699 built it. The calls are T696-1 to T696-3 in `decisions-2026-10-08.md`, "Later decisions". **AC-190 ticked again.**
+    - Reviews: 14/400 in text-secondary with the inbox, its count 12/18/600 on the accent; on its page the accent's soft ground, accent ink, 600. The only 11 px text in the bar, the count, is now 12.
+    - The chip: 28 px, an outline open padlock, its words and a chevron, in the avatar's place with no avatar beside it; below 1,280 px its padlock alone. Its menu is 320 wide, "Sign-in is off" over the sentence at 14/20.
+    - The account button: 36 px, padding 0 8 0 4, with a chevron. Its menu is 280 on a border-subtle edge: the identity in the code face, the Super-Admin badge on the accent's soft ground at 22, and Sign out a 30/14 item with its icon.
+    - The search, icon buttons, Reviews and account never shrink; the tabs never wrap, padding 8 a side below 1,280. The narrow menu comes after the brand (state H).
+    - **Tests.** Unit: `AccountMenu.test`, `ReviewsControl.test`. e2e: `shell.spec.ts` (a new T696 group; the narrow-menu test now waits for the menu to close while wide, which it had raced), `security/sign-in.spec.ts` (the account button and menu, the badge, the bar at 1,024 signed in, and T245's avatar colours moved from `design-conformance.spec.ts`, where sign-in is off and there is no avatar now), `search-palette.spec.ts` (AC-190 with sign-in off), `workspace-single-user.spec.ts`.
+    - **The review (one round):** no bugs. Fixed: a one-line check that couldn't fail (now each tab's words on one row), the bar at 1,024 signed in (it overflowed 28 px: the tabs' padding below 1,280), and the chip's open state.

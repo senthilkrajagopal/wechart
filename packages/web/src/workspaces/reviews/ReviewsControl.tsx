@@ -28,9 +28,10 @@ export function ReviewsControl({ current = false }: { readonly current?: boolean
       aria-label={waiting === 0 ? 'Reviews' : `Reviews, ${String(waiting)} waiting`}
       aria-current={current ? 'page' : undefined}
     >
-      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      {/* The inbox, as designs 05 (state C) and 09 draw it (T696, SEC-19). */}
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" data-icon="inbox">
         <path
-          d="M3 2.5h7l3 3v8H3z M10 2.5v3h3 M5.5 9l1.8 1.8L10.5 7.5"
+          d="M2 9.5l1.6-5.2A1 1 0 0 1 4.6 3.6h6.8a1 1 0 0 1 1 .7L14 9.5v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z M2 9.5h3.5l1 1.5h3l1-1.5H14"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.4"

@@ -277,7 +277,7 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
   - F6 takes the panel into the pane cycle;
   - opening focuses the panel's heading (it focuses the panel itself, as T330 built it).
 - **2026-09-27 design 03, state E:** a "Scheduled health check" row. It is only needed if periodic tests are wanted, which is a spec change.
-- **Explore and the top bar below 1,024 px:** neither review designs them (§3, N16).
+- **Explore below 1,024 px:** no review designs it (§3, N16). ~~The top bar below 1,024 px~~: design 09 state H draws it (brand, menu, spacer, Reviews, theme, avatar), built by T696 (2026-10-17).
 - **2026-09-27 design 04, pin 6:** "Search My workspace" or "Search Sales / EMEA" names the box for its folder, but AC-019's Explore search looks through the whole library, not one folder. Either the search is scoped to the open folder (an AC-019 change), or the box keeps its global label.
 - **Jobs and Schedules, from the 2026-09-28 sync check (R40; `docs/design/reviews/2026-09-28-jobs-schedules/`).** *Trigger, cache warm-up, AC-155, Data as of for readers, auditing builds and query records answered 2026-09-28 (R42.2–R42.4, R42.6–R42.8).* Still open, asked when their work is reached:
   - ~~"Trigger": the refresh key, as AC-229 says and as built, or who started the last build, as design 10 draws it; or both, as "Trigger" and "Started by".~~
