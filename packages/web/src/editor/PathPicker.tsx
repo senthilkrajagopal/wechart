@@ -15,6 +15,11 @@ export interface PathPickerRow {
   /** What choosing it hands back: a cube's or a field's name. */
   readonly value: string;
   readonly title: string;
+  /**
+   * What its search matches, where that isn't its title: a Filter on field's
+   * whole title, its cube's name in it, as its row reads the short one (T742).
+   */
+  readonly searchText?: string | undefined;
   /** Its cube's kind, as design 10's chip says it. */
   readonly kind: 'cube' | 'view';
   /** What is written at its right: its folder path, or its cube's and its path. */
@@ -135,7 +140,9 @@ export function PathPicker({
   const shown = groups
     .map((group) => ({
       ...group,
-      rows: group.rows.filter((row) => row.title.toLowerCase().includes(needle)),
+      rows: group.rows.filter((row) =>
+        (row.searchText ?? row.title).toLowerCase().includes(needle),
+      ),
     }))
     .filter((group) => group.rows.length > 0);
   /** None, first, while one is chosen and nothing is typed. */

@@ -234,6 +234,8 @@ export function useFieldGroups(
             value: member.name,
             // Its short title ("Name"): its cube is at the right (T742, design-10-Q6).
             title: member.shortTitle,
+            // Found by its whole title, its cube's name in it (T742's review).
+            searchText: member.title,
             kind,
             path: group.label === undefined ? row.cube.title : `${row.cube.title} · ${group.label}`,
             chip: row.yours === true ? 'Your copy' : undefined,

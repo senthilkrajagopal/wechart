@@ -389,5 +389,16 @@ describe('a filter’s fields on a dashboard in a folder (T429)', () => {
       { label: 'A', options: [['fa__sales.status', 'Status', 'Sales · A']] },
       { label: 'Shared', options: [['orders.status', 'Status', 'Orders · Shared']] },
     ]);
+
+    // Its search still finds a field by its whole title, its cube's name in
+    // it, though the row reads the short one (T742's review).
+    await userEvent.type(within(list.parentElement!).getByRole('combobox'), 'orders');
+    await waitFor(() =>
+      expect(
+        within(list)
+          .getAllByRole('option')
+          .map((option) => option.getAttribute('data-member')),
+      ).toEqual(['orders.status']),
+    );
   });
 });
