@@ -37,6 +37,8 @@ Rules that go with it:
   ```
 - Unresolved markers are `TBD` and `[NEEDS CLARIFICATION: …]`. Don't use either string anywhere else in the spec.
 - A task in `docs/tasks.md`: `- [ ] T001 [P] (AC-001, AC-004) <title>`
+- A finished task keeps only its line in `docs/tasks.md`. When it's ticked, its sub-lines move word for word to `docs/archive/tasks-done.md` in the same commit.
+- `docs/archive/` holds history: finished tasks' notes and full copies of docs as they were before a cleanup. The interview rounds (`[R1]`…) are in `docs/requirements-log.md`. Read either only when a task needs it.
 - A research doc `docs/research/<name>.md` has frontmatter with `packages:` (every import name it covers), `version:` (exact), and `researched:` (date).
 - `docs/inputs/` holds raw material from the user. It feeds the interview but is not itself requirements, and claims in it must be verified by research.
 
