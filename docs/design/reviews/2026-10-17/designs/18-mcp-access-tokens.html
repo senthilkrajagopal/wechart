@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 18 · Personal access tokens for MCP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8; --role-measure: #a85400;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  b, strong, th, h1, h2, h3 { font-weight: 600; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head ul { margin: 0 0 6px; padding-left: 20px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .doc-head code { color: #f2f2f0; background: #333; padding: 0 4px; border-radius: 3px; font: 400 12px var(--font-code); }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .screen-label { background: #2b2b29; color: #e8e7e2; padding: 10px 32px; font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2, .states h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; }
+  .notes > p, .states > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .bnote { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border: 1px dashed var(--note); border-radius: 4px; color: var(--note); font: 600 12px/16px var(--font-ui); white-space: nowrap; vertical-align: 1px; }
+  .notes code, .states code, .decision code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .stategrid { display: grid; grid-template-columns: repeat(2, 676px); gap: 32px 24px; align-items: start; }
+  .state { display: grid; gap: 8px; align-content: start; }
+  .state.wide { grid-column: 1 / -1; }
+  .state > h3 { margin: 0; font-size: 14px; line-height: 20px; }
+  .state > p { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); max-width: 1180px; }
+  .row3 { display: grid; grid-template-columns: repeat(3, 440px); gap: 24px; align-items: start; }
+  .row2 { display: grid; grid-template-columns: repeat(2, 676px); gap: 24px; align-items: start; }
+  .frame { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg-page); box-shadow: 0 1px 2px rgba(0,0,0,.06); position: relative; }
+  .cap { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0 0 6px; }
+  .decision { margin: 22px 0 0; padding: 16px 20px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-page); max-width: 1376px; }
+  .decision h3 { margin: 0 0 8px; font-size: 16px; line-height: 22px; }
+  .decision > p { margin: 0 0 10px; color: var(--text-secondary); font-size: 13px; line-height: 18px; }
+  .decision table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 18px; }
+  .decision th, .decision td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); }
+  .decision th { font-size: 12px; color: var(--text-secondary); background: var(--bg-subtle); }
+  .decision td.w { white-space: nowrap; font: 600 12px/18px var(--font-code); color: var(--note); }
+
+  svg.i { width: 16px; height: 16px; flex: none; }
+  svg.s { width: 14px; height: 14px; flex: none; }
+  svg.xs { width: 10px; height: 10px; flex: none; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; white-space: nowrap; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 240px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .reviews { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary); }
+  .count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--text-on-accent); font: 600 12px/18px var(--font-ui); text-align: center; font-variant-numeric: tabular-nums; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .iconbtn.sm { width: 24px; height: 24px; }
+  .iconbtn.on { background: var(--bg-subtle); color: var(--text-primary); }
+  .acct { display: inline-flex; align-items: center; gap: 8px; font: 600 12px/16px var(--font-ui); padding: 2px 6px; border-radius: 6px; }
+  .acct.open { background: var(--bg-subtle); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .chipwarn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--warn); font-size: 12px; font-weight: 600; background: var(--bg-surface); white-space: nowrap; }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.danger { color: var(--err); }
+  .btn.danger.solid { background: var(--err); border-color: var(--err); color: #fff; font-weight: 600; }
+  .btn.dis { opacity: .45; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.md { height: 28px; padding: 0 10px; font-size: 12px; }
+  .btn.link { border: 0; background: none; padding: 0; height: auto; color: var(--accent); font-size: 12px; font-weight: 600; }
+  .ring { box-shadow: 0 0 0 3px var(--accent-ring); }
+  .input { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; width: 100%; display: flex; align-items: center; gap: 6px; font-size: 14px; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .input.ph { color: var(--text-muted); }
+  .input.mono { font: 400 12px var(--font-code); }
+  .input.bad { border-color: var(--err-icon); }
+  .input.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+  .input.ro { background: var(--bg-subtle); }
+  .help { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0; }
+  .err-t { font-size: 12px; line-height: 16px; color: var(--err); margin: 0; display: flex; gap: 6px; align-items: flex-start; }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; background: var(--bg-surface); }
+  .seg span { height: 28px; padding: 0 12px; font-size: 12px; display: flex; align-items: center; gap: 5px; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); white-space: nowrap; color: var(--text-primary); }
+  .seg span:first-child { border-left: 0; }
+  .seg span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; background: var(--bg-subtle); color: var(--text-secondary); white-space: nowrap; }
+  .badge.sm { height: 18px; padding: 0 6px; }
+  .badge.accent { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .badge.line { background: none; border: 1px solid var(--border-strong); }
+  .scope { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border: 1px solid var(--border-subtle); border-radius: 3px; font-size: 12px; line-height: 16px; color: var(--text-primary); background: var(--bg-surface); white-space: nowrap; }
+  .scopes { display: flex; gap: 4px; flex-wrap: wrap; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); } .status.warn { color: var(--warn); } .status.run { color: var(--accent); } .status.idle { color: var(--text-secondary); }
+  .status .t { font-weight: 400; color: var(--text-secondary); }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .notebar { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 16px; background: var(--accent-soft); color: var(--text-primary); border: 1px solid var(--border-subtle); }
+  .notebar.warn { background: color-mix(in srgb, var(--warn-icon) 14%, var(--bg-surface)); border-color: color-mix(in srgb, var(--warn-icon) 45%, var(--bg-surface)); }
+  .notebar.err { background: color-mix(in srgb, var(--err-icon) 9%, var(--bg-surface)); }
+  .notebar.plain { background: var(--bg-subtle); }
+  .code { font: 400 12px/16px var(--font-code); background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 8px 10px; white-space: pre-wrap; word-break: break-all; margin: 0; color: var(--text-primary); }
+  .codebox { display: flex; gap: 8px; align-items: flex-start; }
+  .codebox .code { flex: 1; }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+  .grid-table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; height: 28px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table td { height: 34px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table td .sub { display: block; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .grid-table td.two { white-space: normal; padding-top: 5px; padding-bottom: 5px; line-height: 16px; }
+  .grid-table tr:last-child td { border-bottom: 0; }
+  .grid-table tr.hover td { background: var(--bg-hover); }
+  .grid-table tr.new td { background: color-mix(in srgb, var(--accent-soft) 70%, var(--bg-surface)); }
+  .grid-table tr.ended td { color: var(--text-secondary); }
+  .grid-table td.r { text-align: right; }
+  .head { display: flex; align-items: center; gap: 10px; min-height: 32px; }
+  .head h1 { margin: 0; font-size: 20px; line-height: 26px; white-space: nowrap; }
+  .sect { padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 8px; }
+  .sect:last-child { border-bottom: 0; }
+  .sect > h3 { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; font-size: 12px; line-height: 16px; margin: 0; }
+  .kv dt { color: var(--text-secondary); }
+  .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border-subtle); height: 37px; }
+  .tabs span { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tabs span.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .check { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--border-strong); background: var(--bg-surface); flex: none; display: inline-grid; place-items: center; }
+  .check.on { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+  .check.lock { background: var(--bg-subtle); border-color: var(--border-strong); color: var(--text-secondary); }
+  .empty { display: grid; place-items: center; text-align: center; gap: 6px; padding: 28px 16px; color: var(--text-secondary); font-size: 12px; line-height: 16px; }
+  .empty b { color: var(--text-primary); font-size: 14px; line-height: 20px; }
+  .skel { height: 10px; border-radius: 3px; background: var(--bg-subtle); }
+  .dialog { position: absolute; z-index: 60; background: var(--bg-surface); border-radius: 6px; box-shadow: var(--shadow-pop); display: grid; gap: 12px; padding: 20px; border: 1px solid var(--border-subtle); }
+  .dialog h2 { margin: 0; font-size: 16px; line-height: 22px; display: flex; gap: 8px; align-items: center; }
+  .dialog p { margin: 0; color: var(--text-secondary); }
+  .dialog p b { color: var(--text-primary); }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.28); z-index: 50; }
+  .acts { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+  .menu { position: absolute; z-index: 70; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 4px; }
+  .mi { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; border-radius: 4px; font-size: 14px; white-space: nowrap; }
+  .mi.hl { background: var(--bg-hover); }
+  .msep { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+  .who { display: grid; gap: 2px; padding: 8px 8px 6px; }
+  .toast { position: absolute; z-index: 80; display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--text-primary); color: var(--bg-surface); border-radius: 6px; font-size: 14px; line-height: 20px; box-shadow: var(--shadow-pop); }
+  .toast .btn.link { color: #9fd3e4; font-size: 14px; }
+  .fbtn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-surface); font-size: 12px; white-space: nowrap; }
+  .fbtn b { font-weight: 600; }
+  .find { display: flex; align-items: center; gap: 6px; width: 220px; height: 28px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-surface); color: var(--text-muted); font-size: 12px; }
+  .legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 24px; }
+  .legend div { display: flex; gap: 10px; align-items: center; min-height: 34px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; }
+  .legend div > span:last-child { margin-left: auto; color: var(--text-secondary); text-align: right; }
+  kbd.k { font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--bg-surface); color: var(--text-primary); white-space: nowrap; }
+  .ev { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+  .ev svg { color: var(--text-secondary); }
+  .notfound { display: grid; place-items: center; text-align: center; gap: 8px; padding: 40px 24px; }
+  .notfound b { font-size: 16px; line-height: 22px; }
+
+  /* design 18 */
+  .pg { display: grid; grid-template-columns: minmax(0, 1fr) 400px; height: 852px; }
+  .pgmain { min-width: 0; padding: 16px 24px; display: flex; flex-direction: column; gap: 10px; }
+  .crumbs { display: flex; gap: 6px; align-items: center; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .lead { margin: 0; font-size: 14px; line-height: 20px; color: var(--text-secondary); max-width: 900px; }
+  .subh { margin: 6px 0 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+  .pane { background: var(--bg-surface); border-left: 1px solid var(--border-subtle); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .panehead { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 16px; border-bottom: 1px solid var(--border-subtle); flex: none; }
+  .panehead h2 { margin: 0; font: 600 14px/20px var(--font-ui); }
+  .steps { margin: 0; padding: 0 0 0 18px; display: grid; gap: 8px; font-size: 12px; line-height: 16px; }
+  .steps li::marker { color: var(--text-secondary); font-weight: 600; }
+  .fld { display: grid; gap: 4px; }
+  .fld > .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-primary); display: flex; gap: 6px; align-items: center; }
+  .fld > .lbl .req { font-weight: 400; color: var(--text-secondary); }
+  .scoperow { display: grid; grid-template-columns: 16px 1fr; gap: 10px; align-items: start; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: 6px; }
+  .scoperow .check { margin-top: 2px; }
+  .scoperow b { font-size: 14px; line-height: 20px; }
+  .scoperow .d { display: block; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .tokenbox { display: flex; gap: 8px; align-items: center; padding: 8px 8px 8px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent-soft); }
+  .tokenbox .tk { flex: 1; font: 600 12px/16px var(--font-code); word-break: break-all; color: var(--text-primary); }
+  .never { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; line-height: 16px; }
+  .never li { display: flex; gap: 6px; align-items: flex-start; }
+  .never li svg { margin-top: 1px; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M2 9.5l1.6-5.2A1 1 0 0 1 4.6 3.6h6.8a1 1 0 0 1 1 .7L14 9.5v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z M2 9.5h3.5l1 1.5h3l1-1.5H14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-unlock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-.7" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--accent)"/><path d="M8 7v4.2M8 4.6v.4" style="stroke:var(--bg-surface)" stroke-width="1.7"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="12.5" cy="8" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 1.8l5 1.9v4c0 3.1-2.1 5.5-5 6.5-2.9-1-5-3.4-5-6.5v-4z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.6 8.1l1.7 1.7 3.2-3.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-key" viewBox="0 0 16 16"><circle cx="5" cy="10.5" r="2.8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 8.5l6-6M11 4.5l1.8 1.8M9.4 6.1l1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5" y="5" width="8.5" height="8.5" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 10.5V3.8A1.3 1.3 0 0 1 4.3 2.5H10.5" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="i-signout" viewBox="0 0 16 16"><path d="M6 2.5H3.5v11H6M10 5l3 3-3 3M13 8H6.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13.5 2.5L7.5 8.5M11.5 9.5v4h-9v-9h4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-term" viewBox="0 0 16 16"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4.5 6.2L6.8 8l-2.3 1.8M8.3 10.2h3.2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 16 16"><path d="M5.5 1.8v3.4M10.5 1.8v3.4M3.8 5.2h8.4v2.6a4.2 4.2 0 0 1-8.4 0zM8 12v2.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-ban" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.8 12.2l8.4-8.4" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 16 16"><path d="M2.5 11a5.5 5.5 0 1 1 11 0" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 11l2.6-3.4" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-audit" viewBox="0 0 16 16"><path d="M4 1.8h5.2L12 4.6v9.6H4z M9 1.8v3h3M6 8h4M6 10.5h4" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
+  <symbol id="i-hist" viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.3 2.5v2.8h2.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.2l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="s-err" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M5.4 5.4l5.2 5.2M10.6 5.4l-5.2 5.2" stroke="#fff" stroke-width="1.8"/></symbol>
+  <symbol id="s-warn" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" style="fill:var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></symbol>
+  <symbol id="s-idle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-off" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.2 8h5.6" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="s-run" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" style="stroke:var(--border-strong)" stroke-width="2"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" fill="none" style="stroke:var(--accent)" stroke-width="2"/></symbol>
+  <symbol id="s-revoked" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M4.6 11.4l6.8-6.8" stroke="#fff" stroke-width="1.8"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI design 2026-10-17 · Design 18 · for approval</div>
+    <h1>Personal access tokens for MCP — make one, see it once, list and revoke your own; Super-Admins list and revoke everyone's; and how to connect Claude Code and Claude.ai</h1>
+    <p>R78 adds an MCP server so Claude Code, Claude.ai and Claude Desktop can read wechart, edit in My workspace and propose, as the person whose token they hold (F41, AC-430 … AC-445, AC-468 … AC-479). Nothing of it is built. The server itself has no screen: these are the screens a person uses to give a client access, and a Super-Admin uses to oversee it.</p>
+    <p>This design draws:</p>
+    <ul>
+      <li><b>Access tokens, the person's own page,</b> from a new entry in the account menu: their tokens with name, scopes, when made, when it expires and when last used, and Revoke (AC-430, AC-431).</li>
+      <li><b>New token:</b> a name, the three scopes with Read always included, and a lifetime of 7, 30 or 90 days, 30 to start (AC-430, AC-468, AC-469).</li>
+      <li><b>The token, shown once,</b> with Copy, and the Claude Code command ready to paste. It is never shown again, to anyone (AC-430).</li>
+      <li><b>Security › Access tokens,</b> for Super-Admins: every user's tokens, never their text, with Revoke (AC-470).</li>
+      <li><b>How to connect,</b> for Claude Code and for Claude.ai and Claude Desktop custom connectors (AC-444, AC-445), with the limits a client meets (AC-472, AC-475).</li>
+      <li><b>States:</b> empty, loading, error, expired, revoked, never used, sign-in off, the audit events, and narrow widths.</li>
+    </ul>
+    <p><b>Screens 1–3</b> are Wren Writer, a read-write member of Sales / EMEA, making a token for Claude Code. <b>Screen 4</b> is Ada Admin, a Super-Admin, revoking one of Wren's tokens. Sign-in is on. States A–J follow the brief's order.</p>
+    <p><b>What doesn't change:</b> the account menu's identity, Super-Admin badge and Sign out (design 09, as built at T696); Security's Policies, Preview as groups and Audit trail tabs (design 08), whose trail gains the events in state I.</p>
+    <div class="ids">For R78 · AC-430, AC-431, AC-433, AC-435, AC-440 … AC-445, AC-468 … AC-479 · with AC-251 … AC-254, AC-294 … AC-296 · rules 1, 3, 17, 59, 67, 82, 83, 85 · designs 08, 09 (2026-09-27) · research mcp-typescript-sdk.md ("Remote support by client", "Authorization", Gotchas 6, 12, 13), fastify-rate-limit.md · token text, names, dates, URLs and people are illustrative</div>
+  </header>
+
+  <!-- ======================= SCREEN 1 ======================= -->
+  <div class="screen-label">Screen 1 · Access tokens, Wren's own page, opened from the account menu</div>
+  <div class="screen" id="s1">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">2</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="pg">
+      <main class="pgmain">
+        <div class="crumbs"><svg class="s"><use href="#i-person"/></svg>Your account <svg class="s"><use href="#i-chev"/></svg><span style="color:var(--text-primary)">Access tokens</span></div>
+        <div class="head"><h1>Access tokens</h1><span class="spacer"></span><span class="btn primary"><svg class="s"><use href="#i-plus"/></svg>New token</span></div>
+        <p class="lead">A token lets an MCP client, such as Claude Code or Claude.ai, work in wechart as you: it sees what you see, edits only in My workspace, and never approves a proposal.</p>
+        <div class="notebar plain"><svg class="s" style="margin-top:1px"><use href="#i-info"/></svg><span>Your tokens use the groups from your latest sign-in to wechart. If your groups change, sign in again here and your tokens follow.</span></div>
+        <div class="card">
+          <table class="grid-table">
+            <thead><tr><th style="width:220px">Name</th><th>Scopes</th><th style="width:110px">Made</th><th style="width:170px">Expires</th><th style="width:130px">Last used</th><th style="width:84px"></th></tr></thead>
+            <tbody>
+              <tr><td><span class="strong">Claude Code · laptop</span></td><td><span class="scopes"><span class="scope">Read</span><span class="scope">Workspace edit</span></span></td><td>2 Oct 2026</td><td>1 Nov 2026 <span class="sec">· in 15 days</span></td><td>Today 14:05</td><td class="r"><span class="btn sm danger">Revoke</span></td></tr>
+              <tr class="hover"><td><span class="strong">Claude.ai connector</span></td><td><span class="scopes"><span class="scope">Read</span><span class="scope">Workspace edit</span><span class="scope">Proposals and jobs</span></span></td><td>17 Sep 2026</td><td>16 Dec 2026 <span class="sec">· in 60 days</span></td><td>Yesterday 18:20</td><td class="r"><span class="btn sm danger">Revoke</span></td></tr>
+              <tr><td><span class="strong">Reading only</span></td><td><span class="scopes"><span class="scope">Read</span></span></td><td>15 Oct 2026</td><td>22 Oct 2026 <span class="sec">· in 5 days</span></td><td class="sec">Never</td><td class="r"><span class="btn sm danger">Revoke</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="subh">No longer working</p>
+        <div class="card">
+          <table class="grid-table">
+            <tbody>
+              <tr class="ended"><td style="width:220px">Old laptop</td><td><span class="scopes"><span class="scope">Read</span></span></td><td style="width:110px">1 Aug 2026</td><td style="width:170px"><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Expired <span class="t">· 31 Aug</span></span></td><td style="width:130px">30 Aug 2026</td><td class="r" style="width:84px"><span class="btn sm">Remove</span></td></tr>
+              <tr class="ended"><td>CI experiment</td><td><span class="scopes"><span class="scope">Read</span><span class="scope">Workspace edit</span></span></td><td>5 Sep 2026</td><td><span class="status err"><svg class="s"><use href="#s-revoked"/></svg>Revoked <span class="t">· by Ada Admin, 12 Oct</span></span></td><td>11 Oct 2026</td><td class="r"><span class="btn sm">Remove</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="help" style="max-width:900px"><b style="color:var(--text-primary)">A token's text is shown once, when it's made.</b> wechart keeps only what it needs to check a token, so nobody can read it again, Super-Admins included. If you lose one, revoke it and make another. Making and revoking tokens is recorded in the audit trail.</p>
+      </main>
+      <aside class="pane" aria-label="Connect a client">
+        <div class="panehead"><h2>Connect a client</h2></div>
+        <div class="sect">
+          <h3>Server URL</h3>
+          <div class="codebox"><span class="input mono ro">https://mcp.wechart.example.com/mcp</span><span class="btn md"><svg class="s"><use href="#i-copy"/></svg>Copy</span></div>
+          <p class="help">Your deployment's MCP address. It serves only <span class="mono">/mcp</span>, over TLS.</p>
+        </div>
+        <div class="tabs" style="padding:0 12px"><span class="on"><svg class="s"><use href="#i-term"/></svg>Claude Code</span><span><svg class="s"><use href="#i-plug"/></svg>Claude.ai and Claude Desktop</span></div>
+        <div class="sect">
+          <ol class="steps">
+            <li><b>Make a token</b> with New token. Give it the scopes the work needs.</li>
+            <li><b>Add wechart to Claude Code,</b> in a terminal:
+              <div class="codebox" style="margin-top:6px"><pre class="code">claude mcp add --transport http wechart https://mcp.wechart.example.com/mcp --header "Authorization: Bearer <span style="color:var(--accent);font-weight:600">‹your token›</span>"</pre><span class="iconbtn sm" title="Copy the command"><svg class="s"><use href="#i-copy"/></svg></span></div>
+            </li>
+            <li><b>Check it:</b> ask Claude Code to list your wechart folders.</li>
+          </ol>
+          <p class="help">The token goes only in the <span class="mono">Authorization</span> header. wechart refuses it anywhere else, in the URL included.</p>
+        </div>
+        <div class="sect">
+          <h3>What a token can do</h3>
+          <ul class="never">
+            <li><svg class="s" style="color:var(--ok-icon)"><use href="#i-check"/></svg><span><b>Read:</b> list folders and items, read definitions, query cubes and views. Always included.</span></li>
+            <li><svg class="s" style="color:var(--ok-icon)"><use href="#i-check"/></svg><span><b>Workspace edit:</b> change things in My workspace only.</span></li>
+            <li><svg class="s" style="color:var(--ok-icon)"><use href="#i-check"/></svg><span><b>Proposals and jobs:</b> propose, withdraw, Run now and Cancel.</span></li>
+            <li><svg class="s"><use href="#i-ban"/></svg><span><b>Never:</b> approve or reject; change a data source; run SQL; read the audit trail; make or revoke tokens.</span></li>
+          </ul>
+        </div>
+        <div class="sect">
+          <h3>Limits</h3>
+          <ul class="never">
+            <li><svg class="s"><use href="#i-gauge"/></svg><span>60 calls a minute per token, set by your deployment.</span></li>
+            <li><svg class="s"><use href="#i-gauge"/></svg><span>Up to 1,000 rows and under 50,000 characters per answer, with the next page on request.</span></li>
+            <li><svg class="s"><use href="#i-audit"/></svg><span>Every call is recorded in the audit trail with the token's name, never with what it asked for.</span></li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+
+    <span class="pin" style="left:0;top:60px">1</span>
+    <span class="pin" style="left:872px;top:88px">2</span>
+    <span class="pin" style="left:0;top:168px">3</span>
+    <span class="pin" style="left:0;top:212px">4</span>
+    <span class="pin" style="left:820px;top:212px">5</span>
+    <span class="pin" style="left:1014px;top:246px">6</span>
+    <span class="pin" style="left:0;top:350px">7</span>
+    <span class="pin" style="left:0;top:486px">8</span>
+    <span class="pin" style="left:1412px;top:118px">9</span>
+    <span class="pin" style="left:1412px;top:250px">10</span>
+    <span class="pin" style="left:1412px;top:470px">11</span>
+    <span class="pin" style="left:1412px;top:640px">12</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 1: what's new, and why</h2>
+    <p>A token is personal: it acts as its owner, with their folder access, so it lives with the person, under their account, not in a workspace. The page answers three things: which clients can act as me, with what, and until when; how do I stop one; and how do I connect a new one.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Under Your account, from the account menu</b><span class="t">"Access tokens" is a new entry in the account menu, above Sign out (state A). The page sits outside the workspaces, so no switcher entry is selected. Every signed-in user has it, read-only users included, since a read-only user's token can still read. Its address is <code>/account/tokens</code>.</span><span class="fix">AC-430 · AC-252 · rule 59</span></div></li>
+      <li><span class="n">2</span><div><b>New token</b><span class="t">Opens the dialog of screen 2.</span><span class="fix">AC-430</span></div></li>
+      <li><span class="n">3</span><div><b>Which groups a token uses</b><span class="t">Those of the person's latest web sign-in, as R78-3 decided. The note says so, and what to do when groups change.</span><span class="fix">AC-471</span></div></li>
+      <li><span class="n">4</span><div><b>Each working token, with what AC-430 lists</b><span class="t">Its name, its scopes as text tags, when it was made, when it expires (with how long is left), and when it was last used ("Never" until a client calls). No part of the token's text is shown, not even a prefix. Newest first.</span><span class="fix">AC-430 · AC-468 · AC-469 · rule 83</span></div></li>
+      <li><span class="n">5</span><div><b>Scopes as text, never colour</b><span class="t">Each scope is a 12 px text tag in a 3 px-radius outline, the PK / FK tag of design 17: Read, Workspace edit, Proposals and jobs.</span><span class="fix">AC-469 · rules 1, 3</span></div></li>
+      <li><span class="n">6</span><div><b>Revoke</b><span class="t">Asks first, naming the token (state E). From then on every request bearing it is answered 401 and runs nothing. There's no Undo: a revoked token can't work again, and a new one is a new token.</span><span class="fix">AC-431 · rule 85</span></div></li>
+      <li><span class="n">7</span><div><b>No longer working</b><span class="t">Expired and revoked tokens, each with its state as an icon and a label, and who revoked it. Remove takes one off the list; the audit trail keeps its record (Q1).</span><span class="fix">AC-430 · AC-431 · AC-470 · rule 3 · Q1</span></div></li>
+      <li><span class="n">8</span><div><b>Shown once, kept unusable</b><span class="t">The page says plainly that the text can't be shown again, to anyone, and what to do if it's lost.</span><span class="fix">AC-430 · AC-442</span></div></li>
+      <li><span class="n">9</span><div><b>The server URL</b><span class="t">The MCP host the deployment's Helm values name, serving only <code>/mcp</code> over TLS, with Copy. Q6 covers a deployment that names none.</span><span class="fix">AC-476 · AC-434 · Q6</span></div></li>
+      <li><span class="n">10</span><div><b>How to connect Claude Code</b><span class="t">Over its HTTP transport, with the token in the <code>Authorization</code> header, as the research found Claude Code supports (<code>--transport http</code>, <code>--header</code>). The second tab is Claude.ai and Claude Desktop (state G).</span><span class="fix">AC-444 · AC-435 · research mcp-typescript-sdk.md, "Remote support by client"</span></div></li>
+      <li><span class="n">11</span><div><b>What a token can and can't do</b><span class="t">The three scopes in a sentence each, and what no token does, whatever its scopes: approve or reject, data sources, the SQL runner, the audit trail, tokens.</span><span class="fix">AC-437 … AC-441 · AC-469 · AC-477</span></div></li>
+      <li><span class="n">12</span><div><b>The limits a client meets</b><span class="t">The rate, the page size and the audit. The rate is the deployment's setting, so the page shows the configured number, 60 where none is set.</span><span class="fix">AC-472 · AC-475 · AC-478</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= SCREEN 2 ======================= -->
+  <div class="screen-label">Screen 2 · New token: a name, the three scopes, and 7, 30 or 90 days</div>
+  <div class="screen" id="s2">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span></nav>
+      <span class="spacer"></span>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">2</span></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="pg">
+      <main class="pgmain">
+        <div class="crumbs"><svg class="s"><use href="#i-person"/></svg>Your account <svg class="s"><use href="#i-chev"/></svg>Access tokens</div>
+        <div class="head"><h1>Access tokens</h1><span class="spacer"></span><span class="btn primary">New token</span></div>
+        <div class="card"><table class="grid-table"><thead><tr><th>Name</th><th>Scopes</th><th>Made</th><th>Expires</th><th>Last used</th></tr></thead><tbody><tr><td>Claude Code · laptop</td><td>Read, Workspace edit</td><td>2 Oct 2026</td><td>1 Nov 2026</td><td>Today 14:05</td></tr><tr><td>Claude.ai connector</td><td>Read, Workspace edit, Proposals and jobs</td><td>17 Sep 2026</td><td>16 Dec 2026</td><td>Yesterday 18:20</td></tr></tbody></table></div>
+      </main>
+      <aside class="pane"><div class="panehead"><h2>Connect a client</h2></div></aside>
+    </div>
+    <div class="scrim"></div>
+    <div class="dialog" role="dialog" aria-labelledby="s2-h" style="left:460px;top:120px;width:520px">
+      <h2 id="s2-h"><svg class="i" style="color:var(--text-secondary)"><use href="#i-key"/></svg>New access token</h2>
+      <div class="fld"><span class="lbl">Name <span class="req">· names it in your list and in the audit trail</span></span><span class="input focus">Claude Code · desktop</span></div>
+      <div class="fld"><span class="lbl">Scopes</span>
+        <div class="scoperow"><span class="check lock"><svg class="xs"><use href="#i-check"/></svg></span><div><b>Read</b> <span class="badge sm"><svg class="xs"><use href="#i-lock"/></svg>Always included</span><span class="d">List folders and their items, read the definitions of dashboards, charts, cubes, views and data sources, and query cubes and views.</span></div></div>
+        <div class="scoperow"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span><div><b>Workspace edit</b><span class="d">Copy items into My workspace, and create, change or delete dashboards, charts, cubes and views there. Nothing else.</span></div></div>
+        <div class="scoperow"><span class="check"></span><div><b>Proposals and jobs</b><span class="d">Propose workspace items to their folders, withdraw and list your proposals; list jobs, builds and schedules, with Run now and Cancel where you may.</span></div></div>
+      </div>
+      <div class="fld"><span class="lbl">Expires in</span><div style="display:flex;gap:10px;align-items:center"><span class="seg"><span>7 days</span><span class="on">30 days</span><span>90 days</span></span><span class="xs sec">on 16 Nov 2026</span></div><p class="help">No token lasts longer than 90 days.</p></div>
+      <div class="notebar plain"><svg class="s" style="margin-top:1px"><use href="#i-person"/></svg><span>It acts as you, with the groups of your latest sign-in. Whatever its scopes, it never approves or rejects a proposal, changes a data source, runs SQL or reads the audit trail.</span></div>
+      <div class="acts"><span class="btn">Cancel</span><span class="btn primary">Create token</span></div>
+    </div>
+
+    <span class="pin" style="left:436px;top:176px">1</span>
+    <span class="pin" style="left:436px;top:262px">2</span>
+    <span class="pin" style="left:436px;top:340px">3</span>
+    <span class="pin" style="left:436px;top:492px">4</span>
+    <span class="pin" style="left:436px;top:570px">5</span>
+    <span class="pin" style="left:986px;top:632px">6</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 2: making a token</h2>
+    <p>A 520 px dialog, the size of the workspace dialogs (direction §7e). It asks for exactly what AC-430 requires: a name, one or more scopes, and an expiry.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>A name, required</b><span class="t">It names the token in the owner's list, the Super-Admin's list and the audit trail, so a person can tell their clients apart. Focus starts here. Its rules are Q2: drawn as required, at most 100 characters, and unique among the owner's working tokens (B1).</span><span class="fix">AC-430 · AC-442 · Q2</span></div></li>
+      <li><span class="n">2</span><div><b>Read, always included</b><span class="t">Checked and locked, with "Always included" as a label and a lock icon, so the token always has at least one scope.</span><span class="fix">AC-469 · AC-430</span></div></li>
+      <li><span class="n">3</span><div><b>Workspace edit, and Proposals and jobs</b><span class="t">Exactly three scopes, each with what it allows in one sentence. Both start unchecked; Wren has checked Workspace edit here.</span><span class="fix">AC-469 · AC-438 · AC-439 · AC-477</span></div></li>
+      <li><span class="n">4</span><div><b>7, 30 or 90 days, 30 to start</b><span class="t">A segmented control with the date it gives. There's no other choice and no "never". The API refuses anything longer than 90 days with its reason.</span><span class="fix">AC-468</span></div></li>
+      <li><span class="n">5</span><div><b>It acts as you</b><span class="t">The groups it uses, and what no token does, said before the token exists.</span><span class="fix">AC-432 · AC-440 · AC-441 · AC-471</span></div></li>
+      <li><span class="n">6</span><div><b>Create token</b><span class="t">Makes it, records it in the audit trail, and turns the dialog into screen 3. Esc or Cancel closes, asking first if a name was typed (rule 85).</span><span class="fix">AC-430 · AC-442 · rule 85</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= SCREEN 3 ======================= -->
+  <div class="screen-label">Screen 3 · The token, shown once, with Copy and the Claude Code command</div>
+  <div class="screen" id="s3">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span></nav>
+      <span class="spacer"></span>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">2</span></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="pg">
+      <main class="pgmain">
+        <div class="crumbs"><svg class="s"><use href="#i-person"/></svg>Your account <svg class="s"><use href="#i-chev"/></svg>Access tokens</div>
+        <div class="head"><h1>Access tokens</h1><span class="spacer"></span><span class="btn primary">New token</span></div>
+        <div class="card"><table class="grid-table"><thead><tr><th>Name</th><th>Scopes</th><th>Made</th><th>Expires</th><th>Last used</th></tr></thead><tbody><tr class="new"><td><b>Claude Code · desktop</b></td><td>Read, Workspace edit</td><td>Today</td><td>16 Nov 2026</td><td class="sec">Never</td></tr><tr><td>Claude Code · laptop</td><td>Read, Workspace edit</td><td>2 Oct 2026</td><td>1 Nov 2026</td><td>Today 14:05</td></tr><tr><td>Claude.ai connector</td><td>Read, Workspace edit, Proposals and jobs</td><td>17 Sep 2026</td><td>16 Dec 2026</td><td>Yesterday 18:20</td></tr></tbody></table></div>
+      </main>
+      <aside class="pane"><div class="panehead"><h2>Connect a client</h2></div></aside>
+    </div>
+    <div class="scrim"></div>
+    <div class="dialog" role="dialog" aria-labelledby="s3-h" style="left:420px;top:100px;width:600px">
+      <h2 id="s3-h"><svg class="i"><use href="#s-ok"/></svg>Copy your token now</h2>
+      <p><b>Claude Code · desktop</b> · Read, Workspace edit · expires 16 Nov 2026</p>
+      <div class="notebar warn"><svg class="s" style="margin-top:1px"><use href="#s-warn"/></svg><span><b>This is the only time wechart shows it.</b> Copy it now and keep it somewhere safe, such as a password manager. Anyone holding it can act as you until it expires or you revoke it.</span></div>
+      <div class="fld"><span class="lbl">Your token</span><div class="tokenbox"><span class="tk">wct_7Kq2vN8xPz4LrT0aWm3sY6dHc9FbJ1eQ</span><span class="btn md primary"><svg class="s"><use href="#i-copy"/></svg>Copy</span></div></div>
+      <div class="fld"><span class="lbl"><svg class="s"><use href="#i-term"/></svg>Claude Code <span class="req">· run in a terminal, with this token already in it</span></span><div class="codebox"><pre class="code">claude mcp add --transport http wechart https://mcp.wechart.example.com/mcp --header "Authorization: Bearer wct_7Kq2vN8xPz4LrT0aWm3sY6dHc9FbJ1eQ"</pre><span class="btn md"><svg class="s"><use href="#i-copy"/></svg>Copy command</span></div></div>
+      <div class="fld"><span class="lbl"><svg class="s"><use href="#i-plug"/></svg>Claude.ai and Claude Desktop</span><p class="help">Add a custom connector with the server URL <span class="mono">https://mcp.wechart.example.com/mcp</span>, and give this token as its fixed credential. <span class="btn link">How to connect</span></p></div>
+      <div class="acts"><span class="xs sec" style="margin-right:auto">Closing hides it for good.</span><span class="btn">Done</span></div>
+    </div>
+
+    <span class="pin" style="left:396px;top:154px">1</span>
+    <span class="pin" style="left:396px;top:190px">2</span>
+    <span class="pin" style="left:396px;top:284px">3</span>
+    <span class="pin" style="left:396px;top:352px">4</span>
+    <span class="pin" style="left:396px;top:434px">5</span>
+    <span class="pin" style="left:1024px;top:498px">6</span>
+    <span class="pin" style="left:0;top:164px">7</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 3: the token, once</h2>
+    <p>The dialog turns into the one moment the token's text exists on screen. Everything the person needs to use it is here, so they don't have to come back for it.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Made, with what and until when</b><span class="t">The name, scopes and expiry, so the person knows which token they're copying.</span><span class="fix">AC-430 · AC-468</span></div></li>
+      <li><span class="n">2</span><div><b>Only now</b><span class="t">With the warning icon and label: the text is never shown again, and anyone holding it acts as you.</span><span class="fix">AC-430 · rule 3</span></div></li>
+      <li><span class="n">3</span><div><b>The token and Copy</b><span class="t">In the code face, selectable, with Copy as the primary action. After Copy, the button reads "Copied" with its icon (C1). The text and format of a token are illustrative.</span><span class="fix">AC-430</span></div></li>
+      <li><span class="n">4</span><div><b>The Claude Code command, filled in</b><span class="t">The same command as the help, with this token in it, and Copy command (proposal P2).</span><span class="fix">AC-444 · P2</span></div></li>
+      <li><span class="n">5</span><div><b>Claude.ai and Claude Desktop</b><span class="t">A custom connector with the URL and the token as its fixed credential, as the research found these connectors take. How to connect opens the help's second tab (state G2, Q7).</span><span class="fix">AC-445 · research mcp-typescript-sdk.md · Q7</span></div></li>
+      <li><span class="n">6</span><div><b>Done</b><span class="t">Closes it for good. If neither Copy was used, it asks first (C2, Q3). Esc does the same as Done.</span><span class="fix">AC-430 · rule 85 · Q3</span></div></li>
+      <li><span class="n">7</span><div><b>The new row, behind</b><span class="t">Tinted until the dialog closes, with "Never" in Last used. The row holds no text of the token, and no way to show it.</span><span class="fix">AC-430</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= SCREEN 4 ======================= -->
+  <div class="screen-label">Screen 4 · Security › Access tokens, as a Super-Admin sees it, revoking one of Wren's</div>
+  <div class="screen" id="s4">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span><span class="on">Security</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">5</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">AA</span>Ada Admin</span>
+    </div>
+    <main style="padding:14px 24px 0;display:flex;flex-direction:column;gap:10px;height:852px">
+      <div class="head"><h1>Security</h1></div>
+      <div class="tabs"><span>Policies</span><span>Preview as groups</span><span>Audit trail</span><span class="on"><svg class="s"><use href="#i-key"/></svg>Access tokens</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="fbtn">User <b>Anyone</b><svg class="s"><use href="#i-chevd"/></svg></span>
+        <span class="fbtn">State <b>Working</b><svg class="s"><use href="#i-chevd"/></svg></span>
+        <span class="fbtn">Scope <b>Any</b><svg class="s"><use href="#i-chevd"/></svg></span>
+        <span class="find"><svg class="s"><use href="#i-search"/></svg>Search token names</span>
+        <span class="spacer"></span><span class="xs sec">11 working tokens · 7 people · newest first</span>
+      </div>
+      <div class="card">
+        <table class="grid-table">
+          <thead><tr><th style="width:190px">Owner</th><th style="width:220px">Name</th><th>Scopes</th><th style="width:110px">Made</th><th style="width:150px">Expires</th><th style="width:130px">Last used</th><th style="width:84px"></th></tr></thead>
+          <tbody>
+            <tr><td><span style="display:inline-flex;gap:8px;align-items:center"><span class="avatar" style="width:22px;height:22px">RR</span>Rae Reader</span></td><td>Reading from Claude</td><td><span class="scopes"><span class="scope">Read</span></span></td><td>16 Oct 2026</td><td>15 Jan 2027</td><td>Today 09:12</td><td class="r"><span class="btn sm danger">Revoke</span></td></tr>
+            <tr><td><span style="display:inline-flex;gap:8px;align-items:center"><span class="avatar" style="width:22px;height:22px">WW</span>Wren Writer</span></td><td>Reading only</td><td><span class="scopes"><span class="scope">Read</span></span></td><td>15 Oct 2026</td><td>22 Oct 2026</td><td class="sec">Never</td><td class="r"><span class="btn sm danger">Revoke</span></td></tr>
+            <tr><td><span style="display:inline-flex;gap:8px;align-items:center"><span class="avatar" style="width:22px;height:22px">AA</span>Ada Admin <span class="sec">· you</span></span></td><td>Claude Code · admin box</td><td><span class="scopes"><span class="scope">Read</span><span class="scope">Proposals and jobs</span></span></td><td>10 Oct 2026</td><td>17 Oct 2026 <span class="sec">· today</span></td><td>Today 11:40</td><td class="r"><span class="btn sm danger">Revoke</span></td></tr>
+            <tr><td><span style="display:inline-flex;gap:8px;align-items:center"><span class="avatar" style="width:22px;height:22px">FW</span>Finn Writer</span></td><td>Cursor</td><td><span class="scopes"><span class="scope">Read</span><span class="scope">Workspace edit</span></span></td><td>6 Oct 2026</td><td>5 Nov 2026</td><td>Today 13:58</td><td class="r"><span class="btn sm danger">Revoke</span></td></tr>
+            <tr class="hover"><td><span style="display:inline-flex;gap:8px;align-items:center"><span class="avatar" style="width:22px;height:22px">WW</span>Wren Writer</span></td><td>Claude Code · laptop</td><td><span class="scopes"><span class="scope">Read</span><span class="scope">Workspace edit</span></span></td><td>2 Oct 2026</td><td>1 Nov 2026</td><td>Today 14:05</td><td class="r"><span class="btn sm danger ring">Revoke</span></td></tr>
+            <tr><td><span style="display:inline-flex;gap:8px;align-items:center"><span class="avatar" style="width:22px;height:22px">MM</span>Mo Modeller</span></td><td>dbt bridge</td><td><span class="scopes"><span class="scope">Read</span><span class="scope">Workspace edit</span><span class="scope">Proposals and jobs</span></span></td><td>28 Sep 2026</td><td>27 Dec 2026</td><td>Today 06:00</td><td class="r"><span class="btn sm danger">Revoke</span></td></tr>
+            <tr><td><span style="display:inline-flex;gap:8px;align-items:center"><span class="avatar" style="width:22px;height:22px">WW</span>Wren Writer</span></td><td>Claude.ai connector</td><td><span class="scopes"><span class="scope">Read</span><span class="scope">Workspace edit</span><span class="scope">Proposals and jobs</span></span></td><td>17 Sep 2026</td><td>16 Dec 2026</td><td>Yesterday 18:20</td><td class="r"><span class="btn sm danger">Revoke</span></td></tr>
+            <tr><td colspan="7" class="sec">4 more</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="help" style="max-width:1000px"><b style="color:var(--text-primary)">A token's text is never shown here,</b> or anywhere after it's made. Revoking one stops every client using it at once. Each revoke is recorded in the audit trail with your name.</p>
+    </main>
+    <div class="scrim"></div>
+    <div class="dialog" role="alertdialog" aria-labelledby="s4-h" style="left:460px;top:260px;width:520px">
+      <h2 id="s4-h">Revoke Wren Writer's token "Claude Code · laptop"?</h2>
+      <p>Every MCP client using it stops working at once: wechart answers it with 401 and runs nothing. It can't be turned back on; Wren can make a new one.</p>
+      <dl class="kv" style="grid-template-columns:90px 1fr;padding:10px 12px;background:var(--bg-subtle);border-radius:6px"><dt>Scopes</dt><dd>Read, Workspace edit</dd><dt>Last used</dt><dd>Today 14:05</dd><dt>Wren sees</dt><dd>"Revoked · by Ada Admin, 17 Oct" in her list</dd></dl>
+      <div class="acts"><span class="btn ring">Cancel</span><span class="btn danger solid">Revoke token</span></div>
+    </div>
+
+    <span class="pin" style="left:438px;top:108px">1</span>
+    <span class="pin" style="left:0;top:152px">2</span>
+    <span class="pin" style="left:0;top:192px">3</span>
+    <span class="pin" style="left:1180px;top:192px">4</span>
+    <span class="pin" style="left:1412px;top:358px">5</span>
+    <span class="pin" style="left:0;top:502px">6</span>
+    <span class="pin" style="left:436px;top:280px">7</span>
+    <span class="pin" style="left:436px;top:390px">8</span>
+    <span class="pin" style="left:986px;top:482px">9</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 4: a Super-Admin's oversight</h2>
+    <p>R78-4 lets Super-Admins list and revoke any user's tokens. It sits in Security, beside the audit trail that records what tokens do, and shows a Super-Admin nothing a token's owner doesn't see, never the text.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Security › Access tokens</b><span class="t">A fourth tab after Audit trail, at <code>/security/tokens</code>, for Super-Admins only. Anyone else opening the address gets the Not found page (A4).</span><span class="fix">AC-470 · rule 67 · rule 82</span></div></li>
+      <li><span class="n">2</span><div><b>Filters</b><span class="t">User, State (Working, or No longer working) and Scope, combined with AND, as the audit trail's are, and a search over token names.</span><span class="fix">AC-470 · rule 82</span></div></li>
+      <li><span class="n">3</span><div><b>Owner first</b><span class="t">Every user's tokens, the Super-Admin's own included and marked "you", newest first.</span><span class="fix">AC-470</span></div></li>
+      <li><span class="n">4</span><div><b>The same fields as the owner's list</b><span class="t">Name, scopes, made, expires and last used. A token expiring today says so. No text, no prefix.</span><span class="fix">AC-470 · AC-430</span></div></li>
+      <li><span class="n">5</span><div><b>Revoke, on any row</b><span class="t">With the effect of AC-431. Proposal P1 adds a link to the token's calls in the audit trail.</span><span class="fix">AC-470 · AC-431 · P1</span></div></li>
+      <li><span class="n">6</span><div><b>Never the text</b><span class="t">Said under the list, so a Super-Admin doesn't look for a way to see a token.</span><span class="fix">AC-470 · AC-430</span></div></li>
+      <li><span class="n">7</span><div><b>Revoke names the owner and the token</b><span class="t">An alert dialog with focus on Cancel, as design 15's dialogs are. It says what stops, and that it can't be undone.</span><span class="fix">AC-470 · AC-431 · rule 85</span></div></li>
+      <li><span class="n">8</span><div><b>What the owner will see</b><span class="t">The token moves to their "No longer working", revoked by this Super-Admin. Whether to name the Super-Admin, and whether to tell the owner any other way, is Q4.</span><span class="fix">AC-470 · Q4</span></div></li>
+      <li><span class="n">9</span><div><b>Revoke token</b><span class="t">Applies at once, with no proposal, and records a Token revoked event naming who revoked it (state I).</span><span class="fix">AC-431 · AC-442</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= STATES ======================= -->
+  <section class="states">
+    <h2>States A–J</h2>
+    <p>One state for each part of the brief, each naming the criteria it shows. Unless a frame says otherwise, the viewer is Wren, a read-write member of Sales / EMEA, with sign-in on.</p>
+    <div class="stategrid">
+
+      <!-- A -->
+      <div class="state wide">
+        <h3>A · Where tokens live: the account menu, the single-user chip, and Security (AC-430, AC-470, AC-479, AC-252, AC-254)</h3>
+        <p>Every signed-in person reaches their own tokens from the account menu. Super-Admins also get every user's in Security. With sign-in off, the single user reaches theirs from the Single-user mode chip.</p>
+        <div class="row3">
+          <div><p class="cap">A1 · The account menu, for anyone signed in</p>
+            <div class="frame" style="height:220px;background:var(--bg-surface)">
+              <div class="topbar"><span class="spacer"></span><span class="acct open"><span class="avatar">WW</span>Wren Writer<svg class="s"><use href="#i-chevd"/></svg></span></div>
+              <div class="menu" style="right:8px;top:46px;width:280px"><div class="who"><b>Wren Writer</b><span class="xs sec mono">wren@corp.example</span></div><div class="msep"></div><div class="mi hl"><svg class="s"><use href="#i-key"/></svg>Access tokens</div><div class="msep"></div><div class="mi"><svg class="s"><use href="#i-signout"/></svg>Sign out</div></div>
+            </div>
+          </div>
+          <div><p class="cap">A2 · A Super-Admin's: the same entry, beside the badge</p>
+            <div class="frame" style="height:220px;background:var(--bg-surface)">
+              <div class="topbar"><span class="spacer"></span><span class="acct open"><span class="avatar">AA</span>Ada Admin<svg class="s"><use href="#i-chevd"/></svg></span></div>
+              <div class="menu" style="right:8px;top:46px;width:280px"><div class="who"><b>Ada Admin</b><span class="xs sec mono">ada@corp.example</span><span style="margin-top:6px"><span class="badge accent"><svg class="s"><use href="#i-shield"/></svg>Super-Admin</span></span></div><div class="msep"></div><div class="mi hl"><svg class="s"><use href="#i-key"/></svg>Access tokens</div><div class="msep"></div><div class="mi"><svg class="s"><use href="#i-signout"/></svg>Sign out</div></div>
+            </div>
+            <p class="help" style="margin-top:6px">Her own tokens are on the same page as everyone's. Every user's are in Security › Access tokens (screen 4).</p>
+          </div>
+          <div><p class="cap">A3 · Sign-in off: the Single-user mode chip's menu gains the entry</p>
+            <div class="frame" style="height:220px;background:var(--bg-surface)">
+              <div class="topbar"><span class="spacer"></span><span class="chipwarn"><svg class="s"><use href="#i-unlock"/></svg>Single-user mode<svg class="s"><use href="#i-chevd"/></svg></span></div>
+              <div class="menu" style="right:8px;top:46px;width:320px"><div class="who"><b>Sign-in is off</b><span class="xs sec">wechart runs as one user with every permission. Your proposals still wait for your approval in Reviews.</span></div><div class="msep"></div><div class="mi hl"><svg class="s"><use href="#i-key"/></svg>Access tokens</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="row2" style="margin-top:16px">
+          <div><p class="cap">A4 · Anyone but a Super-Admin at <span class="mono">/security/tokens</span></p>
+            <div class="frame" style="background:var(--bg-surface)"><div class="notfound"><b>Not found</b><span class="xs sec">There's nothing here, or you don't have access to it.</span><span class="btn sm">Go to Explore</span></div></div>
+          </div>
+          <div><p class="cap">A5 · A read-only user: the page, and a token that can only read</p>
+            <div class="frame" style="background:var(--bg-surface);padding:12px;display:grid;gap:8px">
+              <div class="scoperow"><span class="check lock"><svg class="xs"><use href="#i-check"/></svg></span><div><b>Read</b> <span class="badge sm"><svg class="xs"><use href="#i-lock"/></svg>Always included</span></div></div>
+              <div class="scoperow" style="opacity:.55"><span class="check"></span><div><b>Workspace edit</b><span class="d">You have no My workspace, so this wouldn't let a client do anything.</span></div></div>
+              <p class="help">Q10 asks whether to offer the other scopes, disabled with the reason as drawn, or to leave them out for read-only users.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- B -->
+      <div class="state wide">
+        <h3>B · Making a token: the name, the scopes, the expiry (AC-430, AC-468, AC-469)</h3>
+        <p>Create token is held until there's a name. Read can't be unchecked, so there's always a scope. 90 days is the longest, in the page and in the API.</p>
+        <div class="row3">
+          <div><p class="cap">B1 · No name, or one already used</p>
+            <div class="frame" style="background:var(--bg-surface);padding:14px;display:grid;gap:10px">
+              <div class="fld"><span class="lbl">Name</span><span class="input bad ph">Name it after the client</span><span class="err-t"><svg class="s"><use href="#s-err"/></svg>Give the token a name.</span></div>
+              <div class="fld"><span class="lbl">Name</span><span class="input bad">Claude.ai connector</span><span class="err-t"><svg class="s"><use href="#s-err"/></svg>You already have a working token named "Claude.ai connector".</span></div>
+              <div class="acts"><span class="btn">Cancel</span><span class="btn primary dis">Create token</span></div>
+            </div>
+          </div>
+          <div><p class="cap">B2 · 90 days, the longest</p>
+            <div class="frame" style="background:var(--bg-surface);padding:14px;display:grid;gap:8px">
+              <div class="fld"><span class="lbl">Expires in</span><div style="display:flex;gap:10px;align-items:center"><span class="seg"><span>7 days</span><span>30 days</span><span class="on">90 days</span></span><span class="xs sec">on 15 Jan 2027</span></div><p class="help">No token lasts longer than 90 days.</p></div>
+              <div class="msep"></div>
+              <p class="help">From the API, a longer expiry is refused with "A token lasts 7, 30 or 90 days." and no token is made.</p>
+            </div>
+          </div>
+          <div><p class="cap">B3 · Making it fails</p>
+            <div class="frame" style="background:var(--bg-surface);padding:14px;display:grid;gap:10px">
+              <div class="notebar err"><svg class="s" style="margin-top:1px"><use href="#s-err"/></svg><span>The token wasn't made: wechart didn't answer. Nothing was kept. <span class="btn link">Try again</span></span></div>
+              <div class="acts"><span class="btn">Cancel</span><span class="btn primary">Create token</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- C -->
+      <div class="state wide">
+        <h3>C · Shown once: copied, closing without copying, and afterwards (AC-430)</h3>
+        <p>The text exists on screen only in this dialog. After it closes, no screen, list or API returns it.</p>
+        <div class="row3">
+          <div><p class="cap">C1 · Copied</p>
+            <div class="frame" style="background:var(--bg-surface);padding:14px">
+              <div class="tokenbox"><span class="tk">wct_7Kq2vN8xPz4LrT0aWm3sY6dHc9FbJ1eQ</span><span class="btn md"><svg class="s" style="color:var(--ok-icon)"><use href="#i-check"/></svg>Copied</span></div>
+            </div>
+          </div>
+          <div><p class="cap">C2 · Done before copying: asked first</p>
+            <div class="frame" style="height:200px">
+              <div class="dialog" role="alertdialog" style="left:12px;right:12px;top:12px"><h2>Close without copying?</h2><p>You won't be able to see this token again. You'd have to revoke it and make another.</p><div class="acts"><span class="btn ring">Go back and copy it</span><span class="btn">Close</span></div></div>
+            </div>
+          </div>
+          <div><p class="cap">C3 · Afterwards: the row, with no way to show the text</p>
+            <div class="frame" style="background:var(--bg-surface)"><table class="grid-table"><tbody><tr><td><b>Claude Code · desktop</b></td><td><span class="scope">Read</span> <span class="scope">Workspace edit</span></td><td class="sec">Never</td><td class="r"><span class="btn sm danger">Revoke</span></td></tr></tbody></table></div>
+            <p class="help" style="margin-top:6px">There is no Show, Copy or Regenerate. A lost token is revoked and replaced.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- D -->
+      <div class="state wide">
+        <h3>D · The list: empty, loading, error, expiring, expired, revoked, never used (AC-430, AC-431, AC-468)</h3>
+        <div class="row3">
+          <div><p class="cap">D1 · No tokens yet</p>
+            <div class="frame" style="background:var(--bg-surface)"><div class="empty"><svg class="i"><use href="#i-key"/></svg><b>No access tokens</b><span>Make one to let Claude Code or Claude.ai work in wechart as you.</span><span class="btn sm primary"><svg class="s"><use href="#i-plus"/></svg>New token</span></div></div>
+          </div>
+          <div><p class="cap">D2 · Loading, and an error</p>
+            <div class="frame" style="background:var(--bg-surface);padding:12px;display:grid;gap:8px">
+              <div class="skel" style="width:80%"></div><div class="skel" style="width:70%"></div><div class="skel" style="width:75%"></div>
+              <div class="msep"></div>
+              <span class="err-t"><svg class="s"><use href="#s-err"/></svg><span>Your tokens couldn't be read. <span class="btn link">Try again</span></span></span>
+            </div>
+          </div>
+          <div><p class="cap">D3 · Each state, as an icon and a label</p>
+            <div class="frame" style="background:var(--bg-surface)"><table class="grid-table"><tbody>
+              <tr><td>Working</td><td>1 Nov 2026 <span class="sec">· in 15 days</span></td></tr>
+              <tr><td>Expires today</td><td><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Expires today <span class="t">· 17:30</span></span></td></tr>
+              <tr><td>Expired</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Expired <span class="t">· 31 Aug</span></span></td></tr>
+              <tr><td>Revoked by you</td><td><span class="status err"><svg class="s"><use href="#s-revoked"/></svg>Revoked <span class="t">· by you, 3 Oct</span></span></td></tr>
+              <tr><td>Revoked by a Super-Admin</td><td><span class="status err"><svg class="s"><use href="#s-revoked"/></svg>Revoked <span class="t">· by Ada Admin, 12 Oct</span></span></td></tr>
+              <tr><td>Never used</td><td class="sec">Last used: Never</td></tr>
+            </tbody></table></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- E -->
+      <div class="state wide">
+        <h3>E · Revoking your own (AC-431)</h3>
+        <div class="row3">
+          <div><p class="cap">E1 · Asked first, naming it</p>
+            <div class="frame" style="height:210px"><div class="dialog" role="alertdialog" style="left:12px;right:12px;top:12px"><h2>Revoke "Claude Code · laptop"?</h2><p>Every client using it stops working at once. It can't be turned back on; you can make a new one.</p><div class="acts"><span class="btn ring">Cancel</span><span class="btn danger solid">Revoke token</span></div></div></div>
+          </div>
+          <div><p class="cap">E2 · Done: a toast, no Undo</p>
+            <div class="frame" style="height:100px"><div class="toast" style="left:12px;right:12px;top:12px"><svg class="s" style="margin-top:3px;color:var(--ok-icon)"><use href="#s-ok"/></svg><span>Revoked "Claude Code · laptop". Clients using it now get 401.</span></div></div>
+          </div>
+          <div><p class="cap">E3 · What the client sees</p>
+            <div class="frame" style="background:var(--bg-surface);padding:12px"><pre class="code">HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer</pre><p class="help" style="margin-top:6px">The same for an expired token, a token sent anywhere but the Authorization header, or a request carrying only the web app's session cookie. Nothing runs.</p></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- F -->
+      <div class="state wide">
+        <h3>F · Security › Access tokens: filtered, ended, and empty (AC-470)</h3>
+        <div class="row3">
+          <div><p class="cap">F1 · One user's, as filter chips</p>
+            <div class="frame" style="background:var(--bg-surface);padding:10px;display:grid;gap:8px">
+              <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge accent">User: Wren Writer</span><span class="badge accent">State: Working</span><span class="btn link">Clear filters</span></div>
+              <table class="grid-table"><tbody><tr><td>Reading only</td><td><span class="scope">Read</span></td><td class="sec">Never</td></tr><tr><td>Claude Code · laptop</td><td><span class="scope">Read</span> <span class="scope">Workspace edit</span></td><td>Today 14:05</td></tr><tr><td>Claude.ai connector</td><td><span class="scope">Read</span> +2</td><td>Yesterday</td></tr></tbody></table>
+            </div>
+          </div>
+          <div><p class="cap">F2 · No longer working</p>
+            <div class="frame" style="background:var(--bg-surface)"><table class="grid-table"><tbody><tr class="ended"><td>Wren Writer</td><td>CI experiment</td><td><span class="status err"><svg class="s"><use href="#s-revoked"/></svg>Revoked <span class="t">· by you</span></span></td></tr><tr class="ended"><td>Finn Writer</td><td>Old laptop</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Expired <span class="t">· 2 Oct</span></span></td></tr></tbody></table></div>
+          </div>
+          <div><p class="cap">F3 · None match</p>
+            <div class="frame" style="background:var(--bg-surface)"><div class="empty"><svg class="i"><use href="#i-key"/></svg><span>No token matches these filters.</span><span class="btn link">Clear filters</span></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- G -->
+      <div class="state wide">
+        <h3>G · How to connect: Claude Code, Claude.ai and Claude Desktop, and a deployment with no MCP host (AC-444, AC-445, AC-476)</h3>
+        <p>The steps say only what <code>docs/research/mcp-typescript-sdk.md</code> supports. The exact wording of Claude.ai's connector form isn't researched yet (Q7), so the second tab links to Anthropic's own article rather than naming its fields.</p>
+        <div class="row3">
+          <div><p class="cap">G1 · Claude Code</p>
+            <div class="frame" style="background:var(--bg-surface)"><div class="sect"><ol class="steps"><li>Make a token.</li><li>In a terminal: <pre class="code" style="margin-top:6px">claude mcp add --transport http wechart https://mcp.wechart.example.com/mcp --header "Authorization: Bearer ‹your token›"</pre></li><li>Ask Claude Code to list your wechart folders.</li></ol></div></div>
+          </div>
+          <div><p class="cap">G2 · Claude.ai and Claude Desktop</p>
+            <div class="frame" style="background:var(--bg-surface)"><div class="sect"><ol class="steps"><li>Make a token.</li><li>In Claude, add a <b>custom connector</b> with the server URL <span class="mono">https://mcp.wechart.example.com/mcp</span>.</li><li>Give your token as the connector's <b>fixed credential</b>, which Claude sends on every request.</li></ol>
+              <div class="notebar plain"><svg class="s" style="margin-top:1px"><use href="#i-info"/></svg><span>Claude.ai and Claude Desktop connect from Anthropic's cloud, not from your computer. Your administrator lets Anthropic's published addresses reach this host.</span></div>
+              <span class="btn link"><svg class="s" style="vertical-align:-3px"><use href="#i-ext"/></svg> Anthropic's guide to custom connectors</span></div></div>
+          </div>
+          <div><p class="cap">G3 · No MCP host set in the deployment</p>
+            <div class="frame" style="background:var(--bg-surface)"><div class="sect"><h3>Server URL</h3><div class="notebar warn"><svg class="s" style="margin-top:1px"><use href="#s-warn"/></svg><span>No MCP host is set for this deployment, so Claude.ai and Claude Desktop can't reach wechart. An administrator sets it in the Helm values.</span></div><p class="help">Drawn for Q6: what Claude Code connects to here is your call.</p></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- H -->
+      <div class="state">
+        <h3>H · Sign-in off: tokens act as the single user (AC-479)</h3>
+        <div class="frame" style="background:var(--bg-surface);padding:12px;display:grid;gap:8px">
+          <div class="notebar warn"><svg class="s" style="margin-top:1px"><use href="#i-unlock"/></svg><span><b>Sign-in is off.</b> A token acts as wechart's single user, with every permission. Everything else on this page applies as it does with sign-in on: the scopes, the expiry, the limits and the audit.</span></div>
+          <p class="help">It replaces the groups note of screen 1, pin 3. There's no Security tab of everyone's tokens to show: there is only one user.</p>
+        </div>
+      </div>
+
+      <!-- I -->
+      <div class="state">
+        <h3>I · In the audit trail (AC-442, AC-478)</h3>
+        <div class="frame" style="background:var(--bg-surface)">
+          <table class="grid-table"><thead><tr><th>Time</th><th>User</th><th>Event</th><th>Details</th></tr></thead><tbody>
+            <tr><td>14:44:02</td><td>Wren Writer</td><td><span class="ev"><svg class="s"><use href="#i-key"/></svg>Token made</span></td><td class="sec">Claude Code · desktop · 30 days</td></tr>
+            <tr><td>14:46:19</td><td>Wren Writer</td><td><span class="ev"><svg class="s"><use href="#i-plug"/></svg>MCP call</span></td><td class="sec">list_folders · Claude Code · desktop · OK</td></tr>
+            <tr><td>14:47:03</td><td>Wren Writer</td><td><span class="ev"><svg class="s"><use href="#i-plug"/></svg>MCP call</span></td><td class="sec">query · Claude Code · desktop · OK</td></tr>
+            <tr><td>14:52:40</td><td>Wren Writer</td><td><span class="ev"><svg class="s"><use href="#i-inbox"/></svg>Proposal</span> <span class="badge sm"><svg class="xs"><use href="#i-plug"/></svg>MCP</span></td><td class="sec">EMEA top accounts → Sales / EMEA · via Claude.ai connector</td></tr>
+            <tr><td>15:02:11</td><td>Ada Admin</td><td><span class="ev"><svg class="s"><use href="#s-revoked"/></svg>Token revoked</span></td><td class="sec">Wren Writer's Claude Code · laptop</td></tr>
+          </tbody></table>
+        </div>
+        <p class="help">No argument values, such as a query's filters, are ever recorded. The tool names are illustrative until the tool list is specified. The proposal's event keeps design 08's name and wording; only the MCP badge and the token's name are new.</p>
+      </div>
+
+      <!-- J -->
+      <div class="state wide">
+        <h3>J · Narrower windows (direction §2)</h3>
+        <p>Below 1,280 px, Connect a client moves under the list, full width. Below 1,024 px, the list's Made column folds under the name, and the table scrolls sideways inside its card; the dialogs keep their width up to the window's, less 16 px each side.</p>
+        <div class="row2">
+          <div><p class="cap">J1 · 900 px</p>
+            <div class="frame" style="width:440px;background:var(--bg-surface);padding:12px;display:grid;gap:8px">
+              <div class="head"><h1 style="font-size:20px">Access tokens</h1><span class="spacer"></span><span class="btn sm primary">New token</span></div>
+              <table class="grid-table"><tbody><tr><td class="two"><b>Claude Code · laptop</b><span class="sub">Made 2 Oct 2026</span></td><td><span class="scope">Read</span> +1</td><td class="r"><span class="btn sm danger">Revoke</span></td></tr></tbody></table>
+              <div class="sect" style="padding:10px 0 0;border-top:1px solid var(--border-subtle)"><h3>Connect a client</h3></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= KEYBOARD ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Keyboard and accessibility</h2>
+    <p>Rule 85 and principle 5. No new shortcut is added: every action is a button, a checkbox or a segmented control, and nothing is bound to a single key.</p>
+    <div class="decision" style="margin-top:0">
+      <table>
+        <thead><tr><th style="width:200px">Moment</th><th style="width:220px">Keys</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>The account menu</td><td><kbd class="k">Enter</kbd> · <kbd class="k">↑</kbd> <kbd class="k">↓</kbd> · <kbd class="k">Esc</kbd></td><td>As built. "Access tokens" is a menu item between the identity and Sign out.</td></tr>
+          <tr><td>New token</td><td><kbd class="k">Tab</kbd> · <kbd class="k">Space</kbd> · <kbd class="k">←</kbd> <kbd class="k">→</kbd> · <kbd class="k">Esc</kbd></td><td>Focus starts on Name. Read is a disabled checkbox read as "Read, always included, checked". The expiry is a radio group: "Expires in, 30 days, on 16 Nov 2026". Esc asks first if a name was typed.</td></tr>
+          <tr><td>The token, shown once</td><td><kbd class="k">Tab</kbd> · <kbd class="k">Enter</kbd></td><td>Focus starts on Copy. The token's text is in a labelled, read-only field ("Your token") so it can be selected and read. "Copied" is announced in a polite live region. Done (and Esc) asks first if nothing was copied.</td></tr>
+          <tr><td>Revoke</td><td><kbd class="k">Tab</kbd> · <kbd class="k">Enter</kbd> · <kbd class="k">Esc</kbd></td><td>Each Revoke is labelled with its token: "Revoke Claude Code · laptop" (and the owner, in Security). The alert dialog starts on Cancel. The toast is announced, and focus moves to the next row's Revoke, or to the list.</td></tr>
+          <tr><td>The help's tabs</td><td><kbd class="k">←</kbd> <kbd class="k">→</kbd></td><td>The APG tabs pattern, as built elsewhere. Each Copy says what it copies: "Copy the server URL", "Copy the Claude Code command".</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Every state as an icon and a label</h3>
+      <div class="legend">
+        <div><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Expires today</span><span></span><span>a working token</span></div>
+        <div><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Expired</span><span></span><span>no longer working</span></div>
+        <div><span class="status err"><svg class="s"><use href="#s-revoked"/></svg>Revoked</span><span></span><span>by you, or by a Super-Admin</span></div>
+        <div><span class="badge sm"><svg class="xs"><use href="#i-lock"/></svg>Always included</span><span></span><span>the Read scope</span></div>
+        <div><span class="status ok"><svg class="s"><use href="#i-check"/></svg>Copied</span><span></span><span>the token, once</span></div>
+        <div><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Only shown now</span><span></span><span>screen 3</span></div>
+        <div><span class="ev"><svg class="s"><use href="#i-key"/></svg>Token made</span> · <span class="ev"><svg class="s"><use href="#s-revoked"/></svg>Token revoked</span><span></span><span>audit events</span></div>
+        <div><span class="ev"><svg class="s"><use href="#i-plug"/></svg>MCP call</span><span></span><span>audit event</span></div>
+        <div><span class="badge sm"><svg class="xs"><use href="#i-plug"/></svg>MCP</span><span></span><span>an event caused through MCP</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= PROPOSALS AND QUESTIONS ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Proposals, and questions for you</h2>
+    <p>The screens draw what F41 asks of a page, with R78's answers. The proposals go beyond it. The questions are gaps the spec doesn't settle; each is drawn one way, and the way drawn is only a default until you decide.</p>
+    <div class="decision" style="margin-top:0">
+      <h3>Proposals: adopt or not</h3>
+      <table>
+        <thead><tr><th style="width:36px">#</th><th>Proposal</th><th>Why</th><th style="width:120px">Where</th></tr></thead>
+        <tbody>
+          <tr><td>P1</td><td>In Security › Access tokens, a row's "Show its calls" opens the audit trail filtered to MCP calls by that token.</td><td>AC-478 records every call with the token's name. A Super-Admin deciding whether to revoke a token wants to see what it has been doing, in one step.</td><td class="w">screen 4 pin 5</td></tr>
+          <tr><td>P2</td><td>In the shown-once dialog, the Claude Code command with the new token already in it, and Copy command.</td><td>It's the moment the token exists on screen. Pasting it into a command by hand is where people put it in the wrong place, such as the URL, which wechart refuses (AC-435).</td><td class="w">screen 3 pin 4</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Questions — your decision</h3>
+      <table>
+        <thead><tr><th style="width:36px">#</th><th>Question</th><th>Drawn as, and the alternatives</th><th style="width:120px">Where</th></tr></thead>
+        <tbody>
+          <tr><td>Q1</td><td>Expired and revoked tokens in their owner's list.</td><td><b>Drawn (a):</b> listed under "No longer working", with the state, when, and who revoked, and Remove to take one off the list (the audit trail keeps its record). (b) Dropped from the list when they stop working. (c) Kept as long as audit records are, with no Remove.</td><td class="w">screen 1 pin 7</td></tr>
+          <tr><td>Q2</td><td>A token's name: what is allowed?</td><td><b>Drawn (a):</b> required, at most 100 characters, and unlike the owner's other working tokens, as R78-15 does for saved queries. (b) Required only; duplicates allowed.</td><td class="w">screen 2 pin 1, B1</td></tr>
+          <tr><td>Q3</td><td>Closing the shown-once dialog before copying.</td><td><b>Drawn (a):</b> asks first, "Close without copying?". (b) Closes without asking.</td><td class="w">C2</td></tr>
+          <tr><td>Q4</td><td>When a Super-Admin revokes someone's token, what is the owner told?</td><td><b>Drawn (a):</b> the token moves to their "No longer working" as "Revoked · by ‹Super-Admin›, ‹date›". (b) The same, but "by a Super-Admin", unnamed. (c) Also a notice on their next visit. wechart sends no email today.</td><td class="w">screen 4 pin 8, D3</td></tr>
+          <tr><td>Q5</td><td>How many working tokens may one person have?</td><td><b>Drawn (a):</b> no limit. (b) A limit, with New token disabled and its reason at the limit. A number would be your call.</td><td class="w">screen 1</td></tr>
+          <tr><td>Q6</td><td>A deployment whose Helm values name no MCP host. AC-476 covers only a named host.</td><td><b>Drawn (a):</b> the help warns that Claude.ai and Claude Desktop can't reach wechart, and an administrator sets the host. Whether <code>/mcp</code> is then served on the web app's host, for Claude Code, is the open part: (a1) yes, for development and inside the network; (a2) no MCP at all until a host is named, and the page says so.</td><td class="w">G3</td></tr>
+          <tr><td>Q7</td><td>The exact steps for a Claude.ai or Claude Desktop custom connector. The research records that these connectors call from Anthropic's cloud and accept "fixed credentials such as API keys that Claude sends on every request", but not the form's field names, or how the credential is sent.</td><td><b>Drawn (a):</b> generic steps, plus a link to Anthropic's guide. A research doc on the connector form before build would let the steps name its fields and confirm the token arrives as <code>Authorization: Bearer</code>, which AC-435 requires. (b) Only the link.</td><td class="w">G2, screen 3 pin 5</td></tr>
+          <tr><td>Q8</td><td>May an owner see their own token's recent calls? The audit trail is Super-Admins' only.</td><td><b>Drawn (a):</b> no, Last used only. (b) A "Recent calls" list per token for its owner, from the same audit records.</td><td class="w">screen 1</td></tr>
+          <tr><td>Q9</td><td>Renaming a token.</td><td><b>Drawn (a):</b> not offered: the name is set when it's made, and the audit records name it. (b) Rename, with the audit recording the change.</td><td class="w">screen 1</td></tr>
+          <tr><td>Q10</td><td>A read-only user's scopes. They have no My workspace, and their proposals would have nothing to propose.</td><td><b>Drawn (a):</b> Workspace edit and Proposals and jobs shown disabled, with the reason. (b) Left out for read-only users. Whether Proposals and jobs can still list jobs for them follows AC-297, which shows read-only users no Jobs.</td><td class="w">A5</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+</body>
+</html>

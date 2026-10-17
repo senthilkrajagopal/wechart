@@ -1,0 +1,1374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 17 · The SQL runner workspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --crossfilter: #7a3fb0; --crossfilter-soft: #f1e9f8;
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8; --role-measure: #a85400;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  b, strong, th, h1, h2, h3 { font-weight: 600; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; font-weight: 600; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head ul { margin: 0 0 6px; padding-left: 20px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .doc-head code { color: #f2f2f0; background: #333; padding: 0 4px; border-radius: 3px; font: 400 12px var(--font-code); }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .screen-label { background: #2b2b29; color: #e8e7e2; padding: 10px 32px; font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2, .states h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .notes > p, .states > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; font-weight: 600; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .bnote { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border: 1px dashed var(--note); border-radius: 4px; color: var(--note); font: 600 12px/16px var(--font-ui); white-space: nowrap; vertical-align: 1px; }
+  .notes code, .states code, .decision code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .stategrid { display: grid; grid-template-columns: repeat(2, 676px); gap: 32px 24px; align-items: start; }
+  .state { display: grid; gap: 8px; align-content: start; }
+  .state.wide { grid-column: 1 / -1; }
+  .state > h3 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .state > p { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); max-width: 1180px; }
+  .row3 { display: grid; grid-template-columns: repeat(3, 440px); gap: 24px; align-items: start; }
+  .row2 { display: grid; grid-template-columns: repeat(2, 676px); gap: 24px; align-items: start; }
+  .row4 { display: grid; grid-template-columns: repeat(4, 326px); gap: 24px; align-items: start; }
+  .frame { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg-page); box-shadow: 0 1px 2px rgba(0,0,0,.06); position: relative; }
+  .cap { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0 0 6px; }
+  .decision { margin: 22px 0 0; padding: 16px 20px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-page); max-width: 1376px; }
+  .decision h3 { margin: 0 0 8px; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .decision > p { margin: 0 0 10px; color: var(--text-secondary); font-size: 13px; line-height: 18px; }
+  .decision table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 18px; }
+  .decision th, .decision td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); }
+  .decision th { font-size: 12px; color: var(--text-secondary); font-weight: 600; background: var(--bg-subtle); }
+  .decision td.w { white-space: nowrap; font: 600 12px/18px var(--font-code); color: var(--note); }
+  .decision td.pick { background: color-mix(in srgb, var(--accent-soft) 60%, var(--bg-page)); }
+  .decision s { color: var(--text-muted); }
+
+  /* app */
+  svg.i { width: 16px; height: 16px; flex: none; }
+  svg.s { width: 14px; height: 14px; flex: none; }
+  svg.xs { width: 10px; height: 10px; flex: none; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; white-space: nowrap; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 240px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .reviews { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary); }
+  .count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--text-on-accent); font: 600 12px/18px var(--font-ui); text-align: center; font-variant-numeric: tabular-nums; }
+  .count.soft { background: var(--bg-subtle); color: var(--text-secondary); }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .iconbtn.sm { width: 24px; height: 24px; }
+  .iconbtn.on { background: var(--bg-subtle); color: var(--text-primary); }
+  .acct { display: inline-flex; align-items: center; gap: 8px; font: 600 12px/16px var(--font-ui); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.danger { color: var(--err); }
+  .btn.danger.solid { background: var(--err); border-color: var(--err); color: #fff; font-weight: 600; }
+  .btn.dis { opacity: .45; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.md { height: 28px; padding: 0 10px; font-size: 12px; }
+  .btn.link { border: 0; background: none; padding: 0; height: auto; color: var(--accent); font-size: 12px; font-weight: 600; }
+  .ring { box-shadow: 0 0 0 3px var(--accent-ring); }
+  .input { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; width: 100%; display: flex; align-items: center; gap: 6px; font-size: 14px; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .input.sm { height: 28px; font-size: 12px; }
+  .input.ph { color: var(--text-muted); }
+  .input.mono { font: 400 12px var(--font-code); }
+  .input.bad { border-color: var(--err-icon); }
+  .input.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+  .input.ro { background: var(--bg-subtle); }
+  .help { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0; }
+  .err-t { font-size: 12px; line-height: 16px; color: var(--err); margin: 0; display: flex; gap: 6px; align-items: flex-start; }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; background: var(--bg-surface); }
+  .seg span { height: 24px; padding: 0 8px; font-size: 12px; display: flex; align-items: center; gap: 5px; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); white-space: nowrap; color: var(--text-primary); }
+  .seg span:first-child { border-left: 0; }
+  .seg span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; background: var(--bg-subtle); color: var(--text-secondary); white-space: nowrap; }
+  .badge.sm { height: 18px; padding: 0 6px; }
+  .badge.line { background: none; border: 1px solid var(--border-strong); }
+  .badge.accent { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .badge.ws { background: var(--role-dim-soft); color: var(--role-dim); font-weight: 600; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); } .status.warn { color: var(--warn); } .status.run { color: var(--accent); } .status.idle { color: var(--text-secondary); }
+  .status .t { font-weight: 400; color: var(--text-secondary); }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .notebar { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 16px; background: var(--accent-soft); color: var(--text-primary); border: 1px solid var(--border-subtle); }
+  .notebar.warn { background: color-mix(in srgb, var(--warn-icon) 14%, var(--bg-surface)); border-color: color-mix(in srgb, var(--warn-icon) 45%, var(--bg-surface)); }
+  .notebar.err { background: color-mix(in srgb, var(--err-icon) 9%, var(--bg-surface)); }
+  .notebar.plain { background: var(--bg-subtle); }
+  .notebar b { font-weight: 600; }
+  .code { font: 400 12px/16px var(--font-code); background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; margin: 0; }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+  .grid-table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; font-weight: 600; height: 28px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table td { height: 34px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table td.wrap { white-space: normal; padding-top: 6px; padding-bottom: 6px; line-height: 16px; }
+  .grid-table tr:last-child td { border-bottom: 0; }
+  .grid-table.compact td { height: 28px; }
+  .grid-table.compact th { height: 26px; }
+  .head { display: flex; align-items: center; gap: 10px; min-height: 32px; }
+  .head h1 { margin: 0; font-size: 20px; line-height: 26px; font-weight: 600; white-space: nowrap; }
+  .sect { padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 8px; }
+  .sect:last-child { border-bottom: 0; }
+  .sect > h3 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; font-size: 12px; line-height: 16px; margin: 0; }
+  .kv dt { color: var(--text-secondary); }
+  .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .tabs { display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); height: 37px; }
+  .tabs span { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tabs span.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .check { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--border-strong); background: var(--bg-surface); flex: none; display: inline-grid; place-items: center; vertical-align: -3px; }
+  .check.on { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+  .check.lock { background: var(--bg-subtle); border-color: var(--border-strong); color: var(--text-secondary); }
+  .radio { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--bg-surface); flex: none; display: inline-grid; place-items: center; }
+  .radio.on { border-color: var(--accent); }
+  .radio.on::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .empty { display: grid; place-items: center; text-align: center; gap: 6px; padding: 28px 16px; color: var(--text-secondary); font-size: 12px; line-height: 16px; }
+  .empty b { color: var(--text-primary); font-size: 14px; line-height: 20px; font-weight: 600; }
+  .skel { height: 10px; border-radius: 3px; background: var(--bg-subtle); }
+  .dialog { position: absolute; z-index: 60; background: var(--bg-surface); border-radius: 6px; box-shadow: var(--shadow-pop); display: grid; gap: 12px; padding: 20px; border: 1px solid var(--border-subtle); }
+  .dialog h2 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+  .dialog p { margin: 0; color: var(--text-secondary); }
+  .dialog p b { color: var(--text-primary); font-weight: 600; }
+  .dialog.inline { position: relative; box-shadow: none; }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.28); z-index: 50; }
+  .acts { display: flex; justify-content: flex-end; gap: 8px; }
+  .menu { position: absolute; z-index: 70; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 4px; }
+  .menu.inline { position: relative; }
+  .mi { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; border-radius: 4px; font-size: 14px; white-space: nowrap; }
+  .mi.hl { background: var(--bg-hover); }
+  .mi.dis { color: var(--text-muted); }
+  .mi .k2 { margin-left: auto; font-size: 12px; color: var(--text-secondary); }
+  .mhead { padding: 6px 8px 2px; font-size: 12px; line-height: 16px; color: var(--text-secondary); font-weight: 600; display: flex; gap: 6px; align-items: center; }
+  .msep { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+  .toast { position: absolute; z-index: 80; display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--text-primary); color: var(--bg-surface); border-radius: 6px; font-size: 14px; line-height: 20px; box-shadow: var(--shadow-pop); }
+  .toast.inline { position: relative; }
+  .toast .btn.link { color: #9fd3e4; font-size: 14px; }
+  .tip { position: absolute; z-index: 90; background: var(--text-primary); color: var(--bg-surface); border-radius: 4px; padding: 4px 8px; font-size: 12px; line-height: 16px; box-shadow: var(--shadow-pop); white-space: nowrap; }
+  .tip.inline { position: relative; display: inline-block; }
+  .legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 24px; }
+  .legend div { display: flex; gap: 10px; align-items: center; min-height: 34px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; }
+  .legend div > span:last-child { margin-left: auto; color: var(--text-secondary); text-align: right; }
+  kbd.k { font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--bg-surface); color: var(--text-primary); white-space: nowrap; }
+  .ev { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+  .ev svg { color: var(--text-secondary); }
+  .fbtn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-surface); font-size: 12px; white-space: nowrap; }
+  .fbtn b { font-weight: 600; }
+  .band { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: var(--bg-subtle); border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .notfound { display: grid; place-items: center; text-align: center; gap: 8px; padding: 40px 24px; }
+  .notfound b { font-size: 16px; line-height: 22px; font-weight: 600; }
+
+  /* design 17: the workbench */
+  .wb { display: grid; grid-template-columns: 280px minmax(0, 1fr) 320px; height: 852px; }
+  .wb.cube { grid-template-columns: 280px minmax(0, 1fr) 480px; }
+  .lpane { background: var(--bg-surface); border-right: 1px solid var(--border-subtle); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .lsect { padding: 12px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 6px; }
+  .lsect > h3, .lhead > h3 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 6px; }
+  .lhead { display: flex; align-items: center; gap: 6px; padding: 10px 8px 6px 12px; }
+  .picker { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); display: flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 12px; min-width: 0; }
+  .picker.open { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+  .picker .nm2 { font: 600 12px/16px var(--font-code); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .srcmark { width: 18px; height: 18px; border-radius: 4px; display: inline-grid; place-items: center; font-size: 12px; background: var(--bg-subtle); color: var(--text-primary); flex: none; }
+  .srcmark.cube { background: var(--accent-soft); color: var(--accent); }
+  .srcmark.ws { background: var(--role-dim-soft); color: var(--role-dim); }
+  .find { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-surface); color: var(--text-muted); font-size: 12px; margin: 0 12px; }
+  .find.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); color: var(--text-primary); }
+  .tree { padding: 6px 0; display: grid; }
+  .tr { height: 28px; display: flex; align-items: center; gap: 6px; padding-right: 8px; font-size: 12px; line-height: 16px; white-space: nowrap; color: var(--text-primary); position: relative; }
+  .tr.l0 { padding-left: 10px; } .tr.l1 { padding-left: 26px; } .tr.l2 { padding-left: 42px; } .tr.l3 { padding-left: 64px; }
+  .tr .cv { color: var(--text-secondary); }
+  .tr .tn { font-family: var(--font-code); }
+  .tr .ty { font-family: var(--font-code); color: var(--text-secondary); }
+  .tr.hover { background: var(--bg-hover); }
+  .tr.focus { box-shadow: inset 0 0 0 2px var(--accent); border-radius: 4px; }
+  .tr .tico { color: var(--text-secondary); flex: none; }
+  .tag { display: inline-flex; align-items: center; height: 16px; padding: 0 4px; border: 1px solid var(--border-subtle); border-radius: 3px; font: 400 12px/14px var(--font-ui); color: var(--text-secondary); background: var(--bg-surface); flex: none; }
+  .role-d { color: var(--role-dim); font-weight: 600; font-size: 12px; width: 16px; text-align: center; flex: none; }
+  .role-m { color: var(--role-measure); font-weight: 600; font-size: 12px; width: 16px; text-align: center; flex: none; }
+  .lfoot { margin-top: auto; padding: 10px 12px; border-top: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+
+  .centre { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .etabs { height: 37px; display: flex; align-items: stretch; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); flex: none; }
+  .et { display: flex; align-items: center; gap: 6px; padding: 0 4px 0 10px; font-size: 13px; color: var(--text-secondary); border-right: 1px solid var(--border-subtle); white-space: nowrap; border-bottom: 2px solid transparent; }
+  .et.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); background: var(--bg-page); }
+  .et .x { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--text-secondary); }
+  .et .dots { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 4px; color: var(--text-secondary); }
+  .et.add { padding: 0 10px; border-right: 0; }
+  .cbody { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
+  .runline { display: flex; align-items: center; gap: 10px; min-height: 16px; font-size: 12px; line-height: 16px; color: var(--text-secondary); white-space: nowrap; }
+  .runline b { font-weight: 600; color: var(--text-primary); }
+  .edcard { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; display: flex; flex-direction: column; flex: none; overflow: hidden; }
+  .edhead { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .cm { display: grid; grid-template-columns: 40px 1fr; font: 400 12px/16px var(--font-code); overflow: hidden; background: var(--bg-surface); }
+  .cm.focus { box-shadow: inset 0 0 0 2px var(--accent); }
+  .cm .gut { background: var(--bg-subtle); color: var(--text-muted); text-align: right; padding: 6px 8px 6px 0; border-right: 1px solid var(--border-subtle); }
+  .cm .gut div { height: 16px; position: relative; }
+  .cm .gut div.cur { color: var(--accent); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); background: var(--accent-soft); margin-right: -8px; padding-right: 8px; }
+  .cm .gut div.bad { color: var(--err); font-weight: 600; }
+  .cm .src { padding: 6px 10px; white-space: pre; color: var(--text-primary); overflow: hidden; }
+  .cm .src div { height: 16px; }
+  .cm .src div.cl { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+  .kw { color: var(--role-dim); font-weight: 600; }
+  .str { color: var(--role-measure); }
+  .cmt { color: var(--text-muted); font-style: italic; }
+  .prm { background: var(--accent-soft); color: var(--accent); font-weight: 600; border-radius: 3px; outline: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+  .selx { background: color-mix(in srgb, var(--accent) 24%, transparent); }
+  .squig { text-decoration: wavy underline var(--err-icon); text-underline-offset: 3px; }
+  .caret { display: inline-block; width: 1px; height: 14px; background: var(--text-primary); vertical-align: -3px; }
+  .pstrip { min-height: 40px; display: flex; align-items: center; gap: 14px; padding: 6px 12px; border-top: 1px solid var(--border-subtle); flex-wrap: wrap; }
+  .pstrip > .pl { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .pf { display: inline-flex; align-items: center; gap: 6px; }
+  .pf .pn { font: 600 12px/16px var(--font-code); color: var(--accent); }
+  .pf .input { width: auto; }
+  .runbar { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-top: 1px solid var(--border-subtle); }
+  .limits { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; color: var(--text-secondary); white-space: nowrap; }
+  .limits .sep { color: var(--border-strong); }
+  .splitter { height: 10px; display: grid; place-items: center; flex: none; }
+  .splitter i { display: block; width: 40px; height: 4px; border-radius: 999px; background: var(--border-strong); }
+  .rescard { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; flex: 1; }
+  .reshead { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--border-subtle); flex: none; }
+  .reshead .t { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .resnote { padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .rscroll { overflow: hidden; min-height: 0; flex: 1; }
+  .rgrid { border-collapse: separate; border-spacing: 0; font-size: 12px; font-variant-numeric: tabular-nums; min-width: 100%; }
+  .rgrid th { background: var(--bg-subtle); text-align: left; padding: 4px 10px; border-bottom: 1px solid var(--border-subtle); border-right: 1px solid var(--border-subtle); vertical-align: top; white-space: nowrap; }
+  .rgrid th .cn { display: block; font-weight: 600; line-height: 16px; color: var(--text-primary); }
+  .rgrid th .ct { display: block; font: 400 12px/16px var(--font-code); color: var(--text-secondary); }
+  .rgrid th.num { text-align: right; }
+  .rgrid td { height: 24px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); border-right: 1px solid var(--border-subtle); white-space: nowrap; }
+  .rgrid td.num { text-align: right; }
+  .rgrid .rn { color: var(--text-muted); text-align: right; width: 44px; }
+  .rgrid th.rn { vertical-align: bottom; font-weight: 400; }
+  .rgrid .null { color: var(--text-muted); font-style: italic; }
+  .rgrid tr.cut td { background: color-mix(in srgb, var(--warn-icon) 10%, var(--bg-surface)); color: var(--warn); font-weight: 600; border-right: 0; }
+  .progress { height: 4px; border-radius: 999px; background: var(--bg-subtle); overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--accent); }
+  .offpanel { display: grid; gap: 12px; padding: 22px 24px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; }
+  .offpanel h2 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+  .offpanel p { margin: 0; color: var(--text-secondary); }
+
+  .rpane { background: var(--bg-surface); border-left: 1px solid var(--border-subtle); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .rtabs { height: 37px; display: flex; align-items: stretch; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); flex: none; gap: 2px; }
+  .rtabs span { display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 13px; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+  .rtabs span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .runsub { padding: 8px 12px; font-size: 12px; line-height: 16px; color: var(--text-secondary); border-bottom: 1px solid var(--border-subtle); display: grid; gap: 6px; }
+  .rrow { display: grid; gap: 4px; padding: 8px 12px 9px 14px; border-bottom: 1px solid var(--border-subtle); }
+  .rrow .top { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; }
+  .rrow .top .when { margin-left: auto; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rrow .top .rows { color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rrow .q { font: 400 12px/16px var(--font-code); color: var(--text-primary); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; word-break: break-word; }
+  .rrow .src { font-size: 12px; line-height: 16px; color: var(--text-secondary); display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; }
+  .rrow .pv { font: 400 12px/16px var(--font-code); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rrow.cur { box-shadow: inset 3px 0 0 var(--accent); background: var(--accent-soft); }
+  .rrow.hover { background: var(--bg-hover); }
+  .runsfoot { padding: 10px 14px; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+
+  .xpane { background: var(--bg-surface); border-left: 1px solid var(--border-subtle); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .panehead { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 16px; border-bottom: 1px solid var(--border-subtle); flex: none; }
+  .panehead h2 { margin: 0; font: 600 14px/20px var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 6px; align-items: center; }
+  .fld { display: grid; gap: 4px; }
+  .fld > .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-primary); display: flex; gap: 6px; align-items: center; }
+  .fld > .lbl .req { font-weight: 400; color: var(--text-secondary); }
+  .cols td { height: 32px; }
+  .rail { width: 40px; background: var(--bg-surface); display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 8px; }
+  .prop { outline: 1px dashed var(--note); outline-offset: 2px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M2 9.5l1.6-5.2A1 1 0 0 1 4.6 3.6h6.8a1 1 0 0 1 1 .7L14 9.5v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z M2 9.5h3.5l1 1.5h3l1-1.5H14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--accent)"/><path d="M8 7v4.2M8 4.6v.4" style="stroke:var(--bg-surface)" stroke-width="1.7"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chevl" viewBox="0 0 16 16"><path d="M10 3.5L5.5 8 10 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="12.5" cy="8" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-hist" viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.3 2.5v2.8h2.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.2l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.5v7.5M4.8 7L8 10.2 11.2 7M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 1.8l5 1.9v4c0 3.1-2.1 5.5-5 6.5-2.9-1-5-3.4-5-6.5v-4z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.6 8.1l1.7 1.7 3.2-3.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.2v9.6L12.6 8z" fill="currentColor"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1.2" fill="currentColor"/></symbol>
+  <symbol id="i-sql" viewBox="0 0 16 16"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4.5 6.2L6.8 8l-2.3 1.8M8.3 10.2h3.2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 16 16"><path d="M5.5 4.5L2.5 7.5l3 3M2.8 7.5H10a3.5 3.5 0 0 1 0 7H8" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13 5.5A5.5 5.5 0 1 0 13.5 9M13.2 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 16 16"><path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z M2.5 4.8L8 7.8l5.5-3M8 7.8v6.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+  <symbol id="i-table" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M2 6.5h12M6.5 6.5V13" stroke="currentColor" stroke-width="1.3"/></symbol>
+  <symbol id="i-view" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 1.5"/><path d="M2 6.5h12" stroke="currentColor" stroke-width="1.3"/></symbol>
+  <symbol id="i-schema" viewBox="0 0 16 16"><path d="M2.5 3.5h4l1 1.5h6v7.5h-11z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+  <symbol id="i-save" viewBox="0 0 16 16"><path d="M3 2.5h8l2 2v9H3z M5.5 2.5v3.5h5V2.5M5.5 13.5v-4h5v4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 16 16"><path d="M2.5 13.5h11M4.5 11.5V8M8 11.5V4.5M11.5 11.5V6.5" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-insert" viewBox="0 0 16 16"><path d="M3 3.5h10M3 12.5h10M8 5.5v5M5.8 8.3L8 10.5l2.2-2.2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5" y="5" width="8.5" height="8.5" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 10.5V3.8A1.3 1.3 0 0 1 4.3 2.5H10.5" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 9h5.8l.6-9" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 16 16"><path d="M10.8 2.7l2.5 2.5-7.6 7.6-3.1.6.6-3.1z" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 16 16"><path d="M9 2.5h4.5V7M13.5 2.5L7.5 8.5M11.5 9.5v4h-9v-9h4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-dup" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="8" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="5.5" y="5.5" width="8" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="s-err" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M5.4 5.4l5.2 5.2M10.6 5.4l-5.2 5.2" stroke="#fff" stroke-width="1.8"/></symbol>
+  <symbol id="s-warn" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" style="fill:var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></symbol>
+  <symbol id="s-idle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-cancel" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.8 12.2l8.4-8.4" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-off" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.2 8h5.6" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="s-run" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" style="stroke:var(--border-strong)" stroke-width="2"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" fill="none" style="stroke:var(--accent)" stroke-width="2"/></symbol>
+  <symbol id="s-new" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.4 1.8"/></symbol>
+  <symbol id="s-held" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.2 5.4v5.2M9.8 5.4v5.2" stroke="currentColor" stroke-width="1.6"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI design 2026-10-17 · Design 17 · for approval</div>
+    <h1>The SQL runner workspace — a data source picker and schema browser, tabs bound to a data source with typed parameters, Saved and History, and a cube or a chart made from a run</h1>
+    <p>R78 moves the SQL runner out of each data source's page and into a workspace of its own, after Schedules. F42 defines it (AC-446 … AC-467, AC-480 … AC-483), and AC-001, AC-373, AC-381, AC-385, AC-386 and AC-387 are amended for it. Today the runner is the sixth tab of a data source's page (design 15, as built in <code>SqlRunner</code>, <code>SqlEditor</code> and <code>SchemaBrowser</code>).</p>
+    <p>This design draws:</p>
+    <ul>
+      <li><b>SQL runner in the switcher,</b> after Schedules, for Super-Admins and read-write members (AC-001, AC-446).</li>
+      <li><b>The three-pane workbench</b> of direction §2. On the left, the data source picker, with its "Cube" group, and the lazy schema browser with Find a table and PK / FK tags. In the centre, tabs bound to a data source, each with the run line, F40's warning, the CodeMirror editor, the typed-parameter strip, the Run bar and the result grid. On the right, Saved and History.</li>
+      <li><b>Make a cube… and Make a chart…,</b> a docked 480 px pane that adds a draft cube to My workspace.</li>
+      <li><b>The data source page's "SQL runner" tab,</b> which keeps the switch and gains "Open in SQL runner", and no longer holds an editor.</li>
+      <li><b>States:</b> empty, loading, running, cancelled, capped, error, lost access, a parameter held on a source that can't bind it, the "Cube" group, and widths below 1,280 and 1,024 px.</li>
+    </ul>
+    <p><b>Screen 1</b> is Wren Writer, a read-write member of Sales / EMEA (group <code>sales-emea-rw</code>) and of Finance, just after a run on <code>emea_replica</code>, with sign-in on. <b>Screen 2</b> is Wren making a cube from that run. States A–O follow the brief's order, and each names its criteria.</p>
+    <p><b>What doesn't change:</b> every F40 safety rule, per run (the switch and its attestation, SELECT and EXPLAIN only, the read-only transaction, 10,000 rows, 10 MB, 30 seconds, one run per person, the audit, the warning); the switch dialogs of design 15 (screen 2, G and H); the run labels of design 15; the audit trail (design 08), which keeps its "SQL run" event.</p>
+    <div class="ids">For R78 · AC-446 … AC-467, AC-480 … AC-483 · amended AC-001, AC-373, AC-381, AC-385, AC-386, AC-387 · with AC-350, AC-374 … AC-380, AC-382 … AC-384, AC-422, AC-139, AC-284, AC-304 · rules 1, 3, 17, 18, 67, 72, 74, 81, 84, 85 and new rules 90–108 · designs 01, 03, 04, 08, 11 (2026-09-27), 15 · references-sql-runner.md · research sql-runner.md, xcube-sql-runner.md, cube/introspection-api.md, code-editor.md · as built: SqlRunner, SqlEditor, SchemaBrowser, SourceSettings · SQL, rows, people, folders and times are illustrative</div>
+  </header>
+
+  <!-- ======================= SCREEN 1 ======================= -->
+  <div class="screen-label">Screen 1 · The SQL runner workspace just after a run on emea_replica, as a read-write member of Sales / EMEA sees it</div>
+  <div class="screen" id="s1">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span class="on">SQL runner</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">2</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="wb">
+      <!-- left -->
+      <aside class="lpane" aria-label="Data source and schema">
+        <div class="lsect">
+          <h3>Data source</h3>
+          <div class="picker"><span class="srcmark">◍</span><span class="nm2">emea_replica</span><span class="sec">PostgreSQL</span><span class="spacer"></span><svg class="s sec"><use href="#i-chevd"/></svg></div>
+          <div style="display:flex;gap:8px;align-items:center;justify-content:space-between"><span class="xs sec">Sales / EMEA</span><span class="status ok"><svg class="s"><use href="#i-shield"/></svg>SQL runner on</span></div>
+        </div>
+        <div class="lhead"><h3>Schema</h3><span class="spacer"></span><span class="iconbtn sm" title="Read the names again"><svg class="s"><use href="#i-refresh"/></svg></span></div>
+        <div class="find"><svg class="s"><use href="#i-search"/></svg>Find a table</div>
+        <div class="tree" role="tree">
+          <div class="tr l0"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-schema"/></svg><span class="tn">public</span></div>
+          <div class="tr l0"><svg class="s cv"><use href="#i-chevd"/></svg><svg class="s tico"><use href="#i-schema"/></svg><span class="tn">sales</span><span class="spacer"></span><span class="xs muted">14 tables</span></div>
+          <div class="tr l1 hover"><svg class="s cv"><use href="#i-chevd"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn">orders</span><span class="spacer"></span><span class="iconbtn sm" style="width:22px;height:22px"><svg class="s"><use href="#i-dots"/></svg></span></div>
+          <div class="tr l3"><span class="tn">order_id</span><span class="ty">int8</span><span class="spacer"></span><span class="tag">PK</span></div>
+          <div class="tr l3" id="s1-fk"><span class="tn">customer_id</span><span class="ty">int8</span><span class="spacer"></span><span class="tag">FK</span></div>
+          <div class="tr l3"><span class="tn">region</span><span class="ty">text</span></div>
+          <div class="tr l3"><span class="tn">amount</span><span class="ty">numeric</span></div>
+          <div class="tr l3"><span class="tn">status</span><span class="ty">text</span></div>
+          <div class="tr l3"><span class="tn">created_at</span><span class="ty">timestamptz</span></div>
+          <div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn">customers</span></div>
+          <div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn">order_lines</span></div>
+          <div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn">products</span></div>
+          <div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn">returns</span></div>
+          <div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-view"/></svg><span class="tn">v_open_orders</span><span class="xs muted">view</span></div>
+          <div class="tr l1 sec" style="padding-left:48px"><span class="xs">+ 9 more tables</span></div>
+          <div class="tr l0"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-schema"/></svg><span class="tn">staging</span></div>
+        </div>
+        <div class="lfoot">Opening a schema or a table reads only its names. Nothing runs until you press Run.</div>
+      </aside>
+      <div class="tip" style="left:150px;top:357px">References <span class="mono">sales.customers (id)</span></div>
+
+      <!-- centre -->
+      <section class="centre" aria-label="SQL editor tabs">
+        <div class="etabs" role="tablist">
+          <span class="et on" role="tab"><svg class="s" style="color:var(--ok-icon)"><use href="#s-ok"/></svg>Top EMEA orders<span class="dots"><svg class="s"><use href="#i-dots"/></svg></span><span class="x"><svg class="s"><use href="#i-x"/></svg></span></span>
+          <span class="et" role="tab"><svg class="s"><use href="#s-new"/></svg>Query 2<span class="x"><svg class="s"><use href="#i-x"/></svg></span></span>
+          <span class="et" role="tab"><svg class="s" style="color:var(--ok-icon)"><use href="#s-ok"/></svg><svg class="s" style="color:var(--accent)"><use href="#i-cube"/></svg>Revenue by region<span class="x"><svg class="s"><use href="#i-x"/></svg></span></span>
+          <span class="et add" title="New tab on emea_replica (Ctrl+Q)"><svg class="s"><use href="#i-plus"/></svg></span>
+        </div>
+        <div class="cbody">
+          <div class="runline"><span>Runs on <b class="mono">sales</b> at <span class="mono">pg-replica-1.sales.internal:5432</span>, as <span class="mono">cube_reader</span></span><span class="spacer"></span><span class="status ok"><svg class="s"><use href="#i-shield"/></svg>On <span class="t">· Ada Admin confirmed it can only read · 1 Oct</span></span></div>
+          <div class="notebar warn"><svg class="s" style="margin-top:1px"><use href="#s-warn"/></svg><span><b>This SQL runs on the database directly, as cube_reader.</b> Folder permissions and access policies don't apply here: you can read whatever that login can read.</span></div>
+          <div class="edcard">
+            <div class="edhead"><span>SQL for <span class="mono" style="color:var(--text-primary)">emea_replica</span></span><span class="badge sm"><svg class="xs"><use href="#i-person"/></svg>Saved query · Only me</span><span class="spacer"></span><span class="btn md"><svg class="s"><use href="#i-save"/></svg>Save</span><span class="btn md">Save as new…</span></div>
+            <div class="cm focus" style="height:192px">
+              <div class="gut"><div>1</div><div class="cur">2</div><div class="cur">3</div><div class="cur">4</div><div class="cur">5</div><div class="cur">6</div><div class="cur">7</div><div class="cur">8</div><div>9</div><div>10</div><div>11</div></div>
+              <div class="src"><div><span class="cmt">-- Top EMEA orders since a date</span></div><div class="cl"><span class="kw">SELECT</span> o.order_id, c.name <span class="kw">AS</span> customer, c.country,</div><div class="cl">       o.amount, o.status, o.created_at</div><div class="cl"><span class="kw">FROM</span>   sales.orders o</div><div class="cl"><span class="kw">JOIN</span>   sales.customers c <span class="kw">ON</span> c.id = o.customer_id</div><div class="cl"><span class="kw">WHERE</span>  o.region = <span class="prm">{{region}}</span></div><div class="cl">  <span class="kw">AND</span>  o.created_at &gt;= <span class="prm">{{since}}</span><span class="caret"></span></div><div class="cl"><span class="kw">ORDER BY</span> o.amount <span class="kw">DESC</span>;</div><div></div><div><span class="kw">SELECT</span> count(*) <span class="kw">FROM</span> sales.returns</div><div> <span class="kw">WHERE</span> region = <span class="prm">{{region}}</span>;</div></div>
+            </div>
+            <div class="pstrip" role="group" aria-label="Parameters">
+              <span class="pl">Parameters</span>
+              <span class="pf"><span class="pn">region</span><span class="input sm" style="width:84px">Text<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span><span class="input sm" style="width:110px">EMEA</span></span>
+              <span class="pf"><span class="pn">since</span><span class="input sm" style="width:84px">Date<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span><span class="input sm tnum" style="width:120px">2026-09-01</span></span>
+              <span class="spacer"></span><span class="xs sec">Sent bound, never written into the SQL</span>
+            </div>
+            <div class="runbar">
+              <span class="btn primary"><svg class="s"><use href="#i-play"/></svg>Run</span>
+              <span class="xs sec" style="display:inline-flex;gap:4px;align-items:center"><kbd class="k">⌘</kbd><kbd class="k">↵</kbd></span>
+              <span class="xs sec">the statement at the cursor, lines 2–8</span>
+              <span class="spacer"></span>
+              <span class="limits"><span>SELECT or EXPLAIN</span><span class="sep">·</span><span>10,000 rows, 10 MB, 30 s</span><span class="sep">·</span><span>one run at a time</span></span>
+            </div>
+          </div>
+          <div class="splitter" role="separator" aria-label="Resize the editor and the results"><i></i></div>
+          <div class="rescard">
+            <div class="reshead"><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Finished</span><span class="t">1,284 rows · 0.84 s · at 14:32:05</span><span class="spacer"></span><span class="btn md"><svg class="s"><use href="#i-cube"/></svg>Make a cube…</span><span class="btn md"><svg class="s"><use href="#i-chart"/></svg>Make a chart…</span><span class="btn md"><svg class="s"><use href="#i-download"/></svg>Download CSV</span></div>
+            <div class="rscroll">
+              <table class="rgrid">
+                <thead><tr><th class="rn">#</th><th class="num"><span class="cn">order_id</span><span class="ct">int8</span></th><th><span class="cn">customer</span><span class="ct">text</span></th><th><span class="cn">country</span><span class="ct">bpchar</span></th><th class="num"><span class="cn">amount</span><span class="ct">numeric</span></th><th><span class="cn">status</span><span class="ct">text</span></th><th><span class="cn">created_at</span><span class="ct">timestamptz</span></th><th style="width:100%;border-right:0"></th></tr></thead>
+                <tbody>
+                  <tr><td class="rn">1</td><td class="num">100482</td><td>Nordwind Handels GmbH</td><td>DE</td><td class="num">18420.00</td><td>shipped</td><td>2026-09-28 14:02:11+00</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">2</td><td class="num">100317</td><td>Lumen Retail SA</td><td>FR</td><td class="num">17950.50</td><td>shipped</td><td>2026-09-14 09:41:56+00</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">3</td><td class="num">100655</td><td>Kestrel Foods Ltd</td><td>GB</td><td class="num">16388.00</td><td>invoiced</td><td>2026-09-30 16:20:03+00</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">4</td><td class="num">100208</td><td>Aalto Design Oy</td><td>FI</td><td class="num">15002.75</td><td>shipped</td><td>2026-09-09 11:15:40+00</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">5</td><td class="num">100590</td><td>Brava Hospitality SL</td><td>ES</td><td class="num">14870.00</td><td class="null">NULL</td><td>2026-09-26 08:03:27+00</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">6</td><td class="num">100124</td><td>Van Dijk Logistiek BV</td><td>NL</td><td class="num">14420.10</td><td>returned</td><td>2026-09-03 13:59:02+00</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">7</td><td class="num">100433</td><td>Sörensen Marin AB</td><td>SE</td><td class="num">13990.00</td><td>shipped</td><td>2026-09-22 10:27:48+00</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">8</td><td class="num">100701</td><td>Ostrava Steelworks a.s.</td><td>CZ</td><td class="num">13512.40</td><td>invoiced</td><td>2026-09-30 18:44:19+00</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">9</td><td class="num">100266</td><td>Bellini Arredamenti Srl</td><td>IT</td><td class="num">12980.00</td><td>shipped</td><td>2026-09-11 15:06:31+00</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">10</td><td class="num">100519</td><td>Kraków Print Sp. z o.o.</td><td>PL</td><td class="num">12441.90</td><td>shipped</td><td>2026-09-24 07:52:10+00</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">11</td><td class="num">100088</td><td>Atlas Gulf Trading LLC</td><td>AE</td><td class="num">12200.00</td><td>shipped</td><td>2026-09-02 12:30:00+00</td><td style="border-right:0"></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- right -->
+      <aside class="rpane" aria-label="Saved and History">
+        <div class="rtabs" role="tablist"><span>Saved <span class="count soft">6</span></span><span class="on">History</span></div>
+        <div class="runsub"><div style="display:flex;gap:8px;align-items:center"><span class="seg"><span class="on">All</span><span>This data source</span></span></div><span style="display:flex;gap:6px;align-items:center"><svg class="s"><use href="#i-person"/></svg>Only you can see these · newest first</span></div>
+        <div class="rrow cur"><div class="top"><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Finished</span><span class="rows">1,284 rows</span><span class="when">14:32</span></div><div class="q">SELECT o.order_id, c.name AS customer, c.country, o.amount, o.status, o.created_at FROM sales.orders o …</div><div class="pv">region = EMEA · since = 2026-09-01</div><div class="src"><span class="srcmark">◍</span>emea_replica · Sales / EMEA</div></div>
+        <div class="rrow hover"><div class="top"><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Finished</span><span class="rows">6 rows</span><span class="when">14:20</span></div><div class="q">SELECT region, MEASURE(revenue) FROM orders_emea GROUP BY 1</div><div class="src"><span class="srcmark cube"><svg class="xs"><use href="#i-cube"/></svg></span>Cube · through Cube, as you</div></div>
+        <div class="rrow"><div class="top"><span class="status err"><svg class="s"><use href="#s-err"/></svg>Not run</span><span class="rows">DELETE</span><span class="when">14:18</span></div><div class="q">DELETE FROM sales.orders WHERE status = 'test'</div><div class="src"><span class="srcmark">◍</span>emea_replica · Sales / EMEA</div></div>
+        <div class="rrow"><div class="top"><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Limited to 10,000 rows</span><span class="when">14:10</span></div><div class="q">SELECT * FROM gl.postings WHERE period &gt;= {{from}}</div><div class="pv">from = 2026-07-01</div><div class="src"><span class="srcmark">◍</span>fx_warehouse · Finance</div></div>
+        <div class="rrow"><div class="top"><span class="status idle"><svg class="s"><use href="#s-cancel"/></svg>Cancelled</span><span class="rows">212 rows, cut</span><span class="when">13:51</span></div><div class="q">SELECT customer_id, count(*) FROM sales.events GROUP BY 1 ORDER BY 2 DESC</div><div class="src"><span class="srcmark">◍</span>emea_replica · Sales / EMEA</div></div>
+        <div class="rrow"><div class="top"><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Finished</span><span class="rows">100 rows</span><span class="when">13:40</span></div><div class="q">SELECT return_id, order_id, reason, amount, created_at FROM sales.returns LIMIT 100</div><div class="src"><span class="srcmark">◍</span>emea_replica · Sales / EMEA</div></div>
+        <div class="runsfoot"><span class="btn link">Show older runs</span> <span class="sec">· 50 at a time</span></div>
+      </aside>
+    </div>
+
+    <span class="pin" style="left:556px;top:12px">1</span>
+    <span class="pin" style="left:262px;top:86px">2</span>
+    <span class="pin" style="left:0;top:116px">3</span>
+    <span class="pin" style="left:252px;top:183px">4</span>
+    <span class="pin" style="left:34px;top:313px">5</span>
+    <span class="pin" style="left:218px;top:273px">6</span>
+    <span class="pin" style="left:832px;top:54px">7</span>
+    <span class="pin" style="left:1094px;top:93px">8</span>
+    <span class="pin" style="left:1094px;top:132px">9</span>
+    <span class="pin" style="left:600px;top:183px">10</span>
+    <span class="pin" style="left:270px;top:250px">11</span>
+    <span class="pin" style="left:270px;top:455px">12</span>
+    <span class="pin" style="left:270px;top:412px">13</span>
+    <span class="pin" style="left:724px;top:491px">14</span>
+    <span class="pin" style="left:686px;top:524px">15</span>
+    <span class="pin" style="left:270px;top:580px">16</span>
+    <span class="pin" style="left:1412px;top:96px">17</span>
+    <span class="pin" style="left:1412px;top:186px">18</span>
+    <span class="pin" style="left:1412px;top:740px">19</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 1: what changes, and why</h2>
+    <p>The runner leaves the data source's page for a workspace of its own, laid out as direction §2's workbench: a typed tree on the left, the work in the centre, and a docked pane on the right. Every editor tab is bound to one data source, so Wren can keep a query on <code>emea_replica</code>, one on <code>fx_warehouse</code> and one through Cube open at once, and see all of her runs in one History. What the run reaches, as whom, and what it bypasses stays above every tab's editor.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>SQL runner, after Schedules</b><span class="t">Explore · Data sources · Jobs · Schedules · SQL runner, then Security for Super-Admins. Shown to Super-Admins and read-write members, as Jobs and Schedules are. A read-only user never sees it, and <code>/sql</code> shows them nothing (state A). The address names the open tab, <code>/sql?tab=…</code>, so a reload in this browser restores it.</span><span class="fix">AC-001 · AC-446 · rule 84 · rule 90</span></div></li>
+      <li><span class="n">2</span><div><b>The data source picker</b><span class="t">A custom listbox, not a native select, so it keeps the 12 px floor. It lists the sources Wren may run SQL on, grouped by folder path: My workspace's first with "Yours", then each folder, then Cube Store at the root while it's on, then the "Cube" group (state B). Choosing one changes the open tab's data source: the tab keeps its SQL and clears its result.</span><span class="fix">AC-447 · AC-450 · rule 1 · rule 92</span></div></li>
+      <li><span class="n">3</span><div><b>The source's folder and the runner's state</b><span class="t">An icon and a label: "SQL runner on", "Off", or "Yours · no switch" for a workspace source. An off source chosen here shows the off panel in the centre, with Turn on… for a Super-Admin (state B).</span><span class="fix">AC-447 · AC-373 · rule 3</span></div></li>
+      <li><span class="n">4</span><div><b>Find a table</b><span class="t">Filters the names already read, as you type. While a schema still has unread pages, it says "Searching the 100 tables read" and offers to read the rest (state C2). It reads nothing on its own.</span><span class="fix">AC-448</span></div></li>
+      <li><span class="n">5</span><div><b>Columns, with their types and PK / FK tags</b><span class="t">Each column shows its name and its type as the database names it, in the code face, and a <b>PK</b> or <b>FK</b> text tag from introspection's <code>primaryKey</code> and <code>foreignKeys</code>. An FK's tooltip names its target, as here. Tags are 12 px text in a 3 px-radius outline: no colour carries the meaning.</span><span class="fix">AC-448 · AC-386 · rules 1, 3 · research cube/introspection-api.md</span></div></li>
+      <li><span class="n">6</span><div><b>A table's ⋯</b><span class="t">Insert name, Insert SELECT and Preview 100 rows (state C1). Opening a schema or a table sends the database only introspection's catalog reads, and the pane's foot says so.</span><span class="fix">AC-449 · rule 95</span></div></li>
+      <li><span class="n">7</span><div><b>Editor tabs, each bound to one data source</b><span class="t">A <code>tablist</code> in the page-tab style (13 px, §7d). Each tab shows its run state as an icon, and names it in its tooltip and accessible name: "Top EMEA orders, Finished, 1,284 rows, on emea_replica". A tab through Cube adds the cube icon. "+" (or <kbd class="k">Ctrl</kbd>+<kbd class="k">Q</kbd>) opens a tab on the current data source. A tab closes only with its ×; its ⋯ holds Rename…, Duplicate, Close and Close other tabs (state D). Tabs are kept in this browser, for Wren only.</span><span class="fix">AC-450 · AC-451 · AC-480 · rules 3, 93</span></div></li>
+      <li><span class="n">8</span><div><b>The run line</b><span class="t">Design 15's: the database, host and login of this tab's data source, never the password, and who confirmed the switch and when. It always names the tab's own data source.</span><span class="fix">AC-385 · AC-374 · rule 83 · rule 94</span></div></li>
+      <li><span class="n">9</span><div><b>The warning, above every tab's editor</b><span class="t">Always shown, never hidden, naming this tab's login. A tab through Cube shows instead that it runs through Cube, as you (state M).</span><span class="fix">AC-385 · AC-467 · rule 94</span></div></li>
+      <li><span class="n">10</span><div><b>Saved query, Save and Save as new…</b><span class="t">The editor's head names its data source ("SQL for emea_replica", the editor's label) and, for a saved query, "Saved query · Only me". Save updates it, and <kbd class="k">⌘</kbd>/<kbd class="k">Ctrl</kbd>+<kbd class="k">S</kbd> does the same anywhere in the workspace. On a new query, Save… opens the dialog (state I2). Saving needs no proposal and makes no audit event.</span><span class="fix">AC-455 · AC-457 · AC-483 · rule 99</span></div></li>
+      <li><span class="n">11</span><div><b>The editor, with the statement at the cursor marked</b><span class="t">The built CodeMirror SQL editor, IBM Plex Mono 12/16, with line numbers. The statement the cursor is in, bounded by semicolons outside strings and comments, is marked in the gutter and tinted, so it's plain what Run will run. Tab still leaves the editor. Autocomplete and find are in state E.</span><span class="fix">AC-387 · AC-456 · §3 code face · rule 85</span></div></li>
+      <li><span class="n">12</span><div><b>Run, the statement at the cursor, and the limits</b><span class="t">Run and <kbd class="k">⌘</kbd><kbd class="k">↵</kbd> run the statement at the cursor, here lines 2–8, and the line beside Run says which. With text selected, the button reads <b>Run selection</b> (state E2). The limits line is design 15's, shortened to fit the narrower centre.</span><span class="fix">AC-387 · AC-375 · AC-377 … AC-379</span></div></li>
+      <li><span class="n">13</span><div><b>Parameters, typed and bound</b><span class="t">Each <code>{{name}}</code> outside strings and comments is tinted in the editor and listed once in the strip: <code>region</code> appears twice in the SQL and once here. Each has a type (Text, the default; Number; Date; Boolean) and a value. Values are sent bound, never written into the SQL text (state F).</span><span class="fix">AC-453 · AC-454 · rule 98</span></div></li>
+      <li><span class="n">14</span><div><b>The splitter, 30 : 70 to start</b><span class="t">The shell's Splitter, with no new keys. The editor keeps at least 200 px and the results at least 160 px.</span><span class="fix">rule 91 · direction §2 bottom drawer</span></div></li>
+      <li><span class="n">15</span><div><b>The result head</b><span class="t">The outcome as an icon and a label, the same words as the tab and History, then the row count, the duration and the time. <b>Make a cube…</b> and <b>Make a chart…</b> sit beside Download CSV (screen 2, state K). No copy to the clipboard: CSV only.</span><span class="fix">AC-380 · AC-452 · AC-461 · rule 97</span></div></li>
+      <li><span class="n">16</span><div><b>The grid, as built</b><span class="t">24 px rows, the column's name over its type, row numbers, tabular figures and NULL in muted italics. It scrolls inside its card, with the header held.</span><span class="fix">AC-380 · rules 1, 17</span></div></li>
+      <li><span class="n">17</span><div><b>Saved and History, on the right</b><span class="t">The right pane docks as the inspector does (320 px, 280–480, rail 40), and F6 reaches it. History lists <b>All</b> of Wren's runs by default; "This data source" narrows it to the open tab's. "Only you can see these."</span><span class="fix">AC-381 · AC-458 · rule 91</span></div></li>
+      <li><span class="n">18</span><div><b>A run in History</b><span class="t">The outcome, row count and time; the SQL; its parameter values, which only Wren sees; and its data source and folder, or "Cube · through Cube, as you". Choosing a row puts its SQL and values into the tab, with Undo, or opens a new tab when the row's source differs (state J). It never runs it.</span><span class="fix">AC-381 · AC-454 · AC-465</span></div></li>
+      <li><span class="n">19</span><div><b>Older runs</b><span class="t">50 at a time, newest first, back as far as the audit trail keeps records.</span><span class="fix">AC-381</span></div></li>
+    </ol>
+    <p class="xs sec" style="margin:14px 0 0"><span class="bnote">Build note</span> Two dependencies, not estimates (F42's preamble). Bound parameters need xcube's run route to take bound values: today it takes <code>{ sql, runId, maxRows, timeoutMs, maxBytes }</code> and no values (research <code>xcube-sql-runner.md</code> L76). Each driver's placeholder syntax, and Cube's <code>/v1/cubesql</code> for the "Cube" group, need research before planning. Until a source's binding is researched, its tabs hold Run when the SQL has a <code>{{name}}</code> (AC-482, state F5).</p>
+  </section>
+
+  <!-- ======================= SCREEN 2 ======================= -->
+  <div class="screen-label">Screen 2 · Make a cube from that run: a docked pane that adds a draft cube to My workspace</div>
+  <div class="screen" id="s2">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span class="on">SQL runner</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">2</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="wb cube">
+      <aside class="lpane">
+        <div class="lsect">
+          <h3>Data source</h3>
+          <div class="picker"><span class="srcmark">◍</span><span class="nm2">emea_replica</span><span class="sec">PostgreSQL</span><span class="spacer"></span><svg class="s sec"><use href="#i-chevd"/></svg></div>
+          <div style="display:flex;gap:8px;align-items:center;justify-content:space-between"><span class="xs sec">Sales / EMEA</span><span class="status ok"><svg class="s"><use href="#i-shield"/></svg>SQL runner on</span></div>
+        </div>
+        <div class="lhead"><h3>Schema</h3><span class="spacer"></span><span class="iconbtn sm"><svg class="s"><use href="#i-refresh"/></svg></span></div>
+        <div class="find"><svg class="s"><use href="#i-search"/></svg>Find a table</div>
+        <div class="tree">
+          <div class="tr l0"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-schema"/></svg><span class="tn">public</span></div>
+          <div class="tr l0"><svg class="s cv"><use href="#i-chevd"/></svg><svg class="s tico"><use href="#i-schema"/></svg><span class="tn">sales</span><span class="spacer"></span><span class="xs muted">14 tables</span></div>
+          <div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn">orders</span></div>
+          <div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn">customers</span></div>
+          <div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn">order_lines</span></div>
+          <div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn">products</span></div>
+          <div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn">returns</span></div>
+          <div class="tr l0"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-schema"/></svg><span class="tn">staging</span></div>
+        </div>
+        <div class="lfoot">Opening a schema or a table reads only its names. Nothing runs until you press Run.</div>
+      </aside>
+      <section class="centre">
+        <div class="etabs"><span class="et on"><svg class="s" style="color:var(--ok-icon)"><use href="#s-ok"/></svg>Top EMEA orders<span class="dots"><svg class="s"><use href="#i-dots"/></svg></span><span class="x"><svg class="s"><use href="#i-x"/></svg></span></span><span class="et"><svg class="s"><use href="#s-new"/></svg>Query 2<span class="x"><svg class="s"><use href="#i-x"/></svg></span></span><span class="et add"><svg class="s"><use href="#i-plus"/></svg></span></div>
+        <div class="cbody">
+          <div class="runline"><span>Runs on <b class="mono">sales</b> at <span class="mono">pg-replica-1…:5432</span>, as <span class="mono">cube_reader</span></span><span class="spacer"></span><span class="status ok"><svg class="s"><use href="#i-shield"/></svg>On <span class="t">· Ada Admin · 1 Oct</span></span></div>
+          <div class="notebar warn"><svg class="s" style="margin-top:1px"><use href="#s-warn"/></svg><span><b>This SQL runs on the database directly, as cube_reader.</b> Folder permissions and access policies don't apply here: you can read whatever that login can read.</span></div>
+          <div class="edcard">
+            <div class="edhead"><span>SQL for <span class="mono" style="color:var(--text-primary)">emea_replica</span></span><span class="badge sm"><svg class="xs"><use href="#i-person"/></svg>Saved query · Only me</span><span class="spacer"></span><span class="btn md">Save</span><span class="btn md">Save as new…</span></div>
+            <div class="cm" style="height:112px">
+              <div class="gut"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div></div>
+              <div class="src"><div><span class="cmt">-- Top EMEA orders since a date</span></div><div><span class="kw">SELECT</span> o.order_id, c.name <span class="kw">AS</span> customer, c.country,</div><div>       o.amount, o.status, o.created_at</div><div><span class="kw">FROM</span>   sales.orders o</div><div><span class="kw">JOIN</span>   sales.customers c <span class="kw">ON</span> c.id = o.customer_id</div><div><span class="kw">WHERE</span>  o.region = <span class="prm">{{region}}</span></div></div>
+            </div>
+            <div class="pstrip"><span class="pl">Parameters</span><span class="pf"><span class="pn">region</span><span class="input sm" style="width:72px">Text<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span><span class="input sm" style="width:80px">EMEA</span></span><span class="pf"><span class="pn">since</span><span class="input sm" style="width:72px">Date<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span><span class="input sm tnum" style="width:100px">2026-09-01</span></span></div>
+            <div class="runbar"><span class="btn primary"><svg class="s"><use href="#i-play"/></svg>Run</span><span class="xs sec" style="display:inline-flex;gap:4px"><kbd class="k">⌘</kbd><kbd class="k">↵</kbd></span><span class="xs sec">lines 2–8</span><span class="spacer"></span><span class="limits">10,000 rows, 10 MB, 30 s · one run at a time</span></div>
+          </div>
+          <div class="splitter"><i></i></div>
+          <div class="rescard">
+            <div class="reshead"><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Finished</span><span class="t">1,284 rows · 0.84 s</span><span class="spacer"></span><span class="btn md ring" style="background:var(--accent-soft);border-color:var(--accent)"><svg class="s"><use href="#i-cube"/></svg>Make a cube…</span><span class="btn md"><svg class="s"><use href="#i-chart"/></svg>Make a chart…</span><span class="btn md"><svg class="s"><use href="#i-download"/></svg>Download CSV</span></div>
+            <div class="rscroll">
+              <table class="rgrid">
+                <thead><tr><th class="rn">#</th><th class="num"><span class="cn">order_id</span><span class="ct">int8</span></th><th><span class="cn">customer</span><span class="ct">text</span></th><th><span class="cn">country</span><span class="ct">bpchar</span></th><th class="num"><span class="cn">amount</span><span class="ct">numeric</span></th><th><span class="cn">status</span><span class="ct">text</span></th><th style="width:100%;border-right:0"></th></tr></thead>
+                <tbody>
+                  <tr><td class="rn">1</td><td class="num">100482</td><td>Nordwind Handels GmbH</td><td>DE</td><td class="num">18420.00</td><td>shipped</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">2</td><td class="num">100317</td><td>Lumen Retail SA</td><td>FR</td><td class="num">17950.50</td><td>shipped</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">3</td><td class="num">100655</td><td>Kestrel Foods Ltd</td><td>GB</td><td class="num">16388.00</td><td>invoiced</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">4</td><td class="num">100208</td><td>Aalto Design Oy</td><td>FI</td><td class="num">15002.75</td><td>shipped</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">5</td><td class="num">100590</td><td>Brava Hospitality SL</td><td>ES</td><td class="num">14870.00</td><td class="null">NULL</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">6</td><td class="num">100124</td><td>Van Dijk Logistiek BV</td><td>NL</td><td class="num">14420.10</td><td>returned</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">7</td><td class="num">100433</td><td>Sörensen Marin AB</td><td>SE</td><td class="num">13990.00</td><td>shipped</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">8</td><td class="num">100701</td><td>Ostrava Steelworks a.s.</td><td>CZ</td><td class="num">13512.40</td><td>invoiced</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">9</td><td class="num">100266</td><td>Bellini Arredamenti Srl</td><td>IT</td><td class="num">12980.00</td><td>shipped</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">10</td><td class="num">100519</td><td>Kraków Print Sp. z o.o.</td><td>PL</td><td class="num">12441.90</td><td>shipped</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">11</td><td class="num">100088</td><td>Atlas Gulf Trading LLC</td><td>AE</td><td class="num">12200.00</td><td>shipped</td><td style="border-right:0"></td></tr>
+                  <tr><td class="rn">12</td><td class="num">100372</td><td>Cape Fynbos Wines (Pty) Ltd</td><td>ZA</td><td class="num">11875.25</td><td>invoiced</td><td style="border-right:0"></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+      <aside class="xpane" role="dialog" aria-label="Make a cube from this query, in My workspace">
+        <div class="panehead"><h2><svg class="s" style="color:var(--role-dim)"><use href="#i-person"/></svg>Make a cube from this query · <span class="sec" style="font-weight:400">in My workspace</span></h2><span class="spacer"></span><span class="iconbtn sm"><svg class="s"><use href="#i-x"/></svg></span></div>
+        <div style="padding:14px 16px;display:grid;gap:12px;overflow:hidden">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="fld"><span class="lbl">Cube name</span><span class="input mono focus">top_emea_orders</span><span class="status ok" style="font-weight:400"><svg class="s"><use href="#s-ok"/></svg><span style="color:var(--text-secondary)">Free, and a name Cube takes</span></span></div>
+            <div class="fld"><span class="lbl">Folder it is to go to</span><span class="input">Sales / EMEA<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span><p class="help">Folders where you have read-write access.</p></div>
+          </div>
+          <div class="fld"><span class="lbl">Data source <span class="req">· the run's</span></span><span class="input ro"><span class="srcmark">◍</span><span class="mono" style="font-weight:600">emea_replica</span><span class="sec xs">· Sales / EMEA</span><span class="spacer"></span><svg class="s sec"><use href="#i-lock"/></svg></span></div>
+          <div class="fld"><span class="lbl">SQL <span class="req">· the statement that ran, lines 2–8, read-only</span></span>
+<pre class="code" style="height:96px;overflow:hidden"><span class="kw">SELECT</span> o.order_id, c.name <span class="kw">AS</span> customer, c.country,
+       o.amount, o.status, o.created_at
+<span class="kw">FROM</span>   sales.orders o
+<span class="kw">JOIN</span>   sales.customers c <span class="kw">ON</span> c.id = o.customer_id
+<span class="kw">WHERE</span>  o.region = <span class="prm">'EMEA'</span>
+  <span class="kw">AND</span>  o.created_at &gt;= <span class="prm">DATE '2026-09-01'</span></pre></div>
+          <div class="notebar plain"><svg class="s" style="margin-top:1px"><use href="#i-info"/></svg><span><b>The run's values are written in.</b> A cube's SQL takes no parameters, so <span class="mono">{{region}}</span> became <span class="mono">'EMEA'</span> and <span class="mono">{{since}}</span> became <span class="mono">DATE '2026-09-01'</span>.</span></div>
+          <div class="fld"><span class="lbl">Columns <span class="req">· one member each, proposed from the database's types</span></span>
+            <table class="grid-table compact cols">
+              <thead><tr><th style="width:30px"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span></th><th>Member</th><th style="width:150px">Kind</th><th style="width:96px">Cube type</th><th style="width:44px">Key</th></tr></thead>
+              <tbody>
+                <tr><td><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span></td><td class="mono">order_id</td><td><span class="seg"><span class="on">Dimension</span><span>Measure</span></span></td><td><span class="input sm" style="height:24px">number<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span></td><td><span class="radio on" title="Primary key"></span></td></tr>
+                <tr><td><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span></td><td class="mono">customer</td><td><span class="seg"><span class="on">Dimension</span><span>Measure</span></span></td><td><span class="input sm" style="height:24px">string<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span></td><td><span class="radio"></span></td></tr>
+                <tr><td><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span></td><td class="mono">country</td><td><span class="seg"><span class="on">Dimension</span><span>Measure</span></span></td><td><span class="input sm" style="height:24px">string<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span></td><td><span class="radio"></span></td></tr>
+                <tr><td><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span></td><td class="mono">amount</td><td><span class="seg"><span>Dimension</span><span class="on">Measure</span></span></td><td><span class="input sm" style="height:24px">sum<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span></td><td class="muted">—</td></tr>
+                <tr><td><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span></td><td class="mono">status</td><td><span class="seg"><span class="on">Dimension</span><span>Measure</span></span></td><td><span class="input sm" style="height:24px">string<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span></td><td><span class="radio"></span></td></tr>
+                <tr><td><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span></td><td class="mono">created_at</td><td><span class="seg"><span class="on">Dimension</span><span>Measure</span></span></td><td><span class="input sm" style="height:24px">time<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span></td><td><span class="radio"></span></td></tr>
+                <tr style="background:var(--bg-subtle)"><td><span class="check lock"><svg class="xs"><use href="#i-check"/></svg></span></td><td class="mono">count</td><td class="sec">Measure · added</td><td class="sec">count</td><td class="muted">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="notebar plain"><svg class="s" style="margin-top:1px;color:var(--text-secondary)"><use href="#i-cube"/></svg><span>Whoever queries this cube reads it through Cube, as the data source's serving login, with folder permissions and access policies applying. The SQL runner's caps don't apply.</span></div>
+        </div>
+        <div style="margin-top:auto;border-top:1px solid var(--border-subtle);padding:10px 16px;display:grid;gap:8px">
+          <p class="help">Adds an unpublished draft to your workspace's model. Nothing reaches Sales / EMEA until you propose it and it's approved.</p>
+          <div class="acts"><span class="btn">Cancel</span><span class="btn primary"><svg class="s"><use href="#i-plus"/></svg>Add to My workspace</span></div>
+        </div>
+      </aside>
+    </div>
+
+    <span class="pin" style="left:528px;top:442px">1</span>
+    <span class="pin" style="left:936px;top:58px">2</span>
+    <span class="pin" style="left:936px;top:106px">3</span>
+    <span class="pin" style="left:1412px;top:106px">4</span>
+    <span class="pin" style="left:936px;top:206px">5</span>
+    <span class="pin" style="left:936px;top:280px">6</span>
+    <span class="pin" style="left:936px;top:388px">7</span>
+    <span class="pin" style="left:936px;top:500px">8</span>
+    <span class="pin" style="left:1096px;top:458px">9</span>
+    <span class="pin" style="left:1240px;top:458px">10</span>
+    <span class="pin" style="left:1412px;top:458px">11</span>
+    <span class="pin" style="left:936px;top:662px">12</span>
+    <span class="pin" style="left:936px;top:716px">13</span>
+    <span class="pin" style="left:1136px;top:856px">14</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 2: what changes, and why</h2>
+    <p>Superset puts "Save dataset" between SQL and a chart, and Metabase "Turn this into a model". In wechart that object is a cube whose <code>sql</code> is the query. Charts then read it through Cube, with folder permissions and access policies, rather than reading raw runner SQL past them. The pane is the shared 480 px docked pane of the data source wizard and Generate cubes, and what it makes lands in My workspace, as every new thing does.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Make a cube…, on a finished SELECT</b><span class="t">Offered on a run that ended Finished or Limited, of a SELECT on a data source, to someone who may make a model. Elsewhere it's disabled with its reason (state K1). Pressed, it stays marked while its pane is open.</span><span class="fix">AC-461 · AC-350 · rule 101</span></div></li>
+      <li><span class="n">2</span><div><b>"in My workspace", in the pane's head</b><span class="t">With the person icon, as every workspace surface marks itself. Focus starts on the name. Esc closes it, asking first if anything changed, and focus returns to Make a cube….</span><span class="fix">AC-462 · rules 72, 85</span></div></li>
+      <li><span class="n">3</span><div><b>The cube's name</b><span class="t">Suggested from the tab's name in the grammar Cube takes (R73), and checked as AC-422 checks: taken, or not a name Cube takes, is said under the field and holds the primary button.</span><span class="fix">AC-462 · AC-422 · R73</span></div></li>
+      <li><span class="n">4</span><div><b>The folder it is to go to</b><span class="t">Read-write folders only. Drawn starting at the data source's own folder when Wren may write there (Q7).</span><span class="fix">AC-462 · rule 74 · Q7</span></div></li>
+      <li><span class="n">5</span><div><b>The data source, fixed</b><span class="t">The run's, locked. A different source would be a different query.</span><span class="fix">AC-462</span></div></li>
+      <li><span class="n">6</span><div><b>The SQL that ran</b><span class="t">Read-only, in the code face: the statement at the cursor that ran, lines 2–8, or only the selection when a selection ran. The trailing semicolon is dropped.</span><span class="fix">AC-462 · AC-387</span></div></li>
+      <li><span class="n">7</span><div><b>Parameters written in as literals, and said so</b><span class="t">The run's values replace each <code>{{name}}</code>, in the type each had, and the note names every one. The values are tinted where they now stand in the SQL.</span><span class="fix">AC-462 · R78 "Make a cube writes the run's values in as literals"</span></div></li>
+      <li><span class="n">8</span><div><b>One row per column, included to start</b><span class="t">The member name starts as the column's name. Unchecking a column leaves it out of the cube. A repeated column name never reaches this pane: Make a cube… is disabled until each has its own name (K1).</span><span class="fix">AC-462 · AC-461</span></div></li>
+      <li><span class="n">9</span><div><b>Dimension or Measure</b><span class="t">Proposed from the database's type: numeric columns that aren't the key as measures, the rest as dimensions. Changeable on each row.</span><span class="fix">AC-462 · Q9</span></div></li>
+      <li><span class="n">10</span><div><b>The Cube type, proposed and changeable</b><span class="t">For a dimension, string, number, time or boolean, from the database's type: <code>int8</code> → number, <code>text</code> → string, <code>timestamptz</code> → time. For a measure, its aggregation, drawn as <code>sum</code> for a number (Q9).</span><span class="fix">AC-462 · research cube/data-modeling.md · Q9</span></div></li>
+      <li><span class="n">11</span><div><b>One primary key</b><span class="t">A radio, so exactly one. Proposed from introspection's <code>primaryKey</code> where the column comes straight from a table, and otherwise the first column. A measure can't be the key.</span><span class="fix">AC-462 · AC-448</span></div></li>
+      <li><span class="n">12</span><div><b>A <code>count</code> measure, added</b><span class="t">As Generate cubes adds one. It's always there, so it can't be unchecked.</span><span class="fix">AC-462 · AC-139</span></div></li>
+      <li><span class="n">13</span><div><b>How the cube will be read</b><span class="t">Through Cube, as the serving login, with folder permissions and access policies, and without the runner's caps. This is the line that separates a cube from the runner's bypass.</span><span class="fix">AC-462 · AC-385 · references-sql-runner.md §6</span></div></li>
+      <li><span class="n">14</span><div><b>Add to My workspace</b><span class="t">Adds an unpublished draft file to the workspace model. The toast reads "top_emea_orders is in My workspace, unpublished · Open in Model" (K3). Nothing reaches a folder without a proposal. Make a chart… is the same pane, with <b>Add and make a chart</b> (K2).</span><span class="fix">AC-462 · AC-463 · AC-284 · AC-345 · rule 102</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= STATES ======================= -->
+  <section class="states">
+    <h2>States A–O</h2>
+    <p>One state for each part of the brief, in its order, each naming the criteria it shows. Frames show the part of the page that changes, and are drawn narrower than the screens. Unless a frame says otherwise, the viewer is Wren, a read-write member of Sales / EMEA and of Finance, with sign-in on.</p>
+    <div class="stategrid">
+
+      <!-- A -->
+      <div class="state wide">
+        <h3>A · SQL runner in the switcher, and who gets it (AC-001, AC-446, AC-304)</h3>
+        <p>SQL runner sits after Schedules, for the same people as Jobs and Schedules. A read-only user's switcher never lists it, and <code>/sql</code> shows them the same Not found page as a missing item (rule 67). Below 1,024 px the switcher folds into the menu button, as built.</p>
+        <div class="row2">
+          <div><p class="cap">A1 · A Super-Admin: SQL runner, then Security</p>
+            <div class="frame"><div class="topbar" style="border:0"><div class="brand"><span class="brand-mark">we</span>wechart</div><nav class="wsnav"><span>Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span class="on">SQL runner</span><span>Security</span></nav><span class="spacer"></span><span class="avatar">AA</span></div></div>
+            <p class="cap" style="margin-top:10px">A2 · A read-write member: no Security</p>
+            <div class="frame"><div class="topbar" style="border:0"><div class="brand"><span class="brand-mark">we</span>wechart</div><nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span></nav><span class="spacer"></span><span class="avatar">WW</span></div></div>
+            <p class="cap" style="margin-top:10px">A3 · A read-only user: Explore only, and nothing at <span class="mono">/sql</span></p>
+            <div class="frame" style="background:var(--bg-surface)"><div class="topbar"><div class="brand"><span class="brand-mark">we</span>wechart</div><nav class="wsnav"><span class="on">Explore</span></nav><span class="spacer"></span><span class="avatar">RR</span></div>
+              <div class="notfound"><b>Not found</b><span class="xs sec">There's nothing here, or you don't have access to it.</span><span class="btn sm">Go to Explore</span></div></div>
+          </div>
+          <div><p class="cap">A4 · Below 1,024 px: the menu button lists it with the rest</p>
+            <div class="frame" style="width:420px;height:300px;background:var(--bg-surface)">
+              <div class="topbar"><span class="iconbtn on"><svg class="i"><use href="#i-menu"/></svg></span><div class="brand"><span class="brand-mark">we</span></div><span class="spacer"></span><span class="avatar">WW</span></div>
+              <div class="menu" style="left:8px;top:46px;width:220px"><div class="mi">Explore</div><div class="mi">Data sources</div><div class="mi">Jobs</div><div class="mi">Schedules</div><div class="mi hl" style="font-weight:600">SQL runner</div></div>
+            </div>
+            <p class="help" style="margin-top:8px">The address names the open tab: <span class="mono">/sql?tab=7f3a</span>. Reloading in the same browser restores that tab, its data source and its text. Tabs aren't kept on wechart's server, so another browser starts with Query 1 (D5).</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- B -->
+      <div class="state wide">
+        <h3>B · The data source picker, its groups, and an off source (AC-447, AC-373, AC-383, AC-384, AC-481)</h3>
+        <p>A custom listbox with type-ahead, grouped by folder path: My workspace's sources first, then each folder Wren may run SQL in, then Cube Store at the root while it's on, then the "Cube" group. Each row gives the driver and the runner's state as an icon and a label. An off source is listed only to Super-Admins and its own folder's read-write members, and choosing it shows the off panel, never an editor that can run.</p>
+        <div class="row2">
+          <div><p class="cap">B1 · Open, as Wren</p>
+            <div class="frame" style="height:470px;background:var(--bg-surface)">
+              <div style="padding:12px;width:300px"><div class="picker open"><span class="srcmark">◍</span><span class="nm2">emea_replica</span><span class="spacer"></span><svg class="s sec"><use href="#i-chevd"/></svg></div></div>
+              <div class="menu" role="listbox" style="left:12px;top:50px;width:420px">
+                <div class="mhead"><svg class="s" style="color:var(--role-dim)"><use href="#i-person"/></svg>My workspace</div>
+                <div class="mi"><span class="srcmark ws">◍</span><span class="mono" style="font-weight:600">sandbox_pg</span><span class="xs sec">PostgreSQL</span><span class="spacer"></span><span class="badge ws sm"><svg class="xs"><use href="#i-person"/></svg>Yours · no switch</span></div>
+                <div class="msep"></div>
+                <div class="mhead">Shared / Sales / EMEA</div>
+                <div class="mi hl"><span class="srcmark">◍</span><span class="mono" style="font-weight:600">emea_replica</span><span class="xs sec">PostgreSQL</span><span class="spacer"></span><span class="status ok"><svg class="s"><use href="#i-shield"/></svg>SQL runner on</span><svg class="s" style="color:var(--accent)"><use href="#i-check"/></svg></div>
+                <div class="mi"><span class="srcmark">◍</span><span class="mono" style="font-weight:600">emea_snowflake</span><span class="xs sec">Snowflake</span><span class="spacer"></span><span class="status idle"><svg class="s"><use href="#s-off"/></svg>Off</span></div>
+                <div class="mhead">Shared / Finance</div>
+                <div class="mi"><span class="srcmark">◍</span><span class="mono" style="font-weight:600">fx_warehouse</span><span class="xs sec">PostgreSQL</span><span class="spacer"></span><span class="status ok"><svg class="s"><use href="#i-shield"/></svg>SQL runner on</span></div>
+                <div class="mhead">Shared</div>
+                <div class="mi"><span class="srcmark" style="background:var(--accent-soft);color:var(--accent)">▤</span><span style="font-weight:600">Cube Store</span><span class="xs sec">rollups</span><span class="spacer"></span><span class="status ok"><svg class="s"><use href="#i-shield"/></svg>SQL runner on</span></div>
+                <div class="msep"></div>
+                <div class="mhead"><svg class="s" style="color:var(--accent)"><use href="#i-cube"/></svg>Cube</div>
+                <div class="mi"><span class="srcmark cube"><svg class="xs"><use href="#i-cube"/></svg></span><span style="font-weight:600">Cubes and views you may query</span><span class="spacer"></span><span class="xs sec">through Cube, as you</span></div>
+              </div>
+            </div>
+            <p class="help" style="margin-top:8px">Wren sees <span class="mono">emea_snowflake</span> while it's off because she is a read-write member of its own folder. A member of Sales / EMEA / DACH, who sees it only from below, doesn't. Cube Store is listed because a Super-Admin turned it on and Wren may run SQL on a shared source (AC-384). The "Cube" group needs no switch and is shown to everyone who may open the workspace (R78-13; Q2 for one entry or one per folder).</p>
+          </div>
+          <div><p class="cap">B2 · An off source chosen, as Wren: the off panel, no editor</p>
+            <div class="frame" style="padding:16px">
+              <div class="offpanel">
+                <h2><svg class="i" style="color:var(--text-secondary)"><use href="#s-off"/></svg>The SQL runner is off for emea_snowflake</h2>
+                <p>Once a Super-Admin turns it on, it runs SELECT and EXPLAIN on this database directly, as its own login, past folder permissions and access policies.</p>
+                <p class="xs">Only a Super-Admin can turn it on. Your tab keeps its SQL.</p>
+              </div>
+            </div>
+            <p class="cap" style="margin-top:12px">B3 · The same, as a Super-Admin: Turn on… opens design 15's dialog</p>
+            <div class="frame" style="padding:16px">
+              <div class="offpanel">
+                <h2><svg class="i" style="color:var(--text-secondary)"><use href="#s-off"/></svg>The SQL runner is off for emea_snowflake</h2>
+                <p>Once on, it runs SELECT and EXPLAIN on this database directly, as <span class="mono">wechart_ro</span>, past folder permissions and access policies.</p>
+                <div style="display:flex;gap:10px;align-items:center"><span class="btn primary"><svg class="s"><use href="#i-shield"/></svg>Turn on the SQL runner…</span><span class="xs sec">The confirmation and the attestation are design 15's (G1).</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- C -->
+      <div class="state wide">
+        <h3>C · The schema browser: a table's ⋯, Find a table, loading and errors, and the Cube group's members (AC-386, AC-448, AC-449, AC-467)</h3>
+        <p>T539's tree, moved to the left pane and extended. Expanding sends the database only introspection's catalog reads. Insert SELECT writes and doesn't run. Preview 100 rows is an ordinary run in a new tab: capped, audited and in History.</p>
+        <div class="row3">
+          <div><p class="cap">C1 · A table's ⋯</p>
+            <div class="frame" style="height:250px;background:var(--bg-surface)">
+              <div class="tree" style="width:260px">
+                <div class="tr l0"><svg class="s cv"><use href="#i-chevd"/></svg><svg class="s tico"><use href="#i-schema"/></svg><span class="tn">sales</span></div>
+                <div class="tr l1 hover"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn">orders</span><span class="spacer"></span><span class="iconbtn sm on" style="width:22px;height:22px"><svg class="s"><use href="#i-dots"/></svg></span></div>
+                <div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn">customers</span></div>
+              </div>
+              <div class="menu" style="left:150px;top:64px;width:270px">
+                <div class="mi hl"><svg class="s"><use href="#i-insert"/></svg>Insert name<span class="k2">Enter</span></div>
+                <div class="mi"><svg class="s"><use href="#i-sql"/></svg>Insert SELECT</div>
+                <div class="mi"><svg class="s"><use href="#i-play"/></svg>Preview 100 rows</div>
+                <div class="msep"></div>
+                <div class="mhead" style="font-weight:400">Preview runs it in a new tab, as an ordinary run</div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">C2 · Insert SELECT, at the cursor, not run</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="cm" style="height:120px"><div class="gut"><div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div></div><div class="src"><div><span class="kw">SELECT</span> order_id, customer_id, region,</div><div>       amount, status, created_at</div><div><span class="kw">FROM</span> sales.orders</div><div><span class="kw">LIMIT</span> 100<span class="caret"></span></div><div></div><div></div></div></div>
+              <div class="runbar"><span class="status idle"><svg class="s"><use href="#s-new"/></svg>Not run yet</span><span class="spacer"></span><span class="btn sm"><svg class="s"><use href="#i-undo"/></svg>Undo</span></div>
+            </div>
+            <p class="help" style="margin-top:6px">The limit in the driver's own syntax, PostgreSQL's here. Each driver's form is fixed at build from research.</p>
+          </div>
+          <div><p class="cap">C3 · Find a table, with pages still unread</p>
+            <div class="frame" style="background:var(--bg-surface);padding:10px 0">
+              <div class="find focus"><svg class="s"><use href="#i-search"/></svg>ret<span class="caret"></span></div>
+              <p class="help" style="padding:6px 12px 0">Searching the 100 tables read in <span class="mono">sales</span>. <span class="btn link">Read the other 312</span></p>
+              <div class="tree"><div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn"><b>ret</b>urns</span></div><div class="tr l1"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s tico"><use href="#i-table"/></svg><span class="tn"><b>ret</b>urn_reasons</span></div></div>
+              <p class="help" style="padding:0 12px">No match: "No table read so far matches ‹text›."</p>
+            </div>
+          </div>
+        </div>
+        <div class="row3" style="margin-top:16px">
+          <div><p class="cap">C4 · Loading, and the built errors</p>
+            <div class="frame" style="background:var(--bg-surface);padding:10px 12px;display:grid;gap:8px">
+              <span class="status run"><svg class="s"><use href="#s-run"/></svg>Reading its schemas…</span>
+              <div class="skel" style="width:70%"></div><div class="skel" style="width:55%"></div><div class="skel" style="width:62%"></div>
+              <div class="msep"></div>
+              <span class="err-t"><svg class="s"><use href="#s-err"/></svg><span>The database didn't answer. <span class="btn link">Try again</span></span></span>
+              <span class="help">Its login sees no schemas.</span>
+              <span class="help">This data source's folder isn't in xcube yet, so its tables can't be read.</span>
+              <span class="help">Choose the folder it is to go to first: its tables are read in your workspace's preview, which places it there.</span>
+            </div>
+          </div>
+          <div><p class="cap">C5 · Cube Store: no catalog, as built</p>
+            <div class="frame" style="background:var(--bg-surface);padding:12px;display:grid;gap:8px">
+              <div class="lhead" style="padding:0"><h3>Schema</h3></div>
+              <p class="help">Cube Store has no catalog to browse. Its tables are listed in <span class="mono">information_schema.tables</span> and <span class="mono">system.tables</span>.</p>
+              <span class="btn sm" style="justify-self:start"><svg class="s"><use href="#i-sql"/></svg>Insert a SELECT of information_schema.tables</span>
+            </div>
+          </div>
+          <div><p class="cap">C6 · The "Cube" group: cubes and views, with their members</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="tree">
+                <div class="tr l0"><svg class="s cv"><use href="#i-chevd"/></svg><svg class="s" style="color:var(--accent)"><use href="#i-cube"/></svg><span class="tn">orders_emea</span><span class="xs muted">cube · Sales / EMEA</span></div>
+                <div class="tr l2"><span class="role-d">Aa</span><span class="tn">region</span><span class="ty">string</span></div>
+                <div class="tr l2"><span class="role-d">◷</span><span class="tn">created_at</span><span class="ty">time</span></div>
+                <div class="tr l2"><span class="role-m">Σ</span><span class="tn">revenue</span><span class="ty">sum</span></div>
+                <div class="tr l2"><span class="role-m">Σ</span><span class="tn">count</span><span class="ty">count</span></div>
+                <div class="tr l0"><svg class="s cv"><use href="#i-chev"/></svg><svg class="s" style="color:var(--accent)"><use href="#i-view"/></svg><span class="tn">sales_overview</span><span class="xs muted">view · Sales</span></div>
+              </div>
+              <p class="help" style="padding:0 12px 10px">Only cubes and views Wren may query. Choosing a member puts its name in the editor.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- D -->
+      <div class="state wide">
+        <h3>D · Tabs: their ⋯, closing, changing a tab's data source, and where they're kept (AC-450, AC-451, AC-480)</h3>
+        <p>Each tab is bound to one data source. Ctrl+Q opens a tab on the current data source, and Ctrl+Alt+[ and Ctrl+Alt+] select the previous and next tab, on macOS too, with Control. No key closes a tab: only its × does, and the ⋯'s Close.</p>
+        <div class="row3">
+          <div><p class="cap">D1 · A tab's ⋯</p>
+            <div class="frame" style="height:220px">
+              <div class="etabs"><span class="et on"><svg class="s"><use href="#s-new"/></svg>Query 2<span class="dots" style="background:var(--bg-subtle)"><svg class="s"><use href="#i-dots"/></svg></span><span class="x"><svg class="s"><use href="#i-x"/></svg></span></span><span class="et add"><svg class="s"><use href="#i-plus"/></svg></span></div>
+              <div class="menu" style="left:60px;top:40px;width:220px"><div class="mi hl"><svg class="s"><use href="#i-pencil"/></svg>Rename…</div><div class="mi"><svg class="s"><use href="#i-dup"/></svg>Duplicate</div><div class="msep"></div><div class="mi"><svg class="s"><use href="#i-x"/></svg>Close</div><div class="mi">Close other tabs</div></div>
+            </div>
+          </div>
+          <div><p class="cap">D2 · Closing a tab whose text isn't saved and isn't what it last ran</p>
+            <div class="frame" style="height:220px">
+              <div class="dialog" style="left:16px;top:16px;right:16px" role="alertdialog">
+                <h2>Close Query 2?</h2>
+                <p>Its SQL isn't saved, and isn't the SQL it last ran. Closing it loses the text. Its runs stay in History.</p>
+                <div class="acts"><span class="btn ring">Keep it open</span><span class="btn danger">Close tab</span></div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">D3 · Changing a tab's data source: SQL kept, result cleared</p>
+            <div class="frame" style="background:var(--bg-surface);padding:12px;display:grid;gap:8px">
+              <div class="runline"><span>Runs on <b class="mono">finance</b> at <span class="mono">pg-fin.internal:5432</span>, as <span class="mono">fin_reader</span></span></div>
+              <div class="cm" style="height:56px"><div class="gut"><div>1</div><div>2</div><div>3</div></div><div class="src"><div><span class="kw">SELECT</span> count(*) <span class="kw">FROM</span> sales.returns</div><div> <span class="kw">WHERE</span> region = <span class="prm">{{region}}</span>;</div><div></div></div></div>
+              <div class="empty" style="padding:12px"><span>Run a SELECT or EXPLAIN to see its rows here.</span></div>
+              <p class="help">The tab now runs on <span class="mono">fx_warehouse</span>. The run line and the warning name it at once. Its old result is gone; its runs stay in History.</p>
+            </div>
+          </div>
+        </div>
+        <div class="row2" style="margin-top:16px">
+          <div><p class="cap">D4 · A tab's state, as its icon, and as its tooltip and accessible name</p>
+            <div class="frame">
+              <div class="etabs"><span class="et"><svg class="s"><use href="#s-new"/></svg>Query 3</span><span class="et"><svg class="s"><use href="#s-run"/></svg>Running</span><span class="et"><svg class="s" style="color:var(--ok-icon)"><use href="#s-ok"/></svg>Finished</span><span class="et"><svg class="s"><use href="#s-warn"/></svg>Limited</span><span class="et"><svg class="s"><use href="#s-err"/></svg>Error</span><span class="et"><svg class="s"><use href="#s-held"/></svg>Held</span></div>
+              <div style="padding:12px"><span class="tip inline">orders check · Limited to 10,000 rows · on emea_replica</span></div>
+            </div>
+            <p class="help" style="margin-top:6px">The tab names here stand for each state. The label is never on the tab itself, to keep tabs short. It's in the tooltip and the accessible name, and the result head and History say it in full.</p>
+          </div>
+          <div><p class="cap">D5 · Kept in this browser only, for this signed-in user</p>
+            <div class="frame" style="background:var(--bg-surface);padding:12px;display:grid;gap:8px">
+              <div class="notebar plain"><svg class="s" style="margin-top:1px"><use href="#i-info"/></svg><span>Open tabs are kept in this browser, for you. In another browser, SQL runner starts with Query 1. Saved queries and History follow you everywhere.</span></div>
+              <p class="help">Shown once, the first time a tab is opened. Another person signing in to the same browser doesn't see Wren's tabs. Nothing about a tab is stored on wechart's server.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- E -->
+      <div class="state wide">
+        <h3>E · The editor: autocomplete, find, a selection, and ⌘/Ctrl+S (AC-387, AC-455, AC-456)</h3>
+        <p>The keys R78 approved, and only those. Autocomplete offers names introspection has already read. Find is CodeMirror's own panel. ⌘/Ctrl+S saves anywhere in the workspace.</p>
+        <div class="row3">
+          <div><p class="cap">E1 · Autocomplete: ↑ ↓ choose, Enter accepts, Esc closes the list only, Tab leaves the editor</p>
+            <div class="frame" style="background:var(--bg-surface);height:190px">
+              <div class="cm" style="height:80px"><div class="gut"><div>1</div><div>2</div><div>3</div><div>4</div></div><div class="src"><div><span class="kw">SELECT</span> o.order_id, o.cr<span class="caret"></span></div><div><span class="kw">FROM</span> sales.orders o</div><div></div><div></div></div></div>
+              <div class="menu" style="left:150px;top:24px;width:260px" role="listbox"><div class="mi hl" style="font-size:12px"><span class="tn mono"><b>cr</b>eated_at</span><span class="spacer"></span><span class="mono sec">timestamptz</span></div><div class="mi" style="font-size:12px"><span class="mono"><b>cr</b>eated_by</span><span class="spacer"></span><span class="mono sec">int8</span></div><div class="mi" style="font-size:12px"><span class="mono"><b>cr</b>m_id</span><span class="spacer"></span><span class="mono sec">text</span></div></div>
+            </div>
+          </div>
+          <div><p class="cap">E2 · A selection: Run reads Run selection</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="cm" style="height:72px"><div class="gut"><div>1</div><div>2</div><div>3</div><div>4</div></div><div class="src"><div><span class="kw">SELECT</span> o.order_id, o.amount</div><div><span class="selx"><span class="kw">FROM</span> sales.orders o</span></div><div><span class="selx"><span class="kw">WHERE</span> o.status = <span class="str">'returned'</span></span><span class="caret"></span></div><div></div></div></div>
+              <div class="runbar"><span class="btn primary"><svg class="s"><use href="#i-play"/></svg>Run selection</span><span class="xs sec"><kbd class="k">⌘</kbd><kbd class="k">↵</kbd></span><span class="xs sec">lines 2–3, selected</span></div>
+            </div>
+          </div>
+          <div><p class="cap">E3 · ⌘/Ctrl+F in the editor: the editor's own find</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--border-subtle);background:var(--bg-subtle)"><span class="input sm focus" style="width:160px">region</span><span class="xs sec tnum">2 of 3</span><span class="iconbtn sm"><svg class="s"><use href="#i-chevd"/></svg></span><span class="spacer"></span><span class="iconbtn sm"><svg class="s"><use href="#i-x"/></svg></span></div>
+              <div class="cm" style="height:56px"><div class="gut"><div>6</div><div>7</div><div>8</div></div><div class="src"><div><span class="kw">WHERE</span>  o.<span class="selx">region</span> = <span class="prm">{{region}}</span></div><div>  <span class="kw">AND</span>  o.created_at &gt;= <span class="prm">{{since}}</span></div><div><span class="kw">ORDER BY</span> o.amount <span class="kw">DESC</span>;</div></div></div>
+            </div>
+            <p class="help" style="margin-top:6px">Outside the editor, ⌘/Ctrl+F is the browser's own find, as everywhere else. ⌘/Ctrl+S on a new query opens Save… (I2).</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- F -->
+      <div class="state wide">
+        <h3>F · Parameters: a type each, Run held until each has a value, and a source that can't bind them (AC-453, AC-454, AC-482, AC-382)</h3>
+        <p>A <code>{{name}}</code> outside string literals and comments is a parameter, found with the editor's own SQL lexer. Values are sent bound, so the audit's SQL keeps <code>{{name}}</code> and holds no value. Where research hasn't shown that a source binds values (Cube Store and the "Cube" group until then), Run is held and says so.</p>
+        <div class="row3">
+          <div><p class="cap">F1 · A value missing: Run held, naming it</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="pstrip"><span class="pl">Parameters</span><span class="pf"><span class="pn">region</span><span class="input sm" style="width:72px">Text<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span><span class="input sm bad ph" style="width:80px">Value</span></span><span class="pf"><span class="pn">since</span><span class="input sm" style="width:64px">Date<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span><span class="input sm tnum" style="width:96px">2026-09-01</span></span></div>
+              <div class="runbar"><span class="btn primary dis"><svg class="s"><use href="#i-play"/></svg>Run</span><span class="status idle"><svg class="s"><use href="#s-held"/></svg><span style="font-weight:400">Give <span class="mono">region</span> a value to run</span></span></div>
+            </div>
+          </div>
+          <div><p class="cap">F2 · The four types</p>
+            <div class="frame" style="height:186px;background:var(--bg-surface)">
+              <div class="pstrip" style="border-top:0"><span class="pf"><span class="pn">limit_n</span><span class="input sm focus" style="width:84px">Number<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span><span class="input sm tnum" style="width:64px">50</span></span><span class="pf"><span class="pn">open</span><span class="input sm" style="width:84px">Boolean<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span><span class="seg"><span class="on">true</span><span>false</span></span></span></div>
+              <div class="menu" style="left:76px;top:40px;width:120px"><div class="mi" style="font-size:12px">Text</div><div class="mi hl" style="font-size:12px;font-weight:600">Number</div><div class="mi" style="font-size:12px">Date</div><div class="mi" style="font-size:12px">Boolean</div></div>
+            </div>
+          </div>
+          <div><p class="cap">F3 · Not parameters: inside a string or a comment</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="cm" style="height:56px"><div class="gut"><div>1</div><div>2</div><div>3</div></div><div class="src"><div><span class="cmt">-- filter by {{region}} later</span></div><div><span class="kw">SELECT</span> <span class="str">'{{not_a_param}}'</span> <span class="kw">AS</span> label,</div><div>       amount <span class="kw">FROM</span> sales.orders</div></div></div>
+              <div class="pstrip"><span class="xs sec">No parameters</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="row3" style="margin-top:16px">
+          <div><p class="cap">F4 · Cube Store: parameters aren't available, Run held</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="cm" style="height:40px"><div class="gut"><div>1</div><div>2</div></div><div class="src"><div><span class="kw">SELECT</span> * <span class="kw">FROM</span> dev_pre_aggregations.orders_by_month</div><div><span class="kw">WHERE</span> region = <span class="prm" style="background:var(--bg-subtle);color:var(--text-secondary);outline-color:var(--border-strong)">{{region}}</span></div></div></div>
+              <div class="runbar" style="height:auto;padding:8px 12px;align-items:flex-start"><span class="btn primary dis"><svg class="s"><use href="#i-play"/></svg>Run</span><span class="status idle" style="white-space:normal"><svg class="s" style="margin-top:1px"><use href="#s-held"/></svg><span style="font-weight:400">Parameters aren't available on Cube Store. Write the value into the SQL to run it here.</span></span></div>
+            </div>
+          </div>
+          <div><p class="cap">F5 · The "Cube" group, the same until its binding is researched</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="runbar" style="height:auto;padding:8px 12px;align-items:flex-start;border-top:0"><span class="btn primary dis"><svg class="s"><use href="#i-play"/></svg>Run</span><span class="status idle" style="white-space:normal"><svg class="s" style="margin-top:1px"><use href="#s-held"/></svg><span style="font-weight:400">Parameters aren't available on Cube SQL. Write the value into the SQL to run it here.</span></span></div>
+            </div>
+            <p class="help" style="margin-top:6px">No strip is shown on such a source: nothing could be typed into it. Once research shows a source binds values, the strip appears there as on a data source.</p>
+          </div>
+          <div><p class="cap">F6 · The audit event keeps the names, never the values</p>
+            <div class="frame" style="background:var(--bg-surface);padding:10px 12px">
+              <dl class="kv" style="grid-template-columns:70px 1fr"><dt>Event</dt><dd><span class="ev"><svg class="s"><use href="#i-sql"/></svg>SQL run</span></dd><dt>Who</dt><dd>Wren Writer</dd><dt>Source</dt><dd>emea_replica · Sales / EMEA</dd><dt>SQL</dt><dd class="mono">SELECT … WHERE o.region = {{region}} AND o.created_at &gt;= {{since}} ORDER BY o.amount DESC</dd></dl>
+            </div>
+            <p class="help" style="margin-top:6px">The values live only in Wren's History and saved queries. Nobody else sees them, Super-Admins included.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- G -->
+      <div class="state wide">
+        <h3>G · Running, cancelled, capped, stopped, refused and failed (AC-452, AC-375, AC-377 … AC-380)</h3>
+        <p>Design 15's labels, each an icon and a label, the same in the tab, the result head and the History row. One run per person, across every tab. Esc never cancels. Leaving the workspace doesn't stop a run; coming back shows it.</p>
+        <div class="row2">
+          <div><p class="cap">G1 · Running, on its own tab</p>
+            <div class="frame">
+              <div class="etabs"><span class="et on"><svg class="s"><use href="#s-run"/></svg>orders check<span class="x"><svg class="s"><use href="#i-x"/></svg></span></span><span class="et"><svg class="s" style="color:var(--ok-icon)"><use href="#s-ok"/></svg>Top EMEA orders</span></div>
+              <div style="padding:12px;display:grid;gap:8px">
+                <div class="runbar card" style="border:1px solid var(--border-subtle)"><span class="btn primary dis"><svg class="s"><use href="#i-play"/></svg>Run</span><span class="btn"><svg class="s"><use href="#i-stop"/></svg>Cancel</span><span class="spacer"></span><span class="limits">one run at a time</span></div>
+                <div class="rescard" style="flex:none"><div class="reshead"><span class="status run"><svg class="s"><use href="#s-run"/></svg>Running <span class="t">· 12 s of 30</span></span><span class="spacer"></span><span class="btn md dis">Make a cube…</span><span class="btn md dis">Make a chart…</span><span class="btn md dis">Download CSV</span></div><div style="padding:10px 12px"><div class="progress"><i style="width:40%"></i></div></div></div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">G2 · Every other tab: Run held, with Go to it and Cancel that run</p>
+            <div class="frame">
+              <div class="etabs"><span class="et"><svg class="s"><use href="#s-run"/></svg>orders check</span><span class="et on"><svg class="s" style="color:var(--ok-icon)"><use href="#s-ok"/></svg>Top EMEA orders<span class="x"><svg class="s"><use href="#i-x"/></svg></span></span></div>
+              <div style="padding:12px;display:grid;gap:8px">
+                <div class="notebar"><svg class="s" style="margin-top:1px"><use href="#s-run"/></svg><span>You have a run going on <b>emea_replica</b>, started at 14:40:02. One run at a time. <span class="btn link">Go to it</span> · <span class="btn link">Cancel that run</span></span></div>
+                <div class="runbar card" style="border:1px solid var(--border-subtle)"><span class="btn primary dis"><svg class="s"><use href="#i-play"/></svg>Run</span><span class="xs sec">held while your other run goes</span></div>
+              </div>
+            </div>
+            <p class="help" style="margin-top:6px">Go to it selects the running tab. On Cube Store there's no Cancel that run, and the note says it can't be stopped (AC-379, R64).</p>
+          </div>
+        </div>
+        <div class="row3" style="margin-top:16px">
+          <div><p class="cap">G3 · Capped: Limited to 10,000 rows (or 10 MB)</p>
+            <div class="frame"><div class="rescard"><div class="reshead"><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Limited to 10,000 rows</span><span class="t">· 2.1 s</span></div><div class="resnote">Only the first 10,000 rows came back. Narrow the query to see the rest.</div><table class="rgrid"><tbody><tr><td class="rn">9,999</td><td class="num">204411</td><td>shipped</td></tr><tr><td class="rn">10,000</td><td class="num">204412</td><td>invoiced</td></tr><tr class="cut"><td colspan="3">Cut here: the limit of 10,000 rows</td></tr></tbody></table></div></div>
+          </div>
+          <div><p class="cap">G4 · Stopped at 30 seconds, rows that arrived marked as cut</p>
+            <div class="frame"><div class="rescard"><div class="reshead"><span class="status err"><svg class="s"><use href="#s-err"/></svg>Stopped at 30 seconds</span><span class="t">· 4,120 rows arrived</span></div><table class="rgrid"><tbody><tr><td class="rn">4,119</td><td class="num">87311</td><td>open</td></tr><tr><td class="rn">4,120</td><td class="num">87312</td><td>open</td></tr><tr class="cut"><td colspan="3">Cut here: stopped at 30 seconds</td></tr></tbody></table></div></div>
+          </div>
+          <div><p class="cap">G5 · Cancelled, rows that arrived marked as cut</p>
+            <div class="frame"><div class="rescard"><div class="reshead"><span class="status idle"><svg class="s"><use href="#s-cancel"/></svg>Cancelled</span><span class="t">· 212 rows arrived</span></div><table class="rgrid"><tbody><tr><td class="rn">212</td><td class="num">55120</td><td class="num">31</td></tr><tr class="cut"><td colspan="3">Cut here: you cancelled it</td></tr></tbody></table></div></div>
+          </div>
+        </div>
+        <div class="row3" style="margin-top:16px">
+          <div><p class="cap">G6 · Not run: refused before reaching the database</p>
+            <div class="frame"><div class="rescard"><div class="reshead"><span class="status err"><svg class="s"><use href="#s-err"/></svg>Not run</span></div><div class="resnote" style="border:0;color:var(--text-primary)">Only SELECT and EXPLAIN run here, one statement at a time. This is a DELETE. Nothing reached the database.</div></div></div>
+          </div>
+          <div><p class="cap">G7 · Database error, redacted, its line marked in the gutter</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="cm" style="height:40px"><div class="gut"><div class="bad">✕ 1</div><div>2</div></div><div class="src"><div><span class="kw">SELECT</span> o.<span class="squig">amount_net</span> <span class="kw">FROM</span> sales.orders o</div><div><span class="kw">WHERE</span> o.region = <span class="prm">{{region}}</span></div></div></div>
+              <div class="reshead" style="border-top:1px solid var(--border-subtle)"><span class="status err"><svg class="s"><use href="#s-err"/></svg>Database error</span></div>
+              <pre class="code" style="margin:8px 12px 12px">ERROR: column o.amount_net does not exist
+LINE 1: SELECT o.amount_net FROM sales.orders o</pre>
+            </div>
+          </div>
+          <div><p class="cap">G8 · Busy, and Cube Store still finishing</p>
+            <div class="frame" style="background:var(--bg-surface);padding:12px;display:grid;gap:10px">
+              <div class="reading" style="display:flex;gap:6px;align-items:flex-start;font-size:12px;line-height:16px"><svg class="s" style="margin-top:1px"><use href="#s-warn"/></svg><span><b>Busy.</b> xcube is running as many queries as it can. Try again in a few seconds. <span class="btn link">Retry</span></span></div>
+              <div class="msep"></div>
+              <div style="display:flex;gap:6px;align-items:flex-start;font-size:12px;line-height:16px"><svg class="s" style="margin-top:1px"><use href="#s-run"/></svg><span>Stopped at 30 seconds. Cube Store is still finishing it, until 14:41:20 at the latest. One run at a time: your next one runs once it has ended.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- H -->
+      <div class="state wide">
+        <h3>H · Empty and loading (AC-466)</h3>
+        <p>An icon and one sentence each, and an action where there is one. Lists load as skeleton rows; the result loads as the Running head in G1.</p>
+        <div class="row3">
+          <div><p class="cap">H1 · First visit: one tab, no data source, focus on the picker</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="etabs"><span class="et on"><svg class="s"><use href="#s-new"/></svg>Query 1<span class="x"><svg class="s"><use href="#i-x"/></svg></span></span></div>
+              <div style="display:grid;grid-template-columns:150px 1fr;min-height:150px">
+                <div style="padding:10px;border-right:1px solid var(--border-subtle)"><div class="picker open"><span class="xs muted">Choose…</span><span class="spacer"></span><svg class="s sec"><use href="#i-chevd"/></svg></div></div>
+                <div class="empty"><svg class="i"><use href="#i-sql"/></svg><b>Choose a data source to write SQL against.</b></div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">H2 · A member with no data source to run on</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="empty"><svg class="i"><use href="#s-off"/></svg><b>No data source runs SQL for you yet.</b><span>A Super-Admin turns the SQL runner on for each data source. Your own data sources in My workspace need no switch.</span><span class="btn sm">Go to Data sources</span><span class="xs sec">You can still query cubes through the "Cube" group.</span></div>
+            </div>
+          </div>
+          <div><p class="cap">H3 · No result yet, and no rows</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="empty" style="padding:16px"><span>Run a SELECT or EXPLAIN to see its rows here.</span></div>
+              <div class="rescard" style="border-left:0;border-right:0;border-radius:0"><div class="reshead"><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Finished</span><span class="t">0 rows · 0.12 s</span></div><table class="rgrid"><thead><tr><th class="rn">#</th><th><span class="cn">return_id</span><span class="ct">int8</span></th><th><span class="cn">reason</span><span class="ct">text</span></th><th style="width:100%;border-right:0"></th></tr></thead></table><div class="empty" style="padding:12px">No rows came back.</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="row3" style="margin-top:16px">
+          <div><p class="cap">H4 · The empty editor</p>
+            <div class="frame" style="background:var(--bg-surface)"><div class="cm" style="height:48px"><div class="gut"><div>1</div></div><div class="src"><div class="muted">SELECT … or EXPLAIN SELECT …</div></div></div></div>
+          </div>
+          <div><p class="cap">H5 · Saved and History, empty</p>
+            <div class="frame" style="background:var(--bg-surface)"><div class="empty" style="padding:14px"><svg class="i"><use href="#i-save"/></svg><span>No saved queries. Save… keeps a query here; only you can see it.</span></div><div class="msep"></div><div class="empty" style="padding:14px"><svg class="i"><use href="#i-hist"/></svg><span>No runs yet.</span></div></div>
+          </div>
+          <div><p class="cap">H6 · History and the tree, loading</p>
+            <div class="frame" style="background:var(--bg-surface);padding:12px;display:grid;gap:12px">
+              <div style="display:grid;gap:6px"><div class="skel" style="width:40%"></div><div class="skel" style="width:90%"></div><div class="skel" style="width:60%"></div></div>
+              <div style="display:grid;gap:6px"><div class="skel" style="width:35%"></div><div class="skel" style="width:85%"></div><div class="skel" style="width:55%"></div></div>
+              <span class="status run"><svg class="s"><use href="#s-run"/></svg>Reading its tables…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- I -->
+      <div class="state wide">
+        <h3>I · Saved queries: the list, Save…, Delete with Undo, a source no longer available, and ⌘K (AC-457 … AC-460, AC-483)</h3>
+        <p>Personal only. A saved query keeps its SQL, its data source, and each parameter's name, type and last value. It never appears in Explore, a folder, a proposal or a bookmark, and nobody else reaches it, Super-Admins included. Saving needs no proposal and makes no audit event.</p>
+        <div class="row3">
+          <div><p class="cap">I1 · The Saved tab</p>
+            <div class="frame" style="background:var(--bg-surface);height:330px">
+              <div class="rtabs"><span class="on">Saved <span class="count soft">6</span></span><span>History</span></div>
+              <div class="runsub"><span style="display:flex;gap:6px;align-items:center"><svg class="s"><use href="#i-person"/></svg>Only me · by name</span></div>
+              <div class="rrow cur"><div class="top"><b>Top EMEA orders</b><span class="when"><span class="iconbtn sm" style="width:22px;height:22px"><svg class="s"><use href="#i-dots"/></svg></span></span></div><div class="src"><span class="srcmark">◍</span>emea_replica · Sales / EMEA</div><div class="src"><svg class="s"><use href="#i-person"/></svg>Only me · 2 parameters</div></div>
+              <div class="rrow hover"><div class="top"><b>GL postings since</b></div><div class="src"><span class="srcmark">◍</span>fx_warehouse · Finance</div><div class="src"><svg class="s"><use href="#i-person"/></svg>Only me · 1 parameter</div></div>
+              <div class="rrow"><div class="top"><b>Revenue by region</b></div><div class="src"><span class="srcmark cube"><svg class="xs"><use href="#i-cube"/></svg></span>Cube</div><div class="src"><svg class="s"><use href="#i-person"/></svg>Only me</div></div>
+              <div class="menu" style="left:150px;top:112px;width:160px"><div class="mi">Open</div><div class="mi">Rename…</div><div class="mi">Duplicate</div><div class="msep"></div><div class="mi" style="color:var(--err)"><svg class="s"><use href="#i-trash"/></svg>Delete</div></div>
+            </div>
+          </div>
+          <div><p class="cap">I2 · Save…: a name (required, unique to you, at most 100) and a description</p>
+            <div class="frame" style="height:330px">
+              <div class="dialog" style="left:12px;top:12px;right:12px" role="dialog">
+                <h2>Save query</h2>
+                <div class="fld"><span class="lbl">Name</span><span class="input bad">Top EMEA orders</span><span class="err-t"><svg class="s"><use href="#s-err"/></svg>You already have a saved query named "Top EMEA orders".</span></div>
+                <div class="fld"><span class="lbl">Description <span class="req">· optional</span></span><span class="input" style="height:56px;align-items:flex-start;padding-top:6px;white-space:normal">Largest EMEA orders since a date, for the month-end check.</span><span class="help" style="text-align:right">58 / 1,000</span></div>
+                <p class="help">Keeps the SQL, emea_replica, and region and since with their types and values. Only you can see it.</p>
+                <div class="acts"><span class="btn">Cancel</span><span class="btn primary dis">Save</span></div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">I3 · Deleted, with Undo</p>
+            <div class="frame" style="height:120px"><div class="toast" style="left:12px;right:12px;top:12px"><span>Deleted "GL postings since". <span class="btn link">Undo</span></span></div></div>
+            <p class="cap" style="margin-top:14px">I4 · Its data source no longer available to you: opened with none chosen, and not named</p>
+            <div class="frame" style="background:var(--bg-surface);padding:10px 12px;display:grid;gap:8px">
+              <div class="picker open"><span class="xs muted">Choose…</span><span class="spacer"></span><svg class="s sec"><use href="#i-chevd"/></svg></div>
+              <div class="notebar warn"><svg class="s" style="margin-top:1px"><use href="#s-warn"/></svg><span>Choose a data source: the one it was saved with isn't available to you.</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="row2" style="margin-top:16px">
+          <div><p class="cap">I5 · ⌘K: your own saved queries, labelled "Saved query"</p>
+            <div class="frame" style="background:var(--bg-surface);padding:10px">
+              <div class="input focus">top em<span class="caret"></span></div>
+              <div class="menu inline" style="margin-top:6px;box-shadow:none"><div class="mhead">Saved queries · only you</div><div class="mi hl"><svg class="s"><use href="#i-sql"/></svg>Top EMEA orders<span class="k2">Saved query · emea_replica</span></div><div class="mhead">Dashboards</div><div class="mi"><span class="sec">▦</span>EMEA top accounts<span class="k2">Sales / EMEA</span></div></div>
+            </div>
+            <p class="help" style="margin-top:6px">Opening one from ⌘K opens it in a new SQL runner tab, or selects its tab if it's already open.</p>
+          </div>
+          <div><p class="cap">I6 · On a saved query whose text has changed since it was saved</p>
+            <div class="frame" style="background:var(--bg-surface)"><div class="edhead"><span>SQL for <span class="mono" style="color:var(--text-primary)">emea_replica</span></span><span class="badge sm"><svg class="xs"><use href="#i-person"/></svg>Saved query · Only me</span><span class="status idle"><svg class="s"><use href="#i-pencil"/></svg>Changed since saved</span><span class="spacer"></span><span class="btn md">Save</span><span class="btn md">Save as new…</span></div></div>
+            <p class="help" style="margin-top:6px">Save updates "Top EMEA orders"; Save as new… opens the dialog with "Top EMEA orders (copy)".</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- J -->
+      <div class="state wide">
+        <h3>J · History: putting a run back, on this tab or a new one (AC-381, AC-465)</h3>
+        <p>Choosing a row, or pressing Enter on it, never runs it. Rows aren't kept, so seeing a row's result means running it again.</p>
+        <div class="row3">
+          <div><p class="cap">J1 · Same data source: into this tab, with Undo</p>
+            <div class="frame" style="height:110px"><div class="toast" style="left:12px;right:12px;top:12px"><span>Put the run of 13:51 into Top EMEA orders. <span class="btn link">Undo</span></span></div></div>
+          </div>
+          <div><p class="cap">J2 · Another data source: a new tab on that source</p>
+            <div class="frame"><div class="etabs"><span class="et"><svg class="s" style="color:var(--ok-icon)"><use href="#s-ok"/></svg>Top EMEA orders</span><span class="et on"><svg class="s"><use href="#s-new"/></svg>From History · 14:10<span class="x"><svg class="s"><use href="#i-x"/></svg></span></span></div><p class="help" style="padding:10px 12px">Opened on <span class="mono">fx_warehouse</span> with its SQL and <span class="mono">from = 2026-07-01</span>. Top EMEA orders is untouched.</p></div>
+          </div>
+          <div><p class="cap">J3 · This data source</p>
+            <div class="frame" style="background:var(--bg-surface)"><div class="runsub"><span class="seg"><span>All</span><span class="on">This data source</span></span><span>Your runs on emea_replica · newest first</span></div><div class="rrow"><div class="top"><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Finished</span><span class="rows">1,284 rows</span><span class="when">14:32</span></div><div class="q">SELECT o.order_id, c.name AS customer …</div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- K -->
+      <div class="state wide">
+        <h3>K · Make a cube… and Make a chart…: disabled with a reason, the chart variant, the toast, and the chart editor (AC-461 … AC-463, AC-481)</h3>
+        <p>Both land in My workspace (F29). Make a chart… saves the cube so previews can query it, then opens the chart editor on a new workspace chart over it, with nothing placed.</p>
+        <div class="row3">
+          <div><p class="cap">K1 · Disabled, each with its reason (in its tooltip and accessible description)</p>
+            <div class="frame" style="background:var(--bg-surface);padding:10px 12px;display:grid;gap:8px">
+              <span class="btn md dis" style="justify-self:start"><svg class="s"><use href="#i-cube"/></svg>Make a cube…</span>
+              <table class="grid-table compact"><tbody>
+                <tr><td class="sec">EXPLAIN</td><td class="wrap">An EXPLAIN's plan isn't data to model.</td></tr>
+                <tr><td class="sec">Cube Store</td><td class="wrap">Cube Store holds rollups Cube builds; model the source instead.</td></tr>
+                <tr><td class="sec">Stopped, cancelled</td><td class="wrap">Run it to the end first.</td></tr>
+                <tr><td class="sec">Same names</td><td class="wrap">Two columns are named <span class="mono">a</span>: give each its own name with AS, and run it again.</td></tr>
+                <tr><td class="sec">"Cube" group</td><td class="wrap">These rows already come from cubes.</td></tr>
+                <tr><td class="sec">Not allowed</td><td class="wrap">Not shown to someone who may not make a model.</td></tr>
+              </tbody></table>
+            </div>
+          </div>
+          <div><p class="cap">K2 · Make a chart…: the same pane, a different last step</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="panehead"><h2><svg class="s" style="color:var(--role-dim)"><use href="#i-person"/></svg>Make a chart from this query · <span class="sec" style="font-weight:400">in My workspace</span></h2></div>
+              <div style="padding:10px 16px"><p class="help">Every field of screen 2, then:</p></div>
+              <div style="border-top:1px solid var(--border-subtle);padding:10px 16px;display:grid;gap:8px">
+                <p class="help">Adds the cube to your workspace's model, then opens a new chart on it in My workspace, to go to Sales / EMEA.</p>
+                <div class="acts"><span class="btn">Cancel</span><span class="btn primary"><svg class="s"><use href="#i-chart"/></svg>Add and make a chart</span></div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">K3 · After Add to My workspace</p>
+            <div class="frame" style="height:100px"><div class="toast" style="left:12px;right:12px;top:12px"><svg class="s" style="color:var(--ok-icon);margin-top:3px"><use href="#s-ok"/></svg><span>top_emea_orders is in My workspace, unpublished · <span class="btn link">Open in Model</span></span></div></div>
+          </div>
+        </div>
+        <div class="state" style="margin-top:16px">
+          <p class="cap">K4 · The chart editor, opened by Add and make a chart: the cube chosen, nothing placed, and the way back</p>
+          <div class="frame" style="background:var(--bg-surface)">
+            <div class="band"><svg class="s"><use href="#i-person"/></svg>My workspace · only you can see this</div>
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border-subtle)"><span class="btn ghost sm"><svg class="s"><use href="#i-chevl"/></svg>Back to SQL runner</span><b>New chart</b><span class="xs sec">· New · to go to Sales / EMEA</span><span class="spacer"></span><span class="btn sm">Save</span></div>
+            <div style="display:grid;grid-template-columns:260px 1fr 300px;min-height:180px">
+              <div style="border-right:1px solid var(--border-subtle);padding:8px 0"><div class="tr l0"><svg class="s cv"><use href="#i-chevd"/></svg><svg class="s" style="color:var(--accent)"><use href="#i-cube"/></svg><span class="tn" style="font-weight:600">top_emea_orders</span><span class="badge sm">draft</span></div><div class="tr l2"><span class="role-d">Aa</span>customer</div><div class="tr l2"><span class="role-d">Aa</span>country</div><div class="tr l2"><span class="role-d">◷</span>created_at</div><div class="tr l2"><span class="role-m">Σ</span>amount</div><div class="tr l2"><span class="role-m">Σ</span>count</div></div>
+              <div class="empty"><svg class="i"><use href="#i-chart"/></svg><b>Drag a field to start, or use + on a well.</b></div>
+              <div style="border-left:1px solid var(--border-subtle);padding:10px 12px;display:grid;gap:6px;align-content:start"><span class="xs strong sec">X</span><div class="input sm ph">+ Add a field</div><span class="xs strong sec">Y</span><div class="input sm ph">+ Add a field</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- L -->
+      <div class="state wide">
+        <h3>L · Lost access mid-session: the switch turned off, or the folder's access removed (AC-466, AC-373)</h3>
+        <p>The next Run, or the next catalog read, finds out. Principle 6: a source the person can no longer see is never named again.</p>
+        <div class="row2">
+          <div><p class="cap">L1 · A Super-Admin turned the runner off for emea_replica</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="runline" style="padding:10px 12px 0"><span>Runs on <b class="mono">sales</b> at <span class="mono">pg-replica-1.sales.internal:5432</span>, as <span class="mono">cube_reader</span></span><span class="spacer"></span><span class="status idle"><svg class="s"><use href="#s-off"/></svg>Off</span></div>
+              <div class="runbar" style="border-top:0;margin-top:6px"><span class="btn primary dis"><svg class="s"><use href="#i-play"/></svg>Run</span><span class="status idle"><svg class="s"><use href="#s-off"/></svg><span style="font-weight:400">The SQL runner was turned off for emea_replica.</span></span></div>
+              <p class="help" style="padding:0 12px 10px">The tab keeps its text and its last result. Choosing another source from the picker lets it run again.</p>
+            </div>
+          </div>
+          <div><p class="cap">L2 · Wren's access to the folder was removed</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="runline" style="padding:10px 12px 0"><span>This tab's data source isn't available to you.</span></div>
+              <div class="runbar" style="border-top:0;margin-top:6px"><span class="btn primary dis"><svg class="s"><use href="#i-play"/></svg>Run</span><span class="status idle"><svg class="s"><use href="#i-lock"/></svg><span style="font-weight:400">Choose a data source: this one isn't available to you.</span></span></div>
+              <p class="help" style="padding:0 12px 10px">The picker shows "Choose…", the schema browser empties, the result is cleared, and the tab's tooltip drops the name. History rows on that source are Q4.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- M -->
+      <div class="state wide">
+        <h3>M · The "Cube" group: through Cube, as you (AC-467, AC-481)</h3>
+        <p>Cube's SQL API, run as the user, with their folder access and Cube's access policies, as a chart is. No switch, R50's caps, audited as a SQL run marked "Cube", and listed in History. The run line says it goes through Cube, in place of the bypass warning.</p>
+        <div class="row2">
+          <div><p class="cap">M1 · A tab through Cube: no bypass warning</p>
+            <div class="frame" style="background:var(--bg-page);padding:12px;display:grid;gap:8px">
+              <div class="runline"><span><svg class="s" style="vertical-align:-3px;color:var(--accent)"><use href="#i-cube"/></svg> Runs through <b>Cube</b>, as you: your folder access and Cube's access policies apply, as they do to a chart.</span></div>
+              <div class="edcard"><div class="cm" style="height:56px"><div class="gut"><div>1</div><div>2</div><div>3</div></div><div class="src"><div><span class="kw">SELECT</span> region, <span class="kw">MEASURE</span>(revenue)</div><div><span class="kw">FROM</span> orders_emea</div><div><span class="kw">GROUP BY</span> 1</div></div></div><div class="runbar"><span class="btn primary"><svg class="s"><use href="#i-play"/></svg>Run</span><span class="spacer"></span><span class="limits">10,000 rows, 10 MB, 30 s · one run at a time</span></div></div>
+            </div>
+          </div>
+          <div><p class="cap">M2 · Its result: no Make a cube or Make a chart, saying why</p>
+            <div class="frame"><div class="rescard"><div class="reshead"><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Finished</span><span class="t">6 rows · 0.31 s</span><span class="spacer"></span><span class="btn md dis" title="These rows already come from cubes."><svg class="s"><use href="#i-cube"/></svg>Make a cube…</span><span class="btn md dis"><svg class="s"><use href="#i-chart"/></svg>Make a chart…</span><span class="btn md"><svg class="s"><use href="#i-download"/></svg>Download CSV</span></div><div class="resnote">These rows already come from cubes: chart them in Explore.</div></div></div>
+            <p class="cap" style="margin-top:12px">M3 · In the audit trail, marked "Cube"</p>
+            <div class="frame" style="background:var(--bg-surface)"><table class="grid-table"><tbody><tr><td>14:20:11</td><td>Wren Writer</td><td><span class="ev"><svg class="s"><use href="#i-sql"/></svg>SQL run</span> <span class="badge sm accent"><svg class="xs"><use href="#i-cube"/></svg>Cube</span></td><td class="sec">Finished · 6 rows</td></tr></tbody></table></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- N -->
+      <div class="state wide">
+        <h3>N · The data source's page keeps a "SQL runner" tab: the switch, who may run, and Open in SQL runner (AC-464, AC-373, AC-374, AC-383)</h3>
+        <p>Design 15's sixth tab, renamed SQL runner, with no editor. It holds either the off panel or the switch's record with Turn off and who may run, plus <b>Open in SQL runner</b>, which opens a workspace tab on this data source. It's shown to the people AC-373 names, and no one else.</p>
+        <div class="row2">
+          <div><p class="cap">N1 · On, as a Super-Admin</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="tabs" style="padding:0 8px"><span>General</span><span>Connection</span><span>Test history</span><span>Usage</span><span>In Cube</span><span class="on"><svg class="s"><use href="#i-sql"/></svg>SQL runner</span></div>
+              <div style="padding:16px;display:grid;gap:12px">
+                <div style="display:flex;gap:10px;align-items:center"><span class="status ok"><svg class="s"><use href="#i-shield"/></svg>SQL runner on</span><span class="xs sec">Ada Admin confirmed <span class="mono">cube_reader</span> can only read · 1 Oct, 09:12</span><span class="spacer"></span><span class="btn sm">Turn off</span></div>
+                <dl class="kv"><dt>Who may run SQL</dt><dd>Super-Admins, and read-write members of Sales / EMEA: <span class="mono">sales-emea-rw</span></dd><dt>Runs as</dt><dd><span class="mono">cube_reader</span> on <span class="mono">sales</span> at <span class="mono">pg-replica-1.sales.internal:5432</span></dd></dl>
+                <span class="btn primary" style="justify-self:start"><svg class="s"><use href="#i-ext"/></svg>Open in SQL runner</span>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">N2 · Off, as a Super-Admin; and as a read-write member</p>
+            <div class="frame" style="padding:12px;display:grid;gap:10px">
+              <div class="offpanel"><h2><svg class="i" style="color:var(--text-secondary)"><use href="#s-off"/></svg>The SQL runner is off for emea_snowflake</h2><p>Once on, it runs SELECT and EXPLAIN on this database directly, as <span class="mono">wechart_ro</span>, past folder permissions and access policies.</p><span class="btn primary" style="justify-self:start"><svg class="s"><use href="#i-shield"/></svg>Turn on the SQL runner…</span></div>
+              <div class="offpanel"><h2><svg class="i" style="color:var(--text-secondary)"><use href="#s-off"/></svg>The SQL runner is off for emea_snowflake</h2><p class="xs">Only a Super-Admin can turn it on. There's no Open in SQL runner while it's off.</p></div>
+            </div>
+          </div>
+        </div>
+        <div class="row2" style="margin-top:16px">
+          <div><p class="cap">N3 · A data source in My workspace: no switch</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="band"><svg class="s"><use href="#i-person"/></svg>My workspace · only you can see this</div>
+              <div style="padding:16px;display:grid;gap:10px"><span class="status ok"><svg class="s"><use href="#i-person"/></svg>Yours · runs with no switch, on its saved settings</span><span class="btn primary" style="justify-self:start"><svg class="s"><use href="#i-ext"/></svg>Open in SQL runner</span><p class="help">A copy pointed at another database, user or role needs a Super-Admin's switch, as a shared data source does (AC-383).</p></div>
+            </div>
+          </div>
+          <div><p class="cap">N4 · The other ways in: the page head's ⋯, and each row's ⋯ in Data sources and in Explore</p>
+            <div class="frame" style="height:190px;background:var(--bg-surface)">
+              <div class="menu" style="left:12px;top:12px;width:250px"><div class="mhead">emea_replica · page head</div><div class="mi hl"><svg class="s"><use href="#i-ext"/></svg>Open in SQL runner</div><div class="msep"></div><div class="mi dis xs">… the built items, unchanged</div></div>
+              <div class="menu" style="left:290px;top:12px;width:240px"><div class="mhead">A row in Data sources or Explore</div><div class="mi hl"><svg class="s"><use href="#i-ext"/></svg>Open in SQL runner</div><div class="msep"></div><div class="mi dis xs">… the built items, unchanged</div></div>
+            </div>
+            <p class="help" style="margin-top:6px">Offered only to someone who may run SQL on that source, and only while it's on or theirs. Each opens a new workspace tab on it. Cube Store keeps its Turn on… in the Data sources header ⋯ (design 15 P5).</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- O -->
+      <div class="state wide">
+        <h3>O · Narrower windows: 1,024–1,279 px, and below 1,024 px (direction §2, AC-304)</h3>
+        <p>The editor keeps its 560 px minimum. Between 1,024 and 1,279 px, Saved and History fold to a 40 px rail and open over the centre, as the inspector does. Below 1,024 px, the left pane folds to a rail too, and the switcher folds into the menu button (A4). How far the workspace goes below 1,024 px is Q1.</p>
+        <div class="row2">
+          <div><p class="cap">O1 · 1,180 px: Saved and History on a rail</p>
+            <div class="frame" style="height:220px;display:grid;grid-template-columns:150px 1fr 40px">
+              <div class="lpane" style="padding:10px;display:grid;gap:6px;align-content:start"><div class="picker"><span class="srcmark">◍</span><span class="nm2">emea_replica</span></div><div class="find" style="margin:0">Find a table</div></div>
+              <div style="padding:10px;display:grid;gap:8px;align-content:start"><div class="notebar warn"><svg class="s"><use href="#s-warn"/></svg><span>This SQL runs on the database directly, as cube_reader. …</span></div><div class="cm" style="height:64px"><div class="gut"><div>1</div><div>2</div><div>3</div></div><div class="src"><div><span class="kw">SELECT</span> …</div></div></div></div>
+              <div class="rail" style="border-left:1px solid var(--border-subtle)"><span class="iconbtn sm" title="Saved"><svg class="s"><use href="#i-save"/></svg></span><span class="iconbtn sm on" title="History"><svg class="s"><use href="#i-hist"/></svg></span></div>
+            </div>
+          </div>
+          <div><p class="cap">O2 · 900 px: both panes on rails; the picker opens over the editor</p>
+            <div class="frame" style="height:220px;display:grid;grid-template-columns:40px 1fr 40px;position:relative">
+              <div class="rail" style="border-right:1px solid var(--border-subtle)"><span class="iconbtn sm on" title="Data source and schema"><svg class="s"><use href="#i-schema"/></svg></span></div>
+              <div style="padding:10px;display:grid;gap:8px;align-content:start"><div class="notebar warn"><svg class="s"><use href="#s-warn"/></svg><span>This SQL runs on the database directly, as cube_reader. …</span></div><div class="cm" style="height:64px"><div class="gut"><div>1</div><div>2</div><div>3</div></div><div class="src"><div><span class="kw">SELECT</span> …</div></div></div></div>
+              <div class="rail" style="border-left:1px solid var(--border-subtle)"><span class="iconbtn sm"><svg class="s"><use href="#i-hist"/></svg></span></div>
+              <div class="lpane" style="position:absolute;left:40px;top:0;bottom:0;width:260px;box-shadow:var(--shadow-pop);padding:10px;display:grid;gap:6px;align-content:start"><div class="picker"><span class="srcmark">◍</span><span class="nm2">emea_replica</span><span class="spacer"></span><svg class="s sec"><use href="#i-chevd"/></svg></div><div class="find" style="margin:0">Find a table</div><div class="tr l0"><svg class="s cv"><use href="#i-chev"/></svg><span class="tn">sales</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= FROM DESIGN 15 ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>What moves from design 15, and what stays</h2>
+    <p>Design 15 (approved 2026-10-01) put the runner on each data source's page. Its safety, labels and dialogs carry over unchanged. Only where things sit changes.</p>
+    <div class="decision" style="margin-top:0">
+      <table>
+        <thead><tr><th style="width:280px">Design 15, as built</th><th>In the SQL runner workspace</th><th style="width:300px">On the data source's page</th><th style="width:150px">Criteria</th></tr></thead>
+        <tbody>
+          <tr><td>The tab "SQL", sixth on the page</td><td>A workspace of its own, after Schedules</td><td>The tab stays, renamed <b>SQL runner</b>, with no editor</td><td>AC-001 · AC-446 · AC-464</td></tr>
+          <tr><td>The switch: off panel (P1), Turn on… with the attestation, Turn off, who and when</td><td>Read-only: the picker shows on or off. An off source chosen shows the same off panel, with Turn on… for a Super-Admin</td><td><b>Stays</b>, with who may run, plus Open in SQL runner (N1–N3)</td><td>AC-373 · AC-374</td></tr>
+          <tr><td>The run line and the warning</td><td><b>Moves</b> above every tab's editor, naming that tab's source and login. A "Cube" tab says it runs through Cube instead</td><td>Not repeated</td><td>AC-385 · AC-467</td></tr>
+          <tr><td>The editor, Run, ⌘/Ctrl+Enter, Run selection, the limits</td><td><b>Moves</b>, one per tab. With nothing selected, Run runs the statement at the cursor</td><td>—</td><td>AC-387</td></tr>
+          <tr><td>The schema browser (P3, T539)</td><td><b>Moves</b> to the left pane, with Find a table, PK / FK tags, Insert SELECT and Preview 100 rows</td><td>—</td><td>AC-386 · AC-448 · AC-449</td></tr>
+          <tr><td>The result grid and Download CSV</td><td><b>Moves</b>, with Make a cube… and Make a chart…</td><td>—</td><td>AC-380 · AC-461</td></tr>
+          <tr><td>My runs, this data source by default</td><td><b>Moves</b> to the right pane as History, <b>All</b> by default, with "This data source"</td><td>—</td><td>AC-381</td></tr>
+          <tr><td>"You have a run going… Go to it"</td><td>Go to it selects that tab</td><td>—</td><td>AC-452</td></tr>
+          <tr><td>A workspace data source, with no switch</td><td>First in the picker, "Yours · no switch"</td><td>The tab says so, with Open in SQL runner (N3)</td><td>AC-383 · AC-447</td></tr>
+          <tr><td>Cube Store, and its Turn on… in the Data sources header ⋯ (P5)</td><td>At the root of the picker while on. No schema browser, as built</td><td>Unchanged</td><td>AC-384</td></tr>
+          <tr><td>The audit event "SQL run"</td><td>Unchanged: every run, Preview included. A "Cube" run is marked Cube. Parameters appear as <code>{{name}}</code></td><td>—</td><td>AC-382 · AC-454 · AC-481</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ======================= KEYBOARD ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Keyboard and accessibility</h2>
+    <p>Principle 5 and rule 85, applied to the workspace. The keys R78 approved under R75 are the statement at the cursor, ⌘/Ctrl+S, ⌘/Ctrl+F in the editor, autocomplete, Ctrl+Q and Ctrl+Alt+[ / ]. Nothing else is added. Every other key below is one the app already has.</p>
+    <div class="decision" style="margin-top:0">
+      <table>
+        <thead><tr><th style="width:200px">Moment</th><th style="width:260px">Keys</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>Panes</td><td><kbd class="k">F6</kbd></td><td>Cycles the three landmarks, "Data source and schema", "SQL editor tabs" and "Saved and History", as built. Each pane is a labelled region.</td></tr>
+          <tr><td>The picker</td><td><kbd class="k">Enter</kbd> / <kbd class="k">Space</kbd> · <kbd class="k">↑</kbd> <kbd class="k">↓</kbd> · typing · <kbd class="k">Esc</kbd></td><td>A combobox with a listbox. Group headings are read before their first option ("Shared / Sales / EMEA, emea_replica, PostgreSQL, SQL runner on"). Esc closes it and keeps the source.</td></tr>
+          <tr><td>The schema tree</td><td>T539's keys</td><td>One tab stop, arrows to move and open, Enter inserts the name. A table's ⋯ is a button after its row. PK and FK are read as "primary key" and "foreign key to sales.customers".</td></tr>
+          <tr><td>Editor tabs</td><td><kbd class="k">←</kbd> <kbd class="k">→</kbd> in the tab list</td><td>A <code>tablist</code>, as the built tab lists are. Each tab's ⋯ and × are separate buttons after it. Each tab's name includes its state: "Query 1, Finished, 1,284 rows, on emea_replica".</td></tr>
+          <tr><td>New tab, previous, next</td><td><kbd class="k">Ctrl</kbd>+<kbd class="k">Q</kbd> · <kbd class="k">Ctrl</kbd>+<kbd class="k">Alt</kbd>+<kbd class="k">[</kbd> · <kbd class="k">Ctrl</kbd>+<kbd class="k">Alt</kbd>+<kbd class="k">]</kbd></td><td>Only while focus is in the workspace, with Control on macOS too. New tabs open on the current data source. No key closes a tab (Q3 asks for a check that these keys reach the page).</td></tr>
+          <tr><td>Run</td><td><kbd class="k">⌘</kbd>/<kbd class="k">Ctrl</kbd>+<kbd class="k">Enter</kbd> in the editor</td><td>The selection, or else the statement at the cursor. The outcome is announced in the polite live region: "Finished, 1,284 rows in 0.84 seconds". A held Run gives its reason in its accessible description. <kbd class="k">Esc</kbd> never cancels.</td></tr>
+          <tr><td>Save</td><td><kbd class="k">⌘</kbd>/<kbd class="k">Ctrl</kbd>+<kbd class="k">S</kbd> in the workspace</td><td>Saves the open tab's saved query, or opens Save… for a new one, in place of the browser's save. Outside the workspace it does nothing new.</td></tr>
+          <tr><td>Find</td><td><kbd class="k">⌘</kbd>/<kbd class="k">Ctrl</kbd>+<kbd class="k">F</kbd> in the editor</td><td>The editor's own find panel. Outside the editor, the browser's find.</td></tr>
+          <tr><td>Autocomplete</td><td>typing · <kbd class="k">↑</kbd> <kbd class="k">↓</kbd> · <kbd class="k">Enter</kbd> · <kbd class="k">Esc</kbd> · <kbd class="k">Tab</kbd></td><td>The list opens as you type. ↑ ↓ choose, Enter accepts, Esc closes the list only, and Tab still leaves the editor. Each option is read with its type.</td></tr>
+          <tr><td>Parameters</td><td><kbd class="k">Tab</kbd></td><td>A labelled group, "Parameters". Each type and value field is labelled with its parameter's name: "region, type", "region, value".</td></tr>
+          <tr><td>History and Saved</td><td><kbd class="k">↑</kbd> <kbd class="k">↓</kbd> · <kbd class="k">Enter</kbd></td><td>Enter puts a run back, as a click does, and the toast with Undo is announced. A saved query's ⋯ is a button after its row.</td></tr>
+          <tr><td>Make a cube, Save…, Close tab?</td><td><kbd class="k">Tab</kbd> · <kbd class="k">Esc</kbd></td><td>Rule 85: focus moves in on open, Esc closes (asking first if anything changed), and focus returns to the control that opened it. Close tab? starts on Keep it open.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Every state as an icon and a label</h3>
+      <div class="legend">
+        <div><span class="status idle"><svg class="s"><use href="#s-new"/></svg>Not run yet</span><span></span><span>a new tab</span></div>
+        <div><span class="status run"><svg class="s"><use href="#s-run"/></svg>Running · n s of 30</span><span></span><span>design 15</span></div>
+        <div><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Finished</span><span></span><span>design 15</span></div>
+        <div><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Limited to 10,000 rows</span><span></span><span>or 10 MB</span></div>
+        <div><span class="status err"><svg class="s"><use href="#s-err"/></svg>Stopped at 30 seconds</span><span></span><span>rows marked cut</span></div>
+        <div><span class="status idle"><svg class="s"><use href="#s-cancel"/></svg>Cancelled</span><span></span><span>rows marked cut</span></div>
+        <div><span class="status err"><svg class="s"><use href="#s-err"/></svg>Not run</span><span></span><span>refused, two sentences</span></div>
+        <div><span class="status err"><svg class="s"><use href="#s-err"/></svg>Database error</span><span></span><span>redacted, line marked</span></div>
+        <div><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Busy</span><span></span><span>xcube's 503, with Retry</span></div>
+        <div><span class="status run"><svg class="s"><use href="#s-run"/></svg>Still finishing in Cube Store</span><span></span><span>until xcube's time</span></div>
+        <div><span class="status idle"><svg class="s"><use href="#s-held"/></svg>Run held</span><span></span><span>a value missing, or not on this source</span></div>
+        <div><span class="status ok"><svg class="s"><use href="#i-shield"/></svg>SQL runner on</span><span></span><span>picker, run line, page tab</span></div>
+        <div><span class="status idle"><svg class="s"><use href="#s-off"/></svg>Off</span><span></span><span>off panel</span></div>
+        <div><span class="badge ws sm"><svg class="xs"><use href="#i-person"/></svg>Yours · no switch</span><span></span><span>a workspace source</span></div>
+        <div><span class="status run"><svg class="s"><use href="#i-cube"/></svg>Through Cube, as you</span><span></span><span>the "Cube" group</span></div>
+        <div><span class="badge sm"><svg class="xs"><use href="#i-person"/></svg>Saved query · Only me</span><span></span><span>rule 81's wording</span></div>
+        <div><span class="status idle"><svg class="s"><use href="#i-pencil"/></svg>Changed since saved</span><span></span><span>proposal P1</span></div>
+        <div><span class="status idle"><svg class="s"><use href="#i-lock"/></svg>Isn't available to you</span><span></span><span>access lost, never named</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= PROPOSALS AND QUESTIONS ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Proposals, and questions for you</h2>
+    <p>The screens and states draw what F42 and the amended F40 criteria ask for, with R78's answers. The proposals go beyond them, to adopt or not, and nothing above depends on them. The questions are gaps the spec and the design study don't settle. Each is drawn one way so the design is complete, and the way drawn is only a default until you decide.</p>
+    <div class="decision" style="margin-top:0">
+      <h3>Proposals: adopt or not</h3>
+      <table>
+        <thead><tr><th style="width:36px">#</th><th>Proposal</th><th>Why</th><th style="width:120px">Where</th></tr></thead>
+        <tbody>
+          <tr><td>P1</td><td>"Changed since saved", an icon and a label beside "Saved query · Only me", when the tab's text or parameters differ from the saved query.</td><td>Save on a saved query overwrites it (AC-457). Without a marker, nothing says whether there is anything to save, or that closing would lose a change.</td><td class="w">I6</td></tr>
+          <tr><td>P2</td><td>A one-time note, the first time a tab is opened, that open tabs are kept in this browser only.</td><td>R78 chose "Browser only". Someone moving to another machine would otherwise look for tabs that aren't there. Saved queries and History do follow them.</td><td class="w">D5</td></tr>
+          <tr><td>P3</td><td>On Cube Store, where there's no schema browser, a button that inserts a SELECT of <code>information_schema.tables</code>.</td><td>The built note names where Cube Store's tables are, but the person still has to type the query. It inserts and doesn't run, like Insert SELECT.</td><td class="w">C5</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Questions — your decision</h3>
+      <table>
+        <thead><tr><th style="width:36px">#</th><th>Question</th><th>Drawn as, and the alternatives</th><th style="width:120px">Where</th></tr></thead>
+        <tbody>
+          <tr><td>Q1</td><td>What the workspace does below 1,024 px. direction §2 makes the app view-only there, but the runner has no view mode.</td><td><b>Drawn (a):</b> both side panes fold to 40 px rails that open over the centre, and the editor stays usable. (b) A message that SQL runner needs a window at least 1,024 px wide, with Saved and History still readable. (c) View-only: Saved and History readable, no editor.</td><td class="w">O2</td></tr>
+          <tr><td>Q2</td><td>Is the "Cube" group one entry, every cube and view the person may query, or one entry per folder's model?</td><td><b>Drawn (a):</b> one entry, "Cubes and views you may query", with each cube's folder shown in the browser. (b) One entry per folder whose model the person may query, each with its own browser.</td><td class="w">B1, C6</td></tr>
+          <tr><td>Q3</td><td>R78-12's keys, Ctrl+Q and Ctrl+Alt+[ / ], may not reach the page everywhere: a browser or an operating system may keep Ctrl+Q for itself, and some keyboard layouts type [ and ] with a key that sends Ctrl+Alt. Nothing in <code>docs/research/</code> covers this yet.</td><td><b>Drawn (a):</b> the keys as approved, with a research doc checking each supported browser, operating system and the enterprise's keyboard layouts before planning. A conflict found goes back to you. (b) Approve a second binding now, used only where research finds a conflict.</td><td class="w">D, keyboard</td></tr>
+          <tr><td>Q4</td><td>A History row whose data source the person can no longer use. AC-381 lists each run with its data source and folder, and keeps every run within the retention. Principle 6 and rule 100 say a source the person can't see isn't named.</td><td><b>Drawn (a):</b> the row stays, its source and folder read "A data source no longer available to you", and choosing it opens a tab with no source chosen. (b) The row keeps naming its source, as AC-381 reads. (c) The row is hidden while access is lost, which AC-381 would need amending for.</td><td class="w">J, L2</td></tr>
+          <tr><td>Q5</td><td>Choosing another data source for a tab that has a result.</td><td><b>Drawn (a):</b> it changes at once: the SQL stays, the result clears, and its runs stay in History. (b) Ask first when a result would be cleared.</td><td class="w">D3</td></tr>
+          <tr><td>Q6</td><td>A tab's state on the tab itself.</td><td><b>Drawn (a):</b> an icon on the tab; the label in its tooltip and accessible name, and in full in the result head and History, keeping tabs short (AC-450 names the tooltip and accessible name). (b) An icon and a short label on each tab ("Finished"), at the cost of fewer tabs in view.</td><td class="w">D4</td></tr>
+          <tr><td>Q7</td><td>Where Make a cube's "Folder it is to go to" starts.</td><td><b>Drawn (a):</b> at the data source's own folder when the person may write there (or at a workspace source's target), otherwise empty. (b) Always empty, so it's always a choice.</td><td class="w">screen 2 pin 4</td></tr>
+          <tr><td>Q8</td><td>How many tabs may be open at once. Tabs are kept in the browser.</td><td><b>Drawn (a):</b> no limit; the tab strip scrolls. (b) A limit, with "+" disabled and its reason at the limit. A number would be your call.</td><td class="w">D</td></tr>
+          <tr><td>Q9</td><td>Make a cube's Kind and Cube type for a measure. AC-462 names "a cube type proposed from the database's type", and a measure in Cube takes an aggregation, not string, number, time or boolean.</td><td><b>Drawn (a):</b> numeric columns other than the key start as measures with <code>sum</code>, chosen from Cube's measure types; the rest start as dimensions with string, number, time or boolean. (b) Every column starts as a dimension, and measures are added later in Model. (c) As (a), but numeric columns start as dimensions too.</td><td class="w">screen 2 pins 9–10</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+</body>
+</html>

@@ -2,6 +2,7 @@
 
 **Status:** proposed on 2026-09-19. Waiting for the user to accept it after reviewing the prototype.
 **Phase 2 (2026-09-25):** principles 6–9, §7e and rules 59–89 extend this direction to sign-in, folder access, workspaces, proposals, history, bookmarks, the audit trail, the country map and the box plot. Evidence: `references.md` › "Phase 2". **Accepted by the user on 2026-09-25.**
+**R78 (2026-10-17):** §7f and rules 90–108 extend it to the SQL runner workspace and personal access tokens. Evidence: `references-sql-runner.md` (its checklist rules 107–125, renumbered here and amended for R78's answers) and designs 17 and 18 (`reviews/2026-10-17/designs/`). **Proposed, waiting for the user's approval of designs 17 and 18.**
 **Sources:**
 
 - `references.md`: six enterprise BI products studied, with a committed direction.
@@ -493,6 +494,42 @@ Nothing in §2–§7d changes. No new colour and no new type size is added: ever
 - Over Cube's row limit, a warning band on the tile reads "Computed from _n_ of _N_ rows", with the status-warning icon.
 - Hover on a box: the category, n, minimum, Q1, median, Q3 and maximum (and the whisker ends when Tukey is on), in tabular numerals.
 
+## 7f. R78: the SQL runner workspace and personal access tokens (proposed 2026-10-17)
+
+**Direction** (`references-sql-runner.md` › Direction). A "SQL runner" workspace after Schedules, laid out as §2's three-pane workbench: a data source picker and lazy schema browser on the left; tabs bound to a data source in the centre, each with F40's warning, the CodeMirror editor, typed and bound parameters and a dense result grid; Saved and History on the right. Make a cube and Make a chart turn a finished run into drafts in My workspace. The data source's page keeps only the runner's switch and "Open in SQL runner". Personal access tokens for MCP live under the person's account, reached from the account menu, with every user's in Security for Super-Admins.
+
+Nothing in §2–§7e changes, except that the switcher gains SQL runner after Schedules (AC-001 as amended; §2's phase-1 list is superseded by AC-001). No new colour, type size or weight is added (`references-sql-runner.md` › Tokens: "No new colour, type size or weight is needed"). Every value below reuses an existing token; the table records which, so design-critic can measure against it.
+
+| Token use | Value | Traced to |
+| --- | --- | --- |
+| SQL runner left pane (picker and schema browser) | 280 px, 220–400, rail 40 | §2 "Left tree"; references-sql-runner.md Tokens (Superset's 400 px rejected) |
+| SQL runner right pane (Saved and History) | 320 px, 280–480, rail 40 | §2 "Right inspector"; references-sql-runner.md Tokens; design 15 placed My runs at the right |
+| Editor : results split | 30 : 70 to start; editor ≥ 200 px, results ≥ 160 px | references-sql-runner.md Tokens (Superset `INITIAL_NORTH_PERCENT` 30, minimum north 200); §2 bottom drawer minimum 160 |
+| Make a cube / Make a chart pane | 480 px, docked | §7e (design 01's wizard pane); Generate cubes' shared head (T691-4) |
+| Save… dialog; New token dialog | 520 px | §7e, the workspace dialogs |
+| Revoke and Close tab? dialogs | 520 px alert dialogs, focus on the safe choice | §7e; design 15's dialogs; rule 85 |
+| Code face (editor, SQL in panes, token text, the Claude Code command) | IBM Plex Mono 12/16 | §3; decisions model-Q2 #6 (12/16, not design 15's 12/18) |
+| Schema tree rows | 28 px, `text-xs` | §4; rule 17; §3 "field and file trees" |
+| Result grid rows | 24 px dense, cells padded 8 px | §4; decisions dashboard-Q4, data-sources-Q1 |
+| History and Saved rows | design 15's two-line rows, `text-xs` | design 15 screen 1 pin 12 |
+| Editor tabs | the page-tab style, 13 px | §7d (13 px on page tabs) |
+| Controls (Run, Save, Make…, picker, New token) | 32 px; parameter fields and editor-head buttons 28 px compact | §4; decisions components-Q1 |
+| PK / FK tags; token scope tags | 12/16 text tags, `border-subtle` outline, radius 3 | §3 floor (absolute); §7d scope-tag radius |
+| Run and token states | `status-success`, `status-warning`, `status-error` and idle, each an icon and a label | §5; rule 3; design 15's state legend |
+| "Yours", "Only me" | the person icon and a label, on the workspace badge | rules 72, 81 |
+| Preview and Insert SELECT limit | 100 rows | references-sql-runner.md (Superset `PREVIEW_QUERY_LIMIT` 100; Hex "100-row preview"); AC-449 |
+| Run caps | 10,000 rows · 10 MB · 30 s · one run per person | AC-377 … AC-379 (unchanged) |
+| Access tokens page | list rows 34; "Connect a client" pane 400 px | §4 admin lists; design 16's docked pane |
+
+**Where each surface lives**
+
+| Surface | Placement | ACs |
+| --- | --- | --- |
+| SQL runner | Switcher, after Schedules, for Super-Admins and read-write members; `/sql` with the open tab named | AC-001, AC-446 |
+| A data source's SQL runner tab | Design 15's sixth tab, renamed, holding the switch and Open in SQL runner, with no editor | AC-464, AC-373 |
+| Access tokens | Account menu (and the single-user chip's), above Sign out; `/account/tokens`; every signed-in user | AC-430, AC-479 |
+| Every user's tokens | Security › Access tokens, after Audit trail; Super-Admins only | AC-470 |
+
 ## 8. Components (primitives and states)
 
 - **Shell:** TopBar, WorkspaceSwitcher, Pane (with collapsed rail), Splitter, Drawer, CommandPalette.
@@ -530,6 +567,11 @@ Nothing in §2–§7d changes. No new colour and no new type size is added: ever
   - BookmarkRow (visibility icon and label)
   - AuditTable, AuditFilters and AuditRecord
   - CountryMapTile (map, legend, "No data" swatch, unplaced-codes note); BoxPlotTile (row-limit warning band)
+- **R78 (§7f):**
+  - SourcePicker (custom listbox, grouped, state per row); SchemaTree (PK / FK tags, Find a table, table ⋯)
+  - EditorTabs (state icon, ⋯, ×); RunLine; ParameterStrip; RunBar (held, with its reason); ResultHead (Make a cube…, Make a chart…, Download CSV)
+  - SavedList and HistoryList (Only me); SaveQueryDialog; MakeCubePane (columns table)
+  - TokenList (working, no longer working); NewTokenDialog; TokenShownOnce; ConnectHelp; RevokeDialog
 
 ## 9. Checklist (numbered rules for design-critic and write-spec)
 
@@ -625,3 +667,25 @@ Phase 2 (§7e; evidence in `references.md` › Phase 2):
 87. A country map names every code it can't place in a text note under the map, in page DOM rather than inside the chart.
 88. A box plot draws Q1–Q3 boxes with a median line, whiskers per its option, and outliers as dots. Its tooltip lists n and the five statistics in tabular numerals.
 89. A box plot drawn from fewer rows than its data holds shows "Computed from _n_ of _N_ rows" on the tile, with the warning icon.
+
+R78, the SQL runner workspace (§7f; design 17). From `references-sql-runner.md` › Checklist, its rules 107–125 renumbered from 90 (the copilot study's proposed 90–106 aren't adopted), and amended where R78's answers differ, each amendment named:
+
+90. The workspace switcher lists **SQL runner** after Schedules, to Super-Admins and read-write members only. Its address names the open tab, and reloading in the same browser restores that tab, its data source and its text. *(ref. 107; AC-001, AC-446; amended for R78's "Browser only")*
+91. The SQL runner has three panes: on the left, the data source picker and schema browser (280 px, 220–400, rail 40); in the centre, the editor tabs over the results; on the right, Saved and History (320 px, 280–480, rail 40). F6 cycles them. The editor and the results split at 30 : 70 to start, with the editor at least 200 px and the results at least 160 px. *(ref. 108)*
+92. The picker lists only data sources the person may run SQL on, or could once a Super-Admin turns the runner on: their own My workspace sources first, then by folder path, then Cube Store at the root while it is on, then the "Cube" group, which everyone who may open the workspace sees, with no switch. Each row shows the driver and the runner's state as an icon and a label. An off source is listed only to Super-Admins and to its own folder's read-write members, and choosing it shows the off panel. *(ref. 109; AC-447, AC-481; the "Cube" group added for R78-13)*
+93. Every editor tab is bound to exactly one data source. A tab's run state appears as an icon, with its label in the tab's tooltip and accessible name, never as colour alone. Changing a tab's data source keeps the SQL and clears the result. Tabs are kept in that browser only, for that signed-in user, and never on wechart's server. *(ref. 110; AC-450, AC-451; storage amended for R78's "Browser only")*
+94. Above every tab's editor stand the run line (database, host, login) and AC-385's warning, naming that tab's data source. Neither can be hidden. A tab in the "Cube" group says instead that it runs through Cube, as the user, and shows no bypass warning. *(ref. 111; AC-385, AC-467)*
+95. The schema browser lists schemas → tables → columns, each column with its database type and PK or FK tags, an FK's tooltip naming its target. Nothing runs when a node opens, except catalog reads. "Insert SELECT" writes a SELECT in the driver's dialect with a 100-row limit and doesn't run it. "Preview 100 rows" is an ordinary run in a new tab: capped, audited and listed in History. *(ref. 112; AC-448, AC-449)*
+96. One person has at most one run going across every tab. Every other tab's Run is disabled, with "Go to it" and "Cancel that run". Esc never cancels a run. *(ref. 113; AC-452, AC-379)*
+97. Every run outcome uses design 15's labels as an icon and a label, the same in the tab, the result head and History. A result cut at any limit says which limit. *(ref. 114; AC-452, AC-377, AC-378)*
+98. A `{{name}}` outside strings and comments is a parameter. It is listed once under the editor with a type (Text, Number, Date or Boolean) and a value, and Run is held, naming what is missing, until every parameter has a value. Values are sent bound and never written into the SQL text. The audit record's SQL keeps `{{name}}` and holds no value. Where research hasn't shown that a source binds values, Run is held and says parameters aren't available on that source. *(ref. 115; AC-453, AC-454; the last sentence added for R78-14, AC-482)*
+99. Saved queries are personal. Only their owner can list, open or find them, Super-Admins included. They never appear in Explore, a folder, a proposal or a bookmark. Each shows "Only me" as an icon and a label, and Delete offers Undo. A name is required, at most 100 characters and unique among the owner's saved queries; a description is at most 1,000 characters. *(ref. 116; AC-458, AC-460; the name rule added for R78-15, AC-483)*
+100. A saved query or History row whose data source the person can no longer use opens with no data source chosen, and never names the old one. *(ref. 117; AC-459; design 17 Q4)*
+101. Make a cube… and Make a chart… are enabled only on a Finished or Limited SELECT run on a data source (not Cube Store, and not the "Cube" group), for someone who may make a model. Otherwise they are disabled, with the reason given. *(ref. 118; AC-461; the "Cube" group added for R78-13, AC-481)*
+102. Make a cube… opens a docked pane headed "in My workspace". It shows the name (held to AC-422), a target folder among read-write folders only, the run's data source, the SQL that ran (with parameter values written in, and saying so), and each column with include, member name, dimension or measure, Cube type and primary key. It adds a `count` measure, adds an unpublished draft, and publishes nothing to any folder. *(ref. 119; AC-462)*
+103. Make a chart… does what rule 102 does, then opens the chart editor on a new chart in My workspace over that cube, with nothing placed and "← Back to SQL runner". *(ref. 120; AC-463; "nothing placed" added for R78's answer to the study's Q7)*
+104. The SQL runner's empty, loading and error states each show an icon and one sentence, and an action where there is one. Lists load as skeleton rows. A database error is shown redacted, and marks its line in the editor where the database names one. *(ref. 121; AC-466)*
+105. Closing a tab whose text is neither saved nor the SQL of its last run asks first. *(ref. 122; AC-450; its storage sentence moved to rule 93)*
+106. A data source's page keeps the runner's switch, its record, the off panel and "Open in SQL runner", and holds no SQL editor. *(ref. 123; AC-464)*
+107. The SQL runner adds only the keys R78 approved under R75: ⌘/Ctrl+Enter runs the selection, or else the statement at the cursor; ⌘/Ctrl+S saves; ⌘/Ctrl+F finds inside the editor; autocomplete opens as you type (↑ ↓ choose, Enter accepts, Esc closes the list only, Tab still leaves the editor); Ctrl+Q opens a tab on the current data source, and Ctrl+Alt+[ and Ctrl+Alt+] select the previous and next tab, with Control on macOS too. No key closes a tab. *(ref. 124; AC-387, AC-455, AC-456, AC-480; amended from "no shortcut … unless the user approves it" to the set R78 approved)*
+108. Every SQL runner pane, dialog and popover follows rule 85. The picker is a custom listbox that meets the 12 px floor. The workspace adds no colour, type size or weight. *(ref. 125)*
