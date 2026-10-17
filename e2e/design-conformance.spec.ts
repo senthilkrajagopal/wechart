@@ -3127,7 +3127,14 @@ test.describe('T257: the chart editor', () => {
       height: '28px',
       'font-size': '12px',
     });
-    expect((await sort.boundingBox())!.y).toBe((await top.boundingBox())!.y);
+    // Read together: the wells above still settle as the chart's answer
+    // comes, moving both rows at once between two separate reads.
+    expect(
+      await sort.evaluate(
+        (node, other) => node.getBoundingClientRect().y - other!.getBoundingClientRect().y,
+        await top.elementHandle(),
+      ),
+    ).toBe(0);
   });
 
   test('the preview sits in a tile, over a drawer whose tabs always show, its rows a data grid', async ({
