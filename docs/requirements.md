@@ -669,7 +669,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **Order.** The MCP server and the SQL runner workspace come first; the copilot and the ask shortcut wait `[R78]`.
 - **Signing in: personal access tokens** `[R78]`. Each user creates a scoped, expiring, revocable access token in wechart. A client using it acts as that user, with that user's own folder permissions. Signing in through OAuth (the research's options A and B) was not chosen.
 - **Clients on day one** `[R78]`: Claude Code, and Claude.ai and Claude Desktop custom connectors.
-  - Claude.ai and Desktop connectors call from Anthropic's cloud, so `/mcp` must be reachable from the public internet (research, "Remote support by client"). How it is exposed is open (§P2.8, R78-7).
+  - Claude.ai and Desktop connectors call from Anthropic's cloud, so `/mcp` must be reachable from the public internet (research, "Remote support by client"). How it is exposed was settled in R78-7, below.
   - Both client kinds accept a fixed credential that they send on every request (research, option C).
 - **Operations in the first release** `[R78]`:
   - **read and explore;**
@@ -679,21 +679,39 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **Never approve or reject** a proposal `[R78]`.
 - **What the MCP specification asks of a server**, taken in as requirements (research, "Transports", "Authorization" and "Gotchas"):
   - one endpoint, `/mcp`, over Streamable HTTP at the 2026-07-28 revision, with the SDK's stateless fallback for 2025-era clients;
-  - tool calls rate-limited: servers "MUST … Rate limit tool invocations" (Gotcha 9). How, and the numbers, are open (§P2.8, R78-5). Whatever is chosen, a request over the limit must be answered 429: wechart's global error handler today turns the limiter's 429 into a 500 (the coordinator, from `docs/research/fastify-rate-limit.md`, 2026-10-17);
+  - tool calls rate-limited: servers "MUST … Rate limit tool invocations" (Gotcha 9). How, and the numbers, were settled in R78-5, below. Whatever is chosen, a request over the limit must be answered 429: wechart's global error handler today turns the limiter's 429 into a 500 (the coordinator, from `docs/research/fastify-rate-limit.md`, 2026-10-17);
   - the `Origin` header validated on every request, and the `Host` header checked, since wechart mounts the handler in its own Fastify app (Gotchas 3 and 4);
   - the token accepted only in the `Authorization` header, never in the query string (the spec), and the web app's session cookie not accepted on `/mcp` (Gotcha 6, a design inference);
   - tool outputs treated as untrusted data: titles, descriptions, markdown and query rows are written by users and reach the model (Gotcha 12).
 - *The coordinator's calls (2026-10-17), overturnable:*
-  - **The audit marks MCP actions.** Each event AC-294 records says when it was done through MCP, and names the token. Making and revoking a token are audit events too. Whether every MCP tool call is also audited is open (§P2.8, R78-9).
+  - **The audit marks MCP actions.** Each event AC-294 records says when it was done through MCP, and names the token. Making and revoking a token are audit events too. Every MCP tool call is also audited (R78-9, below).
   - **A token is shown once,** when it is made, and wechart keeps only what is needed to check it (the handoff's research item "personal-token hashing and storage").
   - **A token works only on `/mcp`,** not on the web app's API.
+- **Settled 2026-10-17** `[R78]` (§P2.8, R78-1 … R78-11):
+  - **A token's lifetime:** its owner picks 7, 30 or 90 days, 30 by default, and none lasts longer than 90 (R78-1).
+  - **Scopes:** three fixed ones, read, workspace-edit, and proposals-and-jobs. Read is always included (R78-2).
+  - **Groups:** a token's calls use the groups of its owner's latest web sign-in (R78-3).
+  - **Super-Admins** may list and revoke any user's tokens (R78-4).
+  - **Rate limiting** (R78-5; research `docs/research/fastify-rate-limit.md`):
+    - counted in a Postgres store on wechart-meta, so it is exact and shared across API replicas;
+    - per token, with every MCP call counting;
+    - 60 calls a minute, as a deployment setting;
+    - closed when the store fails: nothing runs;
+    - traffic with a bad or missing token limited per IP;
+    - over the limit, a 429 with `Retry-After`.
+  - **Output caps** (R78-6): a tool returns at most 1,000 rows and under 50,000 characters, says when it was cut, and offers the next page.
+  - **Exposure** (R78-7): a separate host serving only `/mcp`, over TLS, allow-listed to Anthropic's published IP ranges and the enterprise network, set as Helm values.
+  - **Jobs** (R78-8): jobs, builds and schedules listed as the owner may see them, with Run now and Cancel as the owner may use them in the UI, and no schedule edits.
+  - **Audit** (R78-9): every MCP tool call, reads included, is recorded with who, the token, the tool and the outcome, and no argument values.
+  - **Sign-in off** (R78-10): tokens work, acting as the single user.
+  - **No SQL runner** through MCP in the first release (R78-11).
 
 **L. The SQL runner workspace** `[R78]` *(added 2026-10-17; input `docs/inputs/2026-10-17-sql-runner-and-ask-key.md`; design study `docs/design/references-sql-runner.md`; extends §P2.6 J)*
 - **Its own workspace.** "a seperate tab.. next to jobs, schedules called SQL runner that lets you see and select the datasource, introspect the datasource see the tables, columns.. check superset for the experience" `[docs/inputs/2026-10-17-sql-runner-and-ask-key.md]`. It follows the design study's direction: a data source picker and schema browser on the left, tabs bound to a data source in the centre, Saved and History on the right `[R78]`.
 - **Every safety rule of §P2.6 J stands,** per run: the switch and its confirmation, SELECT and EXPLAIN only, the read-only transaction, the caps, one run per user, the audit and the warning (design study, "Reasoning").
 - **Typed parameters** `[R78]`: `{{name}}`, typed Text, Number, Date or Boolean, filled in a strip under the editor and bound as database parameters, never written into the SQL text.
 - **Cube's semantic SQL API** in the runner, as a separate "Cube" group in the picker `[R78]`. It runs through Cube with the user's folder access and policies, so it has no bypass warning (design study Q13a).
-- **Keyboard** `[R78]`, approved under R75: run the statement at the cursor; Save and Find; autocomplete from the introspected catalog; tab shortcuts. Which keys the tab shortcuts use is open (§P2.8, R78-12).
+- **Keyboard** `[R78]`, approved under R75: run the statement at the cursor; Save and Find; autocomplete from the introspected catalog; tab shortcuts. The tab shortcuts are Ctrl+Q for a new tab and Ctrl+Alt+[ and Ctrl+Alt+] for the previous and next tab; a tab closes with its × button only (R78-12).
 - **Tabs are kept in the browser only** `[R78]`.
 - **Saved queries, personal only** `[docs/inputs/2026-10-17-sql-runner-and-ask-key.md]`: "saved queries (no sharing)".
 - **Making a cube or a chart from a run's results** `[docs/inputs/2026-10-17-sql-runner-and-ask-key.md]`. Both land as drafts in My workspace (design study §6, F29).
@@ -711,6 +729,10 @@ With security on, a deployment that names no Super-Admin group refuses to start 
   - CSV only, with no copy to the clipboard;
   - no "Open in SQL runner" from a chart's View SQL;
   - "Preview 100 rows" only on request, as an ordinary, audited run.
+- **Settled 2026-10-17** `[R78]` (§P2.8, R78-12 … R78-15):
+  - **The "Cube" group** (R78-13) is shown to everyone who sees the workspace, with no switch. R50's caps apply, each run is audited as a SQL run marked "Cube" and listed in History, and Make a cube and Make a chart aren't offered on it.
+  - **Parameters on Cube Store and in the "Cube" group** (R78-14) are offered only where research shows the source binds them. Elsewhere Run is held, saying parameters aren't available there.
+  - **A saved query's name** (R78-15) is required, unique among its owner's saved queries, and at most 100 characters. Its description is optional, at most 1,000 characters.
 
 **M. Brought into scope by R78, to be specified later** `[R78]`
 - The copilot (chat) panel, editing in My workspace, with a Super-Admin setting the provider, models and keys globally `[docs/inputs/2026-10-17-copilot-chat.md]`. It lifts phase 1's non-goal "AI and chat authoring" when it is taken up.
@@ -752,6 +774,8 @@ No criteria are written for these yet. Each gets its own questions where it is o
 - **Around the MCP server** `[R78]`:
   - approving or rejecting a proposal through MCP, ever;
   - creating, changing, testing or deleting data sources through MCP, in the first release;
+  - running SQL in the SQL runner through MCP, in the first release (R78-11);
+  - changing schedules through MCP (R78-8);
   - signing in through OAuth, so clients that need it (ChatGPT, per the research) aren't served in the first release.
 
 Phase 1's non-goals still stand, except two that phase 2 brings into scope:
@@ -766,7 +790,7 @@ The rest still apply: scheduled delivery and alerts, embedding, `.dxp` migration
 
 ## P2.8 Open questions
 
-**Only R78's, below, are open.** Every earlier round's were resolved. All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way. The four xcube's slice 2 left open were settled in round R29, and are in §P2.4, "Slice 2 as built". The six xcube's slice 3 left open were settled in round R30, after xcube answered the questions they raised, and are in §P2.4, "Relaxed from phase 1" and "Slice 3 as built". The nine that slices 4–6 left open were settled in round R31, and are in §P2.4, "Slices 4–6 as built".
+**None.** R78's fifteen, below, were resolved by the user on 2026-10-17 and are folded into §P2.6 K and L. All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way. The four xcube's slice 2 left open were settled in round R29, and are in §P2.4, "Slice 2 as built". The six xcube's slice 3 left open were settled in round R30, after xcube answered the questions they raised, and are in §P2.4, "Relaxed from phase 1" and "Slice 3 as built". The nine that slices 4–6 left open were settled in round R31, and are in §P2.4, "Slices 4–6 as built".
 
 | # | Question | Decision |
 |---|---|---|
@@ -813,11 +837,31 @@ Round R50's fourteen questions on the SQL runner were answered by the user. The 
 | R50-13 | Audit | **The event, with the SQL's literals redacted** |
 | R50-14 | Where in the UI | **A tab on each data source** (superseded by R78: its own workspace, §P2.6 L) |
 
-### Round R78 (2026-10-17): open
+### Round R78 (2026-10-17): settled the same day
 
-Values R78 and the design study leave open, found while writing the spec. The spec holds no criterion that depends on them; each is written once the user answers. The candidate answers are in the coordinator's report.
+Values R78 and the design study left open, found while writing the spec. The user answered all fifteen on 2026-10-17: R78-3, R78-5 and R78-7 directly, and the rest by "Accept all (Recommended)", which takes each one's recommended option (`docs/requirements-log.md`, R78). The decisions are folded into §P2.6 K and L.
 
-| # | Question | Waits in the spec |
+| # | Decision |
+|---|---|
+| R78-1 | **The owner picks 7, 30 or 90 days**, 30 by default, 90 at most |
+| R78-2 | **Three fixed scopes:** read, workspace-edit, proposals-and-jobs; read always included |
+| R78-3 | **The groups of the owner's latest web sign-in** |
+| R78-4 | **Super-Admins may list and revoke any user's tokens** |
+| R78-5 | **A Postgres counter, per token, every MCP call counted, 60 a minute as a deployment setting, closed when the store fails, and an IP limit on bad-token traffic** |
+| R78-6 | **At most 1,000 rows and under 50,000 characters per result, said when cut, with paging** |
+| R78-7 | **A separate host serving only `/mcp`, allow-listed to Anthropic's IP ranges and the enterprise network, as a Helm value** |
+| R78-8 | **Jobs, builds and schedules listed; Run now and Cancel; no schedule edits** |
+| R78-9 | **Every tool call audited, reads included, with no argument values** |
+| R78-10 | **Tokens work with sign-in off,** as the single user |
+| R78-11 | **No SQL runner through MCP** in the first release |
+| R78-12 | **Ctrl+Q new tab; Ctrl+Alt+[ and Ctrl+Alt+] previous and next; close with ×** |
+| R78-13 | **The "Cube" group for everyone who sees the workspace, no switch, R50's caps, audited and in History, no Make a cube** |
+| R78-14 | **Parameters only where binding is shown to work**; elsewhere Run is held, saying so |
+| R78-15 | **Name required, unique per owner, at most 100 characters; description optional, at most 1,000** |
+
+The questions as first asked:
+
+| # | Question | Waited in the spec |
 |---|---|---|
 | R78-1 | A token's lifetime: chosen when it is made or fixed, and its maximum | the expiry values (F41) |
 | R78-2 | A token's scopes: which set is offered | the scope list (F41; AC-433 holds for any set) |

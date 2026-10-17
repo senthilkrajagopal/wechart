@@ -256,6 +256,23 @@ Questions are Claude's; answers are the user's, verbatim.
     - CSV only, with no clipboard copy;
     - no "Open in SQL runner" from a chart's View SQL;
     - Preview 100 rows only on request, as an audited run.
+- **The open questions R78-1 … R78-15** (2026-10-17, the user; raised while writing the spec, requirements §P2.8):
+  - Q: Which groups does a token's call use? A: "Latest web sign-in (Recommended)" (R78-3).
+  - Q: The rate limit's store? A: "Postgres (Recommended)" (R78-5). The option's text named the rest: limited per token, every MCP call counts, fail closed when the store fails, 60 calls a minute as a deployment setting, and an IP limit on bad-token traffic.
+  - Q: How is `/mcp` exposed? A: "Separate host + allow-list (Recommended)" (R78-7).
+  - Q: "Accept the recommended answers for the other questions?" A: "Accept all (Recommended)". So each of R78-1, 2, 4, 6, 8, 9, 10, 11, 12, 13, 14 and 15 takes its option (a):
+    - R78-1: the owner picks 7, 30 or 90 days, 30 by default, 90 at most;
+    - R78-2: three fixed scopes, read, workspace-edit, and proposals-and-jobs, with read always included;
+    - R78-4: Super-Admins may list and revoke any user's tokens;
+    - R78-6: a query tool returns at most 1,000 rows and under 50,000 characters, says when it was cut, and pages;
+    - R78-8: jobs, builds and schedules listed, with Run now and Cancel as the owner may in the UI, and no schedule edits;
+    - R78-9: every MCP tool call is audited, reads included, with the tool, the token and the outcome, and no argument values;
+    - R78-10: with sign-in off, tokens work and act as the single user;
+    - R78-11: no SQL runner through MCP in the first release;
+    - R78-12: Ctrl+Q opens a new tab, Ctrl+Alt+[ and Ctrl+Alt+] go to the previous and next tab, and a tab closes with its × button;
+    - R78-13: the "Cube" group is shown to everyone who sees the workspace, with no switch, R50's caps, audited as a SQL run marked "Cube", listed in History, and Make a cube disabled there;
+    - R78-14: parameters are offered only where research shows binding works; elsewhere Run is held, saying parameters aren't available on that source;
+    - R78-15: a saved query's name is required, unique per owner and at most 100 characters; its description is optional, at most 1,000 characters.
 
 **R77 — closing design conformance faster** (2026-10-08, the user)
 - The user, choosing all three options Claude offered: "Accept small visual differences and Skip the review round on pure-styling tasks and Close AC-187, the overall prototype check, on the per-surface results."
