@@ -73,8 +73,14 @@
   - Depends on: T768, T769
   - **Built 2026-10-17** (lane MCP, batch 2). **AC-431 stays open:** its first sentence, a revoked or expired token answered 401 on `/mcp`, needs the endpoint (T774 on). The page half is shown here.
     - **Revoke:** each working row ends with a small danger Revoke. It opens `RevokeTokenDialog`, a 520 px `alertdialog` titled `Revoke "‹name›"?` with E1's sentence, focus on Cancel, and a filled destructive Revoke token. Esc or Cancel closes it and focus goes back to that row's Revoke. A refusal is said in the dialog, and nothing changes.
-    - **Done:** the toast says `Revoked "‹name›". Clients using it now get 401.` (E2) with no Undo, the list is read again, and focus goes to New token, since the row and its button are gone.
-    - **No longer working:** shown only when something has stopped, as its own table named by its heading. Each row has the name, the scopes, when it was made, its state with its icon (`err` for Revoked, `idle` for Expired) in the Expires column, last used, and Remove. A refused Remove is said under the table.
+    - **Done:** the toast says `Revoked "‹name›". Clients using it now get 401.` (E2) with no Undo, and the list is read again.
+    - **No longer working:** shown only when something has stopped, as its own table named by its heading. Each row has the name, the scopes, when it was made, its state with its icon (Revoked's own, `idle` for Expired) in the Expires column, last used, and Remove. A refused Remove is said under the table.
+    - **After the cold review (follow-up commit):**
+      - Each Revoke is named "Revoke ‹name›", and each Remove "Remove ‹name›", as design 18's keyboard table asks.
+      - After a revoke, focus moves to the next row's Revoke (the one before, for the last row), or to the list, a focusable region named "Your tokens". After a Remove, focus moves the same way to the next Remove, or to the list.
+      - Remove is held while it's on its way, so a second press sends nothing.
+      - A refused revoke reads the list again, so a token that stopped meanwhile moves to No longer working.
+      - Revoked has its own icon, a filled circle struck through (design 18's `s-revoked`), drawn in `AccessTokensPage.tsx` rather than added to the shared `StatusIcon`.
     - **Who revoked it (the lane's call, overturnable):** the name the API gives, also when it's the viewer. D3 draws "by you" for one's own; the API's `revokedBy` carries only a name, and names aren't unique.
     - **The dialog** takes its title and its `revoke` call as props, so T772's Security tab reuses it with the owner in the title (screen 4).
     - **Tests:**

@@ -207,8 +207,9 @@ describe('revoking, and No longer working (T771, AC-431; design 18, states D and
     const asked = serve([{ tokens: [LAPTOP, READING] }, { tokens: [READING], stopped: [STOPPED] }]);
     open();
     await screen.findByRole('table', { name: 'Your tokens' });
-    const revoke = within(rows()[1]!).getByRole('button', { name: 'Revoke' });
-    expect(revoke.getAttribute('aria-label')).toBeNull();
+    // Each Revoke is labelled with its token (design 18's keyboard table).
+    const revoke = within(rows()[1]!).getByRole('button', { name: 'Revoke Claude Code · laptop' });
+    expect(revoke.textContent).toBe('Revoke');
     await userEvent.click(revoke);
     const dialog = screen.getByRole('alertdialog', { name: 'Revoke “Claude Code · laptop”?' });
     expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancel' }));
@@ -225,17 +226,68 @@ describe('revoking, and No longer working (T771, AC-431; design 18, states D and
     expect(within(stoppedRows()[0]!).getAllByRole('cell')[0]!.textContent).toBe(
       'Claude Code · laptop',
     );
+    // Focus moves to the next row's Revoke.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Revoke Reading only' }),
+      ),
+    );
   });
 
-  it('Cancel revokes nothing', async () => {
+  it('sends focus to the list when the last working token is revoked', async () => {
+    const STOPPED = { ...LAPTOP, state: 'revoked', stoppedAt: now.toISOString(), revokedBy: ME };
+    serve([{ tokens: [LAPTOP] }, { tokens: [], stopped: [STOPPED] }]);
+    open();
+    await screen.findByRole('table', { name: 'Your tokens' });
+    await userEvent.click(screen.getByRole('button', { name: 'Revoke Claude Code · laptop' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Revoke token' }));
+    await screen.findByText('No tokens yet');
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Your tokens' })),
+    );
+  });
+
+  it('Cancel and Esc revoke nothing, and focus goes back to the row’s Revoke', async () => {
     const asked = serve([{ tokens: [LAPTOP] }]);
     open();
     await screen.findByRole('table', { name: 'Your tokens' });
-    await userEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    const revoke = screen.getByRole('button', { name: 'Revoke Claude Code · laptop' });
+    await userEvent.click(revoke);
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(document.activeElement).toBe(revoke);
+    await userEvent.click(revoke);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(document.activeElement).toBe(revoke);
     expect(asked.filter((each) => each.startsWith('DELETE'))).toEqual([]);
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Revoke' }));
+  });
+
+  it('reads the list again when a revoke is refused, so a token that stopped meanwhile moves', async () => {
+    const STOPPED = { ...LAPTOP, state: 'expired', stoppedAt: now.toISOString(), revokedBy: null };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === '/api/me') return Response.json(ME);
+        if (init?.method === 'DELETE')
+          return Response.json({ error: 'That token already no longer works.' }, { status: 409 });
+        return Response.json(
+          vi.mocked(fetch).mock.calls.length > 3
+            ? { tokens: [], stopped: [STOPPED] }
+            : { tokens: [LAPTOP], stopped: [] },
+        );
+      }),
+    );
+    open();
+    await screen.findByRole('table', { name: 'Your tokens' });
+    await userEvent.click(screen.getByRole('button', { name: 'Revoke Claude Code · laptop' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Revoke token' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'That token already no longer works.',
+    );
+    await screen.findByRole('table', { name: 'No longer working' });
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('button', { name: 'Revoke Claude Code · laptop' })).toBeNull();
   });
 
   it('lists revoked and expired tokens with their state, when, and who revoked one', async () => {
@@ -247,7 +299,8 @@ describe('revoking, and No longer working (T771, AC-431; design 18, states D and
     expect(revoked![3]!.textContent).toBe(
       `Revoked · by Ada Admin, ${dayOf(new Date(REVOKED.stoppedAt))}`,
     );
-    expect(revoked![3]!.querySelector('svg[data-icon="err"]')).not.toBeNull();
+    // Revoked has its own icon, a circle struck through (design 18's legend).
+    expect(revoked![3]!.querySelector('svg')?.getAttribute('data-icon')).toBe('revoked');
     expect(expired![0]!.textContent).toBe('Old laptop');
     expect(expired![3]!.textContent).toBe(`Expired · ${dayOf(new Date(EXPIRED.stoppedAt))}`);
     expect(expired![3]!.querySelector('svg[data-icon="idle"]')).not.toBeNull();
@@ -261,17 +314,71 @@ describe('revoking, and No longer working (T771, AC-431; design 18, states D and
     }
   });
 
-  it('Remove takes a stopped token off the list', async () => {
+  it('Remove takes a stopped token off the list, focus moving to the next Remove', async () => {
     const asked = serve([
       { tokens: [], stopped: [REVOKED, EXPIRED] },
       { tokens: [], stopped: [EXPIRED] },
     ]);
     open();
     await screen.findByRole('table', { name: 'No longer working' });
-    await userEvent.click(within(stoppedRows()[0]!).getByRole('button', { name: 'Remove' }));
+    const remove = within(stoppedRows()[0]!).getByRole('button', { name: 'Remove CI experiment' });
+    await userEvent.click(remove);
     await waitFor(() => expect(stoppedRows()).toHaveLength(1));
     expect(asked).toContain('POST /api/account/tokens/pat-8/remove');
     expect(within(stoppedRows()[0]!).getAllByRole('cell')[0]!.textContent).toBe('Old laptop');
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Remove Old laptop' }),
+      ),
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('sends a Remove once, however often it is pressed while on its way', async () => {
+    const posts: string[] = [];
+    let answer: (response: Response) => void = () => {};
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === '/api/me') return Response.json(ME);
+        if (init?.method === 'POST') {
+          posts.push(url);
+          return new Promise<Response>((resolve) => {
+            answer = resolve;
+          });
+        }
+        return Response.json({ tokens: [], stopped: posts.length > 0 ? [] : [REVOKED] });
+      }),
+    );
+    open();
+    await screen.findByRole('table', { name: 'No longer working' });
+    const remove = screen.getByRole('button', { name: 'Remove CI experiment' });
+    await userEvent.click(remove);
+    await userEvent.click(remove);
+    expect(posts).toEqual(['/api/account/tokens/pat-8/remove']);
+    expect(remove).toHaveProperty('disabled', true);
+    answer(new Response(null, { status: 204 }));
+    await waitFor(() =>
+      expect(screen.queryByRole('table', { name: 'No longer working' })).toBeNull(),
+    );
+    expect(posts).toEqual(['/api/account/tokens/pat-8/remove']);
+  });
+
+  it('says so under the list when a Remove is refused', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === '/api/me') return Response.json(ME);
+        if (init?.method === 'POST')
+          return Response.json({ error: 'The token wasn’t removed.' }, { status: 500 });
+        return Response.json({ tokens: [], stopped: [REVOKED] });
+      }),
+    );
+    open();
+    await screen.findByRole('table', { name: 'No longer working' });
+    await userEvent.click(screen.getByRole('button', { name: 'Remove CI experiment' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('The token wasn’t removed.');
+    expect(stoppedRows()).toHaveLength(1);
   });
 
   it('shows no No longer working section when nothing has stopped', async () => {

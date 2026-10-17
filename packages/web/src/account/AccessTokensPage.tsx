@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ExportedToast } from '../dashboard/export/ExportedToast';
 import { clockOf, dayOf, exactOf, whenOf } from '../shell/formatTime';
@@ -59,10 +59,40 @@ export function AccessTokensPage() {
   const opener = useRef<HTMLElement | null>(null);
   const [toast, setToast] = useState('');
   const [removeFailed, setRemoveFailed] = useState<string | null>(null);
+  /** The stopped token being removed: its Remove is held, so it's sent once. */
+  const [removing, setRemoving] = useState<string | null>(null);
+  /**
+   * Where focus goes once the list is read again after a row went (design
+   * 18's keyboard table): the next row's button, else the list.
+   */
+  const focusAfter = useRef<{
+    readonly button: string | null;
+    readonly list: 'working' | 'stopped';
+  } | null>(null);
+  const workingList = useRef<HTMLElement>(null);
+  const stoppedList = useRef<HTMLElement>(null);
   const now = new Date();
   const single = me.data?.security === 'off';
   const refresh = () => queries.invalidateQueries({ queryKey: TOKENS_QUERY.queryKey });
+  const working = list.data?.tokens ?? [];
   const stopped = list.data?.stopped ?? [];
+  /** The id of the row after `id`'s, or before it for the last; null for the only one. */
+  const neighbour = (rows: readonly AccessToken[], id: string) => {
+    const at = rows.findIndex((row) => row.id === id);
+    return (rows[at + 1] ?? rows[at - 1])?.id ?? null;
+  };
+  useEffect(() => {
+    const target = focusAfter.current;
+    if (target === null || list.isFetching) return;
+    focusAfter.current = null;
+    const button =
+      target.button === null
+        ? null
+        : document.querySelector<HTMLElement>(`[data-focus-key="${CSS.escape(target.button)}"]`);
+    if (button !== null) button.focus();
+    else if (target.list === 'stopped' && stoppedList.current !== null) stoppedList.current.focus();
+    else workingList.current?.focus();
+  }, [list.data, list.isFetching]);
 
   return (
     <div className="account-page">
@@ -99,59 +129,72 @@ export function AccessTokensPage() {
         </p>
       )}
 
-      {list.isPending ? (
-        <StateLine kind="run">Reading your tokens…</StateLine>
-      ) : list.isError ? (
-        <div className="account-page__error">
-          <StateLine kind="err" role="alert">
-            Your tokens couldn’t be read.
-          </StateLine>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              void list.refetch();
-            }}
-          >
-            Try again
-          </button>
-        </div>
-      ) : list.data.tokens.length === 0 ? (
-        <p className="account-page__empty">No tokens yet</p>
-      ) : (
-        <div className="table-scroll">
-          <table className="grid-table tokens-table" aria-label="Your tokens">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Scopes</th>
-                <th scope="col">Made</th>
-                <th scope="col">Expires</th>
-                <th scope="col">Last used</th>
-                <th scope="col">
-                  <span className="visually-hidden">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.data.tokens.map((token) => (
-                <TokenRow
-                  key={token.id}
-                  token={token}
-                  now={now}
-                  onRevoke={(button) => {
-                    opener.current = button;
-                    setRevoking(token);
-                  }}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* A region focus can land on once a revoked row is gone (design 18's keyboard table). */}
+      <section
+        ref={workingList}
+        className="account-page__list"
+        aria-label="Your tokens"
+        tabIndex={-1}
+      >
+        {list.isPending ? (
+          <StateLine kind="run">Reading your tokens…</StateLine>
+        ) : list.isError ? (
+          <div className="account-page__error">
+            <StateLine kind="err" role="alert">
+              Your tokens couldn’t be read.
+            </StateLine>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                void list.refetch();
+              }}
+            >
+              Try again
+            </button>
+          </div>
+        ) : list.data.tokens.length === 0 ? (
+          <p className="account-page__empty">No tokens yet</p>
+        ) : (
+          <div className="table-scroll">
+            <table className="grid-table tokens-table" aria-label="Your tokens">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Scopes</th>
+                  <th scope="col">Made</th>
+                  <th scope="col">Expires</th>
+                  <th scope="col">Last used</th>
+                  <th scope="col">
+                    <span className="visually-hidden">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.data.tokens.map((token) => (
+                  <TokenRow
+                    key={token.id}
+                    token={token}
+                    now={now}
+                    onRevoke={(button) => {
+                      opener.current = button;
+                      setRevoking(token);
+                    }}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {stopped.length === 0 ? null : (
-        <section className="account-page__stopped" aria-labelledby="tokens-stopped">
+        <section
+          ref={stoppedList}
+          className="account-page__stopped"
+          aria-labelledby="tokens-stopped"
+          tabIndex={-1}
+        >
           <h2 id="tokens-stopped" className="account-page__subhead">
             No longer working
           </h2>
@@ -163,11 +206,24 @@ export function AccessTokensPage() {
                     key={token.id}
                     token={token}
                     now={now}
+                    removing={removing === token.id}
                     onRemove={() => {
+                      if (removing !== null) return;
                       setRemoveFailed(null);
+                      setRemoving(token.id);
+                      const next = neighbour(stopped, token.id);
                       removeToken(token.id).then(
-                        () => refresh(),
+                        () => {
+                          focusAfter.current = {
+                            button: next === null ? null : `remove:${next}`,
+                            list: 'stopped',
+                          };
+                          void refresh().finally(() => {
+                            setRemoving(null);
+                          });
+                        },
                         (error: unknown) => {
+                          setRemoving(null);
                           setRemoveFailed(error instanceof Error ? error.message : String(error));
                         },
                       );
@@ -241,18 +297,29 @@ export function AccessTokensPage() {
       {revoking === null ? null : (
         <RevokeTokenDialog
           title={`Revoke “${revoking.name}”?`}
-          revoke={() => revokeToken(revoking.id)}
+          revoke={() =>
+            revokeToken(revoking.id).catch((error: unknown) => {
+              // Refused, perhaps because it stopped meanwhile: the list as it is now.
+              void refresh();
+              throw error;
+            })
+          }
           onRevoked={() => {
             // No Undo: a revoked token can't work again (state E2).
             setToast(`Revoked “${revoking.name}”. Clients using it now get 401.`);
+            const next = neighbour(working, revoking.id);
+            focusAfter.current = {
+              button: next === null ? null : `revoke:${next}`,
+              list: 'working',
+            };
             setRevoking(null);
             void refresh();
-            // Its row, and its button, are gone: focus to the page's first control.
-            newToken.current?.focus();
           }}
           onClose={() => {
             setRevoking(null);
-            opener.current?.focus();
+            // Its row may have gone meanwhile, when the revoke was refused.
+            if (opener.current?.isConnected === true) opener.current.focus();
+            else workingList.current?.focus();
           }}
         />
       )}
@@ -314,6 +381,9 @@ function TokenRow({
         <button
           type="button"
           className="btn btn-sm btn-danger"
+          // Labelled with its token, starting with what it shows (WCAG 2.5.3).
+          aria-label={`Revoke ${token.name}`}
+          data-focus-key={`revoke:${token.id}`}
           onClick={(event) => {
             onRevoke(event.currentTarget);
           }}
@@ -338,10 +408,13 @@ export function stoppedText(token: StoppedToken, now: Date): string {
 function StoppedRow({
   token,
   now,
+  removing,
   onRemove,
 }: {
   readonly token: StoppedToken;
   readonly now: Date;
+  /** Its Remove is on its way: held, so it's sent once. */
+  readonly removing: boolean;
   readonly onRemove: () => void;
 }) {
   return (
@@ -349,16 +422,33 @@ function StoppedRow({
       <TokenCells token={token} now={now} />
       <td title={exactOf(new Date(token.stoppedAt))}>
         <span className="token-state">
-          <StatusIcon kind={token.state === 'expired' ? 'idle' : 'err'} />
+          {token.state === 'expired' ? <StatusIcon kind="idle" /> : <RevokedIcon />}
           {stoppedText(token, now)}
         </span>
       </td>
       <UsedCell token={token} now={now} />
       <td className="tokens-table__act">
-        <button type="button" className="btn btn-sm" onClick={onRemove}>
+        <button
+          type="button"
+          className="btn btn-sm"
+          aria-label={`Remove ${token.name}`}
+          data-focus-key={`remove:${token.id}`}
+          disabled={removing}
+          onClick={onRemove}
+        >
           Remove
         </button>
       </td>
     </tr>
+  );
+}
+
+/** Revoked's own icon, a filled circle struck through (design 18's `s-revoked`). */
+export function RevokedIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" data-icon="revoked">
+      <circle cx="8" cy="8" r="7" fill="var(--wc-status-error-icon)" />
+      <path d="M4.6 11.4l6.8-6.8" stroke="#fff" strokeWidth="1.8" />
+    </svg>
   );
 }
