@@ -147,6 +147,8 @@ import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
 import type { ModelOrigin } from './db/schema';
 import type { StoredModelFile, WorkspaceModelFile } from './repos/model-files';
 import { workspaceModels } from './routes/workspace-models';
+import { registerAccessTokens } from './routes/access-tokens';
+import type { AccessTokenStore } from './repos/access-tokens';
 import {
   overlayContentOf,
   overlaySync,
@@ -262,6 +264,8 @@ export interface BuildOptions {
   readonly schedules?: WechartScheduler;
   /** Calculations the quick calculations menu can't express, asked of a model's folder (T383, AC-050). */
   readonly calcRequests?: CalcRequestStore;
+  /** Personal access tokens for MCP (T767, AC-430). Unset: none can be made. */
+  readonly accessTokens?: AccessTokenStore;
   /**
    * Where a data source lands before it is stored, and leaves before it is
    * removed (T442): xcube's connections. Unset without xcube.
@@ -499,6 +503,7 @@ export function buildServer({
   refreshWorker,
   schedules,
   calcRequests,
+  accessTokens,
   dataSourceLanding,
   connectionTest,
   connectionTests,
@@ -4487,6 +4492,9 @@ export function buildServer({
       inTurn,
     });
   }
+
+  // Personal access tokens for MCP (T767, AC-430).
+  if (accessTokens !== undefined) registerAccessTokens(app, { store: accessTokens, audit, now });
 
   /**
    * Calculation requests (T383, AC-050): asked of the read-write members of

@@ -1584,11 +1584,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 ### Lane MCP: tokens
 
-- [ ] T767 [P] (AC-430, AC-468, AC-469, AC-442) Make a personal access token through the API: a name, the three scopes with read always in, 7, 30 or 90 days, its text shown once and kept only as a digest, and "Token made" in the audit trail
-  - Lane: MCP
-  - Files: `packages/api/src/db/migrations/1758670000000_personal-access-tokens.cjs`, `packages/api/src/repos/access-tokens.ts` (+ test), `packages/api/src/mcp/tokenText.ts` (+ test; `node:crypto` per `mcp-deployment-and-tokens.md` §4), `packages/api/src/routes/access-tokens.ts` (+ test), `packages/api/src/server.ts` (registration).
-  - Failing test: `routes/access-tokens.test.ts`: `POST /api/account/tokens` with a name, scopes and 7, 30 or 90 days answers 201 with the token's text and `Cache-Control: no-store`, and with no expiry given makes one of 30 days (AC-468); `GET /api/account/tokens` lists it with its name, scopes, made, expires and last used, and no text (AC-430); 400 with the reason for no name, a name over 100 characters, the name of another of the owner's working tokens, no scope, a scope outside read, workspace-edit and proposals-and-jobs, a scope set without read, or 120 days (AC-430, AC-468, AC-469); no column of the token table, nor any other table, holds the text (a search of the metadata database for it finds nothing) (AC-430); the audit trail gains "Token made" with who, the token's name and when (AC-442).
-  - Depends on: none
+- [x] T767 [P] (AC-430, AC-468, AC-469, AC-442) Make a personal access token through the API: a name, the three scopes with read always in, 7, 30 or 90 days, its text shown once and kept only as a digest, and "Token made" in the audit trail
 
 - [ ] T768 (AC-431, AC-442) Revoke your own token through the API, keep a token that stops working under "No longer working" with its state, when and who revoked it, and Remove it from there; "Token revoked" in the audit trail
   - Lane: MCP

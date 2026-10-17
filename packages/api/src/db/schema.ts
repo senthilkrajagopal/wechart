@@ -171,6 +171,23 @@ export interface Database {
   schedules: ScheduleTable;
   calc_requests: CalcRequestTable;
   calc_request_takers: CalcRequestTakerTable;
+  personal_access_tokens: PersonalAccessTokenTable;
+}
+
+/** A personal access token for MCP (T767, AC-430): its SHA-256, never its text. */
+export interface PersonalAccessTokenTable {
+  id: string;
+  owner_key: string;
+  owner_name: string;
+  name: string;
+  scopes: string[];
+  digest: Buffer;
+  created_at: Generated<Date>;
+  expires_at: Date;
+  last_used_at: Date | null;
+  revoked_at: Date | null;
+  revoked_by_key: string | null;
+  revoked_by_name: string | null;
 }
 
 /** A member who took a calculation request up, opening it into their workspace (T384, AC-051). */

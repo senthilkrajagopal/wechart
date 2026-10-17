@@ -30,6 +30,8 @@ export const AUDIT_EVENTS = [
   'build-started',
   'build-cancelled',
   'schedule-change',
+  // A personal access token made (T767, AC-442; design 18, state I).
+  'token-made',
 ] as const;
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];
 

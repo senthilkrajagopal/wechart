@@ -14653,3 +14653,23 @@ Search this file by task ID (`T123`) or AC ID.
     - **D10-04 to D10-09, D10-11:** the footer "＋ Bookmark this view…" as `.btn.link` (accent, 12/600, the plus icon, no border) in a footer padded 8 12; each row's visibility then " · today" or " · 22 Sep" (the API's new `savedAt`, from the row's `created_at`, which a save under the same name keeps); the button's bookmark icon and svg chevron; the popover 8 px under its button on a border-subtle edge; "Shared" 10 px under its rule, 4 px down; each row's ⋯ a 24 px icon button with design 10's dots.
     - **Q6:** Filter on's rows read the member's short title, its cube and folder at the right.
     - **Tests.** API: `repos/bookmarks.test.ts` (dated by the first save, kept on a save again), `bookmarks.test.ts`, `access/bookmarks.test.ts` (`savedAt` through share, rename and update). Unit: `savedOn.test.ts`, `Bookmarks.test.tsx` (a new T742 group; the footer's words), `addFilter.test.tsx` (short titles). e2e: `field-list.spec.ts` (a new T742 test), `security/bookmarks.spec.ts` (a new measured T742 test; the footer's words; the phase-1 row's date), `markings.spec.ts` (the footer's words).
+
+### P2.24 The MCP server and the SQL runner workspace (F41, F42, added 2026-10-17, `[R78]`)
+
+- [x] T767 [P] (AC-430, AC-468, AC-469, AC-442) Make a personal access token through the API: a name, the three scopes with read always in, 7, 30 or 90 days, its text shown once and kept only as a digest, and "Token made" in the audit trail
+  - Lane: MCP
+  - Files: `packages/api/src/db/migrations/1758670000000_personal-access-tokens.cjs`, `packages/api/src/repos/access-tokens.ts` (+ test), `packages/api/src/mcp/tokenText.ts` (+ test; `node:crypto` per `mcp-deployment-and-tokens.md` §4), `packages/api/src/routes/access-tokens.ts` (+ test), `packages/api/src/server.ts` (registration).
+  - Failing test: `routes/access-tokens.test.ts`: `POST /api/account/tokens` with a name, scopes and 7, 30 or 90 days answers 201 with the token's text and `Cache-Control: no-store`, and with no expiry given makes one of 30 days (AC-468); `GET /api/account/tokens` lists it with its name, scopes, made, expires and last used, and no text (AC-430); 400 with the reason for no name, a name over 100 characters, the name of another of the owner's working tokens, no scope, a scope outside read, workspace-edit and proposals-and-jobs, a scope set without read, or 120 days (AC-430, AC-468, AC-469); no column of the token table, nor any other table, holds the text (a search of the metadata database for it finds nothing) (AC-430); the audit trail gains "Token made" with who, the token's name and when (AC-442).
+  - Depends on: none
+  - **Built 2026-10-17** (lane MCP). No AC is ticked yet: each of the four still has parts that T768 to T771 and the MCP tasks build.
+    - **The digest (the coordinator's call, overturnable):** only the token's SHA-256 is stored (`bytea`, unique), with no pepper. The token is 256 random bits, which meets NIST 800-63B §3.1.2.2's bar for look-up secrets stored hashed (112 bits or more). Comparison is `timingSafeEqual` over the two 32-byte digests. The create response sends `Cache-Control: no-store`, and the text is never logged or put in the audit record.
+    - **The format:** `wct_`, then 64 hex digits (`randomBytes(32)`), then `_`, then the CRC32 of everything before it in 8 hex digits (`node:zlib`). `wellFormed` checks the shape and the checksum without the database.
+    - **The API:**
+      - `POST /api/account/tokens` takes `{ name, scopes, days }` and answers 201 with `{ token, text }`.
+      - `GET /api/account/tokens` answers `{ tokens }`: the working ones, newest first, each with `id, name, scopes, createdAt, expiresAt, lastUsedAt`.
+      - The name is trimmed and counted in code points. Scopes come back in the page's order.
+      - An expiry counts from the token's own `created_at`, so the difference is exactly 7, 30 or 90 days.
+      - A name is free again once its token stops working.
+    - **The audit:** event `token-made`, with no folder. The item is `access-token` and its name; the summary is "‹name› · ‹n› days", as design 18 state I draws it.
+    - **Beyond the listed files:** `AuditTrail.tsx` gained the "Token made" label, design 18's key icon and the "Access token" kind (+ 2 tests). Without them, a token-made record would crash the Security audit page, since `EVENT_ICONS[event]` would be undefined. `main.ts` wires the store in.
+    - **Tests:** `mcp/tokenText.test.ts`, `repos/access-tokens.test.ts`, `routes/access-tokens.test.ts` and `AuditTrail.test.tsx`.

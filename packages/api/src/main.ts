@@ -27,6 +27,7 @@ import { xcubePartitions } from './xcube/partitions';
 import { xcubeQueue } from './xcube/queue';
 import { xcubeRefreshWorker } from './xcube/refresh-worker';
 import { calcRequestStore } from './repos/calc-requests';
+import { accessTokenStore } from './repos/access-tokens';
 import { AUDIT_RETENTION_DAYS, startAuditRetention } from './audit/retention';
 import { readModelDir } from './model/read-dir';
 import { startModel } from './model/split';
@@ -292,6 +293,8 @@ async function main(): Promise<void> {
         }),
     // Calculations the quick calculations menu can't express (T383, AC-050).
     calcRequests: calcRequestStore(db),
+    // Personal access tokens for MCP (T767, AC-430).
+    accessTokens: accessTokenStore(db),
     // Read-only SQL run by xcube, on a data source's connection (T532, AC-373).
     ...(config.xcube === undefined || service === undefined
       ? {}

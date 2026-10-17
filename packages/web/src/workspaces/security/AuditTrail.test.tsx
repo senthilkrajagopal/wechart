@@ -1100,6 +1100,54 @@ describe('the audit trail (T369, AC-295)', () => {
   });
 });
 
+/** T767 (AC-442; design 18, state I): a personal access token made, by whom, its name and expiry. */
+describe('a token made (T767, AC-442; design 18, state I)', () => {
+  const WREN = { key: 'wren', name: 'Wren Writer', identity: 'wren@corp.example' };
+  const MADE = {
+    id: 't1',
+    at: today(14, 44, 2),
+    actor: WREN,
+    event: 'token-made',
+    folderId: null,
+    folderPath: null,
+    item: { kind: 'access-token', id: 'pat-1', title: 'Claude Code · desktop' },
+    summary: 'Claude Code · desktop · 30 days',
+    details: { name: 'Claude Code · desktop', scopes: ['read'], days: 30 },
+  };
+
+  it('shows “Token made” with the key icon, by whom, the token and its expiry', async () => {
+    serve({ first: { records: [MADE], total: 1, retentionDays: 365 } });
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+    const [row] = within(table()).getAllByRole('row').slice(1);
+    expect(
+      within(row!)
+        .queryAllByRole('cell')
+        .slice(1)
+        .map((cell) => cell.textContent),
+    ).toEqual([
+      'wren@corp.example',
+      'Token made',
+      '—',
+      'Access token · Claude Code · desktop',
+      'Claude Code · desktop · 30 days',
+    ]);
+    expect(within(row!).getByText('Token made').previousElementSibling).toHaveProperty(
+      'dataset.icon',
+      'key',
+    );
+  });
+
+  it('is offered in the Event filter', async () => {
+    const asked = serve({ first: { records: [MADE], total: 1, retentionDays: 365 } });
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+    await userEvent.click(screen.getByRole('button', { name: /^Event/ }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Token made' }));
+    await waitFor(() => expect(lastQuery(asked).get('events')).toBe('token-made'));
+  });
+});
+
 /** T405 (AC-176; direction.md rule 85): the inspector and the Event picker from the keyboard. */
 describe('the audit trail from the keyboard (T405, rule 85)', () => {
   it('closes the inspector on Escape, giving focus back to its row', async () => {
