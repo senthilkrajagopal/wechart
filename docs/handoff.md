@@ -33,6 +33,7 @@ Read this first when resuming. It holds only the current state and the rules in 
   - each agent uses its own e2e script;
   - never restart shared containers;
   - migrations go above 1758660000000.
+- **Test cadence** (the user, 2026-10-17): per task, its own tests, the full unit suite and the touched e2e in Chrome. A full Chrome e2e runs only at each lane's last task. A full e2e in every browser runs every 10 tasks and at the Phase 2 End Run.
 - **Test output:** log to a file and read back the summary or failures, never the whole output. Never pipe the unit suite into `head`.
 - **Reviews:** one cold review per behaviour task, given the diff and the task's own ACs. Pure-styling tasks skip it (R77).
 - **Docs:**
@@ -81,4 +82,3 @@ Read this first when resuming. It holds only the current state and the rules in 
 - **Northwind:** log its 4 bugs (colours past 8 series, marked pivot overflow, pivot column order, single-level treemap), and decide whether to copy its exports into the repo.
 - **Housekeeping:** add `graphify-out/` to `.gitignore`, and delete `.claude/settings.json.graphify-bak`.
 - **Leftover worktrees:** decide what to do with the 6 that hold unpicked commits: export-import, group3-verify-2, t331, group4-close-2, and two agent branches.
-- **Run cadence:** a full Chrome run per task, or every few tasks (the coordinator suggested every few, to save time and tokens).
