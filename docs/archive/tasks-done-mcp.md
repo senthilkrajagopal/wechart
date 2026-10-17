@@ -65,3 +65,18 @@
     - **Tests:**
       - Unit: `TokenShownOnce.test.tsx` (9), and `AccessTokensPage.test.tsx` (1 changed).
       - e2e: `e2e/security/access-tokens.spec.ts` (extended) and `e2e/access-tokens-single-user.spec.ts` (now closes the dialog).
+
+- [x] T771 (AC-431) Revoke a token from the page, confirmed with no Undo, and list stopped tokens under "No longer working" with Remove, as design 18 states D and E draw them
+  - Lane: MCP
+  - Files: `packages/web/src/account/AccessTokensPage.tsx` (+ test), `packages/web/src/account/RevokeTokenDialog.tsx` (+ test), `e2e/security/access-tokens.spec.ts`.
+  - Failing test: `RevokeTokenDialog.test.tsx`: Revoke asks with a 520 px alert dialog whose focus starts on Cancel; Revoke token revokes it, with a toast and no Undo. `AccessTokensPage.test.tsx`: a revoked token shows under "No longer working" as "Revoked · by ‹name›, ‹date›", an expired one as "Expired · ‹date›", each with Remove, which takes the row away (AC-431).
+  - Depends on: T768, T769
+  - **Built 2026-10-17** (lane MCP, batch 2). **AC-431 stays open:** its first sentence, a revoked or expired token answered 401 on `/mcp`, needs the endpoint (T774 on). The page half is shown here.
+    - **Revoke:** each working row ends with a small danger Revoke. It opens `RevokeTokenDialog`, a 520 px `alertdialog` titled `Revoke "‹name›"?` with E1's sentence, focus on Cancel, and a filled destructive Revoke token. Esc or Cancel closes it and focus goes back to that row's Revoke. A refusal is said in the dialog, and nothing changes.
+    - **Done:** the toast says `Revoked "‹name›". Clients using it now get 401.` (E2) with no Undo, the list is read again, and focus goes to New token, since the row and its button are gone.
+    - **No longer working:** shown only when something has stopped, as its own table named by its heading. Each row has the name, the scopes, when it was made, its state with its icon (`err` for Revoked, `idle` for Expired) in the Expires column, last used, and Remove. A refused Remove is said under the table.
+    - **Who revoked it (the lane's call, overturnable):** the name the API gives, also when it's the viewer. D3 draws "by you" for one's own; the API's `revokedBy` carries only a name, and names aren't unique.
+    - **The dialog** takes its title and its `revoke` call as props, so T772's Security tab reuses it with the owner in the title (screen 4).
+    - **Tests:**
+      - Unit: `RevokeTokenDialog.test.tsx` (4) and `AccessTokensPage.test.tsx` (5 new; the header check now includes the visually hidden "Actions" column).
+      - e2e: `e2e/security/access-tokens.spec.ts`: revoke from the page (the dialog 520 px wide, focus on Cancel), the toast, the row under No longer working "Revoked · by Super Admin, ‹date›", then Remove.

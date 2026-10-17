@@ -10044,6 +10044,13 @@ nav.outline :focus-visible,
   line-height: 18px;
   color: var(--wc-text-secondary);
 }
+/* T771: Revoke and Remove at the row's end; No longer working's rows in the secondary text (state D). */
+.tokens-table__act { width: 84px; text-align: right; }
+.tokens-table__stopped td { color: var(--wc-text-secondary); }
+.tokens-table__stopped .tokens-table__name { font-weight: 400; }
+.token-state { display: inline-flex; align-items: center; gap: 6px; }
+.account-page__subhead { margin: 8px 0 0; font-size: 13px; font-weight: 600; }
+.dialog.revoke-token { width: min(520px, calc(100vw - 32px)); max-width: none; }
 /* New token (screen 2): a 520 px dialog, as the workspace dialogs are. */
 .dialog.new-token { width: min(520px, calc(100vw - 32px)); max-width: none; gap: 12px; }
 .new-token__form { display: grid; gap: 12px; }

@@ -60,6 +60,8 @@ function serve(
       if (url === '/api/me') return Response.json(me);
       if (url === '/api/account/tokens' && init?.method === 'POST')
         return Response.json(made, { status: 201 });
+      if (url.startsWith('/api/account/tokens/') && init?.method !== undefined)
+        return new Response(null, { status: 204 });
       if (url === '/api/account/tokens') {
         const list = lists[Math.min(listed, lists.length - 1)]!;
         listed += 1;
@@ -94,7 +96,7 @@ describe('the Access tokens page (T769, AC-430; design 18, screen 1)', () => {
       within(head!)
         .getAllByRole('columnheader')
         .map((cell) => cell.textContent),
-    ).toEqual(['Name', 'Scopes', 'Made', 'Expires', 'Last used']);
+    ).toEqual(['Name', 'Scopes', 'Made', 'Expires', 'Last used', 'Actions']);
     expect(body).toHaveLength(2);
     const cells = (row: HTMLElement) => within(row).getAllByRole('cell');
     const [reading, laptop] = body.map(cells);
@@ -176,6 +178,107 @@ describe('the Access tokens page (T769, AC-430; design 18, screen 1)', () => {
         true,
       ),
     );
+  });
+});
+
+const REVOKED = {
+  ...LAPTOP,
+  id: 'pat-8',
+  name: 'CI experiment',
+  state: 'revoked',
+  stoppedAt: inDays(-5),
+  revokedBy: { name: 'Ada Admin' },
+};
+const EXPIRED = {
+  ...READING,
+  id: 'pat-9',
+  name: 'Old laptop',
+  expiresAt: inDays(-47),
+  state: 'expired',
+  stoppedAt: inDays(-47),
+  revokedBy: null,
+};
+const stoppedRows = () =>
+  within(screen.getByRole('table', { name: 'No longer working' })).getAllByRole('row');
+
+describe('revoking, and No longer working (T771, AC-431; design 18, states D and E)', () => {
+  it('revokes a token from its row, asked first, with a toast and no Undo', async () => {
+    const STOPPED = { ...LAPTOP, state: 'revoked', stoppedAt: now.toISOString(), revokedBy: ME };
+    const asked = serve([{ tokens: [LAPTOP, READING] }, { tokens: [READING], stopped: [STOPPED] }]);
+    open();
+    await screen.findByRole('table', { name: 'Your tokens' });
+    const revoke = within(rows()[1]!).getByRole('button', { name: 'Revoke' });
+    expect(revoke.getAttribute('aria-label')).toBeNull();
+    await userEvent.click(revoke);
+    const dialog = screen.getByRole('alertdialog', { name: 'Revoke “Claude Code · laptop”?' });
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Revoke token' }));
+
+    expect(
+      await screen.findByText('Revoked “Claude Code · laptop”. Clients using it now get 401.'),
+    ).toBeTruthy();
+    expect(asked).toContain('DELETE /api/account/tokens/pat-1');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: /undo/i })).toBeNull();
+    // It moves under No longer working.
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(within(stoppedRows()[0]!).getAllByRole('cell')[0]!.textContent).toBe(
+      'Claude Code · laptop',
+    );
+  });
+
+  it('Cancel revokes nothing', async () => {
+    const asked = serve([{ tokens: [LAPTOP] }]);
+    open();
+    await screen.findByRole('table', { name: 'Your tokens' });
+    await userEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(asked.filter((each) => each.startsWith('DELETE'))).toEqual([]);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Revoke' }));
+  });
+
+  it('lists revoked and expired tokens with their state, when, and who revoked one', async () => {
+    serve([{ tokens: [LAPTOP], stopped: [REVOKED, EXPIRED] }]);
+    open();
+    expect(await screen.findByRole('heading', { name: 'No longer working' })).toBeTruthy();
+    const [revoked, expired] = stoppedRows().map((row) => within(row).getAllByRole('cell'));
+    expect(revoked![0]!.textContent).toBe('CI experiment');
+    expect(revoked![3]!.textContent).toBe(
+      `Revoked · by Ada Admin, ${dayOf(new Date(REVOKED.stoppedAt))}`,
+    );
+    expect(revoked![3]!.querySelector('svg[data-icon="err"]')).not.toBeNull();
+    expect(expired![0]!.textContent).toBe('Old laptop');
+    expect(expired![3]!.textContent).toBe(`Expired · ${dayOf(new Date(EXPIRED.stoppedAt))}`);
+    expect(expired![3]!.querySelector('svg[data-icon="idle"]')).not.toBeNull();
+    // Neither can be revoked again: each offers Remove alone.
+    for (const row of stoppedRows()) {
+      expect(
+        within(row)
+          .getAllByRole('button')
+          .map((button) => button.textContent),
+      ).toEqual(['Remove']);
+    }
+  });
+
+  it('Remove takes a stopped token off the list', async () => {
+    const asked = serve([
+      { tokens: [], stopped: [REVOKED, EXPIRED] },
+      { tokens: [], stopped: [EXPIRED] },
+    ]);
+    open();
+    await screen.findByRole('table', { name: 'No longer working' });
+    await userEvent.click(within(stoppedRows()[0]!).getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(stoppedRows()).toHaveLength(1));
+    expect(asked).toContain('POST /api/account/tokens/pat-8/remove');
+    expect(within(stoppedRows()[0]!).getAllByRole('cell')[0]!.textContent).toBe('Old laptop');
+  });
+
+  it('shows no No longer working section when nothing has stopped', async () => {
+    serve([{ tokens: [LAPTOP] }]);
+    open();
+    await screen.findByRole('table', { name: 'Your tokens' });
+    expect(screen.queryByRole('heading', { name: 'No longer working' })).toBeNull();
   });
 });
 

@@ -84,6 +84,47 @@ test.describe('Access tokens, signed in (T769, AC-430)', () => {
   });
 });
 
+test.describe('Revoking from the page, and No longer working (T771, AC-431; design 18, D, E)', () => {
+  test.use({ role: 'super' });
+
+  test.afterEach(async ({ page }) => {
+    await tidy(page.request);
+  });
+
+  test('Revoke asks first, revokes with no Undo, and Remove takes it off', async ({ page }) => {
+    const name = `Claude Code · laptop ${RUN}`;
+    const made = await page.request.post('/api/account/tokens', {
+      data: { name, scopes: ['read'], days: 7 },
+    });
+    expect(made.status()).toBe(201);
+
+    await page.goto('/account/tokens');
+    const working = page.getByRole('table', { name: 'Your tokens' }).getByRole('row', { name });
+    await working.getByRole('button', { name: 'Revoke' }).click();
+    const asking = page.getByRole('alertdialog', { name: `Revoke “${name}”?` });
+    await expect(asking.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    expect((await asking.boundingBox())?.width).toBe(520);
+    await asking.getByRole('button', { name: 'Revoke token' }).click();
+
+    await expect(page.getByRole('status').filter({ hasText: 'Revoked “' })).toHaveText(
+      `Revoked “${name}”. Clients using it now get 401.`,
+    );
+    await expect(page.getByRole('button', { name: /undo/i })).toHaveCount(0);
+    await expect(working).toHaveCount(0);
+    const stopped = page
+      .getByRole('table', { name: 'No longer working' })
+      .getByRole('row', { name });
+    await expect(stopped.getByRole('cell').nth(3)).toHaveText(
+      /^Revoked · by Super Admin, \d{1,2} \w{3}/,
+    );
+
+    await stopped.getByRole('button', { name: 'Remove' }).click();
+    await expect(stopped).toHaveCount(0);
+    // Gone from the API's answer too.
+    expect(await (await page.request.get('/api/account/tokens')).text()).not.toContain(name);
+  });
+});
+
 test.describe('Access tokens, read-only everywhere (T769, AC-469; design 18, A5)', () => {
   test.use({ role: 'reader' });
 

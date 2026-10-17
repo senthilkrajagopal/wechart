@@ -1,12 +1,22 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 
+import { ExportedToast } from '../dashboard/export/ExportedToast';
 import { clockOf, dayOf, exactOf, whenOf } from '../shell/formatTime';
 import { hasWorkspace, ME_QUERY } from '../shell/me';
-import { StateLine } from '../shell/StatusIcon';
+import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { NewTokenDialog } from './NewTokenDialog';
+import { RevokeTokenDialog } from './RevokeTokenDialog';
 import { TokenShownOnce } from './TokenShownOnce';
-import { SCOPES, TOKENS_QUERY, type AccessToken, type MadeToken } from './tokensApi';
+import {
+  removeToken,
+  revokeToken,
+  SCOPES,
+  TOKENS_QUERY,
+  type AccessToken,
+  type MadeToken,
+  type StoppedToken,
+} from './tokensApi';
 
 const DAY_MS = 86_400_000;
 
@@ -44,8 +54,15 @@ export function AccessTokensPage() {
   /** A token just made, its text shown once (T770, AC-430); null once closed. */
   const [shown, setShown] = useState<MadeToken | null>(null);
   const newToken = useRef<HTMLButtonElement>(null);
+  /** The token being revoked, asked first (T771, state E), and the button that asked. */
+  const [revoking, setRevoking] = useState<AccessToken | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const [toast, setToast] = useState('');
+  const [removeFailed, setRemoveFailed] = useState<string | null>(null);
   const now = new Date();
   const single = me.data?.security === 'off';
+  const refresh = () => queries.invalidateQueries({ queryKey: TOKENS_QUERY.queryKey });
+  const stopped = list.data?.stopped ?? [];
 
   return (
     <div className="account-page">
@@ -111,15 +128,61 @@ export function AccessTokensPage() {
                 <th scope="col">Made</th>
                 <th scope="col">Expires</th>
                 <th scope="col">Last used</th>
+                <th scope="col">
+                  <span className="visually-hidden">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {list.data.tokens.map((token) => (
-                <TokenRow key={token.id} token={token} now={now} />
+                <TokenRow
+                  key={token.id}
+                  token={token}
+                  now={now}
+                  onRevoke={(button) => {
+                    opener.current = button;
+                    setRevoking(token);
+                  }}
+                />
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {stopped.length === 0 ? null : (
+        <section className="account-page__stopped" aria-labelledby="tokens-stopped">
+          <h2 id="tokens-stopped" className="account-page__subhead">
+            No longer working
+          </h2>
+          <div className="table-scroll">
+            <table className="grid-table tokens-table" aria-labelledby="tokens-stopped">
+              <tbody>
+                {stopped.map((token) => (
+                  <StoppedRow
+                    key={token.id}
+                    token={token}
+                    now={now}
+                    onRemove={() => {
+                      setRemoveFailed(null);
+                      removeToken(token.id).then(
+                        () => refresh(),
+                        (error: unknown) => {
+                          setRemoveFailed(error instanceof Error ? error.message : String(error));
+                        },
+                      );
+                    }}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {removeFailed === null ? null : (
+            <StateLine kind="err" role="alert">
+              {removeFailed}
+            </StateLine>
+          )}
+        </section>
       )}
 
       <p className="account-page__once">
@@ -175,16 +238,39 @@ export function AccessTokensPage() {
           }}
         />
       )}
+      {revoking === null ? null : (
+        <RevokeTokenDialog
+          title={`Revoke “${revoking.name}”?`}
+          revoke={() => revokeToken(revoking.id)}
+          onRevoked={() => {
+            // No Undo: a revoked token can't work again (state E2).
+            setToast(`Revoked “${revoking.name}”. Clients using it now get 401.`);
+            setRevoking(null);
+            void refresh();
+            // Its row, and its button, are gone: focus to the page's first control.
+            newToken.current?.focus();
+          }}
+          onClose={() => {
+            setRevoking(null);
+            opener.current?.focus();
+          }}
+        />
+      )}
+      <ExportedToast
+        message={toast}
+        onDismiss={() => {
+          setToast('');
+        }}
+      />
     </div>
   );
 }
 
-function TokenRow({ token, now }: { readonly token: AccessToken; readonly now: Date }) {
+/** Name, scopes as text tags, and when it was made: a working token's and a stopped one's. */
+function TokenCells({ token, now }: { readonly token: AccessToken; readonly now: Date }) {
   const made = new Date(token.createdAt);
-  const expires = new Date(token.expiresAt);
-  const used = token.lastUsedAt === null ? null : new Date(token.lastUsedAt);
   return (
-    <tr>
+    <>
       <td className="tokens-table__name">{token.name}</td>
       <td>
         <ul className="token-scopes" aria-label="Scopes">
@@ -196,9 +282,82 @@ function TokenRow({ token, now }: { readonly token: AccessToken; readonly now: D
         </ul>
       </td>
       <td title={exactOf(made)}>{dayOf(made, now)}</td>
+    </>
+  );
+}
+
+function UsedCell({ token, now }: { readonly token: AccessToken; readonly now: Date }) {
+  const used = token.lastUsedAt === null ? null : new Date(token.lastUsedAt);
+  return (
+    <td {...(used === null ? {} : { title: exactOf(used) })}>
+      {used === null ? 'Never' : whenOf(used, now)}
+    </td>
+  );
+}
+
+function TokenRow({
+  token,
+  now,
+  onRevoke,
+}: {
+  readonly token: AccessToken;
+  readonly now: Date;
+  readonly onRevoke: (button: HTMLButtonElement) => void;
+}) {
+  const expires = new Date(token.expiresAt);
+  return (
+    <tr>
+      <TokenCells token={token} now={now} />
       <td title={exactOf(expires)}>{expiresText(expires, now)}</td>
-      <td {...(used === null ? {} : { title: exactOf(used) })}>
-        {used === null ? 'Never' : whenOf(used, now)}
+      <UsedCell token={token} now={now} />
+      <td className="tokens-table__act">
+        <button
+          type="button"
+          className="btn btn-sm btn-danger"
+          onClick={(event) => {
+            onRevoke(event.currentTarget);
+          }}
+        >
+          Revoke
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+/** "Revoked · by Ada Admin, 12 Oct", or "Expired · 31 Aug" (design 18, D3), with its icon. */
+export function stoppedText(token: StoppedToken, now: Date): string {
+  const when = dayOf(new Date(token.stoppedAt), now);
+  if (token.state === 'expired') return `Expired · ${when}`;
+  return token.revokedBy === null
+    ? `Revoked · ${when}`
+    : `Revoked · by ${token.revokedBy.name}, ${when}`;
+}
+
+/** A token under "No longer working" (T771, AC-431): its state for its expiry, and Remove. */
+function StoppedRow({
+  token,
+  now,
+  onRemove,
+}: {
+  readonly token: StoppedToken;
+  readonly now: Date;
+  readonly onRemove: () => void;
+}) {
+  return (
+    <tr className="tokens-table__stopped">
+      <TokenCells token={token} now={now} />
+      <td title={exactOf(new Date(token.stoppedAt))}>
+        <span className="token-state">
+          <StatusIcon kind={token.state === 'expired' ? 'idle' : 'err'} />
+          {stoppedText(token, now)}
+        </span>
+      </td>
+      <UsedCell token={token} now={now} />
+      <td className="tokens-table__act">
+        <button type="button" className="btn btn-sm" onClick={onRemove}>
+          Remove
+        </button>
       </td>
     </tr>
   );

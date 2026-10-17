@@ -1592,11 +1592,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T770 (AC-430) Show a new token's text once, with Copy and the filled-in Claude Code command, and ask before closing it uncopied, as design 18 screen 3 and state C draw it
 
-- [ ] T771 (AC-431) Revoke a token from the page, confirmed with no Undo, and list stopped tokens under "No longer working" with Remove, as design 18 states D and E draw them
-  - Lane: MCP
-  - Files: `packages/web/src/account/AccessTokensPage.tsx` (+ test), `packages/web/src/account/RevokeTokenDialog.tsx` (+ test), `e2e/security/access-tokens.spec.ts`.
-  - Failing test: `RevokeTokenDialog.test.tsx`: Revoke asks with a 520 px alert dialog whose focus starts on Cancel; Revoke token revokes it, with a toast and no Undo. `AccessTokensPage.test.tsx`: a revoked token shows under "No longer working" as "Revoked · by ‹name›, ‹date›", an expired one as "Expired · ‹date›", each with Remove, which takes the row away (AC-431).
-  - Depends on: T768, T769
+- [x] T771 (AC-431) Revoke a token from the page, confirmed with no Undo, and list stopped tokens under "No longer working" with Remove, as design 18 states D and E draw them
 
 - [ ] T772 (AC-470) Security › Access tokens: every user's tokens for Super-Admins, with their owners, filters and Revoke, and to no one else, as design 18 screen 4 and state F draw it
   - Lane: MCP

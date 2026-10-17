@@ -56,6 +56,27 @@ export const TOKENS_QUERY = {
   },
 };
 
+/** Sends one change to a token; a refusal throws with the API's reason, or `fallback`. */
+async function act(url: string, method: 'DELETE' | 'POST', fallback: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(url, { method });
+  } catch {
+    throw new Error(`${fallback}: wechart didn’t answer.`);
+  }
+  if (response.ok) return;
+  const answer = (await response.json().catch(() => null)) as { error?: string } | null;
+  throw new Error(answer?.error ?? `${fallback} (${String(response.status)}).`);
+}
+
+/** Revokes one of the user's own tokens (T768, T771; AC-431). */
+export const revokeToken = (id: string) =>
+  act(`/api/account/tokens/${encodeURIComponent(id)}`, 'DELETE', 'The token wasn’t revoked');
+
+/** Takes a stopped token off "No longer working"; its audit record stays (AC-431). */
+export const removeToken = (id: string) =>
+  act(`/api/account/tokens/${encodeURIComponent(id)}/remove`, 'POST', 'The token wasn’t removed');
+
 /** Makes a token; a refusal throws with the API's reason. */
 export async function makeToken(asked: {
   readonly name: string;
