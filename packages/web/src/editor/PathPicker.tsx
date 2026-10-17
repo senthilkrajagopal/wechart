@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 /** A row of the picker: a cube or view, or a field of one. */
 export interface PathPickerRow {
@@ -15,10 +23,29 @@ export interface PathPickerRow {
   readonly chip?: string | undefined;
   /** `data-*` attributes, for the specs that find a row by its name. */
   readonly data?: Readonly<Record<string, string>> | undefined;
+  /** Drawn in place of the C or V chip: a field's role chip (T688). */
+  readonly icon?: ReactNode;
+  /** Listed, not chosen: a field already in the chart, "✓ in chart" (T688, EDI-11). */
+  readonly disabled?: boolean | undefined;
+}
+
+/**
+ * Its button in place of the "label: chosen ▾" select: a well's "+ metric"
+ * (T688, EDI-11), named by its own label.
+ */
+export interface PathPickerTrigger {
+  readonly text: ReactNode;
+  readonly label: string;
+  readonly className: string;
+  readonly testId?: string | undefined;
+  readonly disabled?: boolean | undefined;
+  readonly describedBy?: string | undefined;
 }
 
 export interface PathPickerGroup {
   readonly label: string | undefined;
+  /** Said after its label, quieter: a joined cube's "· via join" (T688, EDI-11). */
+  readonly aside?: string | undefined;
   readonly rows: readonly PathPickerRow[];
 }
 
@@ -52,7 +79,26 @@ export function PathPicker({
   valueTitle,
   onChoose,
   clearLabel,
+  trigger,
+  foot,
+  popClass,
+  popWidth = POP_WIDTH,
+  anchor,
 }: {
+  /** Its button, where it isn't the select (T688): a well's "+ metric". */
+  readonly trigger?: PathPickerTrigger | undefined;
+  /** A line under the list: design 01's "↑ ↓ move · Enter adds · Esc closes". */
+  readonly foot?: string | undefined;
+  /** The popup's own class, beside `cube-picker__pop`. */
+  readonly popClass?: string | undefined;
+  /** The popup's width, as its class sets it, for placing it in the window. */
+  readonly popWidth?: number | undefined;
+  /**
+   * The button's ancestor whose left edge the list opens at, by selector: a
+   * well's "+" picker at its `.well`, as design 01 state A draws it (T688's
+   * review). The button's own edge where none is given or found.
+   */
+  readonly anchor?: string | undefined;
   /** The button's visible label: "Cube or view", "Filter on". */
   readonly label: string;
   readonly buttonId?: string | undefined;
@@ -100,7 +146,8 @@ export function PathPicker({
   /** What can be picked, in the order listed: the keys move through these. */
   const pickable = [
     ...(clear === undefined ? [] : [clear]),
-    ...shown.flatMap((group) => group.rows),
+    // One already in the chart is listed, never picked (T688).
+    ...shown.flatMap((group) => group.rows).filter((row) => row.disabled !== true),
   ];
   /** By its row's own key: a workspace copy shares its original's name (T475's review). */
   const optionId = (key: string) => `${ids}-option-${key}`;
@@ -121,8 +168,11 @@ export function PathPicker({
   const place = () => {
     const rect = button.current?.getBoundingClientRect();
     if (rect === undefined) return;
-    const width = Math.min(POP_WIDTH, window.innerWidth - 2 * GUTTER);
-    const left = Math.max(GUTTER, Math.min(rect.left, window.innerWidth - width - GUTTER));
+    const edge =
+      (anchor === undefined ? null : button.current?.closest(anchor))?.getBoundingClientRect()
+        .left ?? rect.left;
+    const width = Math.min(popWidth, window.innerWidth - 2 * GUTTER);
+    const left = Math.max(GUTTER, Math.min(edge, window.innerWidth - width - GUTTER));
     setAt({ top: rect.bottom + 4, left });
   };
   /** Closed, with what was typed and the active row let go of, so it opens afresh. */
@@ -168,6 +218,7 @@ export function PathPicker({
     setOpen(true);
   };
   const choose = (row: PathPickerRow) => {
+    if (row.disabled === true) return;
     onChoose(row.value);
     close();
   };
@@ -213,19 +264,33 @@ export function PathPicker({
   };
 
   return (
-    <div className="cube-picker" ref={box}>
-      <span id={`${ids}-label`} className="cube-picker__label">
-        {label}
-      </span>
+    <div
+      className={trigger === undefined ? 'cube-picker' : 'cube-picker cube-picker--add'}
+      ref={box}
+    >
+      {trigger === undefined ? (
+        <span id={`${ids}-label`} className="cube-picker__label">
+          {label}
+        </span>
+      ) : null}
       <button
         ref={button}
         type="button"
         id={buttonId}
-        className="select-sm cube-picker__button"
+        className={trigger?.className ?? 'select-sm cube-picker__button'}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-labelledby={`${ids}-label ${ids}-value`}
-        data-value={value}
+        {...(trigger === undefined
+          ? { 'aria-labelledby': `${ids}-label ${ids}-value` }
+          : {
+              'aria-label': trigger.label,
+              ...(trigger.describedBy === undefined
+                ? {}
+                : { 'aria-describedby': trigger.describedBy }),
+              ...(trigger.testId === undefined ? {} : { 'data-testid': trigger.testId }),
+            })}
+        disabled={trigger?.disabled === true}
+        data-value={trigger === undefined ? value : undefined}
         onClick={() => {
           if (open) {
             close();
@@ -240,12 +305,18 @@ export function PathPicker({
           }
         }}
       >
-        <span id={`${ids}-value`}>{value === '' ? empty : (valueTitle ?? value)}</span>
-        <span aria-hidden="true">▾</span>
+        {trigger === undefined ? (
+          <>
+            <span id={`${ids}-value`}>{value === '' ? empty : (valueTitle ?? value)}</span>
+            <span aria-hidden="true">▾</span>
+          </>
+        ) : (
+          trigger.text
+        )}
       </button>
       {open ? (
         <div
-          className="cube-picker__pop"
+          className={popClass === undefined ? 'cube-picker__pop' : `cube-picker__pop ${popClass}`}
           style={
             at === null ? undefined : { top: `${String(at.top)}px`, left: `${String(at.left)}px` }
           }
@@ -310,11 +381,23 @@ export function PathPicker({
                 <p className="cube-picker__none">{noMatch(typed.trim())}</p>
               )
             ) : (
-              shown.map((group) => (
-                <div key={group.label ?? ''} role="group" aria-label={group.label ?? listLabel}>
+              // By place: two groups may share a label, or have none (T688's review).
+              shown.map((group, at) => (
+                <div
+                  key={at}
+                  role="group"
+                  aria-label={
+                    group.label === undefined
+                      ? listLabel
+                      : `${group.label}${group.aside === undefined ? '' : ` ${group.aside}`}`
+                  }
+                >
                   {group.label === undefined ? null : (
                     <div className="cube-picker__group" aria-hidden="true">
                       {group.label}
+                      {group.aside === undefined ? null : (
+                        <span className="cube-picker__aside"> {group.aside}</span>
+                      )}
                     </div>
                   )}
                   {group.rows.map((row) => (
@@ -325,6 +408,7 @@ export function PathPicker({
                       // Never focused: the box keeps focus and names the active one (APG).
                       tabIndex={-1}
                       aria-selected={row.key === active}
+                      aria-disabled={row.disabled === true ? 'true' : undefined}
                       {...Object.fromEntries(
                         Object.entries(row.data ?? {}).map(([name, said]) => [
                           `data-${name}`,
@@ -338,9 +422,11 @@ export function PathPicker({
                         choose(row);
                       }}
                     >
-                      <span className="cube-picker__kind" aria-hidden="true">
-                        {row.kind === 'view' ? 'V' : 'C'}
-                      </span>
+                      {row.icon ?? (
+                        <span className="cube-picker__kind" aria-hidden="true">
+                          {row.kind === 'view' ? 'V' : 'C'}
+                        </span>
+                      )}
                       <span className="cube-picker__title">{row.title}</span>
                       {row.chip === undefined ? null : (
                         <span className="cube-picker__chip">{row.chip}</span>
@@ -352,6 +438,11 @@ export function PathPicker({
               ))
             )}
           </div>
+          {foot === undefined ? null : (
+            <p className="cube-picker__foot" aria-hidden="true">
+              {foot}
+            </p>
+          )}
         </div>
       ) : null}
     </div>

@@ -820,6 +820,53 @@ export function buildServer({
   });
 
   /**
+   * Each cube's joins, for the field list's "· via join" groups (T688,
+   * EDI-03): from Cube's extended metadata, as the user's token sees it, or
+   * the item's overlay's. Each join's target and relationship only, never its
+   * SQL, and no target the answer doesn't hold (research
+   * `cube/meta-extended-joins.md`).
+   */
+  app.get('/api/meta/joins', USER, async (request, reply) => {
+    const raw = (request.query as { for?: unknown } | undefined)?.for;
+    let cube = cubeFor(request);
+    let allowed: ReadonlySet<string> | 'all' = 'all';
+    if (raw !== undefined && security !== 'off') {
+      const item = queryItemOfParam(raw);
+      if (item === null || item === undefined) throw new BadRequest();
+      const scope = await queryScope(request, reply, item);
+      if (scope === undefined) return reply;
+      cube = cubeIn(request, scope);
+      allowed = scope.allowed;
+    }
+    const extended = (await cube.metaExtended()) as { cubes?: unknown } | null;
+    const cubes = (Array.isArray(extended?.cubes) ? extended.cubes : []).filter(
+      (each): each is { name: string; joins?: unknown } =>
+        typeof (each as { name?: unknown } | null)?.name === 'string' &&
+        (allowed === 'all' || allowed.has((each as { name: string }).name)),
+    );
+    const held = new Set(cubes.map((each) => each.name));
+    return {
+      joins: Object.fromEntries(
+        cubes.map((each) => [
+          each.name,
+          (Array.isArray(each.joins)
+            ? (each.joins as { name?: unknown; relationship?: unknown }[])
+            : []
+          )
+            .filter(
+              (join): join is { name: string; relationship?: unknown } =>
+                typeof join.name === 'string' && held.has(join.name),
+            )
+            .map((join) => ({
+              name: join.name,
+              relationship: typeof join.relationship === 'string' ? join.relationship : null,
+            })),
+        ]),
+      ),
+    };
+  });
+
+  /**
    * Who is signed in (AC-190, AC-252, AC-254): the name the top bar shows,
    * whether they are a Super-Admin, and the security mode, so the top bar can
    * show "Single-user mode" in place of Sign out.

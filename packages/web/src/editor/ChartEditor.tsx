@@ -4,6 +4,7 @@ import {
   CHART_TYPE_NAMES,
   chartDocumentOf,
   compile,
+  distinctValues,
   emptySpec,
   isEmpty,
   onOneScale,
@@ -57,11 +58,11 @@ import { drawnSizeIn, hiddenLabelsAt } from './hiddenLabels';
 import { metaQueryOf, useWorkspaceItem } from '../query/meta';
 import { countryMarkingsOf, signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
-import { FieldList } from './FieldList';
+import { CubeSourcePicker, FieldList, membersWithJoins, useJoined } from './FieldList';
 import { Wells } from './Wells';
 import { requestCalculation } from './calcRequests';
 import { RequestCalcDialog } from './RequestCalcDialog';
-import { cubesFrom, formatsOf, membersOf, shortTitlesOf, titlesOf, type Member } from './fields';
+import { cubesFrom, formatsOf, shortTitlesOf, titlesOf, type Member } from './fields';
 
 /**
  * The chart editor (AC-025, AC-026).
@@ -194,6 +195,38 @@ export interface ChartEditorProps {
   readonly chartId?: string | undefined;
 }
 
+/** A channel as a dimension's pill names it (T688, EDI-09); x and y by their axes. */
+const CHANNEL_WORDS: Readonly<Record<string, string>> = {
+  color: 'Color',
+  size: 'Size',
+  facet: 'Panel',
+  row: 'Rows',
+  column: 'Columns',
+};
+
+/** Each member's channel, as its pill says it; a horizontal bar's x reads "Y" (T688). */
+function channelsOf(
+  encoding: Readonly<Record<string, readonly string[] | undefined>> | undefined,
+  flipped: boolean,
+): Record<string, string> {
+  const said: Record<string, string> = {};
+  for (const [channel, members] of Object.entries(encoding ?? {}))
+    for (const member of members ?? []) {
+      const name =
+        channel === 'x'
+          ? flipped
+            ? 'Y'
+            : 'X'
+          : channel === 'y'
+            ? flipped
+              ? 'X'
+              : 'Y'
+            : (CHANNEL_WORDS[channel] ?? channel);
+      said[member] ??= name;
+    }
+  return said;
+}
+
 /** The inspector's tabs (AC-214, the prototype's Data and Customize). */
 const INSPECTOR_TABS = [
   ['data', 'Data'],
@@ -278,9 +311,11 @@ function EditorBody({
   // A workspace item's from its overlay (T347, AC-323).
   const meta = useQuery(metaQueryOf(useWorkspaceItem()));
 
+  /** The cubes the chosen one joins to, whose fields the chart may use too (T688, EDI-03). */
+  const joined = useJoined(cubeName);
   const available = useMemo(
-    () => (cubeName ? membersOf(meta.data, cubeName) : []),
-    [meta.data, cubeName],
+    () => membersWithJoins(meta.data, cubeName, joined),
+    [meta.data, cubeName, joined],
   );
 
   /**
@@ -417,6 +452,20 @@ function EditorBody({
     () =>
       ((result.data as { data?: unknown[] } | undefined)?.data ?? []) as Record<string, unknown>[],
     [result.data],
+  );
+  /**
+   * Each dimension's distinct values in the chart's own result (T688,
+   * EDI-04), for the field list: counted from the rows already come, with no
+   * query of its own (the coordinator's call, 2026-10-17).
+   */
+  const distinct = useMemo(
+    () =>
+      new Map(
+        rows.length === 0
+          ? []
+          : spec.dimensions.map((member) => [member, distinctValues(rows, member).length]),
+      ),
+    [rows, spec.dimensions],
   );
 
   /**
@@ -560,6 +609,17 @@ function EditorBody({
    * multiples where one grouping lets a panel per metric draw them all, and
    * Table. Choosing one is a manual choice, focus going to Change.
    */
+  /**
+   * Each dimension's channel as drawn, its pill's tag (T688, EDI-09): a
+   * horizontal bar draws its categories down y and its values along x
+   * (`@wechart/charts` axis.ts), so its x reads "Y".
+   */
+  const channels = channelsOf(drawnSpec?.encoding, shownType === 'hbar');
+  /** Each cube's title, for the fields' picker's groups (EDI-11). */
+  const cubeTitles = useMemo(
+    () => Object.fromEntries(cubesFrom(meta.data).map((cube) => [cube.name, cube.title])),
+    [meta.data],
+  );
   const undrawn = useMemo(
     () => (drawnSpec === undefined ? [] : undrawnMeasures(drawnSpec)),
     [drawnSpec],
@@ -675,9 +735,9 @@ function EditorBody({
       <aside className="chart-editor__fields" aria-label="Fields" inert={busy} aria-busy={busy}>
         <FieldList
           cubeName={cubeName}
-          folderId={folderId}
           onDragStateChange={setDragging}
           used={used}
+          distinct={distinct}
           // Into the well its role belongs in (AC-215).
           onAdd={(member) => {
             const well = wellFor(member.kind);
@@ -685,11 +745,6 @@ function EditorBody({
             if (well === null || spec[well].includes(member.name)) return;
             setSpec((current) => addToWell(current, well, member.name));
           }}
-          onCubeChange={(next) =>
-            // Members belong to a cube; keeping them across a change would
-            // build a query naming fields the new cube does not have.
-            change((current) => ({ ...current, cubeName: next, spec: emptySpec(next) }))
-          }
         />
       </aside>
 
@@ -865,111 +920,130 @@ function EditorBody({
         >
           {inspector === 'data' ? (
             <>
-              {/* The type by its name, and Change into the gallery (AC-217). */}
-              <ChartTypeCard
-                shown={shownType}
-                manual={isManual(chartTypeState)}
-                recommended={recommended}
-                warnings={typeWarnings}
-                changeRef={changeType}
-                onChange={() => setGallery(true)}
-                onBack={() => {
-                  setChartTypeState(backToRecommended());
-                  // The button pressed goes with the manual choice: to Change.
-                  changeType.current?.focus();
-                }}
-              />
-              <Wells
-                spec={spec}
-                available={available}
-                titles={titles}
-                dragging={dragging}
-                onAdd={(well, member) => setSpec((current) => addToWell(current, well, member))}
-                onRemove={(well, member) =>
-                  setSpec((current) => removeFromWell(current, well, member))
-                }
-                // A time field's grain, from its pill (AC-216).
-                onGranularity={(member, grain) =>
-                  setSpec((current) => ({
-                    ...current,
-                    granularities: { ...current.granularities, [member]: grain },
-                  }))
-                }
-                // A measure's quick calculation, from the menu on its pill (AC-047).
-                onCalculation={(member, calc) =>
-                  setSpec((current) => applyQuickCalc(current, member, calc))
-                }
-                // Anything else, asked of whoever may change the model (T383, AC-050).
-                onRequest={chartId === undefined ? undefined : setRequesting}
-                // The last filter removed leaves none stored, as there were.
-                onFilters={(filters) =>
-                  setSpec((current) => {
-                    if (filters.length > 0) return { ...current, filters };
-                    const { filters: _gone, ...rest } = current;
-                    void _gone;
-                    return rest;
-                  })
-                }
-                // A box plot's "Each point is" (T400, AC-314), for a box plot alone.
-                {...(shownType === 'boxplot'
-                  ? {
-                      eachPointIs: {
-                        member: spec.eachPointIs,
-                        onChange: (member: string | undefined) =>
-                          setSpec((current) => {
-                            if (member !== undefined) return { ...current, eachPointIs: member };
-                            const { eachPointIs: _gone, ...rest } = current;
-                            void _gone;
-                            return rest;
-                          }),
-                      },
-                    }
-                  : {})}
-                undrawn={
-                  undrawn.length === 0 || shownType === null
-                    ? undefined
-                    : {
-                        metrics: undrawn,
-                        drawnAs: CHART_TYPE_NAMES[shownType],
-                        onSmallMultiples: byMetric ? () => chooseAndReturn('trellis') : undefined,
-                        onTable: () => chooseAndReturn('table'),
+              {/* Design 01's three ruled sections (T688, EDI-08): the source
+                  and the type; the wells, Sort and Top N; why. */}
+              <div className="inspector-section" data-testid="inspector-source">
+                {/* The cube or view, the inspector's first field (EDI-05, pin 3). */}
+                <CubeSourcePicker
+                  cubeName={cubeName}
+                  folderId={folderId}
+                  onCubeChange={(next) =>
+                    // Members belong to a cube; keeping them across a change would
+                    // build a query naming fields the new cube does not have.
+                    change((current) => ({ ...current, cubeName: next, spec: emptySpec(next) }))
+                  }
+                />
+                {/* The type by its name, and Change into the gallery (AC-217). */}
+                <ChartTypeCard
+                  shown={shownType}
+                  manual={isManual(chartTypeState)}
+                  recommended={recommended}
+                  warnings={typeWarnings}
+                  changeRef={changeType}
+                  onChange={() => setGallery(true)}
+                  onBack={() => {
+                    setChartTypeState(backToRecommended());
+                    // The button pressed goes with the manual choice: to Change.
+                    changeType.current?.focus();
+                  }}
+                />
+              </div>
+              <div className="inspector-section" data-testid="inspector-wells">
+                <Wells
+                  spec={spec}
+                  available={available}
+                  cubeTitles={cubeTitles}
+                  joined={joined}
+                  channels={channels}
+                  titles={titles}
+                  dragging={dragging}
+                  onAdd={(well, member) => setSpec((current) => addToWell(current, well, member))}
+                  onRemove={(well, member) =>
+                    setSpec((current) => removeFromWell(current, well, member))
+                  }
+                  // A time field's grain, from its pill (AC-216).
+                  onGranularity={(member, grain) =>
+                    setSpec((current) => ({
+                      ...current,
+                      granularities: { ...current.granularities, [member]: grain },
+                    }))
+                  }
+                  // A measure's quick calculation, from the menu on its pill (AC-047).
+                  onCalculation={(member, calc) =>
+                    setSpec((current) => applyQuickCalc(current, member, calc))
+                  }
+                  // Anything else, asked of whoever may change the model (T383, AC-050).
+                  onRequest={chartId === undefined ? undefined : setRequesting}
+                  // The last filter removed leaves none stored, as there were.
+                  onFilters={(filters) =>
+                    setSpec((current) => {
+                      if (filters.length > 0) return { ...current, filters };
+                      const { filters: _gone, ...rest } = current;
+                      void _gone;
+                      return rest;
+                    })
+                  }
+                  // A box plot's "Each point is" (T400, AC-314), for a box plot alone.
+                  {...(shownType === 'boxplot'
+                    ? {
+                        eachPointIs: {
+                          member: spec.eachPointIs,
+                          onChange: (member: string | undefined) =>
+                            setSpec((current) => {
+                              if (member !== undefined) return { ...current, eachPointIs: member };
+                              const { eachPointIs: _gone, ...rest } = current;
+                              void _gone;
+                              return rest;
+                            }),
+                        },
                       }
-                }
-                topN={topN}
-                onTopN={(n) => setOption('topN', n)}
-                tail={options['tail'] === 'drop' ? 'drop' : undefined}
-                onTail={(tail) => setOption('tail', tail)}
-                rowLimit={rowLimit}
-                onRowLimit={(n) => setOption('rowLimit', n)}
-                sort={
-                  /*
+                    : {})}
+                  undrawn={
+                    undrawn.length === 0 || shownType === null
+                      ? undefined
+                      : {
+                          metrics: undrawn,
+                          drawnAs: CHART_TYPE_NAMES[shownType],
+                          onSmallMultiples: byMetric ? () => chooseAndReturn('trellis') : undefined,
+                          onTable: () => chooseAndReturn('table'),
+                        }
+                  }
+                  topN={topN}
+                  onTopN={(n) => setOption('topN', n)}
+                  tail={options['tail'] === 'drop' ? 'drop' : undefined}
+                  onTail={(tail) => setOption('tail', tail)}
+                  rowLimit={rowLimit}
+                  onRowLimit={(n) => setOption('rowLimit', n)}
+                  sort={
+                    /*
                     Sorting (AC-044), beside Top N as the prototype has it
                     (T257). "Cube's order" is the default and is not the same
                     as any of the others: Cube was asked for an ordering and
                     returned one, and leaving it alone is a real choice rather
                     than the absence of one.
                   */
-                  <div className="field">
-                    <label htmlFor="chart-sort">Sort by</label>
-                    <select
-                      id="chart-sort"
-                      className="select-sm"
-                      value={sortValue}
-                      onChange={(event) => {
-                        setSort(event.target.value);
-                      }}
-                    >
-                      {SORT_CHOICES.map((choice) => (
-                        <option key={choice.value} value={choice.value}>
-                          {choice.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                }
-              />
+                    <div className="field">
+                      <label htmlFor="chart-sort">Sort by</label>
+                      <select
+                        id="chart-sort"
+                        className="select-sm"
+                        value={sortValue}
+                        onChange={(event) => {
+                          setSort(event.target.value);
+                        }}
+                      >
+                        {SORT_CHOICES.map((choice) => (
+                          <option key={choice.value} value={choice.value}>
+                            {choice.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  }
+                />
+              </div>
               {recommendation.top ? (
-                <div className="chart-editor__type" data-testid="recommendation">
+                <div className="inspector-section chart-editor__type" data-testid="recommendation">
                   {/* Each type by its name (AC-217), never its id. */}
                   <p data-testid="recommended-type" data-chart-type={recommended ?? undefined}>
                     Recommended: {recommended === null ? '' : CHART_TYPE_NAMES[recommended]}

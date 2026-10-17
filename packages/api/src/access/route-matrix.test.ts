@@ -1215,6 +1215,23 @@ const CASES: Record<string, Case> = {
         `${MARK} cube in ${place}`,
       );
   },
+  // Each cube's joins, for the field list (T688): the cubes the user's token
+  // sees; for an item, that item's, refused to whoever may not open it.
+  'GET /api/meta/joins': async () => {
+    for (const who of WHO) {
+      const whole = await ask(who, { method: 'GET', url: '/api/meta/joins' });
+      answered(whole, `${who} joins`);
+      for (const place of PLACES)
+        if (opens(who, place)) expect(whole.body, `${who} joins`).toContain(fullName(place));
+        else expect(whole.body, `${who} joins`).not.toContain(`"${fullName(place)}"`);
+    }
+    for (const place of PLACES)
+      await openedOnlyBy(
+        `/api/meta/joins?for=dashboard:${at[place].dashboard}`,
+        (who) => opens(who, place),
+        fullName(place),
+      );
+  },
   'POST /api/load': () => queries('/api/load'),
   'POST /api/sql': () => queries('/api/sql'),
   'POST /api/acceleration': () => queries('/api/acceleration'),

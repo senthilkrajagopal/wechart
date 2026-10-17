@@ -16,7 +16,8 @@ import { loadTile } from '../query/loadTile';
 import { MenuButton, type MenuItem } from '../shell/MenuButton';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { FieldIcon } from './FieldList';
-import type { Member } from './fields';
+import { fieldMetaOf, type Member } from './fields';
+import { PathPicker } from './PathPicker';
 import { QuickCalcMenu } from './QuickCalcMenu';
 import { overTimeUnavailable, quickCalcUnavailable } from './quickCalcAvailability';
 
@@ -29,7 +30,7 @@ const VALUE_LIMIT = 500;
 
 /** What becomes of the categories past the top N (T390, AC-041): folded, the default, or left out. */
 const REST: readonly { value: 'drop' | undefined; label: string }[] = [
-  { value: undefined, label: 'Fold into “Other (n)”' },
+  { value: undefined, label: 'Fold into Other (n)' },
   { value: 'drop', label: 'Leave out' },
 ];
 
@@ -42,11 +43,115 @@ const REST: readonly { value: 'drop' | undefined; label: string }[] = [
  * and a "+" picker for everyone. The picker is not a fallback — it is the only
  * route a keyboard or screen reader has, and drag-only would fail AC-176.
  */
-export const WELLS: { name: WellName; label: string; accepts: Member['kind']; adds: string }[] = [
+export const WELLS: {
+  name: WellName;
+  label: string;
+  /** Said after the label, quieter: design 01's "(group by)" (T688, EDI-09). */
+  aside?: string;
+  accepts: Member['kind'];
+  adds: string;
+}[] = [
   { name: 'measures', label: 'Metrics', accepts: 'measure', adds: 'metric' },
-  { name: 'dimensions', label: 'Dimensions', accepts: 'dimension', adds: 'dimension' },
-  { name: 'timeDimensions', label: 'Time', accepts: 'timeDimension', adds: 'time' },
+  {
+    name: 'dimensions',
+    label: 'Dimensions',
+    aside: '(group by)',
+    accepts: 'dimension',
+    adds: 'dimension',
+  },
+  { name: 'timeDimensions', label: 'Time', accepts: 'timeDimension', adds: 'time dimension' },
 ];
+
+/** What the fields' picker says of its keys, as design 01 state A writes it (EDI-11). */
+const PICKER_KEYS = '↑ ↓ move · Enter adds · Esc closes';
+
+/**
+ * A well's "+" picker, design 01 state A (T688, EDI-11): 264 px, a filter
+ * over the fields the well takes, grouped by cube, a joined one "· via join",
+ * each with its role chip and its aggregation or type; those already in the
+ * chart listed "✓ in chart", not offered again. The APG combobox the cube
+ * picker is (`PathPicker`): ↑ ↓, Enter and Esc, as its foot says.
+ */
+function FieldPicker({
+  well,
+  label,
+  adds,
+  testId,
+  candidates,
+  held,
+  joined,
+  cubeTitles,
+  disabled,
+  describedBy,
+  onPick,
+}: {
+  well: string;
+  label: string;
+  adds: string;
+  testId: string;
+  candidates: readonly Member[];
+  held: readonly string[];
+  /** The cubes joined to the chart's own: only theirs are "· via join", never a view's own cubes. */
+  joined: readonly string[];
+  cubeTitles: Readonly<Record<string, string>>;
+  disabled: boolean;
+  describedBy: string | undefined;
+  onPick: (member: Member) => void;
+}) {
+  const cubes = [...new Set(candidates.map((member) => member.cube))];
+  // Its title, or its name in words, never the identifier (T229's review).
+  const titleOfCube = (name: string) =>
+    cubeTitles[name] ??
+    (name.split('__').pop() ?? name)
+      .replace(/_/g, ' ')
+      .replace(/^./, (first) => first.toUpperCase());
+  return (
+    <PathPicker
+      label={label}
+      empty=""
+      searchLabel="Filter fields"
+      listLabel="Fields"
+      noMatch={(typed) =>
+        typed === '' ? 'Nothing to add from this cube.' : `No field matches “${typed}”.`
+      }
+      groups={cubes.map((name) => ({
+        label: titleOfCube(name),
+        aside: joined.includes(name) ? '· via join' : undefined,
+        rows: candidates
+          .filter((member) => member.cube === name)
+          .map((member) => ({
+            key: member.name,
+            value: member.name,
+            title: member.title,
+            kind: 'cube' as const,
+            path: fieldMetaOf(member),
+            icon: <FieldIcon member={member} />,
+            ...(held.includes(member.name) ? { disabled: true, chip: '✓ in chart' } : {}),
+            data: { testid: `pick-${member.name}` },
+          })),
+      }))}
+      value=""
+      valueTitle={undefined}
+      onChoose={(name) => {
+        const member = candidates.find((each) => each.name === name);
+        if (member !== undefined) onPick(member);
+      }}
+      trigger={{
+        text: `+ ${adds}`,
+        label,
+        className: 'addbtn',
+        testId,
+        disabled,
+        describedBy,
+      }}
+      foot={PICKER_KEYS}
+      popClass={`cube-picker__pop--fields field-picker--${well}`}
+      popWidth={264}
+      // At the well's left edge, as design 01 state A draws it (T688's review).
+      anchor=".well"
+    />
+  );
+}
 
 /**
  * A well's "+" (the prototype's `.addbtn` opening its `.picker`, T257): the
@@ -133,6 +238,18 @@ export function rejectionReason(
 export interface WellsProps {
   readonly spec: ChartSpec;
   readonly available: readonly Member[];
+  /** Each cube's title, for the fields' picker's groups (T688, EDI-11). */
+  readonly cubeTitles?: Readonly<Record<string, string>>;
+  /**
+   * The cubes joined to the chart's own (T688's review): their groups in the
+   * "+" picker are "· via join"; a view's own cubes' are not.
+   */
+  readonly joined?: readonly string[];
+  /**
+   * Each dimension's channel as drawn, "X", "Y", "Color" (T688, EDI-09):
+   * its pill's tag. None until the chart is drawn.
+   */
+  readonly channels?: Readonly<Record<string, string>>;
   readonly onAdd: (well: WellName, member: string) => void;
   readonly onRemove: (well: WellName, member: string) => void;
   /** The field currently being dragged, if any. */
@@ -195,6 +312,9 @@ export interface WellsProps {
 export function Wells({
   spec,
   available,
+  cubeTitles = {},
+  joined = [],
+  channels = {},
   onAdd,
   onRemove,
   dragging = null,
@@ -233,10 +353,13 @@ export function Wells({
     ...(spec.filters ?? []).map((filter) => filter.member),
     ...(eachPointIs?.member === undefined ? [] : [eachPointIs.member]),
   ];
-  const oneSource = new Set(held.map((name) => name.split('.')[0])).size === 1;
+  const sources = new Set(held.map((name) => name.split('.')[0]));
+  // A field of a cube the chart holds nothing of — a joined cube's — is
+  // named in full: its source isn't evident (AC-220; T688's review).
   const titleOf = (name: string) =>
-    (oneSource ? available.find((member) => member.name === name)?.shortTitle : undefined) ??
-    fullTitleOf(name);
+    (sources.size === 1 && sources.has(name.split('.')[0])
+      ? available.find((member) => member.name === name)?.shortTitle
+      : undefined) ?? fullTitleOf(name);
   const filters = spec.filters ?? [];
   const filterable = available.filter((member) => member.kind === 'dimension');
   /**
@@ -351,7 +474,6 @@ export function Wells({
    */
   const noSource = spec.cube === '';
   const noSourceId = `${ids}-no-source`;
-  const addState = noSource ? { disabled: true, describedBy: noSourceId } : {};
 
   return (
     <div className="wells" ref={root}>
@@ -372,6 +494,12 @@ export function Wells({
           <section key={well.name} className="well-field">
             <h3 id={`well-${well.name}-label`} className="well-field__label">
               {well.label}
+              {well.aside === undefined ? null : (
+                <>
+                  {' '}
+                  <span className="well-field__opt">{well.aside}</span>
+                </>
+              )}
             </h3>
             <div
               className="well"
@@ -444,6 +572,11 @@ export function Wells({
                           }
                           testId={`calcs-${member}`}
                         />
+                      ) : well.name === 'dimensions' && channels[member] !== undefined ? (
+                        // The channel it is drawn on, "Country Y" (EDI-09).
+                        <span className="pill__tag" title={`Drawn on ${channels[member]}`}>
+                          {channels[member]}
+                        </span>
                       ) : known?.aggType === undefined ? null : (
                         <span className="pill__tag">{known.aggType}</span>
                       )}
@@ -466,19 +599,19 @@ export function Wells({
                 })}
               </ul>
               {/* The "+" picker (AC-026, rule 11): the keyboard's route in. */}
-              <MenuButton
+              <FieldPicker
+                well={well.name}
                 label={`Add to ${well.label}`}
-                className="addbtn"
-                align="start"
+                adds={well.adds}
                 testId={`add-${well.name}`}
-                {...addState}
-                items={pickerItems(
-                  candidates.filter((member) => !held.includes(member.name)),
-                  (member) => onAdd(well.name, member.name),
-                )}
-              >
-                + {well.adds}
-              </MenuButton>
+                candidates={candidates}
+                held={held}
+                joined={joined}
+                cubeTitles={cubeTitles}
+                disabled={noSource}
+                describedBy={noSource ? noSourceId : undefined}
+                onPick={(member) => onAdd(well.name, member.name)}
+              />
             </div>
 
             {refusal ? (
@@ -533,20 +666,21 @@ export function Wells({
               />
             ))}
           </ul>
-          <MenuButton
+          <FieldPicker
+            well="filters"
             label="Add a filter"
-            className="addbtn"
-            align="start"
+            adds="filter"
             testId="add-filters"
-            {...addState}
-            items={pickerItems(
-              filterable.filter((member) => !filters.some((each) => each.member === member.name)),
-              (member) =>
-                onFilters?.([...filters, { member: member.name, operator: 'equals', values: [] }]),
-            )}
-          >
-            + filter
-          </MenuButton>
+            candidates={filterable}
+            held={filters.map((each) => each.member)}
+            joined={joined}
+            cubeTitles={cubeTitles}
+            disabled={noSource}
+            describedBy={noSource ? noSourceId : undefined}
+            onPick={(member) =>
+              onFilters?.([...filters, { member: member.name, operator: 'equals', values: [] }])
+            }
+          />
         </div>
       </section>
 
@@ -554,29 +688,32 @@ export function Wells({
           into one Other (AC-041). */}
       <div className="wells__options">
         {sort}
-        <TopN id={`${ids}-top`} label="Top N (+ Other)" topN={topN} onTopN={onTopN} />
-        {/* What becomes of the rest, as a segmented control (direction.md
-            §8's inspector fields), and a row limit (T390, AC-041). */}
-        <div className="field">
-          <span id={`${ids}-rest`} className="field__label">
-            The rest
-          </span>
-          <div className="seg" role="group" aria-labelledby={`${ids}-rest`}>
-            {REST.map(({ value, label }) => (
-              <button
-                key={label}
-                type="button"
-                disabled={topN === undefined}
-                aria-pressed={tail === value}
-                onClick={() => {
-                  if (tail !== value) onTail?.(value);
-                }}
-              >
-                {label}
-              </button>
-            ))}
+        <TopN id={`${ids}-top`} label="Top N" aside="(+ Other)" topN={topN} onTopN={onTopN} />
+        {/* What becomes of the rest past the top N (T390, AC-041): only once
+            Top N is set, a 28/12 native select in Sort by's row grid, in its
+            full words (chart-editor-Q1; T688). */}
+        {topN === undefined ? null : (
+          <div className="field">
+            <label htmlFor={`${ids}-rest`} className="field__label">
+              The rest
+            </label>
+            <select
+              id={`${ids}-rest`}
+              className="select-sm"
+              value={tail ?? 'fold'}
+              onChange={(event) => {
+                const next = event.target.value === 'drop' ? 'drop' : undefined;
+                if (tail !== next) onTail?.(next);
+              }}
+            >
+              {REST.map(({ value, label }) => (
+                <option key={label} value={value ?? 'fold'}>
+                  {label}
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
+        )}
         <TopN
           id={`${ids}-limit`}
           // Not "Row limit": "rows" reads as a size unit, and no size field
@@ -655,12 +792,15 @@ function EachPointIs({
 function TopN({
   id,
   label,
+  aside,
   placeholder = 'All',
   topN,
   onTopN,
 }: {
   id: string;
   label: string;
+  /** Quieter after the label: "(+ Other)" (design 01, EDI-09). */
+  aside?: string;
   placeholder?: string;
   topN: number | undefined;
   onTopN: ((n: number | undefined) => void) | undefined;
@@ -679,7 +819,15 @@ function TopN({
   };
   return (
     <div className="field">
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={id}>
+        {label}
+        {aside === undefined ? null : (
+          <>
+            {' '}
+            <span className="well-field__opt">{aside}</span>
+          </>
+        )}
+      </label>
       <input
         id={id}
         className="input-sm"

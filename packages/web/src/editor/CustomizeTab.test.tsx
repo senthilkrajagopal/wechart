@@ -39,6 +39,38 @@ const tab = (options: Record<string, unknown> = {}) => {
   return onOptions;
 };
 
+/**
+ * T688 (chart-editor-Q8, answered 2026-10-08: fold as the prototype draws it,
+ * editor.js:316): each section a native disclosure, its heading the summary,
+ * Axes and Legend open at first and Series and Values closed, and Series
+ * counted in its heading.
+ */
+describe('the Customize tab’s sections, folded as the prototype draws them (T688, chart-editor-Q8)', () => {
+  it('folds each section, Axes and Legend open and Series and Values closed, Series counted', () => {
+    tab();
+    const sections = [...document.querySelectorAll('.customize-tab__section')];
+    expect(sections.map((section) => section.tagName)).toEqual([
+      'DETAILS',
+      'DETAILS',
+      'DETAILS',
+      'DETAILS',
+    ]);
+    expect(
+      sections.map((section) => [
+        section.querySelector(':scope > summary')?.textContent,
+        (section as HTMLDetailsElement).open,
+      ]),
+    ).toEqual([
+      ['Axes', true],
+      ['Legend', true],
+      ['Series (2)', false],
+      ['Values', false],
+    ]);
+    // Each summary still a heading, for those who move by them.
+    expect(screen.getByRole('heading', { name: 'Series (2)' }).closest('summary')).not.toBeNull();
+  });
+});
+
 describe('the Customize tab (AC-219)', () => {
   it('offers every axis setting the criterion names, include zero on the axis of values', () => {
     tab();
@@ -116,7 +148,8 @@ describe('the Customize tab (AC-219)', () => {
   it('chooses a number format for the values', async () => {
     const onOptions = tab();
     await userEvent.selectOptions(
-      within(screen.getByRole('region', { name: 'Values' })).getByLabelText('Number format'),
+      // A folded section, a disclosure's group, since T688 (chart-editor-Q8).
+      within(screen.getByRole('group', { name: 'Values' })).getByLabelText('Number format'),
       'compact',
     );
     expect(onOptions).toHaveBeenLastCalledWith({ valueFormat: 'compact' });

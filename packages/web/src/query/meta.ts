@@ -45,6 +45,52 @@ export const WorkspaceItemContext = createContext<WorkspaceItem | undefined>(und
 
 export const useWorkspaceItem = (): WorkspaceItem | undefined => useContext(WorkspaceItemContext);
 
+/** Each cube's joins, by name: the cubes it joins to, as its model declares them (T688). */
+export type Joins = Readonly<
+  Record<string, readonly { readonly name: string; readonly relationship: string | null }[]>
+>;
+
+/**
+ * Each cube's joins (T688, EDI-03; `GET /api/meta/joins`), as the open item
+ * reads its model: a workspace item's overlay's, else the model's. Under
+ * `['meta']`, so a publish's invalidation reaches it too.
+ */
+export function joinsQueryOf(workspace: WorkspaceItem | undefined): {
+  readonly queryKey: readonly string[];
+  readonly queryFn: () => Promise<Joins>;
+} {
+  const url =
+    workspace === undefined
+      ? '/api/meta/joins'
+      : `/api/meta/joins?for=${encodeURIComponent(`${workspace.item.kind}:${workspace.item.id}`)}`;
+  return {
+    queryKey:
+      workspace === undefined
+        ? ['meta', 'joins']
+        : ['meta', 'joins', workspace.item.kind, workspace.item.id],
+    queryFn: async () => ((await metaAt(url)) as { joins?: Joins } | null)?.joins ?? {},
+  };
+}
+
+/**
+ * The cubes a cube reaches by its joins, nearest first: those it names, then
+ * theirs (Cube joins along the declared direction; research
+ * `cube/meta-extended-joins.md`). Never the cube itself.
+ */
+export function joinedFrom(joins: Joins, cube: string): string[] {
+  const reached: string[] = [];
+  const queue = [cube];
+  while (queue.length > 0) {
+    const next = queue.shift()!;
+    for (const join of joins[next] ?? [])
+      if (join.name !== cube && !reached.includes(join.name)) {
+        reached.push(join.name);
+        queue.push(join.name);
+      }
+  }
+  return reached;
+}
+
 /**
  * The field list as the open item reads it: a workspace item's from its
  * overlay, asked for by the item (`/api/meta?for=`); any other the model's,

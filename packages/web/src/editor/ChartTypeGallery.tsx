@@ -3,6 +3,7 @@ import { canDraw, describeMissing, type FieldCounts } from '@wechart/recommender
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { useFocusTrap } from '../shell/useFocusTrap';
+import { ChartTypeIcon } from './ChartTypeIcon';
 import { needsText, TYPE_DESCRIPTIONS, TYPE_PURPOSES, typesMatching } from './chartTypeCatalog';
 
 /**
@@ -80,7 +81,8 @@ export function ChartTypeGallery({
           ? typesMatching('')
           : (TYPE_PURPOSES.find((purpose) => purpose.id === shelf)?.types ?? []);
   const shelves: [Shelf, string][] = [
-    ['suggested', `Suggested (${String(suggested.length)})`],
+    // As the prototype names it (editor.js:379; EDI-25).
+    ['suggested', `Recommended (${String(suggested.length)})`],
     ['all', 'All charts'],
     ...TYPE_PURPOSES.map((purpose): [Shelf, string] => [purpose.id, purpose.name]),
   ];
@@ -143,13 +145,17 @@ export function ChartTypeGallery({
                   aria-describedby={ids.about}
                   onClick={() => onChoose(type)}
                 >
+                  {/* The prototype's card (editor.js:385; T688, EDI-24): the
+                      type's icon on the top row with the badge, its name
+                      on a line of its own. */}
                   <span className="type-card__top">
-                    <span id={ids.name} className="type-card__name">
-                      {CHART_TYPE_NAMES[type]}
-                    </span>
+                    <ChartTypeIcon type={type} size={28} />
                     {suggested.includes(type) ? (
                       <span className="type-card__badge">Suggested</span>
                     ) : null}
+                  </span>
+                  <span id={ids.name} className="type-card__name">
+                    {CHART_TYPE_NAMES[type]}
                   </span>
                   <span id={ids.about} className="type-card__about">
                     <span className="type-card__description">{TYPE_DESCRIPTIONS[type]}</span>
@@ -169,9 +175,10 @@ export function ChartTypeGallery({
           )}
         </div>
         <div className="type-gallery__foot">
+          {/* The prototype's words (editor.js:389; EDI-25). */}
           <p>
-            “Suggested” comes from the recommender for these fields. Any type can be chosen, and
-            then says which fields it needs.
+            “Suggested” comes from the recommender for your current fields. You can pick any type
+            and then add the fields it needs.
           </p>
           <button type="button" className="btn-sm" onClick={onAuto}>
             Use Auto

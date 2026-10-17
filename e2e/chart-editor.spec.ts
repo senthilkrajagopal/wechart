@@ -22,6 +22,147 @@ async function openEditorOnOrders(page: import('@playwright/test').Page) {
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 }
 
+/**
+ * T688 (AC-352; 2026-09-24 design 01 pins 2–9 and state A; the chart editor
+ * critique's EDI-03 to EDI-05, EDI-08, EDI-09, EDI-11, EDI-14, EDI-24,
+ * EDI-25; chart-editor-Q1, components-Q3): the inspector, the field list
+ * and the type gallery as design 01 and the prototype draw them.
+ */
+test('draws the field list, the inspector and the gallery as design 01 and the prototype do (T688)', async ({
+  page,
+}) => {
+  const css = (locator: import('@playwright/test').Locator, ...names: string[]) =>
+    locator.evaluate(
+      (node, wanted) =>
+        Object.fromEntries(
+          wanted.map((name) => [name, getComputedStyle(node).getPropertyValue(name)]),
+        ),
+      names,
+    );
+  const token = (name: string) =>
+    page.evaluate((variable) => {
+      const probe = document.createElement('span');
+      probe.style.color = `var(${variable})`;
+      document.body.append(probe);
+      const said = getComputedStyle(probe).color;
+      probe.remove();
+      return said;
+    }, name);
+
+  // Every query asked of Cube for the field list's sake: none (EDI-04).
+  const counting: unknown[] = [];
+  page.on('request', (request) => {
+    if (!request.url().endsWith('/api/load')) return;
+    const query = (request.postDataJSON() as { query?: { total?: unknown } } | null)?.query;
+    if (query?.total === true) counting.push(query);
+  });
+  await openEditorOnOrders(page);
+  const fields = page.getByRole('complementary', { name: 'Fields' });
+  const inspector = page.getByRole('complementary', { name: 'Chart settings' });
+
+  // The title at 16/600 (components-Q3).
+  expect(await css(page.getByLabel('Chart title'), 'font-size', 'font-weight')).toEqual({
+    'font-size': '16px',
+    'font-weight': '600',
+  });
+
+  // Cube or view, the inspector's first field (EDI-05); the field pane names it.
+  const first = inspector.locator('.inspector-section').first();
+  await expect(first.locator('.cube-picker__label').first()).toHaveText('Cube or view');
+  await expect(fields.getByRole('button', { name: /^Cube or view/ })).toHaveCount(0);
+  await expect(fields.getByRole('heading', { level: 2 })).toHaveText(/^Cube: Orders\s*3 cubes$/);
+  // Three ruled sections, each padded 12 (EDI-08): source and type; wells; why.
+  const sections = inspector.locator('.inspector-section');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await expect(sections).toHaveCount(3);
+  for (const section of await sections.all())
+    expect(await css(section, 'padding-top', 'border-bottom-width')).toEqual({
+      'padding-top': '12px',
+      'border-bottom-width': '1px',
+    });
+
+  // Each joined cube a group "· via join", closed until opened (EDI-03).
+  const customers = fields.getByRole('button', { name: 'Customers fields' });
+  await expect(customers).toHaveText('▸Customers · via join4');
+  await expect(customers).toHaveAttribute('aria-expanded', 'false');
+  await customers.click();
+  await expect(fields.getByTestId('member-customers.country')).toBeVisible();
+  // A dimension says how many distinct values it has in the chart's own
+  // result (EDI-04; the coordinator's call): three statuses, and no query of
+  // its own was asked to count them.
+  await expect(fields.getByTestId('member-orders.status').locator('.field-row__meta')).toHaveText(
+    '3',
+  );
+  expect(counting).toEqual([]);
+  await expect(fields.getByTestId('member-orders.count').locator('.field-row__meta')).toHaveText(
+    'count',
+  );
+
+  // The wells' words (EDI-09): "(group by)" and "(+ Other)" quieter, at 400.
+  const opt = inspector.locator('.well-field__opt').first();
+  await expect(opt).toHaveText('(group by)');
+  expect(await css(opt, 'font-weight', 'color')).toEqual({
+    'font-weight': '400',
+    color: await token('--wc-text-muted'),
+  });
+  await expect(page.getByRole('button', { name: 'Add to Time' })).toHaveText('+ time dimension');
+  const well = page.getByTestId('well-dimensions');
+  expect(await css(well, 'min-height', 'padding-top')).toEqual({
+    'min-height': '36px',
+    'padding-top': '5px',
+  });
+
+  // "+ metric" opens design 01 state A's picker (EDI-11): 264 px, a filter,
+  // the fields by cube, the one held "✓ in chart", its keys at its foot.
+  await page.getByTestId('add-measures').click();
+  const filter = page.getByRole('combobox', { name: 'Filter fields' });
+  await expect(filter).toBeFocused();
+  const pop = page.locator('.cube-picker__pop--fields');
+  expect(Math.round((await pop.boundingBox())?.width ?? 0)).toBe(264);
+  const list = page.getByRole('listbox', { name: 'Fields' });
+  await expect(list.getByRole('group', { name: 'Customers · via join' })).toBeVisible();
+  await expect(list.getByTestId('pick-orders.count')).toHaveAttribute('aria-disabled', 'true');
+  await expect(list.getByTestId('pick-orders.count')).toContainText('✓ in chart');
+  await expect(pop.locator('.cube-picker__foot')).toHaveText('↑ ↓ move · Enter adds · Esc closes');
+  await filter.fill('average');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('in-measures-orders.average_amount')).toBeVisible();
+
+  // "The rest" only once Top N is set, a 28/12 select in its full words (chart-editor-Q1).
+  await expect(page.getByLabel('The rest')).toHaveCount(0);
+  await page.getByLabel('Top N (+ Other)').fill('2');
+  await page.getByLabel('Top N (+ Other)').press('Enter');
+  const rest = page.getByLabel('The rest');
+  await expect(rest.locator('option')).toHaveText(['Fold into Other (n)', 'Leave out']);
+  expect(await css(rest, 'height', 'font-size')).toEqual({ height: '28px', 'font-size': '12px' });
+
+  // A dimension's pill names the channel it is drawn on: a horizontal bar's
+  // categories run down Y (EDI-09).
+  await chooseChartType(page, 'hbar');
+  await expect(page.getByTestId('in-dimensions-orders.status').locator('.pill__tag')).toHaveText(
+    'Y',
+  );
+
+  // The gallery's cards as the prototype draws them (EDI-24, EDI-25).
+  await page.getByTestId('chart-type-change').click();
+  const gallery = page.getByRole('dialog', { name: 'Choose chart type' });
+  await expect(gallery.getByRole('button', { name: /^Recommended \(\d+\)$/ })).toBeVisible();
+  await gallery.getByRole('button', { name: 'All charts' }).click();
+  const card = gallery.getByTestId('type-card-stackedBar');
+  const icon = card.locator('.type-card__top svg');
+  expect(await icon.evaluate((node) => [node.clientWidth, node.clientHeight])).toEqual([28, 28]);
+  expect((await css(icon, 'color')).color).toBe(await token('--wc-accent'));
+  // Its name on a line of its own, under the icon, whole.
+  const [top, name] = [
+    await card.locator('.type-card__top').boundingBox(),
+    await card.locator('.type-card__name').boundingBox(),
+  ];
+  expect((name?.y ?? 0) >= (top?.y ?? 0) + (top?.height ?? 0)).toBe(true);
+  expect(Math.round(name?.height ?? 0)).toBeLessThanOrEqual(20);
+});
+
 test('adds a field with the well picker and runs the query', async ({ page }) => {
   await openEditorOnOrders(page);
   await expect(page.getByTestId('result-empty')).toBeVisible();
@@ -785,12 +926,13 @@ test('a top N folds the rest into “Other (n)” or leaves it out, and a row li
   await expect(rows).toHaveCount(3);
   await expect(rows.last().locator('td').first()).toHaveText('Other (2)');
 
-  const rest = page.getByRole('group', { name: 'The rest' });
-  await rest.getByRole('button', { name: 'Leave out' }).click();
+  // A select once Top N is set (chart-editor-Q1, T688).
+  const rest = page.getByLabel('The rest');
+  await rest.selectOption({ label: 'Leave out' });
   await expect(rows).toHaveCount(2);
   await expect(page.getByTestId('data-table')).not.toContainText('Other (');
   // And folded again.
-  await rest.getByRole('button', { name: 'Fold into “Other (n)”' }).click();
+  await rest.selectOption({ label: 'Fold into Other (n)' });
   await expect(rows).toHaveCount(3);
   await expect(rows.last().locator('td').first()).toHaveText('Other (2)');
 
@@ -1214,6 +1356,18 @@ test('the Customize tab moves the legend, writes data labels and lets the axis l
   const canvas = page.getByTestId('chart-canvas');
   await expect(canvas).toBeVisible();
   await page.getByRole('tab', { name: 'Customize' }).click();
+  // Folded as the prototype draws it (chart-editor-Q8, T688): Axes and
+  // Legend open, Series counted and closed, Values closed; each summary a
+  // 12/600 heading in capitals.
+  const summaries = page.locator('details.customize-tab__section > summary');
+  await expect(summaries).toHaveText(['Axes', 'Legend', 'Series (2)', 'Values']);
+  expect(
+    await page
+      .locator('details.customize-tab__section')
+      .evaluateAll((all) => all.map((each) => (each as HTMLDetailsElement).open)),
+  ).toEqual([true, true, false, false]);
+  await expect(page.getByLabel('Data labels')).toBeHidden();
+  await expect(summaries.first().locator('h3')).toHaveCSS('text-transform', 'uppercase');
 
   // The legend, from above the plot to its right: its entry for the average,
   // by the measure's short title, the chart being one source's (AC-220, T403).
@@ -1238,6 +1392,8 @@ test('the Customize tab moves the legend, writes data labels and lets the axis l
   const labels = async () =>
     (await canvas.locator('svg text').allTextContents()).filter((text) => /\d/.test(text));
   const before = await labels();
+  // Values, closed at first as the prototype's (chart-editor-Q8, T688), opened.
+  await page.locator('summary').filter({ hasText: 'Values' }).click();
   await page.getByLabel('Data labels').check();
   await expect.poll(async () => (await labels()).length).toBeGreaterThan(before.length + 5);
 
@@ -1283,6 +1439,11 @@ test('a horizontal bar split by colour can stack its series', async ({ page }) =
   await expect.poll(barRows).toBe(6);
 
   await page.getByRole('tab', { name: 'Customize' }).click();
+  // Series, closed at first as the prototype's (chart-editor-Q8, T688), opened.
+  await page
+    .locator('summary')
+    .filter({ hasText: /^Series \(\d+\)$/ })
+    .click();
   await page.getByLabel('Stack the series').check();
   await expect.poll(barRows).toBe(2);
 });

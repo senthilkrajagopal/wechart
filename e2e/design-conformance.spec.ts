@@ -2821,7 +2821,8 @@ test.describe('T257: the chart editor', () => {
       ),
     ).toEqual({
       height: '32px',
-      'font-size': '15px',
+      // 16, text-md, not the drawn 15 (components-Q3; T688).
+      'font-size': '16px',
       'font-weight': '600',
       'border-top-color': 'rgba(0, 0, 0, 0)',
       'background-color': 'rgba(0, 0, 0, 0)',
@@ -2967,8 +2968,9 @@ test.describe('T257: the chart editor', () => {
       'border-top-style': 'dashed',
       'border-top-color': await token(page, 'border-strong', 'background-color'),
       'border-radius': '6px',
-      'padding-top': '6px',
-      'padding-left': '6px',
+      // Design 01's 5 (02:283; T688, EDI-09).
+      'padding-top': '5px',
+      'padding-left': '5px',
       'background-color': await token(page, 'bg-surface', 'background-color'),
     });
     expect((await well.boundingBox())?.height).toBeGreaterThanOrEqual(36);
@@ -3067,27 +3069,35 @@ test.describe('T257: the chart editor', () => {
       color: await token(page, 'text-muted'),
       'background-color': 'rgba(0, 0, 0, 0)',
     });
-    // The .picker it opens: a menu of what the well takes, each with its chip.
+    // Inline after the pills, not a grid row of its own (T688's review).
+    expect(await style(well.locator('.cube-picker--add'), 'display')).toEqual({
+      display: 'inline-block',
+    });
+    // The picker it opens, as 2026-09-24 design 01 state A draws it, later
+    // than the prototype's 240 px menu (R37; T688, EDI-11): 264 px, a filter
+    // over the fields by cube, each with its chip, the one held "✓ in chart".
     await add.click();
-    const picker = page.getByRole('menu', { name: 'Add to Metrics' });
+    const picker = page.locator('.cube-picker__pop--fields');
     await expect(picker).toBeVisible();
     expect(await style(picker, 'width', 'border-radius', 'background-color')).toEqual({
-      width: '240px',
+      width: '264px',
       'border-radius': '6px',
       'background-color': await token(page, 'bg-raised', 'background-color'),
     });
-    // .picker { left: 0 } against its .well, so it stays inside the inspector
-    // however far the pills push the "+" (T257's review).
+    // At its well's left edge, as design 01 state A draws it, so it stays
+    // inside the inspector however far the pills push the "+" (T257's
+    // review; T688's review).
     const [menuBox, wellBox, inspectorBox] = await Promise.all(
       [picker, well, inspector].map((each) => each.boundingBox()),
     );
     // At the well's padding edge, inside its 1 px rule, as measured on the prototype.
     expect(Math.abs(menuBox!.x - wellBox!.x)).toBeLessThanOrEqual(1);
     expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(inspectorBox!.x + inspectorBox!.width);
-    const total = picker.getByRole('menuitem', { name: 'Orders Total Amount' });
+    const list = page.getByRole('listbox', { name: 'Fields' });
+    const total = list.getByTestId('pick-orders.total_amount');
     await expect(total.locator('.field-row__icon')).toHaveText('Σ');
-    // Only what the well does not already hold.
-    await expect(picker.getByRole('menuitem', { name: 'Orders Count' })).toHaveCount(0);
+    // What the well already holds, listed and not offered.
+    await expect(list.getByTestId('pick-orders.count')).toHaveAttribute('aria-disabled', 'true');
     await total.click();
     await expect(page.getByTestId('in-measures-orders.total_amount')).toBeVisible();
     await expect(add).toBeFocused();
@@ -3098,7 +3108,8 @@ test.describe('T257: the chart editor', () => {
     ).toHaveText('+ dimension');
     await expect(
       page.getByTestId('well-timeDimensions').getByRole('button', { name: 'Add to Time' }),
-    ).toHaveText('+ time');
+      // "+ time dimension", design 01's words (T688, EDI-09).
+    ).toHaveText('+ time dimension');
     await expect(
       page.getByTestId('well-filters').getByRole('button', { name: 'Add a filter' }),
     ).toHaveText('+ filter');

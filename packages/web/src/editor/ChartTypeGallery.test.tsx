@@ -37,10 +37,30 @@ const typesShown = (dialog: HTMLElement) =>
 describe('the chart type gallery (AC-217)', () => {
   it('opens on the suggested types, each by its name', () => {
     const { dialog } = gallery();
-    const suggested = within(dialog).getByRole('button', { name: 'Suggested (2)' });
+    // "Recommended (n)", as the prototype names the shelf (T688, EDI-25).
+    const suggested = within(dialog).getByRole('button', { name: 'Recommended (2)' });
     expect(suggested.getAttribute('aria-pressed')).toBe('true');
     expect(typesShown(dialog)).toEqual(['bar', 'hbar']);
     expect(within(dialog).getByTestId('type-card-hbar').textContent).toContain('Bar, horizontal');
+  });
+
+  it('draws each card as the prototype does: its icon on the top row with the badge, its name on its own line, and the prototype’s foot (T688, EDI-24, EDI-25)', async () => {
+    const { dialog } = gallery();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'All charts' }));
+    for (const type of CHART_TYPES) {
+      const card = within(dialog).getByTestId(`type-card-${type}`);
+      const top = card.querySelector('.type-card__top')!;
+      // The icon first on the top row; the name below it, not beside the badge.
+      expect(top.firstElementChild?.getAttribute('data-chart-icon'), type).toBe(type);
+      expect(top.querySelector('.type-card__name'), type).toBeNull();
+      expect(card.querySelector(':scope > .type-card__name'), type).not.toBeNull();
+    }
+    expect(
+      within(dialog).getByTestId('type-card-bar').querySelector('.type-card__badge')?.textContent,
+    ).toBe('Suggested');
+    expect(dialog.querySelector('.type-gallery__foot p')?.textContent).toBe(
+      '“Suggested” comes from the recommender for your current fields. You can pick any type and then add the fields it needs.',
+    );
   });
 
   it('lists every type under All charts, and a purpose’s under it', async () => {

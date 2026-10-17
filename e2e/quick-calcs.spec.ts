@@ -109,9 +109,15 @@ test.describe('a calculation over time on a chart with no time field (AC-049)', 
     ]) {
       const item = menu.getByRole('menuitem', { name, exact: true });
       await expect(item).toHaveAttribute('aria-disabled', 'true');
-      // Said where it can be read, naming Orders' time field, and as its description.
-      await expect(item).toContainText('Needs a time field in Time: add Ordered at.');
-      await expect(item).toHaveAccessibleDescription('Needs a time field in Time: add Ordered at.');
+      // Said where it can be read, naming the time fields it could take, and as
+      // its description: Orders' own, and its joined Customers' since T688
+      // (EDI-03), named in full, its source not evident (AC-220).
+      await expect(item).toContainText(
+        'Needs a time field in Time: add Ordered at or Customers Signed Up at.',
+      );
+      await expect(item).toHaveAccessibleDescription(
+        'Needs a time field in Time: add Ordered at or Customers Signed Up at.',
+      );
     }
     for (const name of ['% of total', 'Rank']) {
       await expect(menu.getByRole('menuitem', { name, exact: true })).not.toHaveAttribute(
@@ -299,10 +305,7 @@ test.describe('a quick calculation, computed in Cube and named on the chart (AC-
   ] as const;
 
   for (const each of CASES) {
-    test(`${each.heading}: asked of Cube, answered there, and named`, async ({
-      page,
-      request,
-    }) => {
+    test(`${each.heading}: asked of Cube, answered there, and named`, async ({ page, request }) => {
       const id = await calculatedChart(request, {
         measure: each.measure,
         calculation: each.calculation,
@@ -318,7 +321,11 @@ test.describe('a quick calculation, computed in Cube and named on the chart (AC-
       };
       expect(query.measures).toEqual([each.measure]);
       expect(query.calculations).toEqual([
-        { measure: each.measure, kind: each.kind, ...('periods' in each.calculation ? { periods: 3 } : {}) },
+        {
+          measure: each.measure,
+          kind: each.kind,
+          ...('periods' in each.calculation ? { periods: 3 } : {}),
+        },
       ]);
 
       // The tile names the calculation, and shows Cube's values.
@@ -401,13 +408,19 @@ test.describe('a quick calculation, computed in Cube and named on the chart (AC-
     };
     expect(query.calculations).toEqual([{ measure: 'orders.count', kind: 'running_total' }]);
     expect(query.timeDimensions).toEqual([
-      { dimension: 'orders.ordered_at', granularity: 'month', dateRange: ['2026-03-01', '2026-06-30'] },
+      {
+        dimension: 'orders.ordered_at',
+        granularity: 'month',
+        dateRange: ['2026-03-01', '2026-06-30'],
+      },
     ]);
 
     const tile = page.locator('[data-tile="tile-running"]');
     await expect(tile.getByTestId('chart-canvas')).toBeVisible();
     await viewAs(tile, 'table');
-    await expect(tile.getByRole('columnheader', { name: 'Orders Count (running total)' })).toBeVisible();
+    await expect(
+      tile.getByRole('columnheader', { name: 'Orders Count (running total)' }),
+    ).toBeVisible();
     for (const [at, value] of Object.entries({
       'Mar 2026': '31',
       'Apr 2026': '61',
@@ -439,13 +452,20 @@ test('the menu on an average disables % of total, running total and moving avera
   for (const [name, why] of [
     ['% of total', 'Not for an average: its values don’t add up to a total.'],
     ['Running total', 'Not for an average: adding up its periods gives no true total.'],
-    ['Moving average, 3 periods', 'Not for an average: averaging its periods gives no true average.'],
+    [
+      'Moving average, 3 periods',
+      'Not for an average: averaging its periods gives no true average.',
+    ],
   ] as const) {
     const item = menu.getByRole('menuitem', { name, exact: true });
     await expect(item).toHaveAttribute('aria-disabled', 'true');
     await expect(item).toHaveAccessibleDescription(why);
   }
-  for (const name of ['Difference from previous period', '% difference from previous period', 'Rank'])
+  for (const name of [
+    'Difference from previous period',
+    '% difference from previous period',
+    'Rank',
+  ])
     await expect(menu.getByRole('menuitem', { name, exact: true })).not.toHaveAttribute(
       'aria-disabled',
     );
@@ -488,7 +508,8 @@ test('a running total is paused while the chart has no time field, and runs agai
   expect(query).not.toHaveProperty('calculations');
   await expect(button).toContainText('Running total');
   await expect(page.getByTestId('calc-paused-orders.count')).toHaveText(
-    'Running total on Count is paused, so Count is drawn as it is. Needs a time field in Time: add Ordered at.',
+    // Orders' time field, and its joined Customers' (T688, EDI-03).
+    'Running total on Count is paused, so Count is drawn as it is. Needs a time field in Time: add Ordered at or Customers Signed Up at.',
   );
 
   // Back in Time, it runs again: the query that asks for it is the one asked

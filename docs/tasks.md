@@ -9539,6 +9539,50 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **chart-editor-Q8:** Customize is checked against the prototype (UX-064, cleanup 47).
     - **components-Q3:** the title field at 16/600 (`text-md`), not 15 px.
   - Depends on: T684 (the pressed segment)
+  - **Done 2026-10-08.**
+    - **As built.**
+      - **The field list (EDI-03, EDI-04):**
+        - the pane headed "Cube: ‹title›" and how many cubes it reaches, as design 01's 44 px `.pane-head`;
+        - the chosen cube's fields, then each cube it joins to as a group "‹title› · via join", closed until opened, or open where the chart uses one of its fields;
+        - a search looks in every group;
+        - each group head toggles with ▾ ▸.
+        - The joins come from Cube's extended metadata through a new `GET /api/meta/joins` (each join's target and relationship only, never its SQL; only cubes the user's token sees; for an item, its own scope). Research: `docs/research/cube/meta-extended-joins.md`, observed against compose's xcube.
+        - A joined cube's fields are the chart's to use, in the wells and the pickers too.
+        - A dimension's row says how many distinct values it has in the chart's own result, counted from the rows already come, with no query of its own (T688's review; the coordinator's call, 2026-10-17, overturnable: the user's options were (a) a `total` query per dimension, (b) the chart's own result, (c) on hover). A dimension the result doesn't hold says its type.
+      - **The inspector (EDI-05, EDI-08):** "Cube or view" is its first field, and the field pane no longer holds it. The Data tab is design 01's three ruled sections, each padded 12: the source and the type; the wells, Sort and Top N; the recommendation and why.
+      - **The wells (EDI-09, EDI-11, chart-editor-Q1):**
+        - "Dimensions (group by)" and "Top N (+ Other)", each parenthesis at 400 in text-muted;
+        - "+ time dimension";
+        - wells padded 5;
+        - a dimension's pill tagged with the channel it is drawn on ("X", "Y", "Color", …), a horizontal bar's categories "Y".
+        - Each "+" opens design 01 state A's picker, the cube picker's combobox (`PathPicker`): 264 px, "Filter fields", the fields by cube with "· via join", each with its chip and its aggregation or type, one already in the chart listed "✓ in chart" at half strength and not picked, and the foot "↑ ↓ move · Enter adds · Esc closes", keys it already had.
+        - "The rest" shows only once Top N is set, as a 28/12 native select, "Fold into Other (n)" and "Leave out".
+      - **The title (components-Q3):** 16/600.
+      - **The gallery (EDI-24, EDI-25):** each card's type icon at 28 px in the accent on its top row with the badge, its name on a line of its own; "Recommended (n)"; the prototype's foot words.
+    - **Tests.**
+      - API: `routes/meta-joins.test.ts` (targets and relationships, no SQL; no target the answer doesn't hold; none for an unreadable answer) and `access/route-matrix.test.ts`'s case.
+      - Unit: `FieldList.test` (the head, groups, toggling, a used one open, search across groups, distinct counts one at a time; the cube picker as `CubeSourcePicker`), `Wells.test` (the picker as a listbox with its filter, groups, held rows, keys; labels; channel tags; The rest as a select), `ChartTypeGallery.test` (icons, name line, wording).
+      - e2e: `chart-editor.spec.ts` (a new test over all of it, measured; The rest's test as a select), `design-conformance.spec.ts` (the title at 16, wells padded 5, the picker at 264 per design 01 state A, which is later than the prototype's 240 px menu, R37), `quick-calcs.spec.ts` (a calculation over time now names Customers' "Signed Up at" too, a time field the chart may use by its join).
+    - **Raised with the user:** the test-integrity hook flagged `Wells.test`:
+      - "The rest" test lost two assertions on the segmented control's disabled buttons, which chart-editor-Q1 replaced with a select shown only once Top N is set. The new assertions check that no control shows without Top N, the select's options, and both directions.
+      - Picking an option by `/Orders Total/` rather than an exact name. A listbox option's name joins its title and its aggregation, so the title starts it.
+      - Also changed with the design: the old picker's "Nothing more to add" item (the held field is now listed, disabled), menu items now options, and the e2e expectations named above.
+    - **Implementer's calls, for the user to confirm or change:**
+      - The pane head names the cube by its title ("Cube: Orders"), not design 01's code-face name, as AC-329 forbids a prefixed name.
+      - A cube's joined cubes are those it reaches along declared joins, nearest first, transitively.
+      - ~~Distinct counts load lazily, behind the chart's own query, one at a time, and are kept for 5 minutes.~~ Replaced by T688's review: counted from the chart's own result.
+      - ~~The fields' picker opens under its "+", kept in the window, not at the well's left edge as design 01 draws it.~~ Replaced by T688's review: it opens at its well's left edge, as design 01 draws it, kept in the window.
+      - The prototype draws no icon for Pie (its "pie" is the donut), Box plot or Country map: those three are drawn here in its manner.
+    - **The review's seven findings, fixed (2026-10-17, lane A):**
+      1. In the "+" picker only a joined cube's group is "· via join"; a view's own cubes' are not. Wells takes the joined cubes (`joined`).
+      2. A field of a cube the chart holds nothing of, a joined cube's, is named in full wherever its source isn't evident (AC-220, chart-editor-Q7): "add Ordered at or Customers Signed Up at".
+      3. Distinct counts from the chart's own result; the per-dimension `total` queries are gone (above).
+      4. `.cube-picker.cube-picker--add` wins over `.cube-picker`'s grid.
+      5. The picker opens at its well's left edge (`PathPicker`'s `anchor`), and design-conformance's ±1 px check is back. Design 01 is split here: its `.picker` class sets `left: 0` against the well, while state A's drawn instance carries an inline `left:118px`, under "+ metric". The class's rule, also the prototype's, is built (the coordinator's call, 2026-10-17).
+      6. `query/meta.ts`'s orphaned JSDoc is back on `metaQueryOf`.
+      7. No joined group for a cube `/api/meta` doesn't hold; `.field-list__source`'s unused CSS removed; the picker's groups keyed by place.
+      - The review's failing view test expected the groups' raw names ("orders"); with no title given, a cube is named in words ("Orders"), as T229's review rules, so the expectation was corrected to that.
+    - **chart-editor-Q8 (Customize, checked against the prototype):** the four sections and their controls match (Axes, Legend, Series, Values; T310). Two differences, both structural, so not R77's to accept: the prototype folds each section (`<details>`, with Series and Values closed at first), and counts the series in its heading, "SERIES (n)". **Answered 2026-10-08 (the coordinator, under R76): (a), fold as the prototype draws it.** Built: each section a native `<details>` whose summary is its heading, Axes and Legend open at first, Series ("Series (n)") and Values closed; Whiskers, which the prototype doesn't draw, stays a section. No keyboard behaviour beyond the native disclosure's (R75). Tests: `CustomizeTab.test` (the sections, their open state, the count), `chart-editor.spec.ts` (measured, and Values and Series opened where a test reaches into them, as in `series-order.spec.ts`).
 - [ ] T689 (AC-352, AC-028, AC-029, AC-217, AC-032, AC-220) The recommendation in the inspector: the type card, quick picks, the Recommended card, "Why this recommendation?" and the aggregation menu, as design 01 draws them *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/editor/{ChartTypeCard,WhyThisChart,Wells}.tsx` (+ tests), `e2e/chart-editor.spec.ts`
   - Findings: EDI-06, EDI-07, EDI-10, EDI-12.

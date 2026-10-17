@@ -5553,6 +5553,9 @@ main:has(.review-view) {
 .dialog .type-card[data-drawable='false'] { background: var(--wc-bg-subtle); }
 .dialog .type-card[data-drawable='false'] .type-card__name { color: var(--wc-text-secondary); }
 .type-card__top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+/* The prototype's card (editor.js:385; T688, EDI-24): the type's icon at 28 px
+   in the accent on the top row with the badge, the name on its own line. */
+.type-card__top > .chart-type-icon { flex: none; color: var(--wc-accent); }
 /* <span class="strong" style="font-size:13px"> (editor.js, galleryHtml). */
 .type-card__name { font-size: 13px; font-weight: var(--wc-text-sm-strong-weight); }
 .type-card__badge { padding: 0 6px; border-radius: 999px; background: var(--wc-bg-accent-soft); color: var(--wc-accent); font-size: 12px; line-height: 18px; }
@@ -8362,7 +8365,8 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   background: transparent;
   color: var(--wc-text-primary);
   font: inherit;
-  font-size: 15px;
+  /* text-md, 16/600, not design 01's off-scale 15 (components-Q3; T688). */
+  font-size: 16px;
   font-weight: 600;
 }
 /* Pointed at or typed in, it stays bare, as the prototype's [data-title]:
@@ -8393,6 +8397,39 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   display: grid;
   gap: 12px;
   align-content: start;
+}
+/* Design 01's three .section blocks (T688, EDI-08): the source and the type;
+   the wells, Sort and Top N; why. Each padded 12 with a rule under it, across
+   the pane, the body's own padding gone where they are. */
+.chart-editor__inspector-body:has(> .inspector-section) { padding: 0; gap: 0; }
+.inspector-section {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 12px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+/* The field pane's head (design 01 pin 2): the cube named, how many it reaches. */
+/* Design 01's .pane-head: 44 px, padding 8 12, its h2 14/20/600 (01:94–95). */
+.field-list__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.field-list__head-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field-list__head-count {
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--wc-text-muted);
 }
 .chart-editor__type { display: grid; gap: 6px; }
 .chart-editor__type h3,
@@ -8502,10 +8539,47 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   align-items: center;
   gap: 4px;
   min-height: 36px;
-  padding: 6px;
+  /* Design 01's .well: padding 5 (02:283; T688, EDI-09). */
+  padding: 5px;
   border: 1px dashed var(--wc-border-strong);
   border-radius: 6px;
   background: var(--wc-bg-surface);
+}
+/* "(group by)", "(+ Other)": design 01's .lbl .opt, 400 in text-muted (EDI-09). */
+.well-field__opt { font-weight: 400; color: var(--wc-text-muted); }
+/* A well's "+" picker, design 01 state A (EDI-11): 264 px, its keys at its foot,
+   a field already in the chart listed in text-muted and not picked. */
+/* Two classes, so it wins over .cube-picker's grid, declared later (T688's review). */
+.cube-picker.cube-picker--add { display: inline-block; }
+/* Design 01's .picker (01:154–162): 264 px, a strong border, padding 4; its
+   groups 12/16/600 muted, "· via join" at 400; rows 28 px at 12, padded 0 6,
+   their aggregation muted at the right; one held at half strength; the foot. */
+.cube-picker__pop.cube-picker__pop--fields {
+  width: min(264px, calc(100vw - 32px));
+  padding: 4px;
+  border-color: var(--wc-border-strong);
+}
+.cube-picker__pop--fields .cube-picker__field { margin: 2px 2px 6px; }
+.cube-picker__pop--fields .cube-picker__list { border-top: 0; padding-bottom: 0; }
+.cube-picker__pop--fields .cube-picker__group { padding: 6px 6px 2px; color: var(--wc-text-muted); }
+.cube-picker__aside { font-weight: 400; }
+.cube-picker__pop--fields .cube-picker__option {
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.cube-picker__pop--fields .cube-picker__path { color: var(--wc-text-muted); }
+.cube-picker__pop--fields .cube-picker__option .field-row__icon { flex: none; }
+.cube-picker__option[aria-disabled='true'] { opacity: 0.5; cursor: default; }
+.cube-picker__option[aria-disabled='true']:hover { background: none; }
+.cube-picker__foot {
+  margin: 4px 0 0;
+  padding: 6px 6px 2px;
+  border-top: 1px solid var(--wc-border-subtle);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-muted);
 }
 /* The prototype's .addbtn: borderless, muted, until pointed at. */
 .addbtn {
@@ -8772,7 +8846,8 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 .customize-tab { display: grid; gap: 12px; }
 .customize-tab__section { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--wc-border-subtle); }
 .customize-tab__section:last-child { border-bottom: 0; }
-.customize-tab__section > h3 {
+.customize-tab__section > h3,
+.customize-tab__section > summary > h3 {
   margin: 0;
   font-size: 12px;
   line-height: 16px;
@@ -8781,6 +8856,13 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+/* Folded as the prototype's <details class="section"> (editor.js:316;
+   chart-editor-Q8, T688): the summary its heading, the browser's own marker
+   before it, the controls 8 px apart once open. */
+details.customize-tab__section { display: block; }
+details.customize-tab__section > summary { cursor: pointer; }
+details.customize-tab__section > summary > h3 { display: inline; }
+details.customize-tab__section[open] > :not(summary) { margin-top: 8px; }
 .customize-tab__check { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 /* The Customize tab's fields as the prototype's .input.sm and .select.sm,
    28 px at 12 px, named with the global input rule's own :not()s (T310). */
@@ -8828,10 +8910,8 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 /* A switch beside its words, as the prototype's .inline rows (T310). */
 .axis-panel > label:has(> input[type='checkbox']) { display: flex; align-items: center; gap: 6px; }
 /* The chart editor's field list (AC-215): the prototype's field pane (T257) —
-   the source and the search each padded 8 12, then each cube's .tgroup. */
+   the search padded 8 12, then each cube's .tgroup. */
 .field-list { display: grid; align-content: start; }
-.field-list__source { display: grid; gap: 4px; padding: 8px 12px 0; }
-.field-list__source > label { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--wc-text-secondary); }
 /* The cube picker as the 2026-09-27 design 10 draws it (T475, state D): the
    button as the select it replaced; a 520 px list under it with its search
    box, a 12/600 heading per folder, 32 px rows of a C or V chip, the title
@@ -8954,6 +9034,24 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   color: var(--wc-text-secondary);
 }
 .field-list__count { margin-left: auto; font-weight: 400; color: var(--wc-text-muted); font-variant-numeric: tabular-nums; }
+/* The head opens and closes its group, as design 01's .tgroup-head (▾ ▸; T688). */
+.field-list__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.field-list__caret { width: 10px; color: var(--wc-text-muted); font-weight: 400; }
+/* "· via join", quieter than the cube's name (design 01's .via). */
+.field-list__via { font-weight: 400; color: var(--wc-text-muted); }
 /* One field (the prototype's .frow): chip, title with its "used" dot, what it is. */
 .field-row {
   display: flex;

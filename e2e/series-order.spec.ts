@@ -92,6 +92,11 @@ test('series drawn and listed in the order set in Customize, and kept after a re
   const last = drawn.at(-1)!;
   const wanted = [last, ...drawn.slice(0, -1)];
   await page.getByRole('tab', { name: 'Customize' }).click();
+  // Series, closed at first as the prototype's (chart-editor-Q8, T688), opened.
+  await page
+    .locator('summary')
+    .filter({ hasText: /^Series \(\d+\)$/ })
+    .click();
   for (let step = 1; step < drawn.length; step += 1)
     await page.getByRole('button', { name: `Move ${last} up` }).click();
   await expect(

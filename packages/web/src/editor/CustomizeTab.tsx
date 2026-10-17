@@ -161,8 +161,12 @@ export function CustomizeTab({
   return (
     <div className="customize-tab">
       {cartesian ? (
-        <section className="customize-tab__section" aria-labelledby={`${ids}-axes`}>
-          <h3 id={`${ids}-axes`}>Axes</h3>
+        // Each section folds, as the prototype's <details> (editor.js:316;
+        // chart-editor-Q8, T688): Axes and Legend open at first.
+        <details className="customize-tab__section" open aria-labelledby={`${ids}-axes`}>
+          <summary>
+            <h3 id={`${ids}-axes`}>Axes</h3>
+          </summary>
           <div data-testid="axes-section">
             <AxisPanel
               axis="x"
@@ -179,12 +183,14 @@ export function CustomizeTab({
               onChange={(next) => setAxis('y', next)}
             />
           </div>
-        </section>
+        </details>
       ) : null}
 
       {drawn ? (
-        <section className="customize-tab__section" aria-labelledby={`${ids}-legend`}>
-          <h3 id={`${ids}-legend`}>Legend</h3>
+        <details className="customize-tab__section" open aria-labelledby={`${ids}-legend`}>
+          <summary>
+            <h3 id={`${ids}-legend`}>Legend</h3>
+          </summary>
           <label className="customize-tab__check">
             <input
               type="checkbox"
@@ -214,12 +220,15 @@ export function CustomizeTab({
             </select>
           </div>
           <p className="panel-section__note">A legend shows only for two or more series.</p>
-        </section>
+        </details>
       ) : null}
 
       {series.length === 0 ? null : (
-        <section className="customize-tab__section" aria-labelledby={`${ids}-series`}>
-          <h3 id={`${ids}-series`}>Series</h3>
+        // Closed at first, and counted, as the prototype's "SERIES (n)".
+        <details className="customize-tab__section" aria-labelledby={`${ids}-series`}>
+          <summary>
+            <h3 id={`${ids}-series`}>Series ({series.length})</h3>
+          </summary>
           <ol className="customize-tab__series" aria-label="Series order">
             {ordered.map(({ name, title }, index) => (
               <li key={name}>
@@ -278,12 +287,15 @@ export function CustomizeTab({
               Stack the series
             </label>
           ) : null}
-        </section>
+        </details>
       )}
 
       {drawn ? (
-        <section className="customize-tab__section" aria-labelledby={`${ids}-values`}>
-          <h3 id={`${ids}-values`}>Values</h3>
+        // Closed at first, as the prototype's VALUES.
+        <details className="customize-tab__section" aria-labelledby={`${ids}-values`}>
+          <summary>
+            <h3 id={`${ids}-values`}>Values</h3>
+          </summary>
           <label className="customize-tab__check">
             <input
               type="checkbox"
@@ -316,7 +328,7 @@ export function CustomizeTab({
           <p className="panel-section__note">
             For the data labels; the value axis’s own format is set under Axes.
           </p>
-        </section>
+        </details>
       ) : null}
 
       {whiskers ? (

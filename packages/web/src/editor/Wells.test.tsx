@@ -116,24 +116,116 @@ describe('each well’s "+" picker (AC-026)', () => {
     expect(add.textContent).toBe('+ metric');
 
     await userEvent.click(add);
-    const items = screen.getAllByRole('menuitem').map((item) => item.textContent);
-    expect(items).toEqual(['ΣOrders Total']);
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Orders Total' }));
+    // Design 01 state A's picker (T688, EDI-11): a filter over the fields by
+    // cube, the one held marked "✓ in chart" and not offered again.
+    const list = screen.getByRole('listbox', { name: 'Fields' });
+    const options = within(list).getAllByRole('option');
+    expect(options.map((option) => option.textContent)).toEqual([
+      'ΣOrders Count✓ in chartcount',
+      'ΣOrders Totalcount',
+    ]);
+    expect(options[0]!.getAttribute('aria-disabled')).toBe('true');
+    expect(options[1]!.getAttribute('aria-disabled')).toBeNull();
+    await userEvent.click(within(list).getByRole('option', { name: /Orders Total/ }));
     expect(onAdd).toHaveBeenCalledWith('measures', 'orders.total');
   });
 
-  it('says so when the well can take nothing more', async () => {
+  it('adds nothing for a field already in the chart, and says so', async () => {
+    const onAdd = vi.fn();
     render(
       <Wells
         spec={{ ...emptySpec('orders'), measures: ['orders.count'] }}
         available={[measure]}
-        onAdd={vi.fn()}
+        onAdd={onAdd}
         onRemove={vi.fn()}
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Add to Metrics' }));
-    const none = screen.getByRole('menuitem', { name: 'Nothing more to add from this cube' });
-    expect(none.getAttribute('aria-disabled')).toBe('true');
+    const held = screen.getByRole('option', { name: /Orders Count/ });
+    expect(held.getAttribute('aria-disabled')).toBe('true');
+    expect(held.textContent).toContain('✓ in chart');
+    await userEvent.click(held);
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it('filters the fields as typed, groups them by cube, joined ones “· via join”, and says its keys (T688, EDI-11)', async () => {
+    const onAdd = vi.fn();
+    const country: Member = {
+      name: 'customers.country',
+      title: 'Customers Country',
+      shortTitle: 'Country',
+      kind: 'dimension',
+      type: 'string',
+      cube: 'customers',
+    };
+    const status: Member = {
+      ...country,
+      name: 'orders.status',
+      title: 'Orders Status',
+      cube: 'orders',
+    };
+    render(
+      <Wells
+        spec={emptySpec('orders')}
+        available={[measure, status, country]}
+        joined={['customers']}
+        cubeTitles={{ orders: 'Orders', customers: 'Customers' }}
+        onAdd={onAdd}
+        onRemove={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Add to Dimensions' }));
+    const list = screen.getByRole('listbox', { name: 'Fields' });
+    expect(
+      within(list)
+        .getAllByRole('group')
+        .map((group) => group.getAttribute('aria-label')),
+    ).toEqual(['Orders', 'Customers · via join']);
+    expect(screen.getByText('↑ ↓ move · Enter adds · Esc closes')).toBeTruthy();
+    const filter = screen.getByRole('combobox', { name: 'Filter fields' });
+    expect(document.activeElement).toBe(filter);
+    await userEvent.type(filter, 'coun');
+    expect(
+      within(list)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['AaCustomers Countrystring']);
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    expect(onAdd).toHaveBeenCalledWith('dimensions', 'customers.country');
+  });
+
+  it('opens at its well’s left edge, not its button’s, as design 01 state A draws it (T688’s review)', async () => {
+    const box = (left: number) =>
+      ({
+        left,
+        right: left + 100,
+        top: 40,
+        bottom: 72,
+        width: 100,
+        height: 32,
+        x: left,
+        y: 40,
+      }) as DOMRect;
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      return box(this.classList.contains('well') ? 24 : 180);
+    });
+    try {
+      render(
+        <Wells
+          spec={emptySpec('orders')}
+          available={[measure]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+        />,
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Add to Metrics' }));
+      const pop = document.querySelector<HTMLElement>('.cube-picker__pop--fields');
+      expect(pop?.style.left).toBe('24px');
+    } finally {
+      rect.mockRestore();
+    }
   });
 
   /** T467, UX-063: until a cube or view is chosen there is nothing to add, and the wells say why. */
@@ -162,6 +254,131 @@ describe('each well’s "+" picker (AC-026)', () => {
       expect(add.getAttribute('aria-describedby')).toBeNull();
     }
     expect(screen.queryByText('Choose a cube or view first.')).toBeNull();
+  });
+});
+
+/**
+ * T688 (AC-352; design 01 pin 6 and 02:283; the critique's EDI-09): the
+ * wells' labels as drawn, the parenthesis quieter; "+ time dimension"; and a
+ * dimension's pill tagged with the channel it is drawn on.
+ */
+describe('the wells’ words and tags as design 01 draws them (T688, EDI-09)', () => {
+  const status: Member = {
+    name: 'orders.status',
+    title: 'Orders Status',
+    shortTitle: 'Status',
+    kind: 'dimension',
+    type: 'string',
+    cube: 'orders',
+  };
+
+  it('labels Dimensions “(group by)” and Top N “(+ Other)”, each parenthesis apart, and Time’s “+ time dimension”', () => {
+    render(
+      <Wells spec={emptySpec('orders')} available={[measure]} onAdd={vi.fn()} onRemove={vi.fn()} />,
+    );
+    const dimensions = screen.getByRole('heading', { name: 'Dimensions (group by)' });
+    expect(dimensions.querySelector('.well-field__opt')?.textContent).toBe('(group by)');
+    expect(screen.getByRole('button', { name: 'Add to Time' }).textContent).toBe(
+      '+ time dimension',
+    );
+    const topN = screen.getByText('(+ Other)');
+    expect(topN.className).toBe('well-field__opt');
+    expect(screen.getByLabelText('Top N (+ Other)')).toBeTruthy();
+  });
+
+  it('tags a dimension’s pill with the channel it is drawn on', () => {
+    render(
+      <Wells
+        spec={{ ...emptySpec('orders'), measures: ['orders.count'], dimensions: ['orders.status'] }}
+        available={[measure, status]}
+        channels={{ 'orders.status': 'Y' }}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+    const pill = screen.getByTestId('in-dimensions-orders.status');
+    expect(pill.querySelector('.pill__tag')?.textContent).toBe('Y');
+    expect(pill.querySelector('.pill__tag')?.getAttribute('title')).toBe('Drawn on Y');
+  });
+});
+
+/**
+ * T688's review (AC-220; chart-editor-Q7): a field of a cube the chart holds
+ * nothing of is named in full, its source not being evident; and a view's own
+ * cubes are no joins, its fields' groups said without "· via join".
+ */
+describe('joined cubes’ fields, named and grouped (T688’s review)', () => {
+  const signedUp: Member = {
+    name: 'customers.signed_up_at',
+    title: 'Customers Signed Up at',
+    shortTitle: 'Signed Up at',
+    kind: 'timeDimension',
+    type: 'time',
+    cube: 'customers',
+  };
+
+  it('names a joined cube’s field in full where the chart holds only another cube’s', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Wells
+          spec={{ ...emptySpec('orders'), measures: ['orders.count'] }}
+          available={[measure, timeDimension, signedUp]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+          onCalculation={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Calculations on Count' }));
+    expect(screen.getByRole('menuitem', { name: 'Running total' }).textContent).toContain(
+      'Needs a time field in Time: add Ordered at or Customers Signed Up at.',
+    );
+  });
+
+  it('groups a view’s fields by their cubes without “· via join”, and a joined cube’s with it', async () => {
+    const country: Member = {
+      name: 'customers.country',
+      title: 'Customers Country',
+      shortTitle: 'Country',
+      kind: 'dimension',
+      type: 'string',
+      cube: 'customers',
+    };
+    const status: Member = {
+      ...country,
+      name: 'orders.status',
+      title: 'Orders Status',
+      cube: 'orders',
+    };
+    const { rerender } = render(
+      <Wells
+        spec={emptySpec('order_summary')}
+        available={[status, country]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+    const groups = () =>
+      within(screen.getByRole('listbox', { name: 'Fields' }))
+        .getAllByRole('group')
+        .map((group) => group.getAttribute('aria-label'));
+    await userEvent.click(screen.getByRole('button', { name: 'Add to Dimensions' }));
+    // A cube with no title given is named in words, never its identifier (T229's review).
+    expect(groups()).toEqual(['Orders', 'Customers']);
+    await userEvent.keyboard('{Escape}');
+
+    rerender(
+      <Wells
+        spec={emptySpec('orders')}
+        available={[status, country]}
+        joined={['customers']}
+        cubeTitles={{ orders: 'Orders', customers: 'Customers' }}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Add to Dimensions' }));
+    expect(groups()).toEqual(['Orders', 'Customers · via join']);
   });
 });
 
@@ -293,7 +510,8 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
     expect(screen.getByTestId('well-filters')).toBeTruthy();
     // The well's "+ filter", the prototype's inline picker (T257).
     await userEvent.click(screen.getByRole('button', { name: 'Add a filter' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Orders Status' }));
+    // The fields' picker (T688, EDI-11): an option by its title, its type beside it.
+    await userEvent.click(screen.getByRole('option', { name: /^Orders Status/ }));
     expect(onFilters).toHaveBeenLastCalledWith([
       { member: 'orders.status', operator: 'equals', values: [] },
     ]);
@@ -398,15 +616,9 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
         onTail={onTail}
       />,
     );
-    // A segmented control, as direction.md's inspector fields have it.
-    const group = screen.getByRole('group', { name: 'The rest' });
-    // Nothing to fold or leave out without a top N.
-    const choices = within(group).getAllByRole('button');
-    expect(choices.map((choice) => choice.textContent)).toEqual([
-      'Fold into “Other (n)”',
-      'Leave out',
-    ]);
-    for (const choice of choices) expect((choice as HTMLButtonElement).disabled).toBe(true);
+    // Nothing to fold or leave out without a top N: not shown until one is
+    // set (chart-editor-Q1, T688).
+    expect(screen.queryByLabelText('The rest')).toBeNull();
 
     const withTopN = (tail?: 'drop') => (
       <Wells
@@ -420,17 +632,21 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
       />
     );
     rerender(withTopN());
-    const fold = within(group).getByRole('button', { name: 'Fold into “Other (n)”' });
-    const leaveOut = within(group).getByRole('button', { name: 'Leave out' });
-    expect(fold.getAttribute('aria-pressed')).toBe('true');
-    expect(leaveOut.getAttribute('aria-pressed')).toBe('false');
-    await userEvent.click(leaveOut);
+    // A 28/12 native select in Sort by's row (chart-editor-Q1), in its full words.
+    const rest = screen.getByLabelText('The rest') as HTMLSelectElement;
+    expect(rest.tagName).toBe('SELECT');
+    expect([...rest.options].map((option) => option.textContent)).toEqual([
+      'Fold into Other (n)',
+      'Leave out',
+    ]);
+    expect(rest.selectedOptions[0]?.textContent).toBe('Fold into Other (n)');
+    await userEvent.selectOptions(rest, 'Leave out');
     expect(onTail).toHaveBeenLastCalledWith('drop');
 
     // And back (T390's review).
     rerender(withTopN('drop'));
-    expect(leaveOut.getAttribute('aria-pressed')).toBe('true');
-    await userEvent.click(fold);
+    expect(rest.selectedOptions[0]?.textContent).toBe('Leave out');
+    await userEvent.selectOptions(rest, 'Fold into Other (n)');
     expect(onTail).toHaveBeenLastCalledWith(undefined);
   });
 
@@ -779,7 +995,8 @@ describe('a box plot’s "Each point is" (AC-314)', () => {
   it('sits below the value, before Dimensions (direction.md, Box plot)', () => {
     boxWells({ member: undefined, onChange: vi.fn() });
     const headings = screen.getAllByRole('heading').map((heading) => heading.textContent);
-    expect(headings.slice(0, 3)).toEqual(['Metrics', 'Each point is', 'Dimensions']);
+    // Dimensions with design 01's "(group by)" since T688 (EDI-09).
+    expect(headings.slice(0, 3)).toEqual(['Metrics', 'Each point is', 'Dimensions (group by)']);
   });
 
   it('holds one field, shown by its title, and clears to each row a point', async () => {
