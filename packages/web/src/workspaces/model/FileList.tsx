@@ -303,7 +303,13 @@ export function FileList({
               <tr key={key} className="model-overview__row" onClick={openRow(path)}>
                 <td>
                   <span className="model-overview__file">
-                    <a className="is-code" href={hrefOf(path)} onClick={openLink(path)}>
+                    <a
+                      className="is-code"
+                      href={hrefOf(path)}
+                      onClick={openLink(path)}
+                      // Whole here where its cell cuts it short (T406).
+                      title={path}
+                    >
                       {path}
                     </a>
                     {unpublished.has(path) ? (
@@ -348,7 +354,9 @@ export function FileList({
                 ) : (
                   <>
                     <td>{object.kind === 'cube' ? 'Cube' : 'View'}</td>
-                    <td className="is-code">{object.name}</td>
+                    <td className="is-code" title={object.name}>
+                      {object.name}
+                    </td>
                     {object.kind === 'view' ? (
                       <ViewCounts object={object} />
                     ) : (

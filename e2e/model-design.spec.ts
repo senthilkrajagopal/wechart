@@ -1359,9 +1359,18 @@ test('T691: the tree’s Jinja row, and the overview’s frame, columns and Jinj
   const note = await edgesOf(overview.locator('.info-bar'));
   const card = await edgesOf(overview.locator('.model-overview'));
   expect([meta.y - title.bottom, note.y - meta.bottom, card.y - note.bottom]).toEqual([12, 12, 12]);
-  // Its columns at the drawn widths, Members taking the rest (12:220).
-  const widths = await overview
-    .getByRole('table', { name: 'Cubes and views' })
+  // Its columns at the drawn widths, Members taking the rest (12:220), even
+  // with a long path and name in them, as a full run's other cubes bring (T406).
+  const table = overview.getByRole('table', { name: 'Cubes and views' });
+  await table
+    .locator('tbody tr')
+    .first()
+    .evaluate((row) => {
+      const long = ' a_very_long_cube_name_that_a_full_run_brings_along_with_it';
+      row.querySelector('td a')?.append(long);
+      row.querySelector('td.is-code')?.append(long);
+    });
+  const widths = await table
     .locator('thead th')
     .evaluateAll((cells) => cells.map((cell) => Math.round(cell.getBoundingClientRect().width)));
   expect(widths.slice(0, 8)).toEqual([232, 92, 168, 88, 80, 60, 74, 80]);

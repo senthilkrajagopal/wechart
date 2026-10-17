@@ -957,7 +957,16 @@ main > .proposal-band:first-child,
   border-radius: 6px;
   background: var(--wc-bg-surface);
 }
-.model-overview__table { table-layout: auto; }
+/* At the drawn widths whatever the names (T406, on T691's test): a long path
+   or name, which a full run's other cubes bring, is cut short in its cell
+   and whole in its tooltip, not widening its column. Members' cell isn't
+   clipped: its tooltip hangs out of it. */
+.model-overview__table { table-layout: fixed; }
+.model-overview__table td:not(.model-overview__members-td) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .model-overview__table thead th { position: static; }
 .model-overview__table thead th:first-child { border-top-left-radius: 5px; }
 .model-overview__table thead th:last-child { border-top-right-radius: 5px; }
@@ -973,7 +982,14 @@ main > .proposal-band:first-child,
 .model-overview__table td.is-err { color: var(--wc-status-error); max-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .model-overview__table .is-code { font-family: var(--wc-font-code); }
 .model-overview__file { display: flex; align-items: center; gap: 8px; }
-.model-overview__file > a { color: var(--wc-accent); text-decoration: none; }
+.model-overview__file > a {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--wc-accent);
+  text-decoration: none;
+}
 .model-overview__file > a:hover { text-decoration: underline; }
 .model-overview__mark { display: inline-flex; flex: none; align-items: center; gap: 4px; font-size: 12px; }
 .model-overview__mark.is-err { color: var(--wc-status-error); }
@@ -8930,6 +8946,10 @@ main:has(.chart-editor) {
    long dashboard name on Back — shrink and wrap within it rather than push
    it past the window (AC-179, T228's review). */
 .chart-editor__head > * { min-width: 0; }
+/* Its buttons, links and badges keep their words whole, which squeezed past
+   their boxes and the window at 1,280 (AC-179; T406): the title, Back and
+   the notes give the room. */
+.chart-editor__head > :is(a, button, .badge):not([data-testid='editor-back']) { flex-shrink: 0; }
 .chart-editor__head .state-line { margin: 0; flex: 0 1 auto; font-size: 12px; line-height: 16px; }
 /* A library chart's plain note: the prototype's \`xs muted\` (T256's review). */
 .chart-editor__note { flex: 0 1 auto; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }

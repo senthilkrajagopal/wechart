@@ -276,9 +276,25 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
       await expect(head.getByRole('link', { name: /Edit chart/ })).toHaveCount(0);
       // Added only to a dashboard in My workspace: the dashboard's copy, never
       // the shared dashboard, which gains a tile only by a proposal (T502).
-      const onto = page.getByRole('combobox', { name: 'Dashboard' });
-      await expect(onto.locator(`option[value="${made.copy}"]`)).toHaveCount(1);
-      await expect(onto.locator(`option[value="${made.board}"]`)).toHaveCount(0);
+      // Asked of design 06's picker, which took the select's place (T686):
+      // both are titled BOARD, told apart by their folders (T406).
+      await page
+        .getByRole('complementary', { name: 'Chart details' })
+        .getByRole('button', { name: '＋ Add to a dashboard…' })
+        .click();
+      const picker = page.getByRole('dialog', { name: 'Add to a dashboard' });
+      await picker.getByRole('searchbox', { name: 'Find a dashboard' }).fill(BOARD);
+      const offered = picker
+        .locator('.chart-page__pick')
+        .filter({ has: page.locator('.chart-page__pick-title', { hasText: BOARD }) });
+      await expect(offered).toHaveCount(1);
+      // The copy's: in its project folder in My workspace, not in FOLDER.
+      const project = (await (
+        await page.request.get(`/api/documents/folder/${made.boardProject}`)
+      ).json()) as { body: { title: string } };
+      await expect(offered.locator('.chart-page__pick-folder')).toHaveText(project.body.title);
+      await page.keyboard.press('Escape');
+      await expect(picker).toHaveCount(0);
       await head.getByRole('button', { name: 'Edit in my workspace' }).click();
 
       // The copy, opened in the editor.

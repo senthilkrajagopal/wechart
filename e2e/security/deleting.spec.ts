@@ -138,18 +138,21 @@ test.describe('deleting a library chart (T517, AC-362)', () => {
     test('is offered no way to put a chart on a dashboard, or to edit one, being read-only everywhere (T760, AC-277)', async ({
       page,
     }) => {
-      for (const [chartId, title] of [
-        [made.chart, CHART],
-        [made.lone, 'Chart'],
+      for (const [chartId, title, there] of [
+        [made.chart, CHART, true],
+        [made.lone, 'Chart', false],
       ] as const) {
         await page.goto(`/explore/charts/${chartId}`);
         await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
-        // Once its details have come: "Used in" or the chart that isn't there.
+        // Once its details have come: "Used in", or the chart that isn't
+        // there. Each asked of its own chart: the one that isn't there says
+        // so and its "Used in" too, so one locator for both found two (T406).
         await expect(
-          page
-            .getByTestId('used-by-none')
-            .or(page.getByRole('list', { name: 'Dashboards using this chart' }))
-            .or(page.getByText('This chart is no longer available.')),
+          there
+            ? page
+                .getByTestId('used-by-none')
+                .or(page.getByRole('list', { name: 'Dashboards using this chart' }))
+            : page.getByText('This chart is no longer available.'),
         ).toBeVisible();
         // Design 06's picker's button (T686), none of it offered.
         await expect(page.getByRole('button', { name: '＋ Add to a dashboard…' })).toHaveCount(0);
