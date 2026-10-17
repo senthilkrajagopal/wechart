@@ -402,6 +402,20 @@ test('the preview’s status, and the drawer as design 02 draws it (T690)', asyn
 
   // Design 01 pin 10: the form drawn, and how it was chosen.
   await expect(page.getByTestId('preview-status')).toHaveText('Showing Bar · auto');
+  // Measured as drawn (EDI-13, T406): 12/16 in text-muted, on a canvas padded 12.
+  const muted = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--wc-text-muted)';
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  });
+  const status = page.getByTestId('preview-status');
+  await expect(status).toHaveCSS('font-size', '12px');
+  await expect(status).toHaveCSS('line-height', '16px');
+  await expect(status).toHaveCSS('color', muted);
+  await expect(page.locator('.chart-editor__canvas')).toHaveCSS('padding', '12px');
 
   const drawer = page.getByTestId('results-drawer');
   await page.getByRole('tab', { name: 'Results', exact: true }).click();
@@ -660,6 +674,26 @@ test('the drawer shows result rows, underlying rows and the query', async ({ pag
   await expect(page.getByTestId('drawer-underlying-rows')).toBeVisible();
   const underlying = page.getByTestId('drawer-underlying-rows');
   await expect(underlying.locator('tbody tr').first()).toBeVisible();
+  // The seed's 240 orders, capped: said as design 02 state B's `.dline`
+  // (EDI-21, T406): 12/16 in text-secondary, padded 6 12, its accent info icon.
+  const cap = page.getByTestId('drawer-underlying-rows-truncated');
+  // Cube says no total for an ungrouped query, so the line says there may be more.
+  await expect(cap).toHaveText('Showing the first 100 rows. There may be more.');
+  const [secondary, accent] = await page.evaluate(() =>
+    ['--wc-text-secondary', '--wc-accent'].map((token) => {
+      const probe = document.createElement('span');
+      probe.style.color = `var(${token})`;
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    }),
+  );
+  await expect(cap).toHaveCSS('font-size', '12px');
+  await expect(cap).toHaveCSS('line-height', '16px');
+  await expect(cap).toHaveCSS('padding', '6px 12px');
+  await expect(cap).toHaveCSS('color', secondary!);
+  await expect(cap.locator('svg')).toHaveCSS('color', accent!);
 
   // A row count alone would pass for the wrong query — a different cube, or
   // the chart's members dropped — so tie the rows to the chart's own query.

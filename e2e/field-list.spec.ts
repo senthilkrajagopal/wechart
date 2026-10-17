@@ -87,6 +87,10 @@ test('a Shared chart’s picker lists its cubes under “Shared”, each with it
     const paths = await list.locator('.cube-picker__option .cube-picker__path').allTextContents();
     expect(paths.length).toBeGreaterThan(0);
     expect(new Set(paths)).toEqual(new Set(['Shared']));
+    // The C / V chip at 12/600, not design 10's 11 (D10-03; components-Q5).
+    const chip = list.locator('.cube-picker__option .cube-picker__kind').first();
+    await expect(chip).toHaveCSS('font-size', '12px');
+    await expect(chip).toHaveCSS('font-weight', '600');
 
     const measured = await page.evaluate(() => {
       const glyph = document.querySelector('.cube-picker__glyph')!.getBoundingClientRect();

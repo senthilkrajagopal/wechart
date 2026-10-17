@@ -308,7 +308,7 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
 - **Model copies in the workspace** (T437, paused in a stash by R33's order, then T347 → T350 → T358; T440; T456):
   - design 04's Model in New and model copies;
   - design 05's bundle and bundled previews;
-  - design 10 state D's workspace group;
+  - ~~design 10 state D's workspace group;~~ *built: T475, T718 (R72, R73: "Your copy"); judged by T742, 2026-10-17*
   - design 11 proposal 5 (T492).
 - **The audit trail** (T368 → T369, T370, T427):
   - 2026-09-27 design 08's Audit tab;
@@ -320,7 +320,7 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
   - 2026-09-24 design 07's Last build;
   - wechart-owned schedules (AC-234, T378).
 - **Models opened in their folder** (T342):
-  - design 10 state D's cube picker (T475, AC-342);
+  - ~~design 10 state D's cube picker (T475, AC-342);~~ *built: T475, T633, T718, T742 (AC-342 retired by R71), 2026-10-17*
   - design 10 pin 5's model link;
   - the "Open in Model" links of 2026-09-24 designs 02, 07 and 08.
 

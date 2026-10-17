@@ -231,6 +231,14 @@ describe('the Security workspace’s policies', () => {
         .getAllByRole('columnheader')
         .map((header) => header.textContent),
     ).toEqual(['Cube / view', 'Group', 'Members', 'Rows', 'Conditions', 'Masked', 'Source']);
+    // A policy's identifiers in the code face, as state F draws its cube, group
+    // and row filter (SEC-15; T406's check): the cells set so, and no others.
+    const policy = within(table).getAllByRole('row')[1]!;
+    expect(
+      within(policy)
+        .getAllByRole('cell')
+        .map((cell) => cell.classList.contains('is-code')),
+    ).toEqual([true, true, false, true, true, false, false]);
   });
 
   it('names the cubes and views with no policy as open, and the files it cannot read', async () => {
