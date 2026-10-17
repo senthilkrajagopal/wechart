@@ -50,6 +50,34 @@ main:has(.sql-workspace) {
   font-weight: 600;
   color: var(--wc-text-secondary);
 }
+.sql-pane__section { padding: 0 12px 10px; }
+
+/* The data source picker (T798; design 17, pins 2 and 3, state B): design
+   10's grouped picker, 360 px wide, each row's driver and state at its
+   right, and under its button the chosen one's folder and state. */
+.cube-picker__pop.sql-picker__pop { width: min(360px, calc(100vw - 32px)); }
+.sql-picker .cube-picker__button { width: 100%; }
+.sql-picker__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.sql-picker__state svg[data-icon='ok'] { color: var(--wc-status-success); }
+.sql-picker__state svg[data-icon='off'] { color: var(--wc-text-muted); }
+.sql-picker__chosen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 0;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-secondary);
+}
+/* An off source chosen: its panel in the editor's place (design 17, B2). */
+.sql-centre__off { flex: 1; min-height: 0; overflow: auto; padding: var(--wc-surface-padding); }
+
 /* A pane's edge, dragged to resize it (direction §2; no keys, as the
    results drawer's grip has none). */
 .sql-pane__grip {

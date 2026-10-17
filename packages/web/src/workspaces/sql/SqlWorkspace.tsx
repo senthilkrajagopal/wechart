@@ -3,7 +3,12 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 
 import { NotFound } from '../../shell/NotFound';
 import { ME_QUERY } from '../../shell/me';
+import { StateLine } from '../../shell/StatusIcon';
 import { hiddenWorkspacesFor } from '../../shell/WorkspaceSwitcher';
+import { sourceQuery } from '../data-sources/SourceSettings';
+import { OffPanel } from './OffPanel';
+import { SQL_SOURCES_QUERY } from './sources';
+import { SourcePicker } from './SourcePicker';
 import {
   editorShare,
   LEFT_PANE,
@@ -29,7 +34,43 @@ export function SqlWorkspace() {
   const me = useQuery({ ...ME_QUERY, retry: false });
   if (me.data === undefined) return me.isError ? <NotFound /> : null;
   if (hiddenWorkspacesFor(me.data).includes('sql')) return <NotFound />;
-  return <Workbench />;
+  // With sign-in off, the one user holds every permission (AC-254).
+  return <Workbench superAdmin={me.data.superAdmin || me.data.security === 'off'} />;
+}
+
+/**
+ * An off source chosen in the picker (T798, AC-447, AC-373): the off panel,
+ * as the data source's own page shows it, with Turn on… for a Super-Admin,
+ * and never an editor that can run.
+ */
+function ChosenOff({ id, superAdmin }: { readonly id: string; readonly superAdmin: boolean }) {
+  const page = useQuery({ ...sourceQuery(id), retry: false });
+  if (page.isError) return <StateLine kind="err">{page.error.message}</StateLine>;
+  if (page.data === undefined) return null;
+  const source = page.data;
+  return (
+    <OffPanel
+      source={{
+        id: source.id,
+        version: source.version,
+        name: source.name,
+        driver: source.driver,
+        fields: source.fields,
+        folderPath: source.folderPath,
+        inWorkspace: source.inWorkspace,
+        sqlRunner: {
+          on: false,
+          tab: true,
+          runs: false,
+          ...source.sqlRunner,
+          ...source.sqlAccess,
+        },
+      }}
+      superAdmin={superAdmin}
+      turnedOff={false}
+      onTurnedOn={() => undefined}
+    />
+  );
 }
 
 type Side = 'left' | 'right';
@@ -42,7 +83,11 @@ type Side = 'left' | 'right';
  * right one, and below 1,024 the left one too, is a 40 px rail that opens
  * over the centre (design 17's Q1, (a)), one at a time.
  */
-function Workbench() {
+function Workbench({ superAdmin }: { readonly superAdmin: boolean }) {
+  const sources = useQuery({ ...SQL_SOURCES_QUERY, retry: false });
+  /** The data source chosen in the picker; tabs hold it from T800. */
+  const [chosen, setChosen] = useState('');
+  const chosenRow = sources.data?.find((row) => row.id === chosen);
   const [left, setLeft] = useState<number>(LEFT_PANE.start);
   const [right, setRight] = useState<number>(RIGHT_PANE.start);
   const [share, setShare] = useState<number>(SPLIT.editor);
@@ -101,6 +146,13 @@ function Workbench() {
         }}
       >
         <h2 className="sql-pane__head">Data source</h2>
+        <div className="sql-pane__section">
+          {sources.isError ? (
+            <StateLine kind="err">{sources.error.message}</StateLine>
+          ) : (
+            <SourcePicker rows={sources.data ?? []} value={chosen} onChoose={setChosen} />
+          )}
+        </div>
         <h2 className="sql-pane__head">Schema</h2>
       </SidePane>
       <div
@@ -111,28 +163,37 @@ function Workbench() {
         <div className="sql-centre__tabs" data-testid="sql-tabs-area" />
         {/* The split is of what lies below the tabs (T797's review). */}
         <div ref={below} className="sql-centre__split">
-          <div className="sql-centre__editor" data-testid="sql-editor-area" />
-          <span
-            className="sql-centre__grip"
-            title="Drag to resize · double-click to reset"
-            aria-hidden="true"
-            onPointerDown={(event) => {
-              split.current = { y: event.clientY, from: share * splitHeight() };
-              event.currentTarget.setPointerCapture?.(event.pointerId);
-            }}
-            onPointerMove={(event) => {
-              const from = split.current;
-              if (from === null) return;
-              setShare(editorShare(from.from + (event.clientY - from.y), splitHeight()));
-            }}
-            onPointerUp={endSplit}
-            onPointerCancel={endSplit}
-            onLostPointerCapture={endSplit}
-            onDoubleClick={() => {
-              setShare(SPLIT.editor);
-            }}
-          />
-          <div className="sql-centre__results" data-testid="sql-results-area" />
+          {chosenRow?.runner === 'off' ? (
+            // In the editor's place: nothing here runs (design 17, B2).
+            <div className="sql-centre__off">
+              <ChosenOff id={chosenRow.id} superAdmin={superAdmin} />
+            </div>
+          ) : (
+            <>
+              <div className="sql-centre__editor" data-testid="sql-editor-area" />
+              <span
+                className="sql-centre__grip"
+                title="Drag to resize · double-click to reset"
+                aria-hidden="true"
+                onPointerDown={(event) => {
+                  split.current = { y: event.clientY, from: share * splitHeight() };
+                  event.currentTarget.setPointerCapture?.(event.pointerId);
+                }}
+                onPointerMove={(event) => {
+                  const from = split.current;
+                  if (from === null) return;
+                  setShare(editorShare(from.from + (event.clientY - from.y), splitHeight()));
+                }}
+                onPointerUp={endSplit}
+                onPointerCancel={endSplit}
+                onLostPointerCapture={endSplit}
+                onDoubleClick={() => {
+                  setShare(SPLIT.editor);
+                }}
+              />
+              <div className="sql-centre__results" data-testid="sql-results-area" />
+            </>
+          )}
         </div>
       </div>
       <SidePane

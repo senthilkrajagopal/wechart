@@ -1752,11 +1752,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T797 (AC-386, AC-381, AC-304) The workspace's three panes: the picker and schema browser on the left, the tabs over the results in the centre, Saved and History on the right, folding to rails below 1,024 px, as design 17 screen 1 and state O draw them
 
-- [ ] T798 (AC-447, AC-373, AC-383, AC-384) The data source picker: the sources the user may run SQL on, grouped by folder path, My workspace's first, Cube Store at the root while on, each with its driver and the runner's state; an off source only to those who may turn it on or see it off, opening the off panel
-  - Lane: SQL
-  - Files: `packages/api/src/routes/sql-sources.ts` (+ test), `packages/api/src/server.ts`, `packages/web/src/workspaces/sql/SourcePicker.tsx` (+ test), `packages/web/src/workspaces/sql/OffPanel.tsx` (moved from the data source page's), `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: `sql-sources.test.ts`: `GET /api/sql/sources` gives a read-write member the sources switched on in their folders and their own workspace's (AC-383), plus the off ones of their own folders; gives a Super-Admin every source and Cube Store while on (AC-384); and gives nobody a source of a folder they see only as an ancestor's, or another user's workspace source (AC-373, AC-447). `SourcePicker.test.tsx`: a custom listbox grouped by folder path, My workspace's first with "Yours", each row's driver and "SQL runner on" or "Off" as an icon and a label; choosing an off source shows the off panel, with Turn on… for a Super-Admin, and no editor that can run (AC-447, AC-373).
-  - Depends on: T797
+- [x] T798 (AC-447, AC-373, AC-383, AC-384) The data source picker: the sources the user may run SQL on, grouped by folder path, My workspace's first, Cube Store at the root while on, each with its driver and the runner's state; an off source only to those who may turn it on or see it off, opening the off panel
 
 - [ ] T799 (AC-466) A first visit: one tab, "Query 1", no data source, focus on the picker, and the sentences for no source and for none available, as design 17 state H draws them
   - Lane: SQL

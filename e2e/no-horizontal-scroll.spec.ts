@@ -53,9 +53,7 @@ test('a dashboard does not scroll sideways at 1,280 px, viewed or edited', async
 test('the SQL runner workspace does not scroll sideways at 1,280 px (T797)', async ({ page }) => {
   await page.goto('/sql');
   await expect(page.getByRole('region', { name: 'SQL runner' })).toBeVisible();
-  await expect(
-    page.getByRole('complementary', { name: 'Data source and schema' }),
-  ).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Data source and schema' })).toBeVisible();
   expect(await overflowOf(page)).toEqual(NONE);
 });
 

@@ -9,6 +9,7 @@ import type { AuditStore } from '../repos/audit';
 import type { SqlRunnerSwitchStore } from '../repos/sql-runner-switches';
 import type { SqlRunStore } from '../repos/sql-runs';
 import { mayRunSql, needsSwitch, registerSqlRunner, type SqlRunnerOptions } from './sql-runner';
+import { registerSqlSources } from './sql-sources';
 import { signsInOtherwise } from './sql-runner-switch';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from '../repos/catalog';
 import {
@@ -399,6 +400,16 @@ export function registerDataSources(
     access,
     reached,
     workspaceOf,
+  });
+  // The SQL runner workspace's picker (T798, AC-447).
+  registerSqlSources(app, {
+    store,
+    access,
+    switches,
+    workspaceOf,
+    ownWorkspace,
+    paths: () => listing.pathOf(),
+    runs: sqlRunner !== undefined,
   });
 
   /**

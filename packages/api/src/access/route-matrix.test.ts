@@ -2098,6 +2098,21 @@ const CASES: Record<string, Case> = {
         ).toBe(writes(who, place));
     }
   },
+  // The SQL runner workspace's picker (T798, AC-447): of this world's
+  // places' data sources, those of the places a user writes, on or off, and
+  // none of a place they only read or see from below.
+  'GET /api/sql/sources': async () => {
+    for (const who of WHO) {
+      const answer = await ask(who, { method: 'GET', url: '/api/sql/sources' });
+      answered(answer, `${who} listing the SQL runner's data sources`);
+      const rows = answer.json<{ id: string }[]>();
+      for (const place of PLACES)
+        expect(
+          rows.some((row) => row.id === at[place].source),
+          `${who}'s picker, ${place}'s data source`,
+        ).toBe(writes(who, place));
+    }
+  },
   'POST /api/sql-runs/cancel': async () => {
     for (const who of WHO)
       refused(

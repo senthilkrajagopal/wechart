@@ -1,6 +1,9 @@
-import type { Browser, Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 
-import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
+import type { Browser, Page } from '@playwright/test';
+import { sealSecretV1, type XcubeKey } from '@wechart/core';
+
+import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
 /**
  * F42, the SQL runner workspace (R78; design 17), with sign-in on.
@@ -11,7 +14,13 @@ import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
  * (design 17, state A; rule 67).
  */
 const RUN = Math.random().toString(36).slice(2, 8);
-const world = { folderId: '' };
+const world = { folderId: '', sources: { on: '', off: '' } };
+/** Names held once across the system (T700, AC-421). */
+const SOURCES = { on: `sqlws_on_${RUN}`, off: `sqlws_off_${RUN}` };
+const KEY = JSON.parse(
+  readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
+) as XcubeKey;
+const FIELDS = { host: 'sample-db', port: 5432, database: 'sample', user: 'sample', ssl: false };
 
 // One world for the file's tests, in order, in one worker.
 test.describe.configure({ mode: 'default' });
@@ -48,6 +57,28 @@ test.beforeAll(async ({ browser }) => {
       data: { readOnly: ['sales-ro'], readWrite: ['sales-rw'] },
     });
     expect(access.status()).toBe(200);
+    // Two data sources on the sample database there: one switched on, one off (T798).
+    for (const which of ['on', 'off'] as const) {
+      const request = admin.page.request;
+      const made = await request.post('/api/data-sources', {
+        data: await testedSource(request, {
+          folderId: world.folderId,
+          name: SOURCES[which],
+          driver: 'postgres',
+          authMethod: 'password',
+          fields: FIELDS,
+          sealed: {
+            password: await sealSecretV1(KEY, 'postgres', 'password', FIELDS, 'sample'),
+          },
+        }),
+      });
+      expect(made.status(), await made.text()).toBe(201);
+      world.sources[which] = ((await made.json()) as { id: string }).id;
+    }
+    const on = await admin.page.request.put(`/api/data-sources/${world.sources.on}/sql-runner`, {
+      data: { on: true, readOnlyConfirmed: true },
+    });
+    expect(on.status(), await on.text()).toBe(200);
   } finally {
     await admin.context.close();
   }
@@ -56,6 +87,8 @@ test.beforeAll(async ({ browser }) => {
 test.afterAll(async ({ browser }) => {
   const admin = await signedIn(browser, 'super');
   try {
+    for (const id of Object.values(world.sources))
+      if (id !== '') await admin.page.request.delete(`/api/data-sources/${id}`);
     if (world.folderId !== '')
       await admin.page.request.delete(`/api/documents/folder/${world.folderId}`);
   } finally {
@@ -289,4 +322,85 @@ test.describe('the workspace’s three panes (T797, rule 91)', () => {
     const over = (await leftPane(page).locator('.sql-pane__body').boundingBox())!;
     expect(over.x + over.width).toBeLessThanOrEqual(390);
   });
+});
+
+/**
+ * T798 (AC-447, AC-373, AC-383, AC-384): the data source picker, against
+ * compose's xcube. The folder's on source and its off one, grouped under its
+ * path, each with its driver and state; the off one chosen shows the off
+ * panel, with Turn on… for a Super-Admin alone, and no editor.
+ */
+const pickerButton = (page: Page) =>
+  leftPane(page).getByRole('button', { name: /^Data source (?!and)/ });
+const groupOf = (page: Page) =>
+  page.getByRole('listbox', { name: 'Data sources' }).getByRole('group', {
+    name: `Shared / SQL workspace ${RUN}`,
+  });
+
+test.describe('the data source picker (T798, AC-447)', () => {
+  test.describe('as writer, a read-write member of the folder', () => {
+    test.use({ role: 'writer' });
+
+    test('lists the folder’s on and off sources under its path, each with its driver and state', async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await pickerButton(page).click();
+
+      const options = groupOf(page).getByRole('option');
+      await expect(options).toHaveCount(2);
+      await expect(options.filter({ hasText: SOURCES.off })).toContainText('PostgreSQL');
+      await expect(options.filter({ hasText: SOURCES.off }).locator('.sql-picker__state')).toHaveText(
+        'Off',
+      );
+      await expect(
+        options.filter({ hasText: SOURCES.on }).locator('.sql-picker__state'),
+      ).toHaveText('SQL runner on');
+      // My workspace's group, where the writer has one, comes before every folder's.
+      const labels = await page
+        .getByRole('listbox', { name: 'Data sources' })
+        .getByRole('group')
+        .evaluateAll((groups) => groups.map((group) => group.getAttribute('aria-label')));
+      expect(labels.indexOf('My workspace Yours')).toBeLessThan(1);
+      expect(labels.indexOf(`Shared / SQL workspace ${RUN}`)).toBeGreaterThan(
+        labels.indexOf('My workspace Yours'),
+      );
+    });
+
+    test('an off source chosen shows the off panel, with no Turn on… and no editor', async ({
+      page,
+    }) => {
+      await page.goto('/sql');
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.off) }).click();
+
+      await expect(
+        page.getByRole('heading', { name: `The SQL runner is off for ${SOURCES.off}` }),
+      ).toBeVisible();
+      await expect(page.getByText(/Only a Super-Admin can turn it on/)).toBeVisible();
+      await expect(page.getByRole('button', { name: /Turn on the SQL runner/ })).toHaveCount(0);
+      await expect(page.getByTestId('sql-editor-area')).toHaveCount(0);
+      await expect(page.getByTestId('sql-picker-chosen')).toHaveText(`SQL workspace ${RUN} · Off`);
+    });
+  });
+
+  test.describe('as super', () => {
+    test.use({ role: 'super' });
+
+    test('an off source chosen shows the off panel with Turn on…', async ({ page }) => {
+      await page.goto('/sql');
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.off) }).click();
+
+      await expect(
+        page.getByRole('heading', { name: `The SQL runner is off for ${SOURCES.off}` }),
+      ).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Turn on the SQL runner…' })).toBeVisible();
+      await expect(page.getByTestId('sql-editor-area')).toHaveCount(0);
+    });
+  });
+  // Who sees a folder only from below, or reads it, is the API's to hold
+  // (`routes/sql-sources.test.ts`): here those users have no workspace to
+  // open the picker in.
 });

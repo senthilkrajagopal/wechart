@@ -22,8 +22,11 @@ export interface PathPickerRow {
   readonly searchText?: string | undefined;
   /** Its cube's kind, as design 10's chip says it. */
   readonly kind: 'cube' | 'view';
-  /** What is written at its right: its folder path, or its cube's and its path. */
-  readonly path: string;
+  /**
+   * What is written at its right: its folder path, or its cube's and its
+   * path; the SQL runner's picker, a source's driver and state (T798).
+   */
+  readonly path: ReactNode;
   /** A chip beside its title: "Your copy" for the user's workspace copy (T718, AC-428). */
   readonly chip?: string | undefined;
   /** `data-*` attributes, for the specs that find a row by its name. */
