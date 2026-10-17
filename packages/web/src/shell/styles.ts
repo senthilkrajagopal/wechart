@@ -236,6 +236,8 @@ textarea { height: auto; padding: 6px 8px; }
    so a Super-Admin's five fit beside the 260 px search (T696-3). */
 @media (max-width: 1279.98px) {
   .workspace-switcher a { padding: 0 8px; }
+  /* And the bar's gap 12, not 16: real Chrome's Inter needed 12 px more. */
+  .app-bar { gap: 12px; }
 }
 .workspace-switcher a:hover { color: var(--wc-text-primary); }
 .workspace-switcher a[aria-current='page'] {
