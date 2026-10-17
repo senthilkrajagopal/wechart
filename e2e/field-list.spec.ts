@@ -58,6 +58,56 @@ test('lists the cubes and views from the model', async ({ page }) => {
   await expect(active).toHaveCSS('box-shadow', accent.bar);
 });
 
+/**
+ * T742 (AC-329, AC-343; design 10, state D; D10-01, D10-02; design-10-Q7): a
+ * chart made in Shared, as New › Chart makes one, stores its folder, so its
+ * picker lists the cubes on that path under "Shared", each with "Shared" at
+ * the right, as Filter on's already does. And the search's text starts after
+ * its icon and a 6 px gap, as design 10's `.input` (padding 0 8, gap 6) has it.
+ */
+test('a Shared chart’s picker lists its cubes under “Shared”, each with its path, and the search text clears its icon (T742)', async ({
+  page,
+}) => {
+  const made = await page.request.post('/api/documents', {
+    data: {
+      kind: 'chart',
+      title: `Picker path ${Math.random().toString(36).slice(2, 8)}`,
+      folderId: 'root',
+    },
+  });
+  expect(made.status()).toBe(201);
+  const { id } = (await made.json()) as { id: string };
+  try {
+    await page.goto(`/explore/charts/${encodeURIComponent(id)}/edit`);
+    const picker = cubePicker(page);
+    const list = await picker.open();
+    await expect(list.locator('.cube-picker__option').first()).toBeVisible();
+
+    await expect(list.locator('.cube-picker__group')).toHaveText(['Shared']);
+    const paths = await list.locator('.cube-picker__option .cube-picker__path').allTextContents();
+    expect(paths.length).toBeGreaterThan(0);
+    expect(new Set(paths)).toEqual(new Set(['Shared']));
+
+    const measured = await page.evaluate(() => {
+      const glyph = document.querySelector('.cube-picker__glyph')!.getBoundingClientRect();
+      const input = document.querySelector<HTMLInputElement>('.cube-picker__search')!;
+      const box = input.getBoundingClientRect();
+      const said = getComputedStyle(input);
+      return {
+        glyphInset: glyph.left - box.left,
+        textStart:
+          box.left + Number.parseFloat(said.borderLeftWidth) + Number.parseFloat(said.paddingLeft),
+        glyphEnd: glyph.right,
+      };
+    });
+    // The icon where `.input`'s padding puts it: its 1 px border and 8 px.
+    expect(measured.glyphInset).toBe(9);
+    expect(measured.textStart - measured.glyphEnd).toBe(6);
+  } finally {
+    await page.request.delete(`/api/documents/chart/${encodeURIComponent(id)}`);
+  }
+});
+
 test('shows a chosen cube’s members grouped by type', async ({ page }) => {
   await page.goto('/explore/charts/seed-chart-empty/edit');
   await expect(page.getByTestId('no-cube-chosen')).toBeVisible();

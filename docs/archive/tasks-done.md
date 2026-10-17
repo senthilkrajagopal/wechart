@@ -14626,3 +14626,30 @@ Search this file by task ID (`T123`) or AC ID.
       - One was this task's: the signed-in bar at 1,024 still overflowed by 12 px in real Chrome. Fixed in a follow-up commit: the bar's gap is 12 below 1,280 (T696-3).
       - Passed rerun alone: `acceleration:267`, `filters:201`, `model-design:855`, `model-popout:21`, `security/workspace-overlay-removal:112`.
       - Known, failing before: `no-horizontal-scroll:53`, `model-design:1335` (data-dependent), `security/deleting:138`, `security/workspace-edit:269` (the chart page's Dashboard combobox).
+
+- [x] T742 (AC-329, AC-343, AC-293, AC-187) Design 10's cube picker and Bookmarks as drawn: every item's cubes under their folder with their paths, the pickers' search box, and the Bookmarks popover *(added 2026-10-08 by T406, from its cold review: design 10 hadn't been judged)*
+  - Files: `packages/web/src/editor/{CubePicker,PathPicker,pathCubes}.ts(x)`, the chart route's `folderId` (`packages/web/src/router/routes.tsx`), `packages/web/src/dashboard/bookmarks/Bookmarks.tsx`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/field-list.spec.ts`, `e2e/security/bookmarks.spec.ts`
+  - Findings: D10-01 to D10-11 (`docs/design/critiques/2026-10-08-design-10.md`); D10-12 is T684's.
+  - Failing test:
+    - a Shared chart's picker lists its cubes under "Shared", each with "Shared" at the right, as Filter on's already does;
+    - the pickers' search text starts after its icon and a 6 px gap;
+    - the C/V chip per the components critique's Q5;
+    - the Bookmarks footer, row dates, button icon and chevron, the popover's border-subtle edge, the 8 px gap, 10 px above "Shared", the menu's words, and a row's ⋯ as a 24 px icon button, per Q1–Q5.
+  - ~~Waits on: the design 10 critique's Q1–Q7.~~
+  - **Settled 2026-10-08 (R76: design-10-Q1 to design-10-Q7, components-Q5).** Build:
+    - **design-10-Q1:** the Bookmarks footer is "＋ Bookmark this view…", design 10's accent link (`.btn.link`, 12/600, the plus icon, no border, padding 8 12), with an ellipsis because it asks for a name.
+    - **design-10-Q2:** each row shows the date the bookmark was first saved, the one the list is ordered by (R61), day first ("today", "22 Sep").
+    - **design-10-Q3:** the Bookmarks button carries design 10's bookmark icon, and its chevron becomes the SVG the designs draw.
+    - **design-10-Q4:** "…" stays on every item that asks for more before acting, as built. An item that acts at once takes none.
+    - **design-10-Q5:** with no bookmarks, "No bookmarks yet" and then the footer, with no "Mine" heading, as built.
+    - **design-10-Q6:** Filter on's field rows read the member's short title ("Name"), with "Customers · Shared" at the right.
+    - **design-10-Q7:** every saved chart and dashboard stores its folder, and the picker groups cubes by it. The first failing test then holds through the stored folder rather than a guess. The flat list stays only where the Cube isn't xcube (no folder on any cube, as `pathCubes.ts` detects). R71's no-migration reseed means no stored item needs rewriting.
+    - **components-Q5:** the C/V chip at 12 px, not 11.
+  - Depends on: none
+  - **Built 2026-10-17** (lane D). The calls are T742-1 to T742-4 in `decisions-2026-10-08.md`, "Later decisions". No AC is ticked by it: AC-329 and AC-293 were ticked already, and AC-343 and AC-187 close at T406.
+    - **D10-01, Q7:** a chart made in Shared, as New › Chart makes one, already stored its folder, and its picker lists its cubes under "Shared", each with "Shared" at the right. The critique's capture was the seed's unfoldered `seed-chart-empty`. A save that leaves the folder out is refused as a move (T359's test), so every saved item keeps its folder; the fixtures stay unfoldered (T742-2).
+    - **D10-02:** the search's icon 9 px in (design 10's `.input`: a 1 px border and 8 px), its text 6 px after it. The input's rule names every `:not()` of the global input rule, which had outranked it.
+    - **D10-03, D10-10, Q5:** as built (the chip at 12 px by components-Q5; "…" on items that ask first; the empty popover).
+    - **D10-04 to D10-09, D10-11:** the footer "＋ Bookmark this view…" as `.btn.link` (accent, 12/600, the plus icon, no border) in a footer padded 8 12; each row's visibility then " · today" or " · 22 Sep" (the API's new `savedAt`, from the row's `created_at`, which a save under the same name keeps); the button's bookmark icon and svg chevron; the popover 8 px under its button on a border-subtle edge; "Shared" 10 px under its rule, 4 px down; each row's ⋯ a 24 px icon button with design 10's dots.
+    - **Q6:** Filter on's rows read the member's short title, its cube and folder at the right.
+    - **Tests.** API: `repos/bookmarks.test.ts` (dated by the first save, kept on a save again), `bookmarks.test.ts`, `access/bookmarks.test.ts` (`savedAt` through share, rename and update). Unit: `savedOn.test.ts`, `Bookmarks.test.tsx` (a new T742 group; the footer's words), `addFilter.test.tsx` (short titles). e2e: `field-list.spec.ts` (a new T742 test), `security/bookmarks.spec.ts` (a new measured T742 test; the footer's words; the phase-1 row's date), `markings.spec.ts` (the footer's words).

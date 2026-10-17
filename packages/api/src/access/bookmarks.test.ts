@@ -148,6 +148,8 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
     /** Its owner's, or a Super-Admin's on another's shared one (T580). */
     mayDelete: boolean;
     sharedBy?: string;
+    /** When it was first saved (T742), kept through every change. */
+    savedAt: string;
   }
   const url = (id: string, on = dashboard) => `/api/dashboards/${on}/bookmarks/${id}`;
   const all = async (who: string): Promise<Listed[]> => {
@@ -178,7 +180,7 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
     });
 
     expect(saved.statusCode).toBe(201);
-    const { id } = saved.json<{ id: string }>();
+    const { id, savedAt } = saved.json<{ id: string; savedAt: string }>();
     expect(saved.json()).toEqual({
       id,
       dashboardId: dashboard,
@@ -187,12 +189,15 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
       shared: false,
       mine: true,
       mayDelete: true,
+      savedAt,
     });
+    // When it was saved, as a date (T742; design-10-Q2).
+    expect(Number.isNaN(Date.parse(savedAt))).toBe(false);
     expect(named(await all('reader'))).toEqual([['My view', true]]);
   });
 
   it('shared by its owner, is listed for everyone who may open the dashboard, after their own, labelled with who shared it', async () => {
-    const { id } = await own('writer', 'Shared later');
+    const { id, savedAt } = await own('writer', 'Shared later');
 
     const shared = await change('writer', id, { shared: true });
 
@@ -206,6 +211,7 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
         shared: true,
         mine: true,
         mayDelete: true,
+        savedAt,
       },
     ]);
     const asOthers = {
@@ -217,6 +223,7 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
       mine: false,
       mayDelete: false,
       sharedBy: 'Wren Writer',
+      savedAt,
     };
     const readers = await all('reader');
     expect(named(readers)).toEqual([
@@ -306,7 +313,7 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
   });
 
   it('lets its owner rename it, update it, stop sharing it and delete it', async () => {
-    const { id } = await own('writer', 'Shared second');
+    const { id, savedAt } = await own('writer', 'Shared second');
 
     const renamed = await change('writer', id, { name: '  Renamed  ' });
     expect([renamed.statusCode, renamed.json<Listed>().name]).toEqual([200, 'Renamed']);
@@ -324,6 +331,7 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
       mine: false,
       mayDelete: false,
       sharedBy: 'Wren Writer',
+      savedAt,
     });
 
     const unshared = await change('writer', id, { shared: false });

@@ -133,6 +133,19 @@ button[type='submit']:hover:not(:disabled):not([aria-disabled='true']),
 }
 .btn-ghost { border-color: transparent; background: none; }
 .btn-sm { min-height: 24px; height: 24px; padding: 0 8px; font-size: var(--wc-text-xs-size); }
+/* The designs' .btn.link (design 10:72; T742, D10-04): an accent link at
+   12/600 with its icon, and no box. */
+.btn.link {
+  min-height: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wc-accent);
+  font-size: var(--wc-text-xs-size);
+  font-weight: 600;
+}
+.btn.link:hover:not(:disabled):not([aria-disabled='true']) { background: none; text-decoration: underline; }
 /* One pressed state (T684, CMP-03): the designs' .btn.pressed, accent-soft
    with the accent's border and ink, at 600 (06:68, 07:69). History with its
    panel open, Access with its own. Kept on hover. */
@@ -6647,7 +6660,8 @@ main:has(.dashboard) {
    row's ⋯ beside both. */
 .bookmarks {
   position: absolute;
-  top: calc(100% + 4px);
+  /* 8 px under its button, in design 10's border-subtle (T742, D10-07, D10-08). */
+  top: calc(100% + 8px);
   right: 0;
   z-index: 20;
   width: min(320px, calc(100vw - 32px));
@@ -6655,7 +6669,7 @@ main:has(.dashboard) {
      and a scroll box would clip it (T367's review). A long list grows the
      page instead. */
   padding: 4px 0;
-  border: 1px solid var(--wc-border-strong);
+  border: 1px solid var(--wc-border-subtle);
   border-radius: 6px;
   background: var(--wc-bg-raised);
   box-shadow: var(--wc-shadow-pop);
@@ -6665,7 +6679,9 @@ main:has(.dashboard) {
 .bookmarks:focus { outline: none; }
 .bookmarks:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
 .bookmarks__note { margin: 0; padding: 8px 12px; color: var(--wc-text-secondary); }
-.bookmarks__section + .bookmarks__section { margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--wc-border-subtle); }
+/* Shared under a rule, 4 px down, its heading 10 px under it (design 10:249; T742, D10-09). */
+.bookmarks__section + .bookmarks__section { margin-top: 4px; border-top: 1px solid var(--wc-border-subtle); }
+.bookmarks__section + .bookmarks__section .bookmarks__heading { padding-top: 10px; }
 .bookmarks__heading {
   margin: 0;
   padding: 8px 12px 4px;
@@ -6712,7 +6728,8 @@ main:has(.dashboard) {
 .bookmarks__row .menu-button__item { white-space: nowrap; }
 /* A menuitemradio's ✓ column (T689's review): the chosen one marked in the accent. */
 .menu-button__check { flex: none; width: 12px; color: var(--wc-accent); font-weight: 600; }
-.bookmarks__foot { margin-top: 4px; padding: 8px 12px 4px; border-top: 1px solid var(--wc-border-subtle); }
+/* Design 10's footer (10:251; T742, D10-04): its link, padded 8 12, under a rule. */
+.bookmarks__foot { margin-top: 4px; padding: 8px 12px; border-top: 1px solid var(--wc-border-subtle); }
 .dialog.share-bookmark { width: min(440px, calc(100vw - 32px)); }
 .share-bookmark__who { margin: 0 0 12px; color: var(--wc-text-secondary); }
 .dialog.save-bookmark { width: min(420px, calc(100vw - 32px)); }
@@ -9612,12 +9629,17 @@ details.customize-tab__section[open] > :not(summary) { margin-top: 8px; }
   box-shadow: var(--wc-shadow-pop);
 }
 .cube-picker__field { position: relative; margin: 10px; }
-.cube-picker__glyph { position: absolute; left: 10px; top: 9px; color: var(--wc-text-muted); pointer-events: none; }
-.cube-picker__field > input.cube-picker__search:not([type='checkbox']) {
+/* Where design 10's .input puts its icon and text (10:73; T742, D10-02): the
+   icon after the 1 px border and 8 px, then the text 6 px after it. The input
+   names every :not() of the global input rule, which otherwise outranks it
+   and puts the text under the icon. */
+.cube-picker__glyph { position: absolute; left: 9px; top: 9px; color: var(--wc-text-muted); pointer-events: none; }
+.cube-picker__field
+  > input.cube-picker__search:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) {
   display: block;
   width: 100%;
   height: 32px;
-  padding-left: 30px;
+  padding-left: 28px;
   font-size: var(--wc-text-sm-size);
 }
 .cube-picker__list { max-height: 360px; overflow: auto; padding-bottom: 6px; border-top: 1px solid var(--wc-border-subtle); }

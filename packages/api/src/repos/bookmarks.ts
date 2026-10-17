@@ -35,6 +35,11 @@ export interface Bookmark {
    * isn't: "Only me" (rule 81).
    */
   readonly shared: boolean;
+  /**
+   * When it was first saved, as an ISO date (T742; design-10-Q2): the date
+   * the list is ordered by (R61), which a save under its name keeps.
+   */
+  readonly savedAt: string;
 }
 
 /** What its owner may change of a bookmark (T367): any of them at once. */
@@ -58,7 +63,9 @@ export interface BookmarkStore {
    * name on the dashboard is replaced, and stays as shared as it was.
    */
   save(
-    bookmark: Omit<Bookmark, 'id' | 'ownerName' | 'shared'> & { readonly ownerName?: string },
+    bookmark: Omit<Bookmark, 'id' | 'ownerName' | 'shared' | 'savedAt'> & {
+      readonly ownerName?: string;
+    },
   ): Promise<Bookmark>;
   /** One of a dashboard's bookmarks, whoever's; none when it isn't of that dashboard. */
   get(dashboardId: string, id: string): Promise<Bookmark | undefined>;
@@ -83,7 +90,11 @@ export interface BookmarkStore {
 const dashboardOf = sql<string>`body ->> 'dashboardId'`;
 const sharedOf = sql<boolean>`coalesce((body ->> 'shared')::boolean, false)`;
 
-function toBookmark(row: { id: string; body: Record<string, unknown> }): Bookmark {
+function toBookmark(row: {
+  id: string;
+  body: Record<string, unknown>;
+  created_at: Date;
+}): Bookmark {
   const { dashboardId, title, state, owner, ownerName, shared } = row.body;
   return {
     id: row.id,
@@ -93,6 +104,7 @@ function toBookmark(row: { id: string; body: Record<string, unknown> }): Bookmar
     owner: typeof owner === 'string' ? owner : '',
     ownerName: typeof ownerName === 'string' ? ownerName : '',
     shared: shared === true,
+    savedAt: row.created_at.toISOString(),
   };
 }
 
@@ -105,7 +117,7 @@ export function bookmarkStore(db: Kysely<Database>): BookmarkStore {
     async list(dashboardId, viewer) {
       const rows = await db
         .selectFrom('documents')
-        .select(['id', 'body'])
+        .select(['id', 'body', 'created_at'])
         .where('kind', '=', 'bookmark')
         .where(dashboardOf, '=', dashboardId)
         // The generated column, from `body.owner`.
@@ -140,13 +152,13 @@ export function bookmarkStore(db: Kysely<Database>): BookmarkStore {
         .where(dashboardOf, '=', dashboardId)
         .where('owner', '=', owner)
         .where('title', '=', name)
-        .returning(['id', 'body'])
+        .returning(['id', 'body', 'created_at'])
         .executeTakeFirst();
       if (replaced !== undefined) return toBookmark(replaced);
       const created = await db
         .insertInto('documents')
         .values({ kind: 'bookmark', id: randomUUID(), body: JSON.stringify(fields) })
-        .returning(['id', 'body'])
+        .returning(['id', 'body', 'created_at'])
         .executeTakeFirstOrThrow();
       return toBookmark(created);
     },
@@ -154,7 +166,7 @@ export function bookmarkStore(db: Kysely<Database>): BookmarkStore {
     async get(dashboardId, id) {
       const row = await db
         .selectFrom('documents')
-        .select(['id', 'body'])
+        .select(['id', 'body', 'created_at'])
         .where('kind', '=', 'bookmark')
         .where('id', '=', id)
         .where(dashboardOf, '=', dashboardId)
@@ -180,7 +192,7 @@ export function bookmarkStore(db: Kysely<Database>): BookmarkStore {
         .where('id', '=', id)
         .where(dashboardOf, '=', dashboardId)
         .where('owner', '=', owner)
-        .returning(['id', 'body'])
+        .returning(['id', 'body', 'created_at'])
         .executeTakeFirst();
       return row === undefined ? undefined : toBookmark(row);
     },

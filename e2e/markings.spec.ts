@@ -1359,11 +1359,11 @@ test('a bookmark keeps the page tab, the filters’ values and the marks, and re
   await page.getByRole('tab', { name: 'Second' }).click();
   await expect(tile(page, 'tile-elsewhere').getByTestId('mark-badge')).toContainText('1 marked');
 
-  // The Bookmarks popover (T367): Mine, then Shared, and Save bookmark….
+  // The Bookmarks popover (T367): Mine, then Shared, and Bookmark this view… (T742).
   await page.getByRole('button', { name: 'Bookmarks' }).click();
   await page
     .getByRole('dialog', { name: 'Bookmarks' })
-    .getByRole('button', { name: 'Save bookmark…' })
+    .getByRole('button', { name: 'Bookmark this view…' })
     .click();
   const dialog = page.getByRole('dialog', { name: 'Save a bookmark' });
   await dialog.getByRole('textbox', { name: 'Name' }).fill('Shipped, on Second');

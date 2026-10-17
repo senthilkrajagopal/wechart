@@ -12,7 +12,7 @@ import type { ViewState } from './viewState';
  * Fails when: applying the bookmark restores a different tab, filter value or
  * mark set.
  *
- * The dashboard header's Bookmarks: Save bookmark… asks for a name and sends
+ * The dashboard header's Bookmarks: Bookmark this view… (design-10-Q1, T742) asks for a name and sends
  * what the dashboard shows now under it. The e2e applies what was saved.
  */
 const STATE: ViewState = {
@@ -71,7 +71,7 @@ const open = async () => {
 
 const saveAs = async (name: string) => {
   const user = userEvent.setup();
-  await user.click(within(await open()).getByRole('button', { name: 'Save bookmark…' }));
+  await user.click(within(await open()).getByRole('button', { name: 'Bookmark this view…' }));
   const dialog = screen.getByRole('dialog', { name: 'Save a bookmark' });
   await user.type(within(dialog).getByRole('textbox', { name: 'Name' }), name);
   await user.click(within(dialog).getByRole('button', { name: 'Save' }));
@@ -89,7 +89,7 @@ const mine = (id: string, name: string, state: unknown = STATE) => ({
   mayDelete: true,
 });
 
-describe('Save bookmark…', () => {
+describe('Bookmark this view…', () => {
   it('sends the page tab, the filters’ values and the marks under the name given', async () => {
     const asked = api(
       (body) =>
@@ -127,7 +127,7 @@ describe('Save bookmark…', () => {
     const user = userEvent.setup();
     render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
 
-    await user.click(within(await open()).getByRole('button', { name: 'Save bookmark…' }));
+    await user.click(within(await open()).getByRole('button', { name: 'Bookmark this view…' }));
     const dialog = screen.getByRole('dialog', { name: 'Save a bookmark' });
 
     expect(within(dialog).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
@@ -144,7 +144,7 @@ describe('Save bookmark…', () => {
     const user = userEvent.setup();
     render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
     const openDialog = async () => {
-      await user.click(within(await open()).getByRole('button', { name: 'Save bookmark…' }));
+      await user.click(within(await open()).getByRole('button', { name: 'Bookmark this view…' }));
       return screen.getByRole('dialog', { name: 'Save a bookmark' });
     };
 
@@ -615,7 +615,8 @@ describe('Mine and Shared (T367, AC-293)', () => {
       within(shared)
         .getAllByRole('listitem')
         .map((row) => row.textContent),
-    ).toEqual(['Board packShared by Ada Admin⋯']);
+      // Its ⋯ is design 10's dots icon now, read by its name (T742, D10-11).
+    ).toEqual(['Board packShared by Ada Admin']);
   });
 
   it('takes focus as it opens, and gives it back to Bookmarks on Escape (rule 85)', async () => {
@@ -629,5 +630,91 @@ describe('Mine and Shared (T367, AC-293)', () => {
 
     expect(screen.queryByRole('dialog', { name: 'Bookmarks' })).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Bookmarks' }));
+  });
+});
+
+/**
+ * T742 (AC-343, AC-293; design 10, state B; D10-04 to D10-06, D10-11; R76:
+ * design-10-Q1 to Q3): the Bookmarks button carries design 10's bookmark icon
+ * and the designs' svg chevron; each row says when it was first saved, after
+ * its visibility; its ⋯ is a 24 px icon button drawing design 10's dots; and
+ * the footer is "＋ Bookmark this view…", design 10's accent link.
+ */
+describe('as design 10 draws it (T742)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('draws the button with the bookmark icon and an svg chevron, and no text glyph', () => {
+    api(() => new Response('{}'));
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+
+    const button = screen.getByRole('button', { name: 'Bookmarks' });
+    expect(button.textContent).toBe('Bookmarks');
+    const icons = button.querySelectorAll('svg[aria-hidden="true"]');
+    expect(icons).toHaveLength(2);
+    expect(icons[0]?.getAttribute('data-icon')).toBe('bookmark');
+    expect(icons[1]?.getAttribute('data-icon')).toBe('chevron');
+    // The bookmark icon first, then the word, then the chevron.
+    expect(button.firstElementChild).toBe(icons[0]);
+    expect(button.lastElementChild).toBe(icons[1]);
+  });
+
+  it('says on each row when it was first saved, after its visibility', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 17, 15, 30));
+    api(
+      () => new Response('{}'),
+      () => [
+        { ...mine('b1', 'EMEA'), savedAt: new Date(2026, 9, 17, 9).toISOString() },
+        { ...mine('b2', 'Top 5'), shared: true, savedAt: new Date(2026, 8, 22, 9).toISOString() },
+        {
+          id: 'b3',
+          dashboardId: 'd1',
+          name: 'Board pack',
+          state: STATE,
+          shared: true,
+          mine: false,
+          mayDelete: false,
+          sharedBy: 'Ada Admin',
+          savedAt: new Date(2026, 8, 20, 9).toISOString(),
+        },
+      ],
+    );
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+    const popover = await open();
+    await within(popover).findByRole('list', { name: 'Shared' });
+
+    expect(
+      [...popover.querySelectorAll('.bookmarks__visibility')].map((each) => each.textContent),
+    ).toEqual(['Only me · today', 'Shared · 22 Sep', 'Shared by Ada Admin · 20 Sep']);
+  });
+
+  it('draws each row’s ⋯ as a 24 px icon button with the dots icon, named for its bookmark', async () => {
+    api(
+      () => new Response('{}'),
+      () => [mine('b1', 'EMEA')],
+    );
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+    const popover = await open();
+
+    const actions = await within(popover).findByRole('button', { name: 'Actions for EMEA' });
+    expect(actions.classList.contains('icon-button')).toBe(true);
+    expect(actions.classList.contains('icon-button--sm')).toBe(true);
+    expect(actions.textContent).toBe('');
+    expect(actions.querySelector('svg[aria-hidden="true"]')?.getAttribute('data-icon')).toBe(
+      'dots',
+    );
+  });
+
+  it('ends with "Bookmark this view…" as design 10’s accent link, with its plus icon', async () => {
+    api(() => new Response('{}'));
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+    const popover = await open();
+
+    const foot = within(popover).getByRole('button', { name: 'Bookmark this view…' });
+    expect(foot.className).toBe('btn link bookmarks__add');
+    expect(foot.firstElementChild?.getAttribute('data-icon')).toBe('plus');
+    expect(foot.textContent).toBe('Bookmark this view…');
   });
 });

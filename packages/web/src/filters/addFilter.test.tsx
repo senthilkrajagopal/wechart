@@ -318,7 +318,9 @@ describe('a filter’s fields on a dashboard in a folder (T429)', () => {
     dimensions: [
       {
         name: `${folderId === 'froot' ? shortName : `${folderId}__${shortName}`}.status`,
-        title: 'Status',
+        // As Cube titles a member: its cube's title first, and the short one alone.
+        title: `${title} Status`,
+        shortTitle: 'Status',
         type: 'string',
       },
     ],
@@ -364,8 +366,9 @@ describe('a filter’s fields on a dashboard in a folder (T429)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await addFilter('List with search');
 
-    // Design 10's picker (T633): by folder, nearest first, each field with
-    // its cube and folder path beside it.
+    // Design 10's picker (T633): by folder, nearest first, each field by its
+    // short title ("Status") with its cube and folder path beside it (T742,
+    // design-10-Q6).
     await userEvent.click(fieldButton(properties()));
     const list = await screen.findByRole('listbox', { name: 'Fields' });
     await waitFor(() => expect(within(list).getAllByRole('group')).toHaveLength(2));
@@ -378,12 +381,13 @@ describe('a filter’s fields on a dashboard in a folder (T429)', () => {
             .getAllByRole('option')
             .map((option) => [
               option.getAttribute('data-member'),
+              option.querySelector('.cube-picker__title')?.textContent,
               option.querySelector('.cube-picker__path')?.textContent,
             ]),
         })),
     ).toEqual([
-      { label: 'A', options: [['fa__sales.status', 'Sales · A']] },
-      { label: 'Shared', options: [['orders.status', 'Orders · Shared']] },
+      { label: 'A', options: [['fa__sales.status', 'Status', 'Sales · A']] },
+      { label: 'Shared', options: [['orders.status', 'Status', 'Orders · Shared']] },
     ]);
   });
 });

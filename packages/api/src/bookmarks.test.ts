@@ -23,6 +23,9 @@ const config: Config = {
   modelDir: '',
 };
 
+/** When the memory store says each was first saved (T742). */
+const SAVED_AT = '2026-09-22T09:30:00.000Z';
+
 /** In memory, as the store keeps them (`repos/bookmarks.ts`): newest last here, first listed. */
 function memoryBookmarks(): BookmarkStore & { saved: Bookmark[] } {
   const saved: Bookmark[] = [];
@@ -38,7 +41,13 @@ function memoryBookmarks(): BookmarkStore & { saved: Bookmark[] } {
       ];
     },
     save: async ({ ownerName = '', ...bookmark }) => {
-      const kept = { id: `b${String(saved.length + 1)}`, ...bookmark, ownerName, shared: false };
+      const kept = {
+        id: `b${String(saved.length + 1)}`,
+        ...bookmark,
+        ownerName,
+        shared: false,
+        savedAt: SAVED_AT,
+      };
       saved.push(kept);
       return kept;
     },
@@ -103,6 +112,8 @@ describe('a dashboard’s bookmarks', () => {
       shared: false,
       mine: true,
       mayDelete: true,
+      // When it was first saved, for its row (T742; design-10-Q2).
+      savedAt: SAVED_AT,
     };
     expect([saved.statusCode, saved.json()]).toEqual([201, bookmark]);
     expect(listed.json()).toEqual({ bookmarks: [bookmark] });
@@ -115,6 +126,7 @@ describe('a dashboard’s bookmarks', () => {
         owner: 'admin',
         ownerName: 'admin',
         shared: false,
+        savedAt: SAVED_AT,
       },
     ]);
     await app.close();
@@ -148,6 +160,8 @@ describe('a dashboard’s bookmarks', () => {
       shared: true,
       mine: true,
       mayDelete: true,
+      // Still when it was first saved: a change isn't a new save (T742).
+      savedAt: SAVED_AT,
     };
     expect([shared.statusCode, renamed.statusCode, updated.statusCode]).toEqual([200, 200, 200]);
     expect(updated.json()).toEqual(after);
@@ -188,7 +202,13 @@ describe('a dashboard’s bookmarks', () => {
 
   it('go with their dashboard when it is deleted (T127’s review)', async () => {
     const bookmarks = memoryBookmarks();
-    const kept = { state: STATE, owner: 'admin', ownerName: 'admin', shared: false };
+    const kept = {
+      state: STATE,
+      owner: 'admin',
+      ownerName: 'admin',
+      shared: false,
+      savedAt: SAVED_AT,
+    };
     bookmarks.saved.push(
       { id: 'b1', dashboardId: 'd1', name: 'x', ...kept },
       { id: 'b2', dashboardId: 'd2', name: 'y', ...kept },

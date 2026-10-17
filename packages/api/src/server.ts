@@ -6252,6 +6252,8 @@ export function buildServer({
     mine: bookmark.owner === viewer.key,
     mayDelete: bookmark.owner === viewer.key || (bookmark.shared && viewer.superAdmin),
     ...(bookmark.owner === viewer.key ? {} : { sharedBy: bookmark.ownerName }),
+    // When it was first saved, which its row shows (T742; design-10-Q2).
+    savedAt: bookmark.savedAt,
   });
   const isBookmarkState = (state: unknown): state is Record<string, unknown> => {
     const record = (value: unknown): value is Record<string, unknown> =>

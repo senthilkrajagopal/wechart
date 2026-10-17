@@ -60,8 +60,35 @@ describe('bookmark store', () => {
         owner: ME,
         ownerName: '',
         shared: false,
+        savedAt: saved.savedAt,
       },
     ]);
+  });
+
+  /**
+   * T742 (design-10-Q2): each row shows the date the bookmark was first
+   * saved, the one the list is ordered by (R61). Saved again under its name,
+   * it keeps that date.
+   */
+  it('dates a bookmark by when it was first saved, kept when it is saved again (T742)', async () => {
+    const dashboardId = `d-${randomUUID()}`;
+    const before = Date.now();
+    const first = await store().save({ dashboardId, name: 'Dated', state: STATE, owner: ME });
+    const after = Date.now();
+
+    expect(first.savedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/);
+    // The database's clock and this one's, a second apart at most.
+    expect(Date.parse(first.savedAt)).toBeGreaterThanOrEqual(before - 1000);
+    expect(Date.parse(first.savedAt)).toBeLessThanOrEqual(after + 1000);
+
+    const again = await store().save({
+      dashboardId,
+      name: 'Dated',
+      state: { ...STATE, page: 'page-3' },
+      owner: ME,
+    });
+    expect(again.savedAt).toBe(first.savedAt);
+    expect((await store().list(dashboardId, ME))[0]?.savedAt).toBe(first.savedAt);
   });
 
   // Newest first, as rule 81 has it (T367), where T127 listed them by name.
@@ -112,6 +139,7 @@ describe('bookmark store', () => {
         owner: ME,
         ownerName: '',
         shared: false,
+        savedAt: first.savedAt,
       },
     ]);
   });
@@ -136,6 +164,7 @@ describe('each bookmark its saver’s own (T366, AC-292)', () => {
         owner: 'writer',
         ownerName: '',
         shared: false,
+        savedAt: mine.savedAt,
       },
     ]);
     expect(await store().list(dashboardId, 'reader')).toEqual([]);

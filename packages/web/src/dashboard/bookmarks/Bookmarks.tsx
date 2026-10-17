@@ -5,6 +5,7 @@ import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { StateLine } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import { PersonIcon } from '../../workspaces/explore/WorkspaceBand';
+import { savedOn } from './savedOn';
 import { viewStateFrom, type ViewState } from './viewState';
 
 /** A bookmark as the API lists it to this user (T367). */
@@ -28,6 +29,8 @@ interface Saved {
    * (T762, AC-429).
    */
   readonly savedBeforeSignIn?: boolean;
+  /** When it was first saved, an ISO date (T742; design-10-Q2). */
+  readonly savedAt?: string;
 }
 
 type Listed =
@@ -63,10 +66,8 @@ async function whyNot(response: Response): Promise<string> {
 
 function readSaved(raw: unknown): Saved | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
-  const { id, name, state, shared, mine, mayDelete, sharedBy, savedBeforeSignIn } = raw as Record<
-    string,
-    unknown
-  >;
+  const { id, name, state, shared, mine, mayDelete, sharedBy, savedBeforeSignIn, savedAt } =
+    raw as Record<string, unknown>;
   if (typeof id !== 'string' || typeof name !== 'string') return undefined;
   return {
     id,
@@ -77,7 +78,32 @@ function readSaved(raw: unknown): Saved | undefined {
     mayDelete: mayDelete === true,
     ...(typeof sharedBy === 'string' ? { sharedBy } : {}),
     ...(savedBeforeSignIn === true ? { savedBeforeSignIn: true } : {}),
+    ...(typeof savedAt === 'string' ? { savedAt } : {}),
   };
+}
+
+/**
+ * Design 10's icons (state B; T742, D10-04, D10-06, D10-11): its bookmark,
+ * the designs' chevron, its plus and its dots, each 14 px as its `.s`.
+ */
+function Icon({ of }: { of: 'bookmark' | 'chevron' | 'plus' | 'dots' }) {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" data-icon={of}>
+      {of === 'bookmark' ? (
+        <path d="M4 2.5h8v11l-4-3-4 3z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      ) : of === 'chevron' ? (
+        <path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      ) : of === 'plus' ? (
+        <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" />
+      ) : (
+        <>
+          <circle cx="3.5" cy="8" r="1.3" fill="currentColor" />
+          <circle cx="8" cy="8" r="1.3" fill="currentColor" />
+          <circle cx="12.5" cy="8" r="1.3" fill="currentColor" />
+        </>
+      )}
+    </svg>
+  );
 }
 
 /** Shared: design 10's people, beside the person of "Only me". */
@@ -104,7 +130,7 @@ function PeopleIcon() {
  * writing nothing; its visibility is an icon and a label; its ⋯ offers its
  * owner Update, Rename, Share or Stop sharing and Delete, and anyone else
  * Apply and Save a copy to mine, with Delete too where the API says they may
- * (a Super-Admin, on a shared one: T580, R61). Save bookmark… keeps what the
+ * (a Super-Admin, on a shared one: T580, R61). Bookmark this view… keeps what the
  * dashboard shows now — the page tab, the filters' values and the marks —
  * under a name, "Only me". It sits in the header with the dashboard's other
  * reading controls, before its settings gear.
@@ -337,13 +363,18 @@ export function Bookmarks({
                   : bookmark.mine || bookmark.sharedBy === undefined || bookmark.sharedBy === ''
                     ? 'Shared'
                     : `Shared by ${bookmark.sharedBy}`}
+              {/* When it was first saved, as design 10 writes it (T742, design-10-Q2). */}
+              {bookmark.savedAt === undefined || savedOn(bookmark.savedAt) === undefined
+                ? null
+                : ` · ${savedOn(bookmark.savedAt) ?? ''}`}
             </span>
             <MenuButton
               label={`Actions for ${bookmark.name}`}
-              className="btn-ghost btn-sm bookmarks__actions"
+              // Design 10's .iconbtn.sm, 24 × 24, with its dots (T742, D10-11).
+              className="icon-button icon-button--sm bookmarks__actions"
               items={actionsOf(bookmark)}
             >
-              <span aria-hidden="true">⋯</span>
+              <Icon of="dots" />
             </MenuButton>
           </li>
         ))}
@@ -366,7 +397,10 @@ export function Bookmarks({
           setOpen(!open);
         }}
       >
-        Bookmarks <span aria-hidden="true">▾</span>
+        {/* Design 10's bookmark icon and the designs' chevron (T742; design-10-Q3). */}
+        <Icon of="bookmark" />
+        Bookmarks
+        <Icon of="chevron" />
       </button>
       {open ? (
         <div
@@ -399,9 +433,10 @@ export function Bookmarks({
             </>
           ) : null}
           <div className="bookmarks__foot">
+            {/* Design 10's accent link, with "…" as it asks for a name (T742; design-10-Q1). */}
             <button
               type="button"
-              className="btn-ghost btn-sm"
+              className="btn link bookmarks__add"
               onClick={() => {
                 setOpen(false);
                 setSaid('');
@@ -409,7 +444,8 @@ export function Bookmarks({
                 setAsking({ kind: 'save', state: current });
               }}
             >
-              Save bookmark…
+              <Icon of="plus" />
+              Bookmark this view…
             </button>
           </div>
         </div>
@@ -531,7 +567,7 @@ function Modal({
 }
 
 /**
- * A name asked for: Save bookmark…, Save a copy to mine… and Rename…. What
+ * A name asked for: Bookmark this view…, Save a copy to mine… and Rename…. What
  * `send` answers is said in the dialog when it isn't done, and the dialog
  * kept open.
  */

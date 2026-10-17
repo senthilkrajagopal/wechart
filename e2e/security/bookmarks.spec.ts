@@ -48,7 +48,7 @@ async function bookmarks(page: Page): Promise<Locator> {
   await expect(page.getByRole('heading', { name: `Bookmarked ${RUN}` })).toBeVisible();
   await page.getByRole('button', { name: 'Bookmarks' }).click();
   const popover = page.getByRole('dialog', { name: 'Bookmarks' });
-  await expect(popover.getByRole('button', { name: 'Save bookmark…' })).toBeVisible();
+  await expect(popover.getByRole('button', { name: 'Bookmark this view…' })).toBeVisible();
   await expect(popover.getByText('Reading bookmarks…')).toHaveCount(0);
   return popover;
 }
@@ -64,7 +64,7 @@ const names = (popover: Locator, section: 'Mine' | 'Shared') =>
 
 async function save(page: Page, name: string) {
   const popover = await bookmarks(page);
-  await popover.getByRole('button', { name: 'Save bookmark…' }).click();
+  await popover.getByRole('button', { name: 'Bookmark this view…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Save a bookmark' });
   await dialog.getByRole('textbox', { name: 'Name' }).fill(name);
   await dialog.getByRole('button', { name: 'Save' }).click();
@@ -118,7 +118,7 @@ test.describe('as a read-write member', () => {
     // T405's follow-up (AC-176, rule 85): Esc over a typed name asks first,
     // and Discard closes it, saving nothing.
     const asked = await bookmarks(page);
-    await asked.getByRole('button', { name: 'Save bookmark…' }).click();
+    await asked.getByRole('button', { name: 'Bookmark this view…' }).click();
     const dialog = page.getByRole('dialog', { name: 'Save a bookmark' });
     await dialog.getByRole('textbox', { name: 'Name' }).fill('Not kept');
     await page.keyboard.press('Escape');
@@ -212,6 +212,79 @@ test.describe('the reader, who may see the dashboard (T367)', () => {
     await expect(names(popover, 'Shared')).toHaveText([NEWER, NAME]);
     for (const name of [NEWER, NAME])
       await expect(row(popover, 'Shared', name)).toContainText(`Shared by ${WRITER}`);
+  });
+
+  /**
+   * T742 (AC-343, AC-293; design 10, state B; D10-04 to D10-09, D10-11; R76:
+   * design-10-Q1 to Q3), measured: each row's visibility and the day it was
+   * first saved; the button's bookmark icon and svg chevron; the popover 8 px
+   * under it in border-subtle; "Shared" 10 px under its rule; each row's ⋯ a
+   * 24 px icon button; and the footer design 10's accent link, padded 8 12.
+   */
+  test('draws the popover as design 10’s state B (T742)', async ({ page }) => {
+    const popover = await bookmarks(page);
+    await expect(row(popover, 'Mine', READERS).locator('.bookmarks__visibility')).toHaveText(
+      'Only me · today',
+    );
+    for (const name of [NEWER, NAME])
+      await expect(row(popover, 'Shared', name).locator('.bookmarks__visibility')).toHaveText(
+        `Shared by ${WRITER} · today`,
+      );
+
+    const token = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--wc-border-subtle)';
+      probe.style.backgroundColor = 'var(--wc-accent)';
+      document.body.append(probe);
+      const said = getComputedStyle(probe);
+      const all = { subtle: said.color, accent: said.backgroundColor };
+      probe.remove();
+      return all;
+    });
+    const button = page.getByRole('button', { name: 'Bookmarks' });
+    await expect(button).toHaveText('Bookmarks');
+    await expect(button.locator('svg')).toHaveCount(2);
+    const measured = await page.evaluate(() => {
+      const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+      const sections = document.querySelectorAll('.bookmarks__section');
+      const shared = sections[1]!;
+      const heading = shared.querySelector('.bookmarks__heading')!;
+      const headingStyle = getComputedStyle(heading);
+      return {
+        gap: box('.bookmarks').top - box('.dashboard__bookmarks-button').bottom,
+        sharedRule: getComputedStyle(shared).borderTopWidth,
+        aboveShared:
+          heading.getBoundingClientRect().top +
+          Number.parseFloat(headingStyle.paddingTop) -
+          (shared.getBoundingClientRect().top +
+            Number.parseFloat(getComputedStyle(shared).borderTopWidth)),
+        sharedMargin: getComputedStyle(shared).marginTop,
+      };
+    });
+    expect(measured.gap).toBe(8);
+    expect(measured.sharedRule).toBe('1px');
+    expect(measured.sharedMargin).toBe('4px');
+    expect(measured.aboveShared).toBe(10);
+    await expect(popover).toHaveCSS('border-top-color', token.subtle);
+
+    const actions = row(popover, 'Mine', READERS).getByRole('button', {
+      name: `Actions for ${READERS}`,
+    });
+    await expect(actions.locator('svg')).toHaveCount(1);
+    expect(
+      await actions.evaluate((each) => {
+        const box = each.getBoundingClientRect();
+        return [box.width, box.height];
+      }),
+    ).toEqual([24, 24]);
+
+    const add = popover.getByRole('button', { name: 'Bookmark this view…' });
+    await expect(add.locator('svg')).toHaveCount(1);
+    await expect(add).toHaveCSS('color', token.accent);
+    await expect(add).toHaveCSS('font-size', '12px');
+    await expect(add).toHaveCSS('font-weight', '600');
+    await expect(add).toHaveCSS('border-top-width', '0px');
+    await expect(popover.locator('.bookmarks__foot')).toHaveCSS('padding', '8px 12px');
   });
 
   test('can apply it, and save a copy to theirs, but is offered no change to it', async ({
@@ -379,7 +452,10 @@ test.describe('phase 1’s bookmark (T762, AC-429)', () => {
     test('sees it under Shared, saved before sign-in, to apply or copy only', async ({ page }) => {
       const popover = await bookmarks(page);
       const old = row(popover, 'Shared', OLD);
-      await expect(old.locator('.bookmarks__visibility')).toHaveText('Saved before sign-in');
+      // With the day it was saved, as every row says it (T742, design-10-Q2).
+      await expect(old.locator('.bookmarks__visibility')).toHaveText(
+        'Saved before sign-in · today',
+      );
       const menu = await actionsOf(page, old, OLD);
       await expect(menu.getByRole('menuitem')).toHaveText(['Apply', 'Save a copy to mine…']);
     });

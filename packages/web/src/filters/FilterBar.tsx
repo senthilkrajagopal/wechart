@@ -232,7 +232,8 @@ export function useFieldGroups(
           return membersFor(widget, membersOf(meta.data, row.cube.name)).map((member) => ({
             key: `${row.key}/${member.name}`,
             value: member.name,
-            title: member.title,
+            // Its short title ("Name"): its cube is at the right (T742, design-10-Q6).
+            title: member.shortTitle,
             kind,
             path: group.label === undefined ? row.cube.title : `${row.cube.title} · ${group.label}`,
             chip: row.yours === true ? 'Your copy' : undefined,
