@@ -33,7 +33,7 @@ Read this first when resuming. It holds only the current state and the rules in 
   - each agent uses its own e2e script;
   - never restart shared containers;
   - migrations go above 1758660000000.
-- **Test cadence** (the user, 2026-10-17): per task, its own tests, the full unit suite and the touched e2e in Chrome. A full Chrome e2e runs only at each lane's last task. A full e2e in every browser runs every 10 tasks and at the Phase 2 End Run.
+- **Test cadence** (the user, 2026-10-17): per task, its own tests, the full unit suite and the touched e2e in Chrome. A full Chrome e2e runs only at each lane's last task. Touched-spec runs set `WECHART_E2E_CHROMIUM=1`: bundled headless Chromium, no Dock icons (the user, 2026-10-17). Full runs use real Chrome. A full e2e in every browser runs every 10 tasks and at the Phase 2 End Run.
 - **Test output:** log to a file and read back the summary or failures, never the whole output. Never pipe the unit suite into `head`.
 - **Reviews:** one cold review per behaviour task, given the diff and the task's own ACs. Pure-styling tasks skip it (R77).
 - **Docs:**
@@ -76,6 +76,25 @@ Read this first when resuming. It holds only the current state and the rules in 
 - After a Docker Desktop restart, compose comes back on the repo's pinned images. Run `docker compose up -d --wait` under both locks.
 - **The drawer:** its height is capped at half the editor, which is 312 px in the default 1280×720 viewport.
 - **The graphify watcher** burns a full core while agents edit worktrees, so it is stopped. Run `graphify update .` after picks instead.
+
+## Next new work (the user, 2026-10-17)
+
+The user wants "two more things" built. Only one is named so far:
+- **An MCP server** that lets Claude Code or other LLMs manage data sources, dashboards, cubes, approval and review flows, "and anything else that i missed out".
+  - Raw input: `docs/inputs/2026-10-17-mcp-server.md`.
+  - This is new scope, so it goes through the workflow from the top: project-interview (round R78), then write-spec, then component-research (the MCP SDK; transport; auth, meaning how an LLM client signs in and acts with a user's folder permissions), then plan-tasks.
+- **A copilot / chat panel** that edits cubes and dashboards by conversation. Its edits land in My workspace, a Super-Admin sets the LLM provider, model and keys globally, and ideally it checks the rendered dashboard visually.
+  - Raw input: `docs/inputs/2026-10-17-copilot-chat.md`.
+  - The UI expert's study and proposed direction: [`docs/design/references-copilot.md`](./design/references-copilot.md).
+    - It proposes a pane docked at the right where each edit arrives as a change card, applied into My workspace and undoable, followed by a rendered check with thumbnails.
+    - The copilot never approves anything.
+    - It lists 18 open questions as candidate answers, and extends direction.md's checklist.
+  - **Shared design point:** the MCP server and the copilot share one set of typed operations in the wechart API, run as the signed-in user, with the same permission checks and audit.
+- **Interview R78 covers both**, using the 18 questions in references-copilot.md plus the MCP ones:
+  - how an outside client signs in;
+  - whether MCP may approve;
+  - which operations come first.
+  - It also lifts the phase-1 non-goal "AI and chat authoring" (requirements §P2.7).
 
 ## Waiting on the user
 
