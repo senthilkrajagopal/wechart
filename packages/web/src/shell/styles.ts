@@ -10074,6 +10074,29 @@ nav.outline :focus-visible,
 .new-token__on { font-size: 12px; color: var(--wc-text-secondary); }
 .new-token__note,
 .new-token__acts { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+/* The token, shown once (T770; design 18, screen 3): the text and the
+   command in the code face, selectable, each with its Copy. */
+.token-once__made { margin: 0; font-size: 13px; color: var(--wc-text-secondary); }
+.token-once__warning { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 13px; }
+.token-once__warning svg { flex: none; margin-top: 2px; color: var(--wc-status-warning-icon); }
+.token-once__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 8px; }
+.token-once__row > .new-token__label { grid-column: 1 / -1; }
+.token-once__text,
+.token-once__command {
+  padding: 6px 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+  font-family: var(--wc-font-code);
+  font-size: 12px;
+  color: var(--wc-text-primary);
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+}
+.token-once__row .btn svg { margin-right: 4px; vertical-align: -2px; }
+.token-once__actions { align-items: center; }
+.token-once__closing { margin-right: auto; font-size: 12px; color: var(--wc-text-secondary); }
 `;
 
 export function installStyles(doc: Document = document): void {

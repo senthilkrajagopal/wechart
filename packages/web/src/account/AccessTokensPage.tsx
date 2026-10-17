@@ -1,13 +1,20 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { clockOf, dayOf, exactOf, whenOf } from '../shell/formatTime';
 import { hasWorkspace, ME_QUERY } from '../shell/me';
 import { StateLine } from '../shell/StatusIcon';
 import { NewTokenDialog } from './NewTokenDialog';
-import { SCOPES, TOKENS_QUERY, type AccessToken } from './tokensApi';
+import { TokenShownOnce } from './TokenShownOnce';
+import { SCOPES, TOKENS_QUERY, type AccessToken, type MadeToken } from './tokensApi';
 
 const DAY_MS = 86_400_000;
+
+/**
+ * The MCP server's address, as the command names it: this origin's `/mcp`
+ * until T774 gives the deployment's own MCP host (AC-476).
+ */
+const mcpUrl = () => `${window.location.origin}/mcp`;
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
@@ -34,6 +41,9 @@ export function AccessTokensPage() {
   const me = useQuery({ ...ME_QUERY, retry: false });
   const list = useQuery(TOKENS_QUERY);
   const [making, setMaking] = useState(false);
+  /** A token just made, its text shown once (T770, AC-430); null once closed. */
+  const [shown, setShown] = useState<MadeToken | null>(null);
+  const newToken = useRef<HTMLButtonElement>(null);
   const now = new Date();
   const single = me.data?.security === 'off';
 
@@ -42,6 +52,7 @@ export function AccessTokensPage() {
       <div className="account-page__head">
         <h1 className="workspace-title">Access tokens</h1>
         <button
+          ref={newToken}
           type="button"
           className="btn btn-primary"
           // Held until wechart says who is asking: which scopes are on offer depends on it.
@@ -140,8 +151,10 @@ export function AccessTokensPage() {
       {making && me.data !== undefined ? (
         <NewTokenDialog
           readWrite={hasWorkspace(me.data)}
-          onMade={() => {
+          onMade={(made) => {
+            // The dialog turns into the shown-once one, the new row behind it (T770).
             setMaking(false);
+            setShown(made);
             void queries.invalidateQueries({ queryKey: TOKENS_QUERY.queryKey });
           }}
           onClose={() => {
@@ -149,6 +162,19 @@ export function AccessTokensPage() {
           }}
         />
       ) : null}
+      {shown === null ? null : (
+        <TokenShownOnce
+          made={shown}
+          serverUrl={mcpUrl()}
+          onClose={() => {
+            // Gone for good: the text was held here alone (AC-430). Focus
+            // back to New token, which opened it all (rule 85): the dialog
+            // that opened this one is gone.
+            setShown(null);
+            newToken.current?.focus();
+          }}
+        />
+      )}
     </div>
   );
 }

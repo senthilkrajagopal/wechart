@@ -1590,11 +1590,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T769 (AC-430, AC-468, AC-469, AC-479) The Access tokens page at `/account/tokens`, from the account menu and the single-user chip, with its list and the New token dialog, as design 18 screens 1 and 2 draw them
 
-- [ ] T770 (AC-430) Show a new token's text once, with Copy and the filled-in Claude Code command, and ask before closing it uncopied, as design 18 screen 3 and state C draw it
-  - Lane: MCP
-  - Files: `packages/web/src/account/TokenShownOnce.tsx` (+ test), `packages/web/src/account/AccessTokensPage.tsx`, `e2e/security/access-tokens.spec.ts`.
-  - Failing test: `TokenShownOnce.test.tsx`: after Create token, the dialog shows the text, Copy, and `claude mcp add --transport http wechart <server URL> --header "Authorization: Bearer <text>"`; Done or Esc before Copy asks first, and after Copy closes at once; once closed, no page state and no request can show the text again (AC-430). The e2e confirms a reload of the page shows the row without the text.
-  - Depends on: T769
+- [x] T770 (AC-430) Show a new token's text once, with Copy and the filled-in Claude Code command, and ask before closing it uncopied, as design 18 screen 3 and state C draw it
 
 - [ ] T771 (AC-431) Revoke a token from the page, confirmed with no Undo, and list stopped tokens under "No longer working" with Remove, as design 18 states D and E draw them
   - Lane: MCP

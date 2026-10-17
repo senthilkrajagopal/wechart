@@ -49,12 +49,38 @@ test.describe('Access tokens, signed in (T769, AC-430)', () => {
     await dialog.getByRole('checkbox', { name: /^Workspace edit/ }).check();
     await dialog.getByRole('button', { name: 'Create token' }).click();
 
+    // T770 (AC-430; design 18, screen 3): its text, once, with the command filled in.
+    const shown = page.getByRole('dialog', { name: 'Copy your token now' });
+    const text = shown.getByRole('textbox', { name: 'Your token' });
+    await expect(text).toHaveValue(/^wct_[0-9a-f]{64}_[0-9a-f]{8}$/);
+    const token = await text.inputValue();
+    const server = new URL('/mcp', page.url()).href;
+    await expect(
+      shown.getByRole('textbox', { name: 'Add wechart to Claude Code, in a terminal' }),
+    ).toHaveValue(
+      `claude mcp add --transport http wechart ${server} --header "Authorization: Bearer ${token}"`,
+    );
+    // Done before any Copy asks first (C2); Close then closes it for good.
+    await shown.getByRole('button', { name: 'Done' }).click();
+    const asking = page.getByRole('alertdialog', { name: 'Close without copying?' });
+    await expect(asking.getByRole('button', { name: 'Go back and copy it' })).toBeFocused();
+    await asking.getByRole('button', { name: 'Close' }).click();
+    await expect(shown).toBeHidden();
+
     const row = page.getByRole('table', { name: 'Your tokens' }).getByRole('row', { name });
     await expect(row).toBeVisible();
     await expect(row.getByRole('listitem')).toHaveText(['Read', 'Workspace edit']);
     await expect(row.getByRole('cell').nth(3)).toContainText('in 30 days');
     await expect(row.getByRole('cell').nth(4)).toHaveText('Never');
-    await expect(page.locator('body')).not.toContainText('wct_');
+    expect(await page.content()).not.toContain(token.slice(4, 68));
+
+    // A reload shows the row, and nothing of its text (C3).
+    await page.reload();
+    await expect(row).toBeVisible();
+    expect(await page.content()).not.toContain(token.slice(4, 68));
+    expect(await (await page.request.get('/api/account/tokens')).text()).not.toContain(
+      token.slice(4, 68),
+    );
   });
 });
 

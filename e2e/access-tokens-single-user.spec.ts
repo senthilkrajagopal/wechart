@@ -39,6 +39,15 @@ test.describe('Access tokens with sign-in off (T769, AC-479)', () => {
     await dialog.getByText('7 days', { exact: true }).click();
     await expect(dialog.getByRole('radio', { name: '7 days' })).toBeChecked();
     await dialog.getByRole('button', { name: 'Create token' }).click();
+    // Its text, once (T770); closed uncopied, after the question.
+    const shown = page.getByRole('dialog', { name: 'Copy your token now' });
+    await expect(shown.getByRole('textbox', { name: 'Your token' })).toHaveValue(/^wct_/);
+    await shown.getByRole('button', { name: 'Done' }).click();
+    await page
+      .getByRole('alertdialog', { name: 'Close without copying?' })
+      .getByRole('button', { name: 'Close' })
+      .click();
+    await expect(shown).toBeHidden();
 
     const row = page.getByRole('table', { name: 'Your tokens' }).getByRole('row', { name });
     await expect(row).toBeVisible();

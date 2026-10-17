@@ -34,3 +34,34 @@
     - **Tests:**
       - Unit: `NewTokenDialog.test.tsx` (11), `AccessTokensPage.test.tsx` (8), `AccountMenu.test.tsx` (+2).
       - e2e on headless Chromium: `e2e/security/access-tokens.spec.ts` (2) and `e2e/access-tokens-single-user.spec.ts` (1).
+
+- [x] T770 (AC-430) Show a new token's text once, with Copy and the filled-in Claude Code command, and ask before closing it uncopied, as design 18 screen 3 and state C draw it
+  - Lane: MCP
+  - Files: `packages/web/src/account/TokenShownOnce.tsx` (+ test), `packages/web/src/account/AccessTokensPage.tsx`, `e2e/security/access-tokens.spec.ts`.
+  - Failing test: `TokenShownOnce.test.tsx`: after Create token, the dialog shows the text, Copy, and `claude mcp add --transport http wechart <server URL> --header "Authorization: Bearer <text>"`; Done or Esc before Copy asks first, and after Copy closes at once; once closed, no page state and no request can show the text again (AC-430). The e2e confirms a reload of the page shows the row without the text.
+  - Depends on: T769
+  - **Built 2026-10-17** (lane MCP). **AC-430 is ticked.** Its clauses and the tests that show them:
+    - the name, scope and expiry rules, the fields listed, and no copy in the database: `routes/access-tokens.test.ts`;
+    - the list: `AccessTokensPage.test.tsx`;
+    - shown once, and gone after it closes: `TokenShownOnce.test.tsx`, and the security e2e, which reloads and asks the API;
+    - asked before closing uncopied: `TokenShownOnce.test.tsx`, and the e2e's Done.
+    - **The dialog:** Create token turns New token into "Copy your token now", with the new row behind it.
+      - It shows what was made (the name, the scopes and the expiry day) and design 18's warning with its icon.
+      - The text and the Claude Code command appear in the code face, each in a labelled, read-only field that selects its contents on focus, with its own Copy. Copy reads "Copied" with a check afterwards, and a polite live region says "Copied".
+      - It ends with "Closing hides it for good." and Done.
+      - Claude.ai and Claude Desktop are left out, because AC-445 is retired (18-Q7).
+    - **Closing:**
+      - Before either Copy, Done or Esc asks "Close without copying?", worded as C2, with focus on "Go back and copy it". Esc at that question goes back.
+      - After either Copy, Done or Esc closes at once.
+      - A Copy the browser refuses says so, and asks the person to copy by hand. Done still asks after a refused Copy.
+      - Leaving the page while nothing is copied (a reload, Back or a closed tab) gets the browser's own `beforeunload` question, as the new data source wizard does. This came from the cold review, under AC-430's "closing … SHALL ask first". Back always leaves the document here, because the account menu opens the page with a full load.
+      - On close, focus goes back to New token.
+    - **Where the text lives:**
+      - It is held only in the page's `shown` state, which is cleared on close.
+      - The New token mutation has `gcTime: 0`, so the mutation cache drops the answer that carries it.
+      - The test checks the query and mutation caches, and the page's HTML, after close.
+    - **The server URL (the lane's call, overturnable):** for now the page uses `window.location.origin` + `/mcp`. T774 replaces it with the deployment's MCP host, or with "MCP isn't set up".
+    - **The e2e** takes the Done → Close path and never uses the clipboard, so it runs in all three browsers. T769's unit test now looks for the text in the list's table, since the shown-once dialog over it holds the text by design.
+    - **Tests:**
+      - Unit: `TokenShownOnce.test.tsx` (9), and `AccessTokensPage.test.tsx` (1 changed).
+      - e2e: `e2e/security/access-tokens.spec.ts` (extended) and `e2e/access-tokens-single-user.spec.ts` (now closes the dialog).

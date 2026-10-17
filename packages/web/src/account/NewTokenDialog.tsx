@@ -56,6 +56,8 @@ export function NewTokenDialog({
   const [asking, setAsking] = useState(false);
   const make = useMutation({
     mutationFn: makeToken,
+    // Its answer holds the token's text: the cache keeps none of it (T770, AC-430).
+    gcTime: 0,
     onSuccess: (made) => {
       onMade(made);
     },

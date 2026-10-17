@@ -158,8 +158,10 @@ describe('the Access tokens page (T769, AC-430; design 18, screen 1)', () => {
     await waitFor(() => expect(rows()).toHaveLength(3));
     expect(asked).toContain('POST /api/account/tokens');
     expect(within(rows()[1]!).getAllByRole('cell')[0]!.textContent).toBe('Claude Code · desktop');
-    // The text the API answered is nowhere in the list (T770 shows it, once).
-    expect(document.body.textContent).not.toContain(TEXT);
+    // The text the API answered is nowhere in the list: only the shown-once
+    // dialog over it holds it (T770).
+    expect(screen.getByRole('table', { name: 'Your tokens' }).innerHTML).not.toContain(TEXT);
+    expect(screen.getByRole('dialog', { name: 'Copy your token now' }).textContent).toContain(TEXT);
   });
 
   it('gives a read-only user’s dialog the other scopes disabled (AC-469)', async () => {
