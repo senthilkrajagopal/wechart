@@ -33,7 +33,10 @@ test.describe('signed in as writer, through Dex in docker-compose', () => {
     await account.click();
     const panel = page.getByTestId('account-panel');
     await expect(panel).toContainText('writer@wechart.test');
-    await expect(panel.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
+    // Opening focuses the first item: Access tokens, above Sign out since
+    // T769 (design 18, A1); Sign out is still offered, after it.
+    await expect(panel.getByRole('menuitem')).toHaveText(['Access tokens', 'Sign out']);
+    await expect(panel.getByRole('menuitem', { name: 'Access tokens' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(account).toBeFocused();
   });
