@@ -82,6 +82,15 @@ export function legendFor(spec: RenderSpec): EChartsOption {
   return {
     legend: {
       top: 0,
+      // The prototype's chrome() (T683, CMP-12; research/echarts-axis-legend-
+      // bars.md §2–3): at the left, each swatch a 10 × 10 rounded square
+      // 8 px from the next, with no stroke inherited from its series.
+      left: 0,
+      icon: 'roundRect',
+      itemWidth: 10,
+      itemHeight: 10,
+      itemGap: 8,
+      itemStyle: { borderWidth: 0 },
       type: 'scroll',
       // Toggling visibility from the legend belongs to the interaction modes
       // of AC-070 and AC-071, not to drawing.

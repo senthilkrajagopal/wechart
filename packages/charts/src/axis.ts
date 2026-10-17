@@ -232,13 +232,32 @@ export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOptio
   const xTime = timeFormatOf('xAxis', x);
   const yTime = timeFormatOf('yAxis', y);
 
+  /**
+   * Whole-number ticks on an axis whose every measure is a count (T683,
+   * DSH-02; design 04 pin 6: "never 0.2 for a count"): `minInterval: 1`
+   * (research/echarts-axis-legend-bars.md §1). Only counts, the
+   * coordinator's call: a fraction's axis would collapse to 0 and 1. A
+   * Customize bound that isn't whole keeps its own end tick, as typed.
+   */
+  const counted = (members: readonly string[]) => allCounts(spec, members);
+  const whole = { minInterval: 1 };
+  const xWhole = (bothValues ? counted(membersOn(spec.encoding, 'x')) : valueKey === 'xAxis' && counted(measures))
+    ? whole
+    : undefined;
+  const yWhole =
+    isValueAxis('yAxis') && (bothValues || valueKey === 'yAxis') && counted(measures)
+      ? whole
+      : undefined;
+
   if (
     x === undefined &&
     y === undefined &&
     memberFormat === undefined &&
     xFormat === undefined &&
     xTime === undefined &&
-    yTime === undefined
+    yTime === undefined &&
+    xWhole === undefined &&
+    yWhole === undefined
   ) {
     return option;
   }
@@ -276,11 +295,44 @@ export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOptio
 
   return {
     ...option,
-    ...merge(
-      'xAxis',
-      x,
-      bothValues ? (xFormat ?? {}) : valueKey === 'xAxis' ? (memberFormat ?? {}) : (xTime ?? {}),
-    ),
-    ...merge('yAxis', y, valueKey === 'yAxis' ? (memberFormat ?? yTime ?? {}) : (yTime ?? {})),
+    ...merge('xAxis', x, {
+      ...xWhole,
+      ...(bothValues ? (xFormat ?? {}) : valueKey === 'xAxis' ? (memberFormat ?? {}) : (xTime ?? {})),
+    }),
+    ...merge('yAxis', y, {
+      ...yWhole,
+      ...(valueKey === 'yAxis' ? (memberFormat ?? yTime ?? {}) : (yTime ?? {})),
+    }),
   };
 }
+
+/**
+ * Whether every one of these measures is a count, so their axis is ticked in
+ * whole numbers (T683, DSH-02). A quick calculation's values sit under its
+ * count's own name, and "% of total" is a fraction, so a calculated measure
+ * never counts (T683's review).
+ */
+export function allCounts(spec: RenderSpec, members: readonly string[]): boolean {
+  return (
+    members.length > 0 &&
+    members.every(
+      (member) =>
+        spec.calculated?.[member] === undefined &&
+        COUNT_TYPES.has(spec.measureTypes?.[member] ?? ''),
+    )
+  );
+}
+
+/**
+ * Cube's count aggregations: their values are whole numbers (T683; the
+ * coordinator's call). `/v1/meta`'s aggType spells them in camelCase
+ * (research/cross-highlight.md, "Measure metadata"); the model's snake_case
+ * spellings are taken too.
+ */
+const COUNT_TYPES = new Set([
+  'count',
+  'countDistinct',
+  'countDistinctApprox',
+  'count_distinct',
+  'count_distinct_approx',
+]);

@@ -77,14 +77,14 @@ const SIDE_ROOM_PX = 120;
 
 /**
  * A pie's side legend's names, kept within its room (T309): the room less the
- * legend's 5 px padding each side, its 25 px icon and the 5 px before the
- * name (research/echarts.md, "A pie's layout box, and a legend's text
- * width"). A longer name ends in "…" rather than running over the ring,
- * which the legend is the only key to. A chart on axes keeps its names
- * whole, as before.
+ * legend's 5 px padding each side, its 10 px icon (T683) and the 5 px before
+ * the name (research/echarts.md, "A pie's layout box, and a legend's text
+ * width"; research/echarts-axis-legend-bars.md §2). A longer name ends in
+ * "…" rather than running over the ring, which the legend is the only key
+ * to. A chart on axes keeps its names whole, as before.
  */
 const PIE_SIDE_NAMES = {
-  textStyle: { width: SIDE_ROOM_PX - 2 * 5 - 25 - 5, overflow: 'truncate' },
+  textStyle: { width: SIDE_ROOM_PX - 2 * 5 - 10 - 5, overflow: 'truncate' },
 };
 
 /** Where a legend goes, and the room the plot leaves it. */
@@ -159,7 +159,16 @@ export function applyCustomize(option: EChartsOption, spec: RenderSpec): ECharts
     } else if (legend.position !== undefined && legend.position !== 'top') {
       next = {
         ...next,
-        legend: { ...without(record(next['legend']), 'top'), ...PLACED[legend.position].legend },
+        // Every edge taken off first: given left and right both, ECharts
+        // keeps left (research/echarts-axis-legend-bars.md §3), and a legend
+        // placed right would be drawn at the left (T683).
+        legend: {
+          ...without(
+            without(without(without(record(next['legend']), 'top'), 'left'), 'right'),
+            'bottom',
+          ),
+          ...PLACED[legend.position].legend,
+        },
         grid: { ...grid, top: PROTOTYPE_GRID.top, ...PLACED[legend.position].grid },
       };
     }

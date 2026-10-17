@@ -7,6 +7,7 @@ import { CHART_MISSING, formatsFrom, pickedWithFormats } from '../../dashboard/c
 import { PencilIcon } from '../../dashboard/edit/EditChrome';
 import { NOTHING_CHOSEN } from '../../dashboard/edit/templates';
 import { specFor } from '../../dashboard/DashboardPage';
+import { measureTypesOf } from '../../editor/fields';
 import { allMembers } from '../../filters/FilterBar';
 import { metaQueryOf } from '../../query/meta';
 import { hasWorkspace, ME_QUERY } from '../../shell/me';
@@ -224,6 +225,8 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
               shortTitles: Object.fromEntries(
                 allMembers(meta.data).map((member) => [member.name, member.shortTitle]),
               ),
+              // A count's axis in whole numbers (T683, DSH-02).
+              measureTypes: measureTypesOf(meta.data),
             },
           ),
     [spec, drawn.data?.document, meta.data],
@@ -591,6 +594,8 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
                     height={360}
                     asOf={drawn.data?.answered?.lastRefreshTime}
                     served={drawn.data?.answered}
+                    // A KPI alone on its page, at text-kpi-solo (T683; design 06 state B).
+                    kpiSolo
                     rowsTotal={drawn.data?.answered?.total}
                   />
                 </div>

@@ -180,7 +180,13 @@ export function itemsInShape(
           overlaid ? (columns[0] ?? '') : (series.stack ?? `alone-${String(seriesIndex)}`),
         ),
       );
-      const width = laidBarWidth(band, 1, Math.max(1, columns.length));
+      // As drawn: never past its series' cap (T683; wechart's 36 px), the
+      // group centred all the same (research/echarts-axis-legend-bars.md §4).
+      const cap = (series as { barMaxWidth?: unknown }).barMaxWidth;
+      const width = Math.min(
+        laidBarWidth(band, 1, Math.max(1, columns.length)),
+        typeof cap === 'number' ? cap : Number.POSITIVE_INFINITY,
+      );
       const group = columns.length * width + (columns.length - 1) * 0.1 * width;
       const centre = onCategory(index) - group / 2 + width / 2 + column * 1.1 * width;
       if (!Number.isFinite(centre)) return;

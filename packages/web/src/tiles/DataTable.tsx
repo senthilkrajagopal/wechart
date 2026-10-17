@@ -53,10 +53,11 @@ export interface DataTableProps {
 
 const DEFAULT_HEIGHT = 320;
 /**
- * Fixed, so the native table layout survives virtualisation: the prototype's
- * `.grid-table.comfy` row, as its tiles draw tables (T304).
+ * Fixed, so the native table layout survives virtualisation: §4's dense
+ * 24 px row, as the editor's results grid draws it (T683; R76 dashboard-Q4;
+ * the prototype's `.comfy` 34 before it, T304).
  */
-const ROW_HEIGHT = 34;
+const ROW_HEIGHT = 24;
 
 export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: DataTableProps) {
   const scroller = useRef<HTMLDivElement | null>(null);

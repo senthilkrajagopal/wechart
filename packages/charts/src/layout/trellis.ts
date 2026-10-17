@@ -14,9 +14,10 @@
  */
 import { distinctValues, formatterFor, memberOn, membersOn, type RenderSpec } from '@wechart/core';
 
+import { allCounts } from '../axis';
 import { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 import { labelOf, modelWriter, nameWriter } from '../modelWriter';
-import { DEFAULT_CANVAS, gapFor, laidBarWidth, type Canvas } from '../series/bar';
+import { BAR_MAX_PX, DEFAULT_CANVAS, drawnBarWidth, gapFor, type Canvas } from '../series/bar';
 
 export function isTrellisType(chartType: string): boolean {
   return chartType === 'trellis';
@@ -138,6 +139,11 @@ export function trellisOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS)
       gridIndex: index,
       type: 'value' as const,
       ...(shared && sharedMax !== undefined ? { min: 0, max: sharedMax } : {}),
+      // A count's panel ticked in whole numbers, as any count's axis (T683's
+      // review, DSH-02): the shared axis settings leave this array alone.
+      ...(allCounts(spec, [byMetric ? (panels[index] ?? measure) : measure])
+        ? { minInterval: 1 }
+        : {}),
       // The measure's format on every panel's values (AC-046, T195). A trellis
       // has an array of axes, which the shared axis settings leave alone, so
       // it wore none at all. By metric, each panel its own metric's (T510).
@@ -155,13 +161,15 @@ export function trellisOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS)
       xAxisIndex: index,
       yAxisIndex: index,
       data: series[index] ?? [],
+      // At most 36 px, as every bar (T683, CMP-12).
+      barMaxWidth: BAR_MAX_PX,
       itemStyle: {
         color: palette[0],
         borderColor: surface,
         // The gap where it leaves each bar its colour (AC-210): a panel's
         // category axis runs its cell's width, set here rather than by
         // ECharts' default grid.
-        borderWidth: gapFor(laidBarWidth((canvas.width * cellWidth) / 100, categories.length, 1)),
+        borderWidth: gapFor(drawnBarWidth((canvas.width * cellWidth) / 100, categories.length, 1)),
         borderRadius: [MARK.cornerRadiusPx, MARK.cornerRadiusPx, 0, 0],
       },
     })),

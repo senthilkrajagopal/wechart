@@ -6646,8 +6646,10 @@ main:has(.dashboard) {
    charts.js tableHtml and pivotHtml): 34 px rows. A pivot's corner sticks
    with the heads, on their ground; its row names are pivotHtml's td.strong,
    in 600 on the row's own ground, as are its totals. */
+/* A table or pivot tile's rows: §4's dense 24 px row, as the editor's
+   results grid (T683; R76 dashboard-Q4), where the prototype's were 34. */
 .grid-table.comfy tbody td,
-.grid-table.comfy tfoot td { height: 34px; }
+.grid-table.comfy tfoot td { height: 24px; }
 .grid-table thead td {
   height: 28px;
   padding: 0 8px;
@@ -6659,7 +6661,7 @@ main:has(.dashboard) {
 .grid-table tbody th,
 .grid-table tfoot th { background: transparent; }
 .grid-table.comfy tbody th,
-.grid-table.comfy tfoot th { height: 34px; }
+.grid-table.comfy tfoot th { height: 24px; }
 .grid-table tbody tr:hover th { background: var(--wc-bg-hover); }
 .grid-table__total { font-weight: 600; }
 /* A table's row or a pivot's cell marked in part (T453, R43): the
@@ -6955,6 +6957,9 @@ button.filter-pill__summary {
   cursor: pointer;
 }
 .filter-pill__caret { color: var(--wc-text-muted); font-weight: 400; }
+/* Its field at 400, what it holds at 600 (T683; R76 components-Q2). */
+.filter-pill__label { font-weight: 400; }
+.filter-pill__value { font-weight: 600; }
 button.filter-pill__clear {
   width: 24px;
   min-width: 24px;
@@ -7056,7 +7061,15 @@ button.filter-pill__clear {
   border-color: var(--wc-accent);
   color: var(--wc-text-on-accent);
 }
-.link-tile--text { color: var(--wc-accent); text-decoration: underline; }
+.link-tile--text { color: var(--wc-accent); text-decoration: underline; font-weight: 600; }
+.link-tile--primary { font-weight: 600; }
+/* Link and image tiles draw no tile chrome: no padding, border or ground
+   (T683; direction §2; the prototype's dashboard.js 322, 329; CMP-13). */
+.dashboard:not([data-editing='true']) .grid-tile:has(> .link-tile, > .image-tile) {
+  padding: 0;
+  border: 0;
+  background: none;
+}
 .tile-properties__found { margin: 0; padding: 0; list-style: none; }
 .tile-properties__found li { padding: 4px 8px; cursor: pointer; }
 .tile-properties__found li:hover,
@@ -7151,6 +7164,17 @@ button.filter-pill__clear {
    row by a pixel each way, so the head stays the prototype's 22 (T252,
    mismatch 9) with the badges beside it. */
 .tile-head .tile-head__action { margin: -1px 0 -1px auto; }
+/* A table tile's rows, "626 rows · first 100", at the head's end in xs muted
+   tabular figures (T683; design 04 pin 7). */
+.tile-head__count {
+  flex: none;
+  margin-left: auto;
+  color: var(--wc-text-muted);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 /* "Table view" keeps its words on one line; the title and badge give way. */
 .tile-head .tile-head__action { flex: none; white-space: nowrap; }
 /* In a narrow head — a three- or four-column tile, or a tile in a phone's
@@ -7573,17 +7597,18 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 /* What a tile says of its answer, under its head (T253's review): as tall as
    its lines, the chart taking the rest. */
 .tile-notes { flex: none; margin-bottom: 4px; }
-/* The KPI, as the prototype draws it (T300, AC-187, direction rule 1): its
-   name in .xs.sec.strong over its value in .kpi-val, 32 px at 600 in tabular
-   numerals, on a 36 px line in a dashboard's .dtile.kpi, which is padded
-   12 16 with 4 px under its head. */
+/* The KPI in the KPI ramp (T683; design 04 pin 3; R76 dashboard-Q3): its
+   label above in the tile-title style, 14/20/600 in the primary ink, its
+   value text-kpi, 32/40/600 in tabular numerals; the tile padded 16 as every
+   tile is (rule 16). Alone on its page, text-kpi-solo, 40/52, centred
+   (design 06 state B). */
 .kpi { display: flex; flex-direction: column; min-height: 0; }
 .kpi p { margin: 0; }
 .kpi__label {
-  font-size: 12px;
-  line-height: 16px;
+  font-size: var(--wc-text-sm-size);
+  line-height: 20px;
   font-weight: 600;
-  color: var(--wc-text-secondary);
+  color: var(--wc-text-primary);
 }
 .kpi__value {
   font-size: 32px;
@@ -7592,9 +7617,14 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
-.grid-tile:has(> .chart-tile .kpi) { padding: 12px 16px; }
-.grid-tile:has(> .chart-tile .kpi) .tile-head { margin-bottom: 4px; }
+.kpi--solo { align-items: center; justify-content: center; height: 100%; text-align: center; }
+.kpi--solo .kpi__value { font-size: 40px; line-height: 52px; text-align: center; }
+/* On a dashboard tile, the prototype's 36 px line, and no gap under the
+   head: padded 16 now and its label on a 20 px line, a KPI tile at its saved
+   height keeps its value and its badge inside it (T683; 4 px differences,
+   accepted under R77). */
 .grid-tile .kpi__value { line-height: 36px; }
+.grid-tile:has(> .chart-tile .kpi) .tile-head { margin-bottom: 0; }
 /* A Markdown or Image element's head while editing: the prototype's
    tile-head naming its kind in xs muted, the content under it
    (dashboard.js:319, :322). */

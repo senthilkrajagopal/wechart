@@ -137,6 +137,23 @@ describe('what a shape touches on a chart', () => {
     ]);
   });
 
+  // T683 (CMP-12): a bar capped at its series' barMaxWidth is taken as drawn.
+  it('takes a capped bar by its drawn width, centred in its band', () => {
+    const capped = bars();
+    const series = (capped.series as Record<string, unknown>[]).map((one) => ({
+      ...one,
+      barMaxWidth: 36,
+    }));
+    const option = { ...capped, series };
+    // Drawn 36 px wide, centred on 50: 32 to 68. Its laid 69 px would reach 70.
+    expect(
+      itemsInShape(converter, option, { kind: 'rect', x0: 33, y0: 290, x1: 38, y1: 299 }),
+    ).toEqual([{ name: 'completed', seriesName: 'Count' }]);
+    expect(
+      itemsInShape(converter, option, { kind: 'rect', x0: 70, y0: 290, x1: 80, y1: 299 }),
+    ).toEqual([]);
+  });
+
   it('takes a grouped bar by its own slot in the band, not its neighbour', () => {
     const option: EChartsOption = {
       xAxis: { type: 'category', data: ['a', 'b'] },

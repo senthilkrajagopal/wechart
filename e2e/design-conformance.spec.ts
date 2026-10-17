@@ -3806,29 +3806,32 @@ test.describe('T300 and T304: KPI, table and pivot tiles', () => {
       'font-variant-numeric': 'tabular-nums',
       'letter-spacing': '-0.32px',
     });
-    // kpiHtml: <div class="xs sec strong">{title}</div> above the value.
+    // Above the value in the tile-title style, 14/20/600 in the primary ink
+    // (T683; R76 dashboard-Q3; design 04 pin 3), where kpiHtml's was xs sec.
     const label = tile.getByTestId('kpi-label');
     expect(await style(label, 'font-size', 'line-height', 'font-weight', 'color')).toEqual({
-      'font-size': '12px',
-      'line-height': '16px',
+      'font-size': '14px',
+      'line-height': '20px',
       'font-weight': '600',
-      color: await token(page, 'text-secondary'),
+      color: await token(page, 'text-primary'),
     });
     const labelBox = await label.boundingBox();
     const valueBox = await value.boundingBox();
     expect((labelBox?.y ?? 0) + (labelBox?.height ?? 0)).toBeLessThanOrEqual(valueBox?.y ?? 0);
 
-    // .dtile.kpi { padding: 12px 16px } .dtile.kpi .tile-head { margin-bottom: 4px }
+    // Padded 16 as every tile is (rule 16; T683, R76 dashboard-Q3), where the
+    // prototype's .dtile.kpi was 12 16; nothing under its head, so a KPI tile
+    // at its saved height still holds its value (accepted-differences.md).
     expect(
       await style(tile, 'padding-top', 'padding-right', 'padding-bottom', 'padding-left'),
     ).toEqual({
-      'padding-top': '12px',
+      'padding-top': '16px',
       'padding-right': '16px',
-      'padding-bottom': '12px',
+      'padding-bottom': '16px',
       'padding-left': '16px',
     });
     expect(await style(tile.locator('.tile-head'), 'margin-bottom')).toEqual({
-      'margin-bottom': '4px',
+      'margin-bottom': '0px',
     });
   });
 
@@ -3860,7 +3863,9 @@ test.describe('T300 and T304: KPI, table and pivot tiles', () => {
       'padding-left': '8px',
     });
     expect((await table.locator('thead tr').first().boundingBox())?.height).toBeCloseTo(28, 0);
-    expect((await table.locator('tbody tr').first().boundingBox())?.height).toBeCloseTo(34, 0);
+    // §4's dense 24 px row, as the editor's results grid (T683; R76
+    // dashboard-Q4), where the prototype's .comfy row was 34.
+    expect((await table.locator('tbody tr').first().boundingBox())?.height).toBeCloseTo(24, 0);
     expect(
       await style(measureCell, 'font-size', 'font-variant-numeric', 'text-align', 'padding-right'),
     ).toEqual({
@@ -3871,7 +3876,7 @@ test.describe('T300 and T304: KPI, table and pivot tiles', () => {
     });
   };
 
-  test('a table tile is the prototype’s comfy grid table: a sticky head, 34 px rows, measures set right', async ({
+  test('a table tile is the grid table: a sticky head, 24 px rows, measures set right', async ({
     page,
   }) => {
     const tile = page.locator('[data-tile="tile-table"]');

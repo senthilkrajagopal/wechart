@@ -7,6 +7,7 @@ import { dashboardOf, type StoredDocument } from '../../dashboard/model/stored';
 import { chartIdsOf } from '../../dashboard/model/document';
 import { ReviewMarks } from '../../dashboard/grid/reviewMarks';
 import { tileChangesOf } from './tileChanges';
+import { measureTypesOf } from '../../editor/fields';
 import { allMembers } from '../../filters/FilterBar';
 import { formatsFrom, pickedWithFormats } from '../../dashboard/chartSpec';
 import { metaQueryOf } from '../../query/meta';
@@ -665,6 +666,8 @@ function ChartPreview({
               shortTitles: Object.fromEntries(
                 allMembers(meta.data).map((member) => [member.name, member.shortTitle]),
               ),
+              // A count's axis in whole numbers (T683, DSH-02).
+              measureTypes: measureTypesOf(meta.data),
             },
           ),
     [spec, drawn.data?.document, meta.data],

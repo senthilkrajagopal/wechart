@@ -43,6 +43,8 @@ export interface CompileOptions {
   readonly titles?: Readonly<Record<string, string>>;
   /** Each member's short title, for a one-source chart's legend and KPI label (T403, AC-220). */
   readonly shortTitles?: Readonly<Record<string, string>>;
+  /** Each measure's aggregation from the model (T683; `RenderSpec.measureTypes`). */
+  readonly measureTypes?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -174,6 +176,7 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
         ...(options.formats === undefined ? {} : { formats: options.formats }),
         ...(options.titles === undefined ? {} : { titles: options.titles }),
         ...(options.shortTitles === undefined ? {} : { shortTitles: options.shortTitles }),
+        ...(options.measureTypes === undefined ? {} : { measureTypes: options.measureTypes }),
         ...(Object.keys(calculated).length === 0 ? {} : { calculated }),
         // By the grain each was asked at, chosen or not (AC-188, AC-216).
         granularities,

@@ -168,3 +168,9 @@ Explore's Q7 was settled by design 15 before this round (R37), so it is not amon
 | jobs-J1 | What does the refresh worker's panel show a Super-Admin (F2) and a member (F3)? | **Exactly as drawn.** A Super-Admin gets the worker and module panel with Cube's error, and no summary line. A member gets the status lines only: the badge, and that a module failed, without the error. A member sees no tables and no "Model revision". | The drawings match design 16 Q4's default, which the user accepted in R56. The module tables, with their opaque module ids, are what the drawing deliberately withholds, so the caption's "the same" is the loose part. | No |
 | jobs-J2 | Below 1,024 px, is the Jobs and Schedules list stacked rows or a table? | **Stacked rows, as G8 draws them,** keeping list or table semantics for screen readers. For example, the stacked blocks take `role=table` with `rowgroup` and `row`, not display changes that strip the semantics. | G8 is drawn and approved (R56). | No |
 | jobs-J3 | Is a refresh key's pane laid out in two columns or one? | **One column, as built.** | D5 is drawn wider than the 400 px pane it lives in. Two columns of about 180 px would squeeze the `refresh_key` block and the "Mon 5 Oct 07:00 · 05:00 UTC" run rows into wraps. The drawing doesn't fit its space, so one column stays. | Yes: D5's two columns |
+
+## Later decisions (coordinator, under the user's R76 delegation)
+
+| ID | Question | Decision | Why | Departs |
+|---|---|---|---|---|
+| CMP-10 folder crumb (T683) | Should the dashboard header's folder crumb be a plain muted span, as the prototype draws it? | **No: it stays a link to its folder.** | AC-195 requires the crumb to navigate to its folder. The spec wins over the drawing. | Yes: the prototype's `span.muted` |

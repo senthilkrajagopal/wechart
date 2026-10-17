@@ -18,7 +18,14 @@ import { seriesOf, type RenderSpec } from '@wechart/core';
 import { colourFor } from '../colours';
 import { plotEdgesOf } from '../customize';
 import { PROTOTYPE_GRID } from '../layout/grid';
-import { categoryAxisPx, DEFAULT_CANVAS, gapFor, laidBarWidth, type Canvas } from './bar';
+import {
+  BAR_MAX_PX,
+  categoryAxisPx,
+  DEFAULT_CANVAS,
+  drawnBarWidth,
+  gapFor,
+  type Canvas,
+} from './bar';
 import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
 export function isComboType(chartType: string): boolean {
@@ -49,13 +56,15 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
             type: 'bar' as const,
             name: one.name,
             data: [...one.values],
+            // At most 36 px, as every bar (T683, CMP-12).
+            barMaxWidth: BAR_MAX_PX,
             itemStyle: {
               color: colour,
               borderColor: surface,
               // One bar series, a bar per category, its gap kept only where
               // it leaves the bar its colour on this canvas (AC-210).
               borderWidth: gapFor(
-                laidBarWidth(
+                drawnBarWidth(
                   categoryAxisPx(
                     canvas,
                     false,

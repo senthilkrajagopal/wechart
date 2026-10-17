@@ -56,6 +56,7 @@ import {
   type ReactNode,
 } from 'react';
 
+import { measureTypesOf } from '../editor/fields';
 import type { TileSize } from '../editor/PreviewFrame';
 import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
 import { DrillCrumb, type DrilledView } from './drill/DrillCrumb';
@@ -2172,6 +2173,8 @@ export function DashboardView({
   const itemKind = queryItem?.kind ?? 'dashboard';
   const itemId = queryItem?.id ?? dashboardId;
   const item = useMemo<QueryItem>(() => ({ kind: itemKind, id: itemId }), [itemKind, itemId]);
+  /** Each measure's aggregation, so a count's axis is ticked in whole numbers (T683, DSH-02). */
+  const measureTypes = useMemo(() => measureTypesOf(model), [model]);
   /**
    * A shared one is edited in a copy in My workspace, never in place (T348,
    * AC-278): no Edit, no gear, no tile's ✎ and no "Start editing". Unlike
@@ -2913,7 +2916,8 @@ export function DashboardView({
   };
 
   // Formatted after the drafts and filters are in, so those tiles are too —
-  // and named by the model's titles (AC-220).
+  // and named by the model's titles (AC-220), with each measure's aggregation
+  // so a count's axis is ticked in whole numbers (T683, DSH-02).
   const formatted = useMemo(() => {
     const written =
       formats === undefined ? withFiltered.specs : withFormats(withFiltered.specs, formats);
@@ -2923,10 +2927,10 @@ export function DashboardView({
       : Object.fromEntries(
           Object.entries(written).map(([id, spec]) => [
             id,
-            withMemberLabels(spec, { titles, shortTitles }),
+            withMemberLabels(spec, { titles, shortTitles, measureTypes }),
           ]),
         );
-  }, [withFiltered.specs, formats, titles, shortTitles]);
+  }, [withFiltered.specs, formats, titles, shortTitles, measureTypes]);
 
   /**
    * A click on a mark (AC-117): the selection from that tile, replacing
@@ -4181,7 +4185,7 @@ export function DashboardView({
         ...(state.kind === 'done'
           ? {
               // Written with the model's formats and titles, as every tile is (T270's review).
-              spec: withMemberLabels(state.spec, { formats, titles, shortTitles }),
+              spec: withMemberLabels(state.spec, { formats, titles, shortTitles, measureTypes }),
               ...(state.answered === undefined ? {} : { answered: state.answered }),
             }
           : {}),

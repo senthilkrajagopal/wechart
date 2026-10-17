@@ -48,7 +48,9 @@ function stackOf(svg: string): string[] {
   const byColour = Object.fromEntries(
     Object.entries(COLOURS).map(([name, colour]) => [colour, name]),
   );
-  const marks = marksOf(svg, Object.values(COLOURS));
+  // The bars, not the legend's swatches in its top 32 px band, which sit at
+  // the left since T683 (CMP-12).
+  const marks = marksOf(svg, Object.values(COLOURS)).filter((mark) => mark.top >= 32);
   const first = Math.min(...marks.map((mark) => mark.left));
   return marks
     .filter((mark) => Math.abs(mark.left - first) < 1)

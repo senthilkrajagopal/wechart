@@ -162,6 +162,13 @@ export interface RenderSpec {
    */
   readonly shortTitles?: Readonly<Record<string, string>>;
   /**
+   * Each measure's aggregation, as the model declares it (`count`, `sum`, …):
+   * an axis of counts alone is ticked in whole numbers (T683, DSH-02;
+   * research/echarts-axis-legend-bars.md §1). A measure absent here is
+   * drawn as any other.
+   */
+  readonly measureTypes?: Readonly<Record<string, string>>;
+  /**
    * Each measure whose values Cube computed as a quick calculation (AC-048),
    * by the measure: what its name gains, and how its values are written. The
    * rows hold the calculated values under the measure's own name. Absent when

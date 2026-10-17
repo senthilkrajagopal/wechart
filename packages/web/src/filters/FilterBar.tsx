@@ -338,10 +338,18 @@ function Filters({
         // Only a filter with a field has a value to set.
         const open = openId === filter.id && member !== undefined;
         const popover = `filter-popover-${filter.id}`;
-        const summary =
-          member === undefined
-            ? `${kind?.label ?? 'Filter'}: choose a field…`
-            : `${member.title}: ${summaryOf(filter.widget, value)}`;
+        // Its field at 400 and what it holds at 600, as design 04 draws a
+        // pill (T683; R76 components-Q2). The words read as before.
+        const summary = (
+          <>
+            <span className="filter-pill__label">
+              {member === undefined ? (kind?.label ?? 'Filter') : member.title}:
+            </span>{' '}
+            <span className="filter-pill__value">
+              {member === undefined ? 'choose a field…' : summaryOf(filter.widget, value)}
+            </span>
+          </>
+        );
 
         return (
           /**

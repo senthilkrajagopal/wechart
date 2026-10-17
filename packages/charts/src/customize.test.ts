@@ -173,11 +173,11 @@ describe('a legend beside a pie or donut (T309)', () => {
     palette: PALETTE,
     options,
   });
-  /** The ring's extent, and the legend's swatches (25 × 14). */
+  /** The ring's extent, and the legend's swatches (10 × 10 since T683, CMP-12). */
   const drawn = (options: Record<string, unknown>) => {
     const marks = marksOf(renderToSvg(optionFor(donut(options)), TILE), PALETTE);
     const swatch = (mark: (typeof marks)[number]) =>
-      Math.round(mark.right - mark.left) === 25 && Math.round(mark.bottom - mark.top) === 14;
+      Math.round(mark.right - mark.left) === 10 && Math.round(mark.bottom - mark.top) === 10;
     const ring = marks.filter((mark) => !swatch(mark));
     return {
       left: Math.min(...ring.map((mark) => mark.left)),
@@ -202,8 +202,8 @@ describe('a legend beside a pie or donut (T309)', () => {
   it('keeps a pie’s side legend’s names within its room, and a bar chart’s whole', () => {
     type WithText = { legend?: { textStyle?: { width?: unknown; overflow?: unknown } } };
     const legend = (optionFor(donut({ legend: { position: 'right' } })) as WithText).legend;
-    // 120 less the legend's 5 px padding each side, its 25 px icon and 5 px gap.
-    expect(legend?.textStyle).toMatchObject({ width: 80, overflow: 'truncate' });
+    // 120 less the legend's 5 px padding each side, its 10 px icon (T683) and 5 px gap.
+    expect(legend?.textStyle).toMatchObject({ width: 95, overflow: 'truncate' });
     const bars = (optionFor(twoSeries({ legend: { position: 'right' } })) as WithText).legend;
     expect(bars?.textStyle?.overflow).toBeUndefined();
   });

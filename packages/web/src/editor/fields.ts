@@ -140,6 +140,20 @@ export function titlesOf(meta: unknown): Record<string, string> {
 }
 
 /**
+ * Each measure's aggregation from the model (`count`, `sum`, …), for every
+ * cube and view: an axis of counts alone is ticked in whole numbers (T683,
+ * DSH-02). A measure with no aggregation said is left out.
+ */
+export function measureTypesOf(meta: unknown): Record<string, string> {
+  const types: Record<string, string> = {};
+  for (const cube of cubesFrom(meta))
+    for (const member of membersOf(meta, cube.name))
+      if (member.kind === 'measure' && member.aggType !== undefined && !(member.name in types))
+        types[member.name] = member.aggType;
+  return types;
+}
+
+/**
  * Each shown member's short title ("Count" for "Orders Count"), for where its
  * cube is evident: a one-source chart's legend and KPI label (T403, AC-220).
  */

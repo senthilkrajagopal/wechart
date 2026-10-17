@@ -6,6 +6,7 @@ import {
   groupByCube,
   groupMembers,
   matchesSearch,
+  measureTypesOf,
   membersOf,
   titlesOf,
 } from './fields';
@@ -277,5 +278,52 @@ describe('every member’s title (AC-220)', () => {
       'order_summary.count': 'Order summary Count',
       'order_summary.category': 'Order summary Category',
     });
+  });
+});
+
+/**
+ * T683 (DSH-02): an axis whose every measure is a count is ticked in whole
+ * numbers, so the app hands the renderer each measure's aggregation, from
+ * every cube and view. A measure whose aggregation the model doesn't say is
+ * left out, and a dimension never appears.
+ */
+describe('every measure’s aggregation (T683, DSH-02)', () => {
+  it('gives each shown measure of every cube and view its aggType, and nothing else', () => {
+    const counted = {
+      name: 'orders',
+      type: 'cube',
+      title: 'Orders',
+      measures: [
+        { name: 'orders.count', title: 'Orders Count', type: 'number', aggType: 'count' },
+        { name: 'orders.total', title: 'Orders Total', type: 'number', aggType: 'sum' },
+        { name: 'orders.ratio', title: 'Orders Ratio', type: 'number' },
+      ],
+      dimensions: [
+        { name: 'orders.status', title: 'Orders Status', type: 'string', aggType: 'count' },
+      ],
+    };
+    const summary = {
+      name: 'order_summary',
+      type: 'view',
+      title: 'Order summary',
+      measures: [
+        {
+          name: 'order_summary.customers',
+          title: 'Order summary Customers',
+          type: 'number',
+          aggType: 'countDistinct',
+        },
+      ],
+      dimensions: [],
+    };
+    expect(measureTypesOf({ cubes: [counted, summary] })).toEqual({
+      'orders.count': 'count',
+      'orders.total': 'sum',
+      'order_summary.customers': 'countDistinct',
+    });
+  });
+
+  it('is empty before the model has answered', () => {
+    expect(measureTypesOf(undefined)).toEqual({});
   });
 });

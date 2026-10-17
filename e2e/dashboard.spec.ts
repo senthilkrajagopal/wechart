@@ -2072,8 +2072,9 @@ test('a narrow donut with its legend at the right draws its ring clear of the le
       const marks = [...node.querySelectorAll('svg path[fill^="#"]')].map((path) =>
         path.getBoundingClientRect(),
       );
+      // The legend's 10 × 10 rounded swatch (T683, CMP-12), where it was 25 × 14.
       const swatch = (box: DOMRect) =>
-        Math.round(box.width) === 25 && Math.round(box.height) === 14;
+        Math.round(box.width) === 10 && Math.round(box.height) === 10;
       const ring = marks.filter((box) => !swatch(box) && box.width > 2);
       return {
         slices: ring.length,
@@ -2088,4 +2089,296 @@ test('a narrow donut with its legend at the right draws its ring clear of the le
   // products (T309's review — with none, the comparison below meant nothing).
   expect(swatches).toBe(4);
   expect(ringRight).toBeLessThanOrEqual(legendLeft);
+});
+
+/**
+ * T683 (AC-352, AC-187; design 04 pins 3 and 7; R76 dashboard-Q3, Q4,
+ * components-Q2; DSH-03, DSH-04, CMP-11, CMP-13): the dashboard view's
+ * remaining differences. Small ones under R77's line are recorded in
+ * docs/design/accepted-differences.md, not drawn here.
+ */
+test.describe('the dashboard view as design 04 draws it (T683)', () => {
+  const API = 'http://localhost:4100/api';
+  /** A colour token as the browser resolves it. */
+  const tokenOf = (page: Page, token: string) =>
+    page.evaluate((name) => {
+      const probe = document.createElement('span');
+      probe.style.color = `var(${name})`;
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    }, token);
+  const styleOf = (locator: Locator, ...properties: string[]) =>
+    locator.evaluate(
+      (node, names) =>
+        Object.fromEntries(names.map((name) => [name, getComputedStyle(node).getPropertyValue(name)])),
+      properties,
+    );
+
+  /** A dashboard of its own: a KPI, a table of orders cut at 100, a link, a text link, an image. */
+  async function viewDashboard(request: import('@playwright/test').APIRequestContext) {
+    const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+    const title = `View ${unique}`;
+    const made = async (kind: string, name: string) =>
+      (
+        (await (
+          await request.post(`${API}/documents`, { data: { kind, title: name, ...IN_MY_WORKSPACE } })
+        ).json()) as { id: string }
+      ).id;
+    const dashboard = await made('dashboard', title);
+    const chart = async (name: string, chart: Record<string, unknown>) => {
+      const id = await made('chart', name);
+      await request.put(`${API}/documents/chart/${id}`, {
+        data: {
+          version: 1,
+          body: {
+            schemaVersion: 1,
+            title: name,
+            owner: 'admin',
+            localToDashboardId: dashboard,
+            chart: { source: { cube: 'orders' }, ...chart },
+          },
+        },
+      });
+      return id;
+    };
+    const kpi = await chart('Orders', {
+      wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
+      chartType: 'kpi',
+    });
+    const table = await chart('Latest orders', {
+      wells: { measures: ['orders.count'], dimensions: ['orders.id'], timeDimensions: [] },
+      chartType: 'table',
+      options: { rowLimit: 100 },
+    });
+    const saved = await request.put(`${API}/documents/dashboard/${dashboard}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          ...IN_MY_WORKSPACE,
+          owner: 'admin',
+          settings: { width: 'fixed' },
+          filters: [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }],
+          pages: [
+            {
+              id: 'only',
+              title: 'Only',
+              items: [
+                { id: 'tile-kpi', kind: 'chart', w: 3, h: 12, chartId: kpi },
+                { id: 'tile-table', kind: 'chart', w: 9, h: 40, chartId: table },
+                {
+                  id: 'tile-go',
+                  kind: 'link',
+                  w: 3,
+                  h: 7,
+                  text: 'See the report',
+                  link: { style: 'primary', target: { kind: 'url', url: 'https://example.com/r' } },
+                },
+                {
+                  id: 'tile-text',
+                  kind: 'link',
+                  w: 3,
+                  h: 7,
+                  text: 'Read more',
+                  link: { style: 'text', target: { kind: 'url', url: 'https://example.com/m' } },
+                },
+                { id: 'tile-image', kind: 'image', w: 3, h: 12 },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    return { id: dashboard, title, kpi };
+  }
+
+  test('a table tile says its rows in its head, and draws them 24 px tall (DSH-03, dashboard-Q4)', async ({
+    page,
+    request,
+  }) => {
+    const { id, title } = await viewDashboard(request);
+    await page.goto(`/explore/dashboards/${id}`);
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    const tile = page.locator('[data-tile="tile-table"]');
+    const count = tile.locator('.tile-head').getByTestId('tile-row-count');
+    await expect(count).toHaveText(/^\d{1,3}(,\d{3})* rows · first 100$/);
+    // 12/16 in the muted ink, tabular, at the head's end.
+    expect(await styleOf(count, 'font-size', 'color', 'font-variant-numeric')).toEqual({
+      'font-size': '12px',
+      color: await tokenOf(page, '--wc-text-muted'),
+      'font-variant-numeric': 'tabular-nums',
+    });
+    // At the end of the head's room, which keeps the tile's corner actions clear.
+    const end = await tile
+      .locator('.tile-head')
+      .evaluate(
+        (node) =>
+          node.getBoundingClientRect().right - Number.parseFloat(getComputedStyle(node).paddingRight),
+      );
+    const own = (await count.boundingBox())!;
+    expect(Math.abs(end - (own.x + own.width))).toBeLessThanOrEqual(1);
+    // Its rows 24 px, §4's dense row, as the editor's results grid.
+    const row = tile.locator('tbody tr[data-row-index] td').first();
+    await expect(row).toBeVisible();
+    expect(Math.round((await row.boundingBox())!.height)).toBe(24);
+  });
+
+  test('a KPI: its label 14/20/600 in the primary ink above its 32 px value, padded 16 (DSH-04, dashboard-Q3)', async ({
+    page,
+    request,
+  }) => {
+    const { id, title } = await viewDashboard(request);
+    await page.goto(`/explore/dashboards/${id}`);
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    const tile = page.locator('[data-tile="tile-kpi"]');
+    const label = tile.getByTestId('kpi-label');
+    await expect(label).toHaveText('Count');
+    expect(await styleOf(label, 'font-size', 'line-height', 'font-weight', 'color')).toEqual({
+      'font-size': '14px',
+      'line-height': '20px',
+      'font-weight': '600',
+      color: await tokenOf(page, '--wc-text-primary'),
+    });
+    expect(
+      await styleOf(tile.getByTestId('kpi-value'), 'font-size', 'line-height', 'font-weight'),
+      // On a 36 px line, 4 px under design 04's 40, so a KPI tile at its saved
+      // height holds its value and badge (accepted-differences.md, R77).
+    ).toEqual({ 'font-size': '32px', 'line-height': '36px', 'font-weight': '600' });
+    expect(await styleOf(tile, 'padding-top', 'padding-left')).toEqual({
+      'padding-top': '16px',
+      'padding-left': '16px',
+    });
+  });
+
+  test('a KPI alone on its page: text-kpi-solo, 40/52/600, centred (DSH-04; design 06 state B)', async ({
+    page,
+    request,
+  }) => {
+    const { kpi } = await viewDashboard(request);
+    await page.goto(`/explore/charts/${kpi}`);
+    const value = page.locator('.chart-page__tile').getByTestId('kpi-value');
+    await expect(value).toBeVisible();
+    expect(
+      await styleOf(value, 'font-size', 'line-height', 'font-weight', 'text-align'),
+    ).toEqual({
+      'font-size': '40px',
+      'line-height': '52px',
+      'font-weight': '600',
+      'text-align': 'center',
+    });
+  });
+
+  test('a filter pill’s field at 400, its value at 600 (components-Q2; CMP-11)', async ({
+    page,
+    request,
+  }) => {
+    const { id, title } = await viewDashboard(request);
+    await page.goto(`/explore/dashboards/${id}`);
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    const pill = page.locator('[data-filter-id="f-status"]');
+    await expect(pill).toContainText(/Status\s*:/);
+    expect(await styleOf(pill.locator('.filter-pill__label'), 'font-weight')).toEqual({
+      'font-weight': '400',
+    });
+    expect(await styleOf(pill.locator('.filter-pill__value'), 'font-weight')).toEqual({
+      'font-weight': '600',
+    });
+  });
+
+  test('link and image tiles have no tile chrome; a primary link at 600 and a text link at 600 (CMP-13)', async ({
+    page,
+    request,
+  }) => {
+    const { id, title } = await viewDashboard(request);
+    await page.goto(`/explore/dashboards/${id}`);
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    for (const tileId of ['tile-go', 'tile-text', 'tile-image']) {
+      const tile = page.locator(`[data-tile="${tileId}"]`);
+      await expect(tile).toBeVisible();
+      expect(
+        await styleOf(tile, 'padding-top', 'border-top-width', 'background-color'),
+        tileId,
+      ).toEqual({
+        'padding-top': '0px',
+        'border-top-width': '0px',
+        'background-color': 'rgba(0, 0, 0, 0)',
+      });
+    }
+    expect(
+      await styleOf(page.getByRole('link', { name: 'See the report' }), 'font-weight'),
+    ).toEqual({ 'font-weight': '600' });
+    expect(await styleOf(page.getByRole('link', { name: 'Read more' }), 'font-weight')).toEqual({
+      'font-weight': '600',
+    });
+  });
+
+  test('a count tile’s value axis is ticked in whole numbers, never 0.2 (DSH-02; design 04 pin 6)', async ({
+    page,
+    request,
+  }) => {
+    // Three orders, one each: ECharts alone would tick 0, 0.2, 0.4 … 1.
+    const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+    const title = `Counts ${unique}`;
+    const made = async (kind: string, name: string) =>
+      (
+        (await (
+          await request.post(`${API}/documents`, { data: { kind, title: name, ...IN_MY_WORKSPACE } })
+        ).json()) as { id: string }
+      ).id;
+    const dashboard = await made('dashboard', title);
+    const chart = await made('chart', 'Orders each');
+    await request.put(`${API}/documents/chart/${chart}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: 'Orders each',
+          owner: 'admin',
+          localToDashboardId: dashboard,
+          chart: {
+            source: { cube: 'orders' },
+            wells: { measures: ['orders.count'], dimensions: ['orders.id'], timeDimensions: [] },
+            chartType: 'bar',
+            options: { rowLimit: 3 },
+          },
+        },
+      },
+    });
+    const saved = await request.put(`${API}/documents/dashboard/${dashboard}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          ...IN_MY_WORKSPACE,
+          owner: 'admin',
+          settings: { width: 'fixed' },
+          pages: [
+            {
+              id: 'only',
+              title: 'Only',
+              items: [{ id: 'tile-counts', kind: 'chart', w: 6, h: 24, chartId: chart }],
+            },
+          ],
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+
+    await page.goto(`/explore/dashboards/${dashboard}`);
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    const tile = page.locator('[data-tile="tile-counts"]');
+    await expect(tile.getByTestId('chart-canvas')).toBeVisible();
+    // Every number the chart writes: its ticks, and its order ids.
+    const numbers = async () =>
+      (await tile.locator('svg text').allTextContents()).filter((text) => /^-?[\d.,]+$/.test(text));
+    await expect.poll(numbers).toContain('1');
+    const written = await numbers();
+    expect(written).toContain('0');
+    expect(written.filter((text) => text.includes('.')), written.join(' ')).toEqual([]);
+  });
 });

@@ -87,7 +87,7 @@ export function barOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
   const names = series.map((one) => one.name);
   const edges = plotEdgesOf(spec, names);
   const gap = gapFor(
-    laidBarWidth(
+    drawnBarWidth(
       categoryAxisPx(canvas, horizontal, {
         ...edges,
         // Less the room direct labels take at the right (T681's follow-up):
@@ -133,6 +133,8 @@ export function barOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
         },
       })),
       ...(stacked ? { stack: 'total' } : {}),
+      // On every series: ECharts caps each column on its own (T683).
+      barMaxWidth: BAR_MAX_PX,
       itemStyle: {
         // By member where the dashboard has decided one (AC-039), by position
         // otherwise.
@@ -192,6 +194,22 @@ export function laidBarWidth(axisPx: number, categories: number, columns: number
   const band = Math.max(0, axisPx) / Math.max(1, categories);
   const categoryGap = (Math.max(35 - columns * 4, 15) / 100) * band;
   return Math.max(1, (band - categoryGap) / (columns + (columns - 1) * 0.1));
+}
+
+/**
+ * The widest a bar is drawn: the prototype's `barMaxWidth: 36` (T683,
+ * CMP-12), set on every bar series, since ECharts caps each column on its
+ * own (research/echarts-axis-legend-bars.md §4).
+ */
+export const BAR_MAX_PX = 36;
+
+/**
+ * How wide a bar is drawn: as ECharts lays it out, never past the cap. A
+ * capped group stays centred in its band, its bars `0.1 × width` apart
+ * (research/echarts-axis-legend-bars.md §4).
+ */
+export function drawnBarWidth(axisPx: number, categories: number, columns: number): number {
+  return Math.min(laidBarWidth(axisPx, categories, columns), BAR_MAX_PX);
 }
 
 /**

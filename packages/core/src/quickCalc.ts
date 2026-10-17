@@ -261,6 +261,8 @@ export interface MemberLabels {
   readonly formats?: MemberFormats | undefined;
   readonly titles?: Readonly<Record<string, string>> | undefined;
   readonly shortTitles?: Readonly<Record<string, string>> | undefined;
+  /** Each measure's aggregation from the model (T683; `RenderSpec.measureTypes`). */
+  readonly measureTypes?: Readonly<Record<string, string>> | undefined;
 }
 
 /**
@@ -302,6 +304,7 @@ export function withMemberLabels(spec: RenderSpec, labels: MemberLabels): Render
     ...(labels.shortTitles === undefined
       ? {}
       : { shortTitles: named(labels.shortTitles, labels.titles) }),
+    ...(labels.measureTypes === undefined ? {} : { measureTypes: labels.measureTypes }),
   };
 }
 

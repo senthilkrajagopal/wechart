@@ -9434,7 +9434,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - Every row's icon sat at the top of its row, from the footer's own rule for its two lines. Icons are now centred, and the footer's clock alone sits by its first line.
       - The pinned footer could hide the row the arrows had just focused. The list now keeps 52 px of scroll padding below. `tile-menu.spec.ts` checks every row the arrows reach ends above the footer, and that an icon is centred.
       - The dashboard-Q1 note broke the Dashboard table in the decisions file. It now sits below the table.
-- [ ] T683 (AC-352, AC-187) The dashboard view's remaining differences: whole-number count axes, a table tile's row count, the KPI ramp, and backlog §1's residuals *(added 2026-10-08 by T406)*
+- [x] T683 (AC-352, AC-187) The dashboard view's remaining differences: whole-number count axes, a table tile's row count, the KPI ramp, and backlog §1's residuals *(added 2026-10-08 by T406)*
   - Files: the chart renderer's options (`packages/web/src/charts/…`), `packages/web/src/tiles/{ChartTile,Kpi}.tsx`, `packages/web/src/dashboard/edit/…`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/dashboard.spec.ts`
   - Findings: DSH-02, DSH-03, DSH-04, CMP-09, CMP-10, CMP-11, CMP-12, CMP-13.
   - Failing test:
@@ -9452,6 +9452,30 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **dashboard-Q4:** a table tile's rows at 24 px, §4's dense row and the editor's results grid (direction §4 amended);
     - **components-Q2:** a filter pill's label at 400 and its value at 600, as design 04 draws them.
   - Depends on: none
+  - **Built 2026-10-17** (begun 2026-10-08, paused, finished on lane B).
+    - **Whole-number ticks on counts (DSH-02; research/echarts-axis-legend-bars.md §1):** `minInterval: 1` goes on a value axis only when every measure on it is a count (`count`, `countDistinct`, `countDistinctApprox`, as `/v1/meta`'s aggType spells them, research/cross-highlight.md; the model's snake_case spellings too). The coordinator's call: on a fraction's axis it would collapse the ticks to 0 and 1. A measure whose aggregation isn't known is ticked as ECharts ticks it.
+      - `RenderSpec.measureTypes` carries each measure's aggregation. `measureTypesOf(meta)` (`editor/fields.ts`) reads it from the model, and the dashboard view (its tiles and a drill's), the library chart page, the review preview and the chart editor's preview all pass it in.
+      - A Customize min or max that isn't whole is kept as typed, its own end tick (the coordinator's call).
+    - **A table tile's rows (DSH-03, design 04 pin 7):** "626 rows · first 100" at the head's end, in xs muted tabular figures; rows 24 px (R76 dashboard-Q4), in `DataTable`'s fixed row and the comfy grid's head and foot.
+    - **The KPI ramp (DSH-04, R76 dashboard-Q3):** the label at 14/20/600 in the primary ink, the tile padded 16. Alone on the library chart page, the value is `text-kpi-solo`, 40/52, centred (design 06 state B).
+    - **CMP-11 and components-Q2:** a filter pill's field at 400 and its value at 600; the words read as before.
+    - **CMP-12 (research/echarts-axis-legend-bars.md §2–4), the coordinator's calls:**
+      - the legend at the left (`left: 0`), each swatch a `roundRect` 10 × 10, 8 px apart, `borderWidth: 0`. A placed legend strips all four edges first, since ECharts keeps `left` when given both;
+      - `barMaxWidth: 36` on every bar series (bar, combo, trellis), as ECharts caps each column on its own. The mark-by-shape and gap figures use the drawn width.
+    - **CMP-13:** link and image tiles draw no tile chrome outside edit mode; a primary button link and a text link at 600.
+    - **Recorded in `accepted-differences.md`:** CMP-09's 4 px palette rows and 52 px templates; CMP-10's borders on "← Explore" and "+ Page tab", and the folder crumb kept a link (AC-195); CMP-11's padding and radius; the KPI value's 36 px line and no gap under its head; a button link's radius 4.
+    - **Tests:** `axisLegendBars.test.ts` (ticks, legend, bar cap), `tableHead.test.tsx`, `fields.test.ts` (`measureTypesOf`), `itemsInShape.test.ts`; e2e `dashboard.spec.ts` "the dashboard view as design 04 draws it (T683)", a count tile's ticks included; `design-conformance.spec.ts`'s KPI and table rows moved with R76.
+    - **The review (FAIL; one high finding and three low ones, all fixed):**
+      - A count drawn as a quick calculation ("% of total") was ticked whole, which collapsed its axis to 0 % and 100 %. A calculated measure never counts now (`allCounts`, `axis.ts`).
+      - A trellis's panels didn't go through the shared axis settings, so counts there kept fractional ticks. Each panel of counts now takes `minInterval: 1` (`trellis.ts`).
+      - The table head now counts Cube's own `rowsTotal` where the query was told it.
+      - The folder crumb kept as a link is recorded as a decision (`decisions-2026-10-08.md`, "Later decisions"), not as a small difference.
+    - **Tests moved by the change (the coordinator's calls, 2026-10-17):**
+      - `dashboard.spec.ts`'s narrow donut counts the legend's swatches at 10 × 10, where they were 25 × 14.
+      - `direct-labels.spec.ts`: the seed bar tile can't carry "every status named twice" any more. With every bar at most 36 px and ECharts' 10 % barGap, its last category's three bars stand about 40 px apart at any width, and names of about 60 px meet, so one is hidden.
+        - The exact [2,2,2] now runs on a line chart of the 3 statuses, built in the test, whose end labels are moved apart.
+        - On the bar tile, a new check: every status is named in the legend's row, and a status whose end label was hidden is named there.
+    - **Runs:** the full Chrome e2e (783 passed; the 12 that failed passed on rerun, or were fixed as above), the API suite under its lock (1,858 passed), and the unit suites.
 - [x] T684 (AC-187, AC-352) One button rule and one pressed state: every `.btn` 32/14, item heads at one height with History first, and the designs' `.btn.pressed` *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, `packages/web/src/workspaces/explore/ExplorePage.tsx` (+ tests), `e2e/consistency.spec.ts`
   - Findings: CMP-01, CMP-02, CMP-03, DSH-05, EXP-13, EXP-23 (the button), SRC-04, and the pressed tokens of EDI-14 and EXP-02.

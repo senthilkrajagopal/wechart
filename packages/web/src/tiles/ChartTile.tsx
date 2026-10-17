@@ -98,6 +98,8 @@ export interface ChartTileProps {
    * shows no freshness badge (T401's review).
    */
   readonly rowsTotal?: number | undefined;
+  /** A KPI standing alone, on its own page, at text-kpi-solo (T683; design 06 state B). */
+  readonly kpiSolo?: boolean | undefined;
   /**
    * The marked-items badge, in the header row beside the title (AC-201): the
    * prototype's `.mbadge`, rather than a line above that pushed the title down.
@@ -133,6 +135,8 @@ interface ChartBodyProps {
    * primary key to identify them by (AC-092).
    */
   readonly rowMarking?: DataTableProps['marking'];
+  /** A KPI standing alone: on its own page (T683; design 06 state B). */
+  readonly kpiSolo?: boolean | undefined;
 }
 
 /** Types wechart draws as DOM rather than handing to ECharts. */
@@ -151,7 +155,10 @@ function ChartBody({
   rangeStripes,
   onContextMenuAt,
   rowMarking,
+  kpiSolo,
 }: ChartBodyProps) {
+  // A KPI alone, at text-kpi-solo (T683; design 06 state B).
+  if (spec.chartType === 'kpi') return <Kpi spec={spec} {...(kpiSolo === true ? { solo: true } : {})} />;
   const DomChart = DOM_TYPES[spec.chartType];
   if (DomChart !== undefined) {
     return (
@@ -199,6 +206,7 @@ export function ChartTile({
   asOf,
   served,
   rowsTotal,
+  kpiSolo,
   onItemClick,
   onShapeMark,
   onAxisRange,
@@ -349,6 +357,25 @@ export function ChartTile({
         {heading}
         {inFoot ? null : badge}
         {editing ? kindTag : inFoot ? null : dataAsOf}
+        {/* A table's rows, and how many it shows where its row limit cut
+            them: "626 rows · first 100", at the head's end (T683; design
+            04 pin 7). */}
+        {spec.chartType === 'table' ? (
+          <span className="tile-head__count" data-testid="tile-row-count">
+            {(() => {
+              // Cube's own total where the query was told it (T683's review).
+              const all = Math.max(
+                spec.answeredRows?.length ?? 0,
+                spec.rows.length,
+                rowsTotal ?? 0,
+              );
+              const word = `${all.toLocaleString('en-US')} ${all === 1 ? 'row' : 'rows'}`;
+              return spec.rows.length < all
+                ? `${word} · first ${spec.rows.length.toLocaleString('en-US')}`
+                : word;
+            })()}
+          </span>
+        ) : null}
         {canSwitch && tableToggle ? (
           <button
             type="button"
@@ -394,6 +421,7 @@ export function ChartTile({
           {...(rangeStripes === undefined ? {} : { rangeStripes })}
           {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
+          {...(kpiSolo === true ? { kpiSolo } : {})}
         />
       )}
       {/* A map's codes it can't place, named under it (T398, rule 87). */}

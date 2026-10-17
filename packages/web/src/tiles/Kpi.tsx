@@ -11,6 +11,12 @@ import { formatValue, memberOn, type RenderSpec } from '@wechart/core';
  */
 export interface KpiProps {
   readonly spec: RenderSpec;
+  /**
+   * Standing alone, on its own page: `text-kpi-solo`, 40/52, centred
+   * (direction §3; design 06 state B; T683). A dashboard's KPI keeps
+   * `text-kpi`, 32/40, as a row of them is drawn (design 04 pin 3).
+   */
+  readonly solo?: boolean;
 }
 
 /**
@@ -53,7 +59,8 @@ function markedShareOf(
   };
 }
 
-export function Kpi({ spec }: KpiProps) {
+export function Kpi({ spec, solo = false }: KpiProps) {
+  const className = solo ? 'kpi kpi--solo' : 'kpi';
   const measure = memberOn(spec.encoding, 'y');
   const row = spec.rows[0];
   const raw = measure === undefined || row === undefined ? undefined : row[measure];
@@ -66,7 +73,7 @@ export function Kpi({ spec }: KpiProps) {
     // An empty result is not zero, and a value that will not parse is not
     // zero either. Printing one would assert a measurement never made.
     return (
-      <div className="kpi" data-testid="kpi">
+      <div className={className} data-testid="kpi">
         <p data-testid="kpi-empty">No value</p>
         {label === undefined ? null : <p data-testid="kpi-label">{label}</p>}
       </div>
@@ -78,7 +85,7 @@ export function Kpi({ spec }: KpiProps) {
   // Its name above its value, as the prototype's kpiHtml has them (T300),
   // and under it the marked share, as its renderMarked has it (T453).
   return (
-    <div className="kpi" data-testid="kpi">
+    <div className={className} data-testid="kpi">
       <p className="kpi__label" data-testid="kpi-label">
         {label}
       </p>
