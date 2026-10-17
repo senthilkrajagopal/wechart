@@ -22,6 +22,20 @@ Read this first when resuming. It holds only the current state and the rules in 
   - T691's overview column-width test (`model-design.spec.ts:1335`) depends on the data: in a full run, long cube names from other tests widen the columns. Fix with `table-layout: fixed` plus ellipsis.
   - All fail on their own, before and after this batch's work.
 - **Running the suite:** bare `pnpm -r test` also runs the e2e package's Playwright tests, outside the e2e lock. Use `pnpm -r --filter '!./e2e' test`.
+- **Next steps for the new work.**
+  - Interview **R78 is recorded** in `docs/requirements-log.md` for the MCP server and the SQL runner workspace. Read it first.
+  - Then:
+    1. **project-interview:** write R78's scope into `docs/requirements.md` §P2.6/P2.7. Lift the non-goals it brings in. Add the pending items the user took in, which still need their own questions where they're open: the read-only login per data source, the build history, slice 7, and the phase 3 keyboard items.
+    2. **write-spec:** new features for the MCP server and the SQL runner workspace, plus amendments to F40.
+    3. **component-research:**
+       - `@fastify/rate-limit`, since the MCP spec says servers MUST rate-limit tool calls;
+       - personal-token hashing and storage;
+       - CodeMirror SQL autocomplete (check `docs/research/` for existing CodeMirror docs first);
+       - Cube's `/v1/cubesql` from wechart's server (check `docs/research/cube/` first);
+       - how `/mcp` is exposed to Anthropic's cloud safely, since the user chose Claude.ai/Desktop.
+    4. **ui-design:** fold `references-sql-runner.md` into direction.md and a design.
+    5. **plan-tasks.**
+    6. **implement**, with lanes.
 - **Order of new work** (the user, 2026-10-17): the **MCP server** and the **SQL runner changes** (Superset-like) first. The **copilot and Ask (⌘J)** wait.
 - **Demo:** the Northwind dashboards are in folders `sales` and `shipping` on the k8s deploy. Their exports are in the coordinator's scratchpad (`northwind/export/`), not in the repo.
 

@@ -223,6 +223,40 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R78 — new work: the MCP server and the SQL runner workspace first; the copilot later** (2026-10-17, the user; inputs `docs/inputs/2026-10-17-{mcp-server,copilot-chat,sql-runner-and-ask-key}.md`; research `docs/research/mcp-typescript-sdk.md`; designs `docs/design/references-{sql-runner,copilot}.md`)
+- **Scope and order.**
+  - "we need to build two more things.. one is a mcp server that lets claude code or other llms.. manage datasources, dashboards, cubes, approval and review flows and anything else that i missed out."
+  - The copilot: "i want to build a coilot/chat interface … (remember that all edits will happen in the workspace).. superadmin can set globally the api keys, models for the llm".
+  - The SQL runner: "templating; making a chart or a cube from a query's results.. and saved queries (no sharing)". Also: "The SQL running is seen within the datasource. Instead have a seperate tab.. next to jobs, schedules called SQL runner that lets you see and select the datasource, introspect the datasource see the tables, columns.. check superset for the experience".
+  - The pending items: "yes ad the other pending items". These are the coordinator's list: a read-only login per data source; Cube's semantic SQL API; the phase 3 keyboard items (backlog §7); the refresh worker's build history (R41); xcube's slice 7; and the 4 Northwind bugs.
+  - The ask shortcut: "IN another app that i am building ask functionality is done using #J key.. can we add that as well". This is read as ⌘J/Ctrl+J, opening the copilot.
+  - Order: "start with MCP, SQL Runner changes like Superset, keep Ask/Copilot pending for now."
+  - The phase-1 non-goal "AI and chat authoring" is lifted for the copilot, when it is taken up.
+- **MCP:**
+  - Q: How should an MCP client sign in and act as a user? A: "Personal tokens (Recommended)": each user creates a scoped, expiring, revocable access token in wechart and acts with their own folder permissions.
+  - Q: Which clients must work on day one? A: "Claude Code, Claude.ai / Desktop". Claude.ai and Desktop connectors call from Anthropic's cloud, so `/mcp` must be reachable from the public internet; how it is exposed is for the spec to settle.
+  - Q: May an MCP client approve or reject proposals? A: "Never (Recommended)".
+  - Q: Which operations in the first release? A: "Read and explore, Edit in My workspace, Proposals and jobs". Data sources by MCP were not chosen.
+- **SQL runner workspace:**
+  - Q: What does "templating" mean? A: "Typed parameters (Recommended)": `{{name}}` typed Text, Number, Date or Boolean, filled in a strip under the editor and bound as database parameters.
+  - Q: Cube's semantic SQL API? A: "In the runner (Recommended)", as a separate "Cube" group in the picker.
+  - Q: Which keyboard behaviour may it add (R75)? A: "Run statement at cursor, Save and Find, Autocomplete, Tab shortcuts".
+  - Q: Where are open tabs kept? A: "Browser only".
+  - Questions 2–8 and 12–19 of `references-sql-runner.md` were not asked. They take the recommended answers, which are the coordinator's call and overturnable:
+    - no optional clauses;
+    - values only, no table or column parameters;
+    - no snippets;
+    - parameter values kept for the owner only, with the audit keeping names only;
+    - Make a cube writes the run's values in as literals;
+    - Make a chart starts with the new cube and nothing placed;
+    - History shows all my runs;
+    - saved queries appear in ⌘K for their owner;
+    - the data source page keeps a "SQL runner" tab with its switch and "Open in SQL runner";
+    - the workspace is shown to Super-Admins and read-write members;
+    - CSV only, with no clipboard copy;
+    - no "Open in SQL runner" from a chart's View SQL;
+    - Preview 100 rows only on request, as an audited run.
+
 **R77 — closing design conformance faster** (2026-10-08, the user)
 - The user, choosing all three options Claude offered: "Accept small visual differences and Skip the review round on pure-styling tasks and Close AC-187, the overall prototype check, on the per-surface results."
 - *Decided:*
