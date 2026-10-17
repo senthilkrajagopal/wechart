@@ -27,6 +27,15 @@ export interface StoppedAccessToken extends AccessToken {
   readonly revokedBy: { readonly name: string } | null;
 }
 
+/** A token on Security's list of everyone's (T772, AC-470): with its owner and its state. */
+export interface AnyonesAccessToken extends AccessToken {
+  readonly owner: { readonly key: string; readonly name: string };
+  readonly state: 'working' | 'revoked' | 'expired';
+  /** When it was revoked, or when it expired; none while it works. */
+  readonly stoppedAt: Date | null;
+  readonly revokedBy: { readonly name: string } | null;
+}
+
 /** Whom a token belongs to, for a revoke's audit record. */
 export interface TokenOwned {
   readonly id: string;
@@ -168,6 +177,32 @@ export function accessTokenStore(db: Kysely<Database>) {
         .orderBy('id', 'desc')
         .execute();
       return rows.map(tokenOf);
+    },
+
+    /**
+     * Every user's tokens, working and stopped, newest first (T772, AC-470).
+     * One its owner removed from "No longer working" is left out, as it is
+     * from their list; its audit records stay.
+     */
+    async everyone(now: Date): Promise<AnyonesAccessToken[]> {
+      const rows = await db
+        .selectFrom('personal_access_tokens')
+        .select([...LISTED, 'owner_key', 'owner_name', 'revoked_at', 'revoked_by_name'])
+        .where('removed_at', 'is', null)
+        .orderBy('created_at', 'desc')
+        .orderBy('id', 'desc')
+        .execute();
+      return rows.map((row): AnyonesAccessToken => {
+        const state =
+          row.revoked_at !== null ? 'revoked' : row.expires_at <= now ? 'expired' : 'working';
+        return {
+          ...tokenOf(row),
+          owner: { key: row.owner_key, name: row.owner_name },
+          state,
+          stoppedAt: state === 'working' ? null : (row.revoked_at ?? row.expires_at),
+          revokedBy: row.revoked_at === null ? null : { name: row.revoked_by_name ?? 'Someone' },
+        };
+      });
     },
 
     /** Whether one of an owner's working tokens has this name (AC-430). */

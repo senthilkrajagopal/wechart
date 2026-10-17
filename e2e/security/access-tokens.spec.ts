@@ -1,6 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 
-import { expect, test } from './fixtures';
+import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 
 /**
  * T769 (AC-430, AC-468, AC-469; design 18, screens 1 and 2, state A1):
@@ -122,6 +122,71 @@ test.describe('Revoking from the page, and No longer working (T771, AC-431; desi
     await expect(stopped).toHaveCount(0);
     // Gone from the API's answer too.
     expect(await (await page.request.get('/api/account/tokens')).text()).not.toContain(name);
+  });
+});
+
+test.describe('Security › Access tokens (T772, AC-470; design 18, screen 4)', () => {
+  test.use({ role: 'super' });
+
+  test('a Super-Admin sees another user’s token, revokes it, and the owner sees who', async ({
+    page,
+    browser,
+  }) => {
+    // Wren Writer makes a token in a context of her own.
+    // An empty state: a new context would otherwise come with this test's own (super's).
+    const wren = await browser.newContext({
+      baseURL: BASE_URL,
+      storageState: { cookies: [], origins: [] },
+    });
+    try {
+      const wrenPage = await wren.newPage();
+      await signInThroughDex(wrenPage, 'writer');
+      const name = `Claude Code · laptop ${RUN}`;
+      const made = await wrenPage.request.post('/api/account/tokens', {
+        data: { name, scopes: ['read'], days: 7 },
+      });
+      expect(made.status()).toBe(201);
+
+      await page.goto('/security/tokens');
+      const tabs = page.getByRole('navigation', { name: 'Security' });
+      await expect(tabs.getByRole('link', { name: 'Access tokens' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      await page.getByRole('combobox', { name: 'User' }).selectOption({ label: 'Wren Writer' });
+      const row = page.getByRole('table', { name: 'Everyone’s tokens' }).getByRole('row', { name });
+      await expect(row.getByRole('cell').first()).toHaveText('Wren Writer');
+      expect(await page.content()).not.toContain((await made.json()).text.slice(4, 68));
+
+      await row.getByRole('button', { name: `Revoke Wren Writer’s ${name}` }).click();
+      const asking = page.getByRole('alertdialog', {
+        name: `Revoke Wren Writer’s token “${name}”?`,
+      });
+      await expect(asking.getByRole('button', { name: 'Cancel' })).toBeFocused();
+      await asking.getByRole('button', { name: 'Revoke token' }).click();
+      await expect(row).toHaveCount(0);
+
+      // Wren's own list names the Super-Admin as who revoked it (AC-431).
+      const own = (await (await wrenPage.request.get('/api/account/tokens')).json()) as {
+        stopped: { name: string; state: string; revokedBy: { name: string } | null }[];
+      };
+      expect(own.stopped.find((each) => each.name === name)).toEqual(
+        expect.objectContaining({ state: 'revoked', revokedBy: { name: 'Super Admin' } }),
+      );
+      await tidy(wrenPage.request);
+    } finally {
+      await wren.close();
+    }
+  });
+});
+
+test.describe('Security › Access tokens, to anyone else (T772, AC-470; design 18, A4)', () => {
+  test.use({ role: 'writer' });
+
+  test('is Not found to a read-write member', async ({ page }) => {
+    await page.goto('/security/tokens');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Not found');
+    expect((await page.request.get('/api/security/tokens')).status()).toBe(404);
   });
 });
 

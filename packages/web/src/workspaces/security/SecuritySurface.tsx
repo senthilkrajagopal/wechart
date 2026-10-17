@@ -31,7 +31,9 @@ export function SecuritySurface({
     );
   const signedIn = me.data?.security === 'oidc';
   // With sign-in off, the one user is a Super-Admin: the same tabs (security-Q1, R76; T699).
-  const allowed = me.isSuccess && tab !== undefined && (signedIn ? me.data.superAdmin : true);
+  // Everyone's tokens only with sign-in on: off, there is one user (T772; design 18, H).
+  const allowed =
+    me.isSuccess && tab !== undefined && (signedIn ? me.data.superAdmin : tab !== 'tokens');
   if (!allowed)
     return (
       <AppShell>

@@ -1594,11 +1594,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T771 (AC-431) Revoke a token from the page, confirmed with no Undo, and list stopped tokens under "No longer working" with Remove, as design 18 states D and E draw them
 
-- [ ] T772 (AC-470) Security › Access tokens: every user's tokens for Super-Admins, with their owners, filters and Revoke, and to no one else, as design 18 screen 4 and state F draw it
-  - Lane: MCP
-  - Files: `packages/api/src/routes/access-tokens.ts` (+ `access-tokens-admin.test.ts`), `packages/web/src/workspaces/security/AccessTokensTab.tsx` (+ test), `packages/web/src/workspaces/security/SecurityPage.tsx`, `packages/web/src/router/routes.tsx`, `e2e/security/access-tokens.spec.ts`.
-  - Failing test: `access-tokens-admin.test.ts`: `GET /api/security/tokens` lists every user's tokens, working and stopped, with owner, name, scopes, made, expires and last used, and no text, to a Super-Admin; anyone else gets 404; a Super-Admin's `DELETE` revokes another user's token, and the owner's list then names that Super-Admin as who revoked it (AC-470, with AC-431). `AccessTokensTab.test.tsx`: the fourth tab, after Audit trail, filters by owner and state, and Revoke names owner and token in its dialog. The e2e shows `/security/tokens` as Not found to a read-write member.
-  - Depends on: T768
+- [x] T772 (AC-470) Security › Access tokens: every user's tokens for Super-Admins, with their owners, filters and Revoke, and to no one else, as design 18 screen 4 and state F draw it
 
 ### Lane MCP: the `/mcp` endpoint
 

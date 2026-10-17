@@ -10052,6 +10052,25 @@ nav.outline :focus-visible,
 .token-state { display: inline-flex; align-items: center; gap: 6px; }
 .account-page__subhead { margin: 8px 0 0; font-size: 13px; font-weight: 600; }
 .dialog.revoke-token { width: min(520px, calc(100vw - 32px)); max-width: none; }
+/* T772: Security's Access tokens (screen 4): filters, count, and the dialog's facts. */
+.tokens-tab { display: grid; gap: 10px; align-content: start; }
+.tokens-tab__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tokens-tab__filters input.tokens-tab__search { width: 220px; max-width: 100%; height: 28px; font-size: 12px; }
+.tokens-tab__count { margin: 0 0 0 auto; font-size: 12px; color: var(--wc-text-secondary); }
+.tokens-tab__none { margin: 0; padding: 16px 0; color: var(--wc-text-secondary); }
+.tokens-table__you { color: var(--wc-text-secondary); }
+.tokens-tab__facts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--wc-bg-subtle);
+  font-size: 13px;
+}
+.tokens-tab__facts > div { display: grid; grid-template-columns: 90px 1fr; gap: 8px; }
+.tokens-tab__facts dt { color: var(--wc-text-secondary); }
+.tokens-tab__facts dd { margin: 0; }
 /* New token (screen 2): a 520 px dialog, as the workspace dialogs are. */
 .dialog.new-token { width: min(520px, calc(100vw - 32px)); max-width: none; gap: 12px; }
 .new-token__form { display: grid; gap: 12px; }

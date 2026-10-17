@@ -86,3 +86,28 @@
     - **Tests:**
       - Unit: `RevokeTokenDialog.test.tsx` (4) and `AccessTokensPage.test.tsx` (5 new; the header check now includes the visually hidden "Actions" column).
       - e2e: `e2e/security/access-tokens.spec.ts`: revoke from the page (the dialog 520 px wide, focus on Cancel), the toast, the row under No longer working "Revoked · by Super Admin, ‹date›", then Remove.
+
+- [x] T772 (AC-470) Security › Access tokens: every user's tokens for Super-Admins, with their owners, filters and Revoke, and to no one else, as design 18 screen 4 and state F draw it
+  - Lane: MCP
+  - Files: `packages/api/src/routes/access-tokens.ts` (+ `access-tokens-admin.test.ts`), `packages/web/src/workspaces/security/AccessTokensTab.tsx` (+ test), `packages/web/src/workspaces/security/SecurityPage.tsx`, `packages/web/src/router/routes.tsx`, `e2e/security/access-tokens.spec.ts`.
+  - Failing test: `access-tokens-admin.test.ts`: `GET /api/security/tokens` lists every user's tokens, working and stopped, with owner, name, scopes, made, expires and last used, and no text, to a Super-Admin; anyone else gets 404; a Super-Admin's `DELETE` revokes another user's token, and the owner's list then names that Super-Admin as who revoked it (AC-470, with AC-431). `AccessTokensTab.test.tsx`: the fourth tab, after Audit trail, filters by owner and state, and Revoke names owner and token in its dialog. The e2e shows `/security/tokens` as Not found to a read-write member.
+  - Depends on: T768
+  - **Built 2026-10-17** (lane MCP, batch 2). **AC-470 stays open:** its "a token the Super-Admin revoked still works" can only be shown once `/mcp` answers (T774 on). The list, who sees it, and the revoke itself are shown here.
+    - **The API:**
+      - `GET /api/security/tokens` answers `{ tokens }`, newest first, with `Cache-Control: no-store`. Each token has `id`, `name`, `scopes`, `createdAt`, `expiresAt`, `lastUsedAt`, `owner: { key, name }`, `yours`, `state` (`working`, `revoked` or `expired`), `stoppedAt` and `revokedBy`. There is no text and no digest.
+      - `DELETE /api/security/tokens/:id` revokes any user's token: 204, or 409 for one that already doesn't work, or 404 for no such token. It records "Token revoked" with the Super-Admin as its actor, through the same `revokeAs` as the owner's own route.
+      - Both answer 404 to anyone but a Super-Admin (design 18, A4: the page is Not found), not the 403 of the `ADMIN` route option.
+      - `accessTokenStore.everyone(now)` reads them.
+    - **Left out (the lane's call, overturnable):** a token its owner removed from "No longer working" isn't on the Super-Admin's list either. Its audit records stay.
+    - **The tab:** "Access tokens" is the fourth tab, at `/security/tokens`, with sign-in on only. With sign-in off there's no tab and the address is Not found, since there is one user (design 18, state H).
+      - Filters as pills, as the audit trail's: User (Anyone, or each owner), State (Working at the start, No longer working, Any), Scope (Any, or each of the three). A search over names sits beside them. All combine with AND.
+      - Clear filters appears once any filter differs from the start. A count follows: "3 working tokens · 3 people · newest first".
+      - None matching says "No token matches these filters." with Clear filters (F3).
+    - **The table:** Owner (the viewer's own marked "· you"), Name, Scopes as tags, Made, Expires, Last used, and Revoke on working rows only. A stopped row shows its state with its icon in Expires, as the owner's list does. Under it: "A token's text is never shown here, …" (pin 6).
+    - **Revoke:** each button is named "Revoke ‹owner›'s ‹name›". It opens `RevokeTokenDialog`, titled "Revoke ‹owner›'s token "‹name›"?", with screen 4's body ("‹first name› can make a new one", or "you can" for one's own) and its facts: Scopes, Last used, and "‹first name› sees "Revoked · by ‹me›, ‹today›" in their list". The design writes "her list"; the lane wrote "their list".
+      - On success: a toast, the list read again (with the viewer's own list too), and focus to the User filter. A refused revoke reads the list again.
+    - **Shared with the owner's page:** `TokenScopeTags`, `stoppedText` and `RevokedIcon` are exported from `AccessTokensPage.tsx`. `RevokeTokenDialog` gained `body` and `children`.
+    - **Tests:**
+      - API: `access-tokens-admin.test.ts` (5).
+      - Unit: `AccessTokensTab.test.tsx` (6). `SecuritySurface.test.tsx` (2 new): the tab opens to a Super-Admin, is Not found to others, and is Not found with sign-in off. `SecurityPage.test.tsx`: the tab list now has four tabs signed in, and stays three with sign-in off.
+      - e2e, `e2e/security/access-tokens.spec.ts`: Wren makes a token in her own context; `super` filters to her on the tab, revokes it, and Wren's list names Super Admin as who revoked it. `writer` gets Not found at `/security/tokens`, and 404 from the API.

@@ -36,7 +36,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function open(tab: 'policies' | 'preview' | undefined) {
+function open(tab: 'policies' | 'preview' | 'tokens' | undefined) {
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
@@ -61,6 +61,25 @@ describe('Security’s gate (T500)', () => {
     open('policies');
     expect(await heading()).toBe('Not found');
     expect(screen.queryByRole('table', { name: 'Access policies' })).toBeNull();
+  });
+
+  it('opens Access tokens to a Super-Admin, and to no one else (T772, AC-470)', async () => {
+    answering(signedIn(true));
+    open('tokens');
+    expect(await heading()).toBe('Security');
+    expect(screen.getByRole('link', { name: 'Access tokens' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    cleanup();
+    answering(signedIn(false));
+    open('tokens');
+    expect(await heading()).toBe('Not found');
+  });
+
+  it('has no Access tokens tab with sign-in off: there is one user (T772; design 18, H)', async () => {
+    answering(single);
+    open('tokens');
+    expect(await heading()).toBe('Not found');
   });
 
   it('is Not found, never open, when who is signed in can’t be read', async () => {

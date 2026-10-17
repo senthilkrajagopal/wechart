@@ -91,6 +91,8 @@ describe('Security in tabs, with sign-in on (T500)', () => {
       ['Preview as groups', '/security/preview'],
       // The audit trail joins with T369.
       ['Audit trail', '/security/audit'],
+      // Everyone's tokens, the fourth tab, with sign-in on alone (T772, AC-470; design 18, pin 1).
+      ['Access tokens', '/security/tokens'],
     ]);
     expect(links[0]?.getAttribute('aria-current')).toBe('page');
     // Said over the list, once the model's files are read.
@@ -154,7 +156,7 @@ describe('Security in tabs, with sign-in on (T500)', () => {
       within(tabs)
         .getAllByRole('link')
         .map((link) => link.getAttribute('href')),
-    ).toEqual(['/security', '/security/preview', '/security/audit']);
+    ).toEqual(['/security', '/security/preview', '/security/audit', '/security/tokens']);
     expect(
       within(tabs).getByRole('link', { name: 'Audit trail' }).getAttribute('aria-current'),
     ).toBe('page');

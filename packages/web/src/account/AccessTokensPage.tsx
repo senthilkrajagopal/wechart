@@ -16,6 +16,7 @@ import {
   type AccessToken,
   type MadeToken,
   type StoppedToken,
+  type TokenScope,
 } from './tokensApi';
 
 const DAY_MS = 86_400_000;
@@ -340,16 +341,23 @@ function TokenCells({ token, now }: { readonly token: AccessToken; readonly now:
     <>
       <td className="tokens-table__name">{token.name}</td>
       <td>
-        <ul className="token-scopes" aria-label="Scopes">
-          {SCOPES.filter((scope) => token.scopes.includes(scope.id)).map((scope) => (
-            <li key={scope.id} className="token-scope">
-              {scope.label}
-            </li>
-          ))}
-        </ul>
+        <TokenScopeTags scopes={token.scopes} />
       </td>
       <td title={exactOf(made)}>{dayOf(made, now)}</td>
     </>
+  );
+}
+
+/** A token's scopes as text tags, never colour alone (screen 1, pin 5). */
+export function TokenScopeTags({ scopes }: { readonly scopes: readonly TokenScope[] }) {
+  return (
+    <ul className="token-scopes" aria-label="Scopes">
+      {SCOPES.filter((scope) => scopes.includes(scope.id)).map((scope) => (
+        <li key={scope.id} className="token-scope">
+          {scope.label}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -396,7 +404,10 @@ function TokenRow({
 }
 
 /** "Revoked · by Ada Admin, 12 Oct", or "Expired · 31 Aug" (design 18, D3), with its icon. */
-export function stoppedText(token: StoppedToken, now: Date): string {
+export function stoppedText(
+  token: Pick<StoppedToken, 'state' | 'stoppedAt' | 'revokedBy'>,
+  now: Date,
+): string {
   const when = dayOf(new Date(token.stoppedAt), now);
   if (token.state === 'expired') return `Expired · ${when}`;
   return token.revokedBy === null

@@ -82,7 +82,7 @@ const securityTabRoute = createRoute({
     const filters = auditFiltersFrom(new URLSearchParams(searched));
     return (
       <SecuritySurface
-        tab={tab === 'preview' || tab === 'audit' ? tab : undefined}
+        tab={tab === 'preview' || tab === 'audit' || tab === 'tokens' ? tab : undefined}
         audit={{
           filters,
           onFilters: (next) => {

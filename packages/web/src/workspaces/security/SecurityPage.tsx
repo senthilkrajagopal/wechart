@@ -4,6 +4,7 @@ import { InfoBar } from '../../shell/InfoBar';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { MODEL_FILES_QUERY } from '../model/FileList';
+import { AccessTokensTab } from './AccessTokensTab';
 import { AuditTrail, NO_FILTERS, type AuditFilters } from './AuditTrail';
 import { AuthWarning } from './AuthWarning';
 import { modelHref } from './dashboardPreview';
@@ -20,11 +21,13 @@ import {
 } from './policies';
 
 /** Security's tabs with sign-in on, each at its own address (T500; design 08, pin 1). */
-export type SecurityTab = 'policies' | 'preview' | 'audit';
+export type SecurityTab = 'policies' | 'preview' | 'audit' | 'tokens';
 const TABS: readonly (readonly [SecurityTab, string, string])[] = [
   ['policies', 'Policies', '/security'],
   ['preview', 'Preview as groups', '/security/preview'],
   ['audit', 'Audit trail', '/security/audit'],
+  // Everyone's tokens, with sign-in on alone: off, there is one user (T772; design 18, H).
+  ['tokens', 'Access tokens', '/security/tokens'],
 ];
 
 /**
@@ -101,13 +104,15 @@ export function SecurityPage({
       <h1 className="workspace-title">Security</h1>
       {/* Tabs as places, each at its own address (pin 1, AC-002). */}
       <nav aria-label="Security" className="security-tabs">
-        {TABS.map(([key, label, href]) => (
+        {TABS.filter(([key]) => signedIn || key !== 'tokens').map(([key, label, href]) => (
           <a key={key} href={href} aria-current={key === tab ? 'page' : undefined}>
             {label}
           </a>
         ))}
       </nav>
-      {tab === 'audit' ? (
+      {tab === 'tokens' ? (
+        <AccessTokensTab />
+      ) : tab === 'audit' ? (
         <AuditTrail
           filters={audit?.filters ?? NO_FILTERS}
           onFilters={audit?.onFilters ?? (() => undefined)}

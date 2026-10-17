@@ -2,12 +2,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { actorOf, recordIn } from '../audit/record';
 import { USER } from '../auth/guard';
-import { userOf } from '../auth/user';
+import { userOf, type WechartUser } from '../auth/user';
 import { mintToken } from '../mcp/tokenText';
 import {
   TOKEN_SCOPES,
   type AccessToken,
   type AccessTokenStore,
+  type TokenOwned,
   type TokenScope,
 } from '../repos/access-tokens';
 import type { AuditStore } from '../repos/audit';
@@ -105,11 +106,13 @@ export function registerAccessTokens(
     return { user, token };
   };
 
-  // Revoke your own (T768, AC-431, AC-442): at once, with no Undo.
-  app.delete('/api/account/tokens/:id', USER, async (request, reply) => {
-    const own = await ownOf(request, reply);
-    if (own === undefined) return reply;
-    const { user, token } = own;
+  /** Revokes `token` as `user`, at once and with no Undo, and records it (AC-431, AC-442). */
+  const revokeAs = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    user: WechartUser,
+    token: TokenOwned,
+  ) => {
     if (!(await store.revoke(token.id, { key: user.key, name: user.name }, now())))
       return reply.status(409).send({ error: 'That token already no longer works.' });
     await recordIn(
@@ -126,6 +129,41 @@ export function registerAccessTokens(
       request.log,
     );
     return reply.status(204).send();
+  };
+
+  // Revoke your own (T768, AC-431, AC-442): at once, with no Undo.
+  app.delete('/api/account/tokens/:id', USER, async (request, reply) => {
+    const own = await ownOf(request, reply);
+    if (own === undefined) return reply;
+    return revokeAs(request, reply, own.user, own.token);
+  });
+
+  // Security › Access tokens (T772, AC-470): a Super-Admin's alone; to anyone
+  // else the routes are as none, as the page is (design 18, A4).
+  const NOT_FOUND = { error: 'Not found.' };
+  app.get('/api/security/tokens', USER, async (request, reply) => {
+    const user = userOf(request);
+    if (!user.superAdmin) return reply.status(404).send(NOT_FOUND);
+    const tokens = await store.everyone(now());
+    return reply.header('cache-control', 'no-store').send({
+      tokens: tokens.map((token) => ({
+        ...shown(token),
+        owner: token.owner,
+        yours: token.owner.key === user.key,
+        state: token.state,
+        stoppedAt: token.stoppedAt?.toISOString() ?? null,
+        revokedBy: token.revokedBy,
+      })),
+    });
+  });
+
+  app.delete('/api/security/tokens/:id', USER, async (request, reply) => {
+    const user = userOf(request);
+    if (!user.superAdmin) return reply.status(404).send(NOT_FOUND);
+    const { id } = request.params as { id: string };
+    const token = await store.owned(id);
+    if (token === undefined) return reply.status(404).send({ error: 'No token has that id.' });
+    return revokeAs(request, reply, user, token);
   });
 
   // Remove from "No longer working" (T768, AC-431; Q1): its audit records stay.

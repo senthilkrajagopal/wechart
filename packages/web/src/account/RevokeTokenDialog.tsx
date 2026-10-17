@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import { useFocusTrap } from '../shell/useFocusTrap';
 
@@ -10,12 +10,18 @@ import { useFocusTrap } from '../shell/useFocusTrap';
  */
 export function RevokeTokenDialog({
   title,
+  body = 'Every client using it stops working at once. It can’t be turned back on; you can make a new one.',
+  children,
   revoke,
   onRevoked,
   onClose,
 }: {
   /** `Revoke "Claude Code · laptop"?`, or with its owner on Security's tab. */
   readonly title: string;
+  /** What stops, and that it can't be undone: state E1's, or screen 4's. */
+  readonly body?: string;
+  /** More about it, under the body: screen 4's scopes, last used and what the owner sees. */
+  readonly children?: ReactNode;
   /** Revokes it; throws with the reason when it wasn't. */
   readonly revoke: () => Promise<void>;
   readonly onRevoked: () => void;
@@ -53,10 +59,8 @@ export function RevokeTokenDialog({
         className="dialog revoke-token"
       >
         <h2 id={`${ids}-title`}>{title}</h2>
-        <p id={`${ids}-body`}>
-          Every client using it stops working at once. It can’t be turned back on; you can make a
-          new one.
-        </p>
+        <p id={`${ids}-body`}>{body}</p>
+        {children}
         {refused === null ? null : (
           <p role="alert" className="propose-dialog__refused">
             {refused}
