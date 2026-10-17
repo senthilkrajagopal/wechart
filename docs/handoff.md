@@ -54,7 +54,9 @@ Read this first when resuming. It holds only the current state and the rules in 
   - each agent uses its own e2e script;
   - never restart shared containers;
   - migrations go above 1758660000000.
-- **Test cadence** (the user, 2026-10-17): per task, its own tests, the full unit suite and the touched e2e in Chrome. A full Chrome e2e runs only at each lane's last task. Touched-spec runs set `WECHART_E2E_CHROMIUM=1`: bundled headless Chromium, no Dock icons (the user, 2026-10-17). Full runs use real Chrome. A full e2e in every browser runs every 10 tasks and at the Phase 2 End Run.
+- **Test cadence** (the user, 2026-10-17: "use chrome test for a batch of tasks instead of per task"):
+  - **Per task:** its own tests (unit, plus its own new or changed e2e on headless Chromium), and the full unit suite.
+  - **Per batch:** the Chrome e2e, a full run at each lane's last task, with fixes in a follow-up commit. Touched-spec runs set `WECHART_E2E_CHROMIUM=1`: bundled headless Chromium, no Dock icons (the user, 2026-10-17). Full runs use real Chrome. A full e2e in every browser runs every 10 tasks and at the Phase 2 End Run.
 - **Test output:** log to a file and read back the summary or failures, never the whole output. Never pipe the unit suite into `head`.
 - **Reviews:** one cold review per behaviour task, given the diff and the task's own ACs. Pure-styling tasks skip it (R77).
 - **Docs:**
