@@ -623,7 +623,9 @@ function ChartEditorSurface() {
               // Whose it is (AC-214), in the prototype's words (T256): new in its
               // folder, or shared and on how many dashboards.
               badges: local ? (
-                <span className="badge" data-testid="editor-ownership">
+                // A plain note, as designs 01 and 02 draw ownership, not a
+                // bordered chip that reads as a control (chart-editor-Q9; T690).
+                <span className="chart-editor__note" data-testid="editor-ownership">
                   Local to a dashboard
                 </span>
               ) : (

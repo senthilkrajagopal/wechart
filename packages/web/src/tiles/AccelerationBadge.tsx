@@ -50,18 +50,38 @@ export function accelerationOf(result: unknown): Acceleration {
   };
 }
 
+/** The Live badge's tooltip (chart-editor-Q5; AC-147 as amended, Q4). */
+export const LIVE_TOOLTIP =
+  'Not served by a pre-aggregation · Cube queried the source database. If Cube runs in rollup-only mode, it would refuse this chart.';
+
 export interface AccelerationBadgeProps {
   readonly result: unknown;
   /** Injected so the rendered age is deterministic in tests. */
   readonly now?: Date;
+  /**
+   * The chart editor's head (T690, EDI-01; chart-editor-Q5): a `.badge`,
+   * "● Live" or "✓ Pre-agg", the age in its tooltip. A tile's otherwise.
+   */
+  readonly variant?: 'tile' | 'head';
 }
 
-export function AccelerationBadge({ result, now = new Date() }: AccelerationBadgeProps) {
+export function AccelerationBadge({
+  result,
+  now = new Date(),
+  variant = 'tile',
+}: AccelerationBadgeProps) {
   const { accelerated, lastUpdatedAt, preAggregation } = accelerationOf(result);
+  const badge = variant === 'head' ? ' badge' : '';
 
   if (!accelerated) {
     return (
-      <span className="acceleration acceleration--live" data-testid="acceleration">
+      <span
+        className={`acceleration acceleration--live${badge}`}
+        data-testid="acceleration"
+        // What Live means (chart-editor-Q5), and the rollup-only sentence
+        // (AC-147 as amended by R76, Q4; T690).
+        title={LIVE_TOOLTIP}
+      >
         <span data-icon="live" aria-hidden="true">
           ●
         </span>{' '}
@@ -78,12 +98,27 @@ export function AccelerationBadge({ result, now = new Date() }: AccelerationBadg
    */
   const built = lastUpdatedAt ? `built ${relativeAge(lastUpdatedAt, now)}` : 'age unknown';
   const short = lastUpdatedAt ? shortAge(lastUpdatedAt, now) : '?';
+  const exact = lastUpdatedAt ? `, ${exactOf(lastUpdatedAt)}` : '';
+  if (variant === 'head')
+    return (
+      <span
+        className={`acceleration acceleration--accelerated${badge}`}
+        data-testid="acceleration"
+        // "by", as Q5 words it (T690's review).
+        title={`Served by the pre-aggregation ${preAggregation ?? ''}, ${built}${exact}`}
+      >
+        <span data-icon="accelerated" aria-hidden="true">
+          ✓
+        </span>{' '}
+        Pre-agg
+      </span>
+    );
   return (
     <span
       className="acceleration acceleration--accelerated"
       data-testid="acceleration"
       // Its age, then the exact build time with UTC beside it (T477, Q9).
-      title={`Accelerated: served from ${preAggregation ?? 'a pre-aggregation'}, ${built}${lastUpdatedAt ? `, ${exactOf(lastUpdatedAt)}` : ''}`}
+      title={`Accelerated: served from ${preAggregation ?? 'a pre-aggregation'}, ${built}${exact}`}
     >
       <span data-icon="accelerated" aria-hidden="true">
         ⚡

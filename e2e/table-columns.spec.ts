@@ -100,5 +100,6 @@ test('a table and the drawer show a time member asked at a grain once, as its bu
   const drawer = page.getByTestId('drawer-result-rows');
   await expect(drawer.getByRole('columnheader')).not.toHaveCount(0);
   const drawn = await drawer.getByRole('columnheader').allTextContents();
-  expect(drawn.filter((head) => /ordered at/i.test(head))).toEqual(['Orders Ordered at (month)']);
+  // With its time chip before its title (T690).
+  expect(drawn.filter((head) => /ordered at/i.test(head))).toEqual(['◷Orders Ordered at (month)']);
 });

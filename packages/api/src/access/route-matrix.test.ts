@@ -1243,6 +1243,12 @@ const CASES: Record<string, Case> = {
         opens(who, place),
       );
   },
+  // Whether Cube runs the model rollup-only (T690, AC-147): the model's, the
+  // same for every user who may sign in.
+  'GET /api/rollup-only': async () => {
+    for (const who of WHO)
+      answered(await ask(who, { method: 'GET', url: '/api/rollup-only' }), `${who} rollup-only`);
+  },
   'POST /api/load': () => queries('/api/load'),
   'POST /api/sql': () => queries('/api/sql'),
   'POST /api/acceleration': () => queries('/api/acceleration'),

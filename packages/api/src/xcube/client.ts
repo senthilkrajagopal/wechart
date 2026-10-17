@@ -27,6 +27,12 @@ export interface XcubeHead {
    * a files-mode revision.
    */
   readonly current: { readonly revision: number; readonly itemsHash: string | null } | null;
+  /**
+   * Whether the answering instance runs the model in rollup-only mode
+   * (T690, AC-147; research `xcube-407622a6b8.md`). Absent where xcube can't
+   * say: no Cube attached (`null`), or an image before 407622a6b8.
+   */
+  readonly rollupOnly?: boolean;
 }
 
 export type SnapshotAnswer =
@@ -424,6 +430,7 @@ export function xcubeAdmin({
                 revision: current.revision,
                 itemsHash: typeof current.itemsHash === 'string' ? current.itemsHash : null,
               },
+        ...(typeof answer['rollupOnly'] === 'boolean' ? { rollupOnly: answer['rollupOnly'] } : {}),
       };
     },
 

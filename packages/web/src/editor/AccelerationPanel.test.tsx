@@ -48,9 +48,11 @@ describe('a chart’s acceleration panel', () => {
     const sent = answering({ matched: 'monthly_orders.by_status_month' });
 
     const status = await screen.findByTestId('acceleration-matched');
+    // "by", as the badge's words have it (chart-editor-Q5; T690, EDI-22).
     expect(status.textContent).toBe(
-      'Served from the pre-aggregation monthly_orders.by_status_month.',
+      'Served by the pre-aggregation monthly_orders.by_status_month.',
     );
+    expect(status.querySelector('svg')?.getAttribute('data-icon')).toBe('ok');
     expect(sent).toEqual([{ query }]);
   });
 
@@ -71,36 +73,41 @@ describe('a chart’s acceleration panel', () => {
       'Monthly Orders ID',
     );
     expect(miss.textContent).toBe(
-      'Not served from a pre-aggregation; the nearest is monthly_orders.by_status_month. ' +
+      'Not served by a pre-aggregation; the nearest is monthly_orders.by_status_month. ' +
         'Stopped by Monthly Orders ID: Monthly Orders ID is not one of the rollup’s dimensions.',
     );
     expect(miss.textContent).not.toContain('monthly_orders.id');
   });
 
   /**
-   * T153 / AC-147: IF a query would fail under rollup-only mode, THEN THE
-   * SYSTEM SHALL warn on the chart that it depends on the source database.
-   * Fails when: such a chart shows no warning.
+   * T153 / AC-147 as amended by R76 (chart-editor-Q4; T690, EDI-02, EDI-22):
+   * … SHALL say in the chart editor's Acceleration tab that Cube would refuse
+   * the chart in rollup-only mode. `Fails when: … its Acceleration tab has no
+   * rollup-only note …`
    *
    * Under rollup-only mode Cube refuses a query no pre-aggregation serves,
    * rather than falling back to the database (research/cube/
    * pre-aggregations.md §2, "No match") — so a miss is exactly such a chart.
+   * Design 02 state D's `.info` note: information, not a warning, with its
+   * icon; a warning only where wechart knows the mode is on (the chart's banner).
    */
-  it('warns that a chart no rollup serves depends on the source database', async () => {
+  const NOTE = 'If Cube runs in rollup-only mode (CUBEJS_ROLLUP_ONLY), it would refuse this chart.';
+
+  it('notes that a chart no rollup serves would be refused in rollup-only mode', async () => {
     answering({
       matched: null,
       miss: { rollup: null, member: 'orders.count', reason: 'orders has no pre-aggregations.' },
     });
 
-    const warning = await screen.findByTestId('rollup-only-warning');
-    expect(warning.getAttribute('role')).toBe('status');
-    expect(warning.querySelector('[data-icon="warning"]')).not.toBeNull();
-    expect(warning.textContent).toBe(
-      'Depends on the source database: in rollup-only mode, Cube would refuse this chart.',
-    );
+    const note = await screen.findByTestId('rollup-only-note');
+    expect(note.className).toBe('acceleration-panel__info');
+    expect(note.querySelector('svg')?.getAttribute('data-icon')).toBe('info');
+    expect(note.textContent).toBe(NOTE);
+    // A note here, not the warning the chart carries where the mode is known on.
+    expect(screen.queryByTestId('rollup-only-warning')).toBeNull();
   });
 
-  it('warns on every miss: one with a nearest rollup, and one Cube could not explain', async () => {
+  it('notes it on every miss: one with a nearest rollup, and one Cube could not explain', async () => {
     answering({
       matched: null,
       miss: {
@@ -109,22 +116,23 @@ describe('a chart’s acceleration panel', () => {
         reason: 'monthly_orders.ordered_at is grouped by day, and the rollup keeps it by month.',
       },
     });
-    expect(await screen.findByTestId('rollup-only-warning')).toBeTruthy();
+    expect((await screen.findByTestId('rollup-only-note')).textContent).toBe(NOTE);
   });
 
-  it('warns when Cube planned no rollup but could not say why', async () => {
+  it('notes it when Cube planned no rollup but could not say why', async () => {
     answering({ matched: null });
 
     expect((await screen.findByTestId('acceleration-miss')).textContent).toBe(
-      'Not served from a pre-aggregation.',
+      'Not served by a pre-aggregation.',
     );
-    expect(screen.getByTestId('rollup-only-warning')).toBeTruthy();
+    expect(screen.getByTestId('rollup-only-note').textContent).toBe(NOTE);
   });
 
-  it('gives no such warning to a chart a rollup serves', async () => {
+  it('gives no such note to a chart a rollup serves', async () => {
     answering({ matched: 'monthly_orders.by_status_month' });
 
     await screen.findByTestId('acceleration-matched');
+    expect(screen.queryByTestId('rollup-only-note')).toBeNull();
     expect(screen.queryByTestId('rollup-only-warning')).toBeNull();
   });
 
@@ -143,7 +151,14 @@ describe('a chart’s acceleration panel', () => {
 
     const miss = await screen.findByTestId('acceleration-miss');
     expect(miss.textContent).toBe(
-      'Not served from a pre-aggregation. Stopped by Orders Count: Orders has no pre-aggregations.',
+      'Not served by a pre-aggregation. Stopped by Orders Count: Orders has no pre-aggregations.',
+    );
+    // Design 02 state D (EDI-22): a 12/600 status line with its icon, then why.
+    expect(miss.querySelector('.acceleration-panel__status svg')?.getAttribute('data-icon')).toBe(
+      'live',
+    );
+    expect(miss.querySelector('.acceleration-panel__why')?.textContent).toBe(
+      'Stopped by Orders Count: Orders has no pre-aggregations.',
     );
   });
 });

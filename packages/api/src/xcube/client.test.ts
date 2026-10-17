@@ -320,6 +320,18 @@ describe('xcube’s answers (T419, AC-333)', () => {
     expect(await head(null, 'files')).toEqual({ generation: 'g1', mode: 'files', current: null });
   });
 
+  it('reads whether the answering instance runs the model rollup-only, where it says (T690, AC-147)', async () => {
+    const head = (rollupOnly: unknown) =>
+      answering(200, { model: 'dev', generation: 'g1', mode: 'items', current: null, rollupOnly })
+        .revision()
+        .then((answer) => answer.rollupOnly);
+    expect(await head(true)).toBe(true);
+    expect(await head(false)).toBe(false);
+    // No Cube attached (null), or an image before 407622a6b8 (absent): unknown.
+    expect(await head(null)).toBeUndefined();
+    expect(await head(undefined)).toBeUndefined();
+  });
+
   it('puts the folder tree, and reads the tree hash xcube answers (T449)', async () => {
     const tree = [{ id: 'froot', parentId: null }];
     expect(await answering(200, { model: 'dev', hash: 'h'.repeat(64) }).folders(tree)).toEqual({

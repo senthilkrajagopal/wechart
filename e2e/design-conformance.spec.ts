@@ -3162,25 +3162,44 @@ test.describe('T257: the chart editor', () => {
       'background-color': await token(page, 'bg-surface', 'background-color'),
     });
 
-    // .drawer { height: 220px; border-top: 1px solid var(--border-subtle); background: var(--bg-surface) },
-    // open by default on Results (editor.js 183, 416).
+    // .drawer { border-top: 1px solid var(--border-subtle); background: var(--bg-surface) },
+    // open by default on Results (editor.js 183, 416), at design 02 pin 1's
+    // 240 px, which replaces the prototype's 220 (R37; T690, EDI-15).
     const drawer = page.getByTestId('results-drawer');
     await expect(drawer).toBeVisible();
     expect(await style(drawer, 'height', 'border-top-width', 'background-color')).toEqual({
-      height: '220px',
+      height: '240px',
       'border-top-width': '1px',
       'background-color': await token(page, 'bg-surface', 'background-color'),
+    });
+    // Its grip on the top edge: 44 × 10, a 32 × 4 bar in border-strong.
+    const grip = drawer.locator('.results-drawer__grip');
+    expect(await style(grip, 'width', 'height', 'cursor')).toEqual({
+      width: '44px',
+      height: '10px',
+      cursor: 'row-resize',
+    });
+    expect(await style(grip.locator('i'), 'width', 'height', 'background-color')).toEqual({
+      width: '32px',
+      height: '4px',
+      'background-color': await token(page, 'border-strong', 'background-color'),
     });
     // .tabs button { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600;
     //                color: var(--text-secondary); border-bottom: 2px solid transparent }
     // [aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent) }
     const tabs = drawer.getByRole('tablist', { name: 'Results' });
+    // Results with its count, Acceleration with its mark (T690, EDI-16).
     await expect(tabs.getByRole('tab')).toHaveText([
-      'Results',
+      /^Results\d+$/,
       'Underlying rows',
       'Cube query',
-      'Acceleration',
+      /^Acceleration[✓○]$/,
     ]);
+    // .tb .ct { font-weight: 400; color: var(--text-muted) }
+    expect(await style(tabs.locator('.results-drawer__count'), 'font-weight', 'color')).toEqual({
+      'font-weight': '400',
+      color: await token(page, 'text-muted'),
+    });
     const selected = tabs.getByRole('tab', { name: 'Results' });
     await expect(selected).toHaveAttribute('aria-selected', 'true');
     expect(
@@ -3218,7 +3237,7 @@ test.describe('T257: the chart editor', () => {
       'font-size': '12px',
       'font-variant-numeric': 'tabular-nums',
     });
-    const header = table.getByRole('columnheader', { name: 'Orders Status' });
+    const header = table.getByRole('columnheader', { name: /Orders Status$/ });
     expect(
       await style(header, 'height', 'position', 'background-color', 'text-align', 'font-weight'),
     ).toEqual({
@@ -3229,8 +3248,15 @@ test.describe('T257: the chart editor', () => {
       'font-weight': '600',
     });
     const cells = table.locator('tbody tr').first().getByRole('cell');
+    // Design 02's .rn first (T690, EDI-18): the row's number, muted, on the right.
+    expect(await style(cells.first(), 'width', 'text-align', 'color')).toEqual({
+      width: '36px',
+      'text-align': 'right',
+      color: await token(page, 'text-muted'),
+    });
+    await expect(cells.first()).toHaveText('1');
     // A dimension's cell keeps the start alignment, as measured on the prototype.
-    expect(await style(cells.first(), 'height', 'padding-left', 'text-align')).toEqual({
+    expect(await style(cells.nth(1), 'height', 'padding-left', 'text-align')).toEqual({
       height: '24px',
       'padding-left': '8px',
       'text-align': 'start',
@@ -3238,13 +3264,25 @@ test.describe('T257: the chart editor', () => {
     // The count, a measure, is a number and lines up on the right.
     expect(await style(cells.last(), 'text-align')).toEqual({ 'text-align': 'right' });
     expect(
-      await style(table.getByRole('columnheader', { name: 'Orders Count' }), 'text-align'),
+      await style(table.getByRole('columnheader', { name: /Orders Count$/ }), 'text-align'),
     ).toEqual({ 'text-align': 'right' });
+    // Each head's role chip, 16 px, before its title.
+    expect(await style(header.locator('.field-row__icon'), 'width', 'height')).toEqual({
+      width: '16px',
+      height: '16px',
+    });
+    // The facts and tools at the strip's end (EDI-17).
+    await expect(drawer.getByTestId('drawer-facts')).toHaveText(/^\d+ rows · \d+ ms$/);
+    await expect(drawer.getByRole('button', { name: 'Copy' })).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Download CSV' })).toBeVisible();
 
-    // Collapsed, the strip stays, so the drawer can always be found (UX-058).
+    // Collapsed, the strip stays, so the drawer can always be found (UX-058),
+    // keeping its count, with ⌃ (design 02 state E, EDI-23).
     await drawer.getByRole('button', { name: 'Hide the results' }).click();
     await expect(table).toHaveCount(0);
     await expect(tabs).toBeVisible();
+    await expect(drawer.getByTestId('drawer-facts')).toHaveText(/^\d+ rows · \d+ ms$/);
+    await expect(drawer.getByRole('button', { name: 'Show the results' })).toHaveText('⌃');
     await tabs.getByRole('tab', { name: 'Cube query' }).click();
     await expect(drawer.getByTestId('drawer-query')).toBeVisible();
   });

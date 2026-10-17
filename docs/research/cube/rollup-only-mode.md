@@ -23,5 +23,7 @@ researched: 2026-10-08
   - a refusal with the first text means rollup-only mode is on for the instance that answered;
   - the second text means a rollup isn't built yet, and says nothing about the mode.
 
-## xcube can report it (requested 2026-10-08, image pending)
-wechart asked xcube for `rollupOnly: boolean` per model, as the answering instance resolves it, on `GET …/revision`. It might also go on `GET …/refresh-worker`. Until that image is pinned, wechart infers the mode only from the first refusal text (AC-147 as amended by R76).
+## xcube can report it (requested 2026-10-08, ~~image pending~~ pinned 2026-10-17)
+wechart asked xcube for `rollupOnly: boolean` per model, as the answering instance resolves it, on `GET …/revision`. ~~It might also go on `GET …/refresh-worker`. Until that image is pinned, wechart infers the mode only from the first refusal text (AC-147 as amended by R76).~~
+
+**Correction, 2026-10-17 (T690):** xcube `407622a6b8` carries it on both `GET …/revision` and `GET …/refresh-worker` as `rollupOnly: boolean | null`, with `null` only where no Cube is attached. See `docs/research/xcube-407622a6b8.md`. wechart pins that image and passes the field on as `GET /api/rollup-only`, and the banner shows on `true`. Where wechart can't know (`null`, or an older image without the field), it still infers the mode from the first refusal text above.

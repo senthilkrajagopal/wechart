@@ -1517,13 +1517,13 @@ button.model-problems__row { cursor: pointer; }
   font-size: 12px;
 }
 .model-editor__warnbar-text { flex: 1; min-width: 240px; }
-/* A chart no rollup serves, in its acceleration panel (T153, AC-147): the
-   warning bar's tint, and its icon beside the words. */
+/* A chart Cube refuses in rollup-only mode, where wechart knows the mode is
+   on (T153, T690, AC-147): the warning bar's tint, and its icon beside the words. */
 .rollup-only-warning {
   display: flex;
   gap: 6px;
   align-items: baseline;
-  margin: 8px 0 0;
+  margin: 0;
   padding: 6px 10px;
   border-radius: 6px;
   background: color-mix(in srgb, var(--wc-status-warning-icon) 16%, var(--wc-bg-surface));
@@ -1531,9 +1531,6 @@ button.model-problems__row { cursor: pointer; }
   font-size: 12px;
 }
 .rollup-only-warning__icon::before { content: '⚠'; color: var(--wc-status-warning); }
-/* Beside the editor's result: what served it, and the warning if nothing did. */
-.result-source { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 8px; }
-.result-source .rollup-only-warning { margin: 0; }
 /* What uses the members a save changes (T147): two short lists in the bar. */
 .model-references__lead { margin: 0 0 6px; }
 .model-references__head { margin: 6px 0 2px; font-size: 12px; font-weight: 600; }
@@ -8712,7 +8709,6 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   border-color: transparent;
   background: transparent;
 }
-.chart-editor__meta { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); white-space: nowrap; }
 .chart-editor__spacer { flex: 1; }
 /* Undo and Redo are .icon-button (the prototype's .iconbtn); with nothing to
    step through, at the prototype's opacity .4 (editor.js 408, T257). */
@@ -8777,7 +8773,8 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 16px;
+  /* Design 01's canvas, padded 12 (T690, EDI-13). */
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -8803,8 +8800,23 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   color: var(--wc-text-secondary);
 }
 .chart-editor__missing { margin: auto; max-width: 480px; }
+/* Design 01 pin 10's status over the preview (T690, EDI-13): 12/16 muted,
+   the form drawn in text-secondary. */
+.chart-editor__status { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-muted); }
+.chart-editor__status b { color: var(--wc-text-secondary); font-weight: 600; }
+/* The head's badges (design 01 pin 1, EDI-01): 22 px on bg-subtle, borderless. */
+.chart-editor__head .badge {
+  gap: 4px;
+  height: 22px;
+  border: 0;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.chart-editor__facts { font-variant-numeric: tabular-nums; }
 /* The drawer at the foot of the preview (AC-214), the prototype's .drawer
-   (T257): its tab strip always there, and open, 220 px with the strip — the
+   (T257): its tab strip always there, and open, 240 px with the strip (T690) — the
    only place result rows are printed. */
 .chart-editor__center .results-drawer {
   flex: none;
@@ -8813,7 +8825,24 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   border-top: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);
 }
-.chart-editor__center .results-drawer[data-open='true'] { height: 220px; }
+/* Design 02 pin 1 (T690, EDI-15): open, its body 240 px (set as it is
+   dragged, 160 px to half the editor), under a grip on its top edge. */
+.chart-editor__center .results-drawer { position: relative; }
+.chart-editor__center .results-drawer[data-open='true'] { height: 240px; }
+.results-drawer__grip {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 10px;
+  margin-left: -22px;
+  cursor: row-resize;
+  touch-action: none;
+}
+.results-drawer__grip > i { display: block; width: 32px; height: 4px; border-radius: 2px; background: var(--wc-border-strong); }
 .results-drawer__bar {
   display: flex;
   align-items: center;
@@ -8821,6 +8850,43 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   padding: 0 8px;
   border-bottom: 1px solid var(--wc-border-subtle);
 }
+.results-drawer[data-open='false'] .results-drawer__bar { border-bottom: 0; }
+/* Design 02's .tb .ct and its Acceleration mark (EDI-16). */
+.results-drawer__tabs [role='tab'] { display: inline-flex; align-items: center; gap: 6px; }
+.results-drawer__count { font-weight: 400; color: var(--wc-text-muted); }
+.results-drawer__mark { font-weight: 400; color: var(--wc-text-muted); }
+.results-drawer__mark[data-served='pre-aggregation'] { color: var(--wc-status-success); }
+/* Design 02's .tools: the facts, Copy, Download CSV, the JSON | SQL switch, ⌄. */
+.results-drawer__tools { display: flex; flex: none; align-items: center; gap: 4px; margin-left: auto; white-space: nowrap; }
+.results-drawer__facts { margin-right: 6px; font-size: 12px; line-height: 16px; color: var(--wc-text-muted); font-variant-numeric: tabular-nums; }
+/* Design 02 state B's .dline (EDI-21): information, 12/16 secondary, ruled. */
+.results-drawer__dline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-secondary);
+}
+.results-drawer__dline > svg { flex: none; color: var(--wc-accent); }
+.results-drawer__muted { color: var(--wc-text-muted); }
+.results-drawer__foot { border-top: 1px solid var(--wc-border-subtle); border-bottom: 0; }
+.results-drawer__foot code { font-family: var(--wc-font-code); font-size: 12px; }
+.results-drawer__query-view { display: flex; flex-direction: column; min-height: 100%; }
+.results-drawer__query-view > .results-drawer__query { flex: 1; }
+/* The grid's muted "#", its role chips and the colour swatches (EDI-18). */
+.grid-table--numbered th:first-child,
+.grid-table--numbered td:first-child { width: 36px; text-align: right; color: var(--wc-text-muted); }
+.grid-table th .field-row__icon { display: inline-grid; width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; }
+.results-drawer__swatch { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 2px; }
+/* The Cube query's JSON in the model editor's code colours (EDI-20). */
+.results-drawer__query .code-key { color: var(--wc-code-key); }
+.results-drawer__query .code-string { color: var(--wc-code-string); }
+.results-drawer__query .code-number,
+.results-drawer__query .code-literal { color: var(--wc-code-number); }
 .results-drawer__tabs { display: flex; flex: 1; gap: 2px; min-width: 0; overflow-x: auto; }
 /* The prototype's .tabs button. */
 .results-drawer__tabs [role='tab'] {
@@ -9104,6 +9170,35 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   font-size: var(--wc-text-xs-size);
   font-weight: 600;
 }
+/* The Acceleration tab as design 02 state D draws it (T690, EDI-22): padded
+   12, gap 10; a 12/600 status line with its icon; why at 12; the rollup-only
+   sentence as an .info note on accent-soft (AC-147, chart-editor-Q4). */
+.acceleration-panel { display: grid; gap: 10px; margin: 0; padding: 12px; font-size: 12px; line-height: 16px; }
+.acceleration-panel__miss { display: grid; gap: 10px; margin: 0; }
+.acceleration-panel__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+}
+.acceleration-panel__status > svg { flex: none; }
+.acceleration-panel__status > svg[data-icon='ok'] { color: var(--wc-status-success); }
+.acceleration-panel__why { color: var(--wc-text-primary); }
+.acceleration-panel__info {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-text-primary);
+}
+.acceleration-panel__info > svg { margin-top: 1px; color: var(--wc-accent); }
+.acceleration-panel code,
+.acceleration-panel__info code { font-family: var(--wc-font-code); font-size: 12px; }
 /* Where the chart's answer came from (T014, AC-013): the editor head's badge,
    the prototype's .badge, "ok"-coloured when a pre-aggregation served it. */
 .acceleration {

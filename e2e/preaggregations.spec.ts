@@ -651,8 +651,9 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
   await page.getByTestId('drawer-tab-acceleration').click();
 
   // The rollup Cube serves the chart from, and no other.
+  // "by", as the badge's words have it (chart-editor-Q5; T690, EDI-22).
   await expect(page.getByTestId('acceleration-matched')).toHaveText(
-    'Served from the pre-aggregation monthly_orders.by_status_month.',
+    'Served by the pre-aggregation monthly_orders.by_status_month.',
     cube,
   );
 
@@ -682,50 +683,131 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
   await cubePicker(page).selectOption({ label: 'Orders' });
   await wellPicker(page, 'measures').selectOption('orders.count');
   await expect(page.getByTestId('acceleration-miss')).toHaveText(
-    'Not served from a pre-aggregation. Stopped by Orders Count: Orders has no pre-aggregations.',
+    'Not served by a pre-aggregation. Stopped by Orders Count: Orders has no pre-aggregations.',
     cube,
   );
 });
 
 /**
- * T153 / AC-147: IF a query would fail under rollup-only mode, THEN THE
- * SYSTEM SHALL warn on the chart that it depends on the source database.
- * Fails when: such a chart shows no warning.
+ * T153 / AC-147 as amended by R76 (chart-editor-Q4; T690): IF a query would
+ * fail under rollup-only mode, THEN THE SYSTEM SHALL say on the chart that
+ * the source database answered it (its query badge reads "Live", with the
+ * rollup-only sentence in the badge's tooltip), SHALL say in the chart
+ * editor's Acceleration tab that Cube would refuse the chart in rollup-only
+ * mode, and, WHERE wechart knows that Cube runs in rollup-only mode, SHALL
+ * show that as a warning banner on the chart.
+ * `Fails when: such a chart's badge doesn't say Live, its Acceleration tab
+ * has no rollup-only note, or, while rollup-only mode is known to be on, the
+ * chart shows no banner.`
  *
  * Under rollup-only mode Cube refuses what no pre-aggregation serves
  * (research/cube/pre-aggregations.md §2): on the real Cube, a chart on
  * `orders`, which has no rollups, is such a chart, and one the seed rollup
- * serves is not.
+ * serves is not. Compose's Cube runs without CUBEJS_ROLLUP_ONLY, so xcube
+ * says `rollupOnly: false` (research `xcube-407622a6b8.md`): no banner; the
+ * known-on case is xcube saying true, answered here in its place.
  */
-test('a chart no rollup serves is warned of depending on the source database', async ({ page }) => {
+test('a chart no rollup serves reads Live, says rollup-only would refuse it, and warns only where that mode is known on', async ({
+  page,
+}) => {
   const cube = { timeout: 30_000 };
   await page.goto('/explore/charts/seed-chart-empty/edit');
   await cubePicker(page).selectOption({ label: 'Orders' });
   await wellPicker(page, 'measures').selectOption('orders.count');
 
-  // On the chart itself, beside its result — nothing to open first (T153's
-  // review: "warn on the chart").
-  const onChart = page.getByTestId('result-source');
-  const warning = onChart.getByTestId('rollup-only-warning');
-  await expect(warning).toHaveText(
-    'Depends on the source database: in rollup-only mode, Cube would refuse this chart.',
-    cube,
+  // On the chart: its head's badge, "● Live", and the sentence in its tooltip.
+  const head = page.getByTestId('editor-bar');
+  const badge = head.getByTestId('acceleration');
+  await expect(badge).toHaveText('● Live', cube);
+  await expect(badge).toHaveAttribute(
+    'title',
+    'Not served by a pre-aggregation · Cube queried the source database. If Cube runs in rollup-only mode, it would refuse this chart.',
   );
-  await expect(warning).toHaveAttribute('role', 'status');
-  await expect(warning.locator('[data-icon="warning"]')).toHaveCount(1);
-  await expect(onChart.getByTestId('acceleration')).toContainText('Live');
-  // And in its acceleration panel.
+  // No banner: the mode isn't known to be on.
+  await expect(page.getByTestId('rollup-only-warning')).toHaveCount(0);
+  // The Acceleration tab's note.
   await page.getByRole('tab', { name: 'Results', exact: true }).click();
   await page.getByTestId('drawer-tab-acceleration').click();
-  await expect(
-    page.getByRole('tabpanel', { name: 'Acceleration' }).getByTestId('rollup-only-warning'),
-  ).toBeVisible(cube);
+  const note = page.getByRole('tabpanel', { name: 'Acceleration' }).getByTestId('rollup-only-note');
+  await expect(note).toHaveText(
+    'If Cube runs in rollup-only mode (CUBEJS_ROLLUP_ONLY), it would refuse this chart.',
+    cube,
+  );
 
-  // A chart the rollup serves: no warning, on the chart or in the panel.
+  // A chart the rollup serves: "✓ Pre-agg", no note, no banner.
   await cubePicker(page).selectOption({ value: 'monthly_orders' });
   await wellPicker(page, 'measures').selectOption('monthly_orders.count');
   await wellPicker(page, 'dimensions').selectOption('monthly_orders.status');
   await expect(page.getByTestId('acceleration-matched')).toBeVisible(cube);
-  await expect(onChart.getByTestId('acceleration')).toContainText('Accelerated', cube);
+  await expect(badge).toHaveText('✓ Pre-agg', cube);
+  await expect(page.getByTestId('rollup-only-note')).toHaveCount(0);
   await expect(page.getByTestId('rollup-only-warning')).toHaveCount(0);
+});
+
+/**
+ * T690's review: in a real rollup-only deployment Cube refuses the chart, so
+ * the banner is on the failed query's path. Cube's own words for the mode
+ * bring it, where xcube says on or can't say (null); no other refusal does —
+ * a matched rollup not yet built is refused in other words.
+ */
+for (const said of [null, true] as const)
+  test(`a query Cube refuses for rollup-only mode carries the banner, xcube saying ${String(said)}; another refusal doesn't`, async ({
+    page,
+  }) => {
+    const cube = { timeout: 30_000 };
+    await page.route('**/api/rollup-only', (route) =>
+      route.fulfill({ json: { rollupOnly: said } }),
+    );
+    let refusal =
+      'No pre-aggregation table has been built for this query yet. Please check your refresh worker configuration if it persists.';
+    await page.route('**/api/load', (route) =>
+      route.request().method() === 'POST'
+        ? route.fulfill({ status: 400, json: { error: refusal } })
+        : route.continue(),
+    );
+    await page.goto('/explore/charts/seed-chart-empty/edit');
+    await cubePicker(page).selectOption({ label: 'Orders' });
+    await wellPicker(page, 'measures').selectOption('orders.count');
+    const warning = page.getByTestId('rollup-only-warning');
+    await expect(warning).toHaveText(
+      'Cube runs in rollup-only mode: it refuses this chart, which no pre-aggregation serves.',
+      cube,
+    );
+    // Cube's own message stays, beneath it (AC-012).
+    await expect(page.getByText(refusal)).toBeVisible();
+
+    // A matched rollup not built yet: refused, but not for the mode.
+    refusal =
+      'No pre-aggregation partitions were built yet for the pre-aggregation serving this query and this API instance wasn’t set up to build pre-aggregations.';
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect(page.getByText(refusal)).toBeVisible(cube);
+    await expect(warning).toHaveCount(0);
+  });
+
+test('where xcube says Cube runs rollup-only, a chart no rollup serves carries the banner', async ({
+  page,
+}) => {
+  const cube = { timeout: 30_000 };
+  // xcube's answer, as 407622a6b8 gives it with CUBEJS_ROLLUP_ONLY set.
+  await page.route('**/api/rollup-only', (route) => route.fulfill({ json: { rollupOnly: true } }));
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  const warning = page.getByTestId('rollup-only-warning');
+  await expect(warning).toHaveText(
+    'Cube runs in rollup-only mode: it refuses this chart, which no pre-aggregation serves.',
+    cube,
+  );
+  await expect(warning).toHaveAttribute('role', 'status');
+  await expect(warning.locator('[data-icon="warning"]')).toHaveCount(1);
+
+  // One a rollup serves: none.
+  await cubePicker(page).selectOption({ value: 'monthly_orders' });
+  await wellPicker(page, 'measures').selectOption('monthly_orders.count');
+  await wellPicker(page, 'dimensions').selectOption('monthly_orders.status');
+  await expect(page.getByTestId('editor-bar').getByTestId('acceleration')).toHaveText(
+    '✓ Pre-agg',
+    cube,
+  );
+  await expect(warning).toHaveCount(0);
 });

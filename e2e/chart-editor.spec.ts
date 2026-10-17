@@ -387,6 +387,74 @@ test('Auto hands the choice back, and is pressed only in Auto', async ({ page })
   await expect(page.getByTestId('recommended-card')).toHaveCount(0);
 });
 
+/**
+ * T690 (AC-352, AC-036, AC-301; design 02, EDI-13, EDI-15–EDI-20): the
+ * status over the preview, and the drawer: its columns in the wells' order,
+ * Copy and Download CSV, the Cube query as JSON or Cube's SQL with where it
+ * went, and its grip.
+ */
+test('the preview’s status, and the drawer as design 02 draws it (T690)', async ({ page }) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await openEditorOnOrders(page);
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
+
+  // Design 01 pin 10: the form drawn, and how it was chosen.
+  await expect(page.getByTestId('preview-status')).toHaveText('Showing Bar · auto');
+
+  const drawer = page.getByTestId('results-drawer');
+  await page.getByRole('tab', { name: 'Results', exact: true }).click();
+  // The columns in the wells' order, the row's "#" first (AC-301, EDI-18, EDI-19).
+  await expect(drawer.getByTestId('drawer-result-rows').getByRole('columnheader')).toHaveText([
+    '#',
+    'AaOrders Status',
+    'ΣOrders Count',
+  ]);
+  // Copy: tab-separated, as it pastes into a spreadsheet (EDI-17).
+  await drawer.getByRole('button', { name: 'Copy' }).click();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied.split('\n')[0]).toBe('Orders Status\tOrders Count');
+  expect(copied.split('\n')).toHaveLength(4);
+  // Download CSV: a file of the same rows.
+  const saved = page.waitForEvent('download');
+  await drawer.getByRole('button', { name: 'Download CSV' }).click();
+  expect((await saved).suggestedFilename()).toBe('results.csv');
+
+  // The Cube query: JSON, then Cube's SQL, and where it went (EDI-20).
+  await drawer.getByRole('tab', { name: 'Cube query' }).click();
+  await expect(drawer.getByTestId('drawer-query').locator('.code-key').first()).toHaveText(
+    /^"\w+"$/,
+  );
+  await expect(drawer.getByTestId('drawer-query-foot')).toHaveText(
+    /^Sent to POST \/cubejs-api\/v1\/load · \d+ ms · 3 rows$/,
+  );
+  await drawer.getByRole('button', { name: 'SQL', exact: true }).click();
+  await expect(drawer.getByTestId('drawer-sql')).toContainText('SELECT', { timeout: 30_000 });
+
+  // The grip: dragged up 100 px, the drawer is 100 px taller; a double-click puts it back.
+  const grip = drawer.locator('.results-drawer__grip');
+  const before = (await drawer.boundingBox())!.height;
+  expect(before).toBe(240);
+  const at = (await grip.boundingBox())!;
+  await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2 - 100, { steps: 5 });
+  await page.mouse.up();
+  expect((await drawer.boundingBox())!.height).toBe(340);
+  await grip.dblclick();
+  expect((await drawer.boundingBox())!.height).toBe(240);
+
+  // EDI-19's case: a dimension added after another, whose name sorts first in
+  // the query Cube is asked, stays after it in the drawer, as in the wells.
+  await wellPicker(page, 'dimensions').selectOption('customers.country');
+  await drawer.getByRole('tab', { name: 'Results', exact: true }).click();
+  await expect(drawer.getByTestId('drawer-result-rows').getByRole('columnheader')).toHaveText(
+    ['#', 'AaOrders Status', 'AaCustomers Country', 'ΣOrders Count'],
+    { timeout: 30_000 },
+  );
+});
+
 /** EDI-07 (T689): the Recommended card, only while a manual pick differs, and its Use. */
 test('the Recommended card shows only after a differing manual choice, and Use hands it back', async ({
   page,
@@ -1225,10 +1293,13 @@ test('the editor is three panes under one header row, its preview in view at 144
   await wellPicker(page, 'measures').selectOption('orders.count');
   await wellPicker(page, 'dimensions').selectOption('orders.status');
 
-  // One header row: title, source and rows, ownership, Undo, Redo, Discard, Save.
+  // One header row: title, the answer's badges, ownership, Undo, Redo, Discard,
+  // Save. Design 01 pin 1's badges since T690 (EDI-01): what served it, and
+  // "3 rows · n ms"; the cube is named over the field list (T688).
   const head = page.getByTestId('editor-bar');
   await expect(head.getByTestId('result-row-count')).toHaveText('3 rows');
-  await expect(head).toContainText('Orders');
+  await expect(head.getByTestId('result-facts')).toHaveText(/^3 rows · \d+ ms$/);
+  await expect(head.getByTestId('acceleration')).toHaveText('● Live');
   // A library chart that exists, on no dashboard: shared, not new for having
   // no fields when opened (T256's review).
   await expect(head.getByTestId('editor-ownership')).toHaveText(
@@ -1326,6 +1397,12 @@ test('over a dashboard, the editor’s one header row holds Back and Save dashbo
   const head = page.getByTestId('editor-bar');
   await expect(head.getByLabel('Chart title')).toHaveValue('Orders by category and status');
   await expect(head.getByTestId('editor-ownership')).toHaveText('Local · only on this dashboard');
+  // A plain note, not a bordered chip (chart-editor-Q9; T690).
+  expect(
+    await head
+      .getByTestId('editor-ownership')
+      .evaluate((node) => getComputedStyle(node).borderTopWidth),
+  ).toBe('0px');
   const controls = [
     head.getByTestId('editor-back'),
     head.getByLabel('Chart title'),
@@ -1575,7 +1652,13 @@ test('a two-measure legend, the results headers and the trace read the members�
   // The results' headers.
   await page.getByRole('tab', { name: 'Results', exact: true }).click();
   const headers = page.getByTestId('drawer-result-rows').getByRole('columnheader');
-  await expect(headers).toHaveText(['Orders Status', 'Orders Count', 'Orders Total Amount']);
+  // After the row's "#", each with its role chip before its title (T690).
+  await expect(headers).toHaveText([
+    '#',
+    'AaOrders Status',
+    'ΣOrders Count',
+    'ΣOrders Total Amount',
+  ]);
 
   // The checklist and its full table (T689).
   await page.getByRole('button', { name: 'Why this recommendation?' }).click();

@@ -9729,6 +9729,46 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - **The revision route's `rollupOnly: true` waits on that xcube image.** It is built once the image is published and pinned by digest.
     - **chart-editor-Q9:** a local chart's ownership is a plain note, as designs 01 and 02 draw it ("Shared chart · on 2 dashboards · edits change both", with ⚠ when it matters), in place of the bordered "Local to a dashboard" chip.
   - Depends on: T681 (the badge's words, which the head's badges share)
+  - **Done 2026-10-17 (lane A).**
+    - **xcube `407622a6b8` pinned** by digest (`sha256:3e329db5…`) in compose, both Helm values, `docs/deploy.md`, `infra/xcube/fresh-start.sh` and `cube-image.test`. Research: `docs/research/xcube-407622a6b8.md`; `cube/rollup-only-mode.md` corrected. No migration (schema 14).
+    - **As built.**
+      - **AC-147 (chart-editor-Q4):**
+        - `XcubeAdmin.revision()` passes on `rollupOnly` where it is a boolean.
+        - The new `GET /api/rollup-only` answers `{ rollupOnly: true | false | null }`. It is null without xcube, with an older image, or when xcube fails.
+        - The banner shows on a chart no pre-aggregation serves only where wechart knows the mode is on: xcube says `true`, or, where it says null, the query failed with Cube's "No pre-aggregation table has been built for this query yet" (`rollupOnlyKnown`).
+        - The canvas's always-on warning is gone. The Live badge's tooltip carries the sentence on every chart and tile.
+        - The Acceleration tab has design 02 state D's `.info` note: "If Cube runs in rollup-only mode (CUBEJS_ROLLUP_ONLY), it would refuse this chart."
+      - **The head (EDI-01, chart-editor-Q5):** "● Live" or "✓ Pre-agg", then "n rows · n ms", both 22 px badges on bg-subtle. The cube's title left the head; the field list's head names it (T688). The elapsed time is read inside the preview's `queryFn` and kept in the query's data, since structural sharing loses `elapsedOf`'s WeakMap entry.
+      - **The status line (EDI-13):** "Showing ‹form› · auto | chosen manually", 12/16 muted, over the preview. The canvas is padded 12.
+      - **The drawer (EDI-15–EDI-23):**
+        - 240 px opened. The grip (44 × 10, its 32 × 4 bar) drags it from 160 px to half the editor, and a double-click resets it. Pointer only, no keyboard (R75).
+        - Results' tab shows its count, and Acceleration's tab ✓ or ○.
+        - The facts: "n rows · n ms". Copy (tab-separated), and Download CSV (as a tile's CSV, `rowsCsvOf`, raw columns included), plus Underlying rows' Download CSV.
+        - ⌄ and ⌃. Collapsed, the strip keeps the facts.
+        - The grid's muted "#", a role chip per head, and the colour dimension's swatch, in the series' own colour or the palette's by place.
+        - Columns in the wells' order (AC-301).
+        - The Cube query as JSON in the code colours, or Cube's SQL (`/api/sql`), with Copy of the view shown and the foot "Sent to POST /cubejs-api/v1/load · n ms · n rows".
+        - The cap note as `.dline` information.
+        - Acceleration as state D: padded 12, gap 10, a 12/600 status line with its icon, "Served by" / "Not served by" (Q5), and the reason at 12.
+      - **chart-editor-Q9:** a local chart's ownership is a plain `.chart-editor__note` in the editor's head and the dashboard's editor overlay, not a bordered badge.
+    - **Not built, each waiting on an open item:**
+      - The status line's "click a bar to drill, keep or exclude" waits on backlog §5's drill item.
+      - Acceleration's "Open in Model › Pre-aggs" is backlog §6(c).
+      - The cap note's "of n orders behind this chart · columns from…" is backlog §6(a).
+      - The badge tooltip's "Details in Acceleration" link isn't built: a `title` tooltip can't hold a link, and a focusable tooltip is new keyboard work (R75).
+    - **Tests.**
+      - API: `routes/rollup-only.test.ts`, `xcube/client.test.ts` (`rollupOnly`), `deploy/cube-image.test.ts` (the pin), and `route-matrix.test.ts`'s case.
+      - Unit: `ResultsDrawer.test`, `AccelerationPanel.test`, `RollupOnlyWarning.test`, `AccelerationBadge.test`.
+      - e2e: `chart-editor.spec.ts` (the head, the status, the drawer's tools, columns, query and grip, ownership's note), `preaggregations.spec.ts` (AC-147: Live with its tooltip, the note, no banner on compose's Cube; the banner where `/api/rollup-only` says true, answered by the test), `design-conformance.spec.ts` (240 px, the grip, count, `.rn`, chips, facts, ⌃), `titles.spec.ts` and `table-columns.spec.ts` (heads with their chips).
+    - **The review (one round), fixed:**
+      - A failed query carries the banner only where Cube refused it in its own words for rollup-only mode and xcube doesn't say the mode is off (`refusedInRollupOnly`). Before the fix it showed for any failure while xcube said true. The new e2e cases route `/api/load` to that refusal, with xcube saying null or true, then to the not-built refusal, which carries no banner.
+      - EDI-19's e2e now covers a dimension whose name sorts first but was added second.
+      - A time member on colour gets its swatch.
+      - A refused clipboard throws nothing.
+      - The Pre-agg tooltip says "Served by".
+      - The dead `.chart-editor__meta` CSS is gone.
+      - Left as is: the drawer's height is clamped to half the editor only while it is dragged, not again when the window shrinks.
+    - **Changed with the design:** the "Served/Not served from" wording is now "by" (Q5); the drawer's heads now start with "#" and each has its chip; the always-on banner is now the Acceleration note (R76, AC-147 amended).
 - [ ] T691 (AC-344, AC-343, AC-187) The Model workspace's remaining differences and the shared pane chrome of Generate cubes and the data source wizard *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/model/{FileTree,FileList,GenerateCubes}.tsx`, `packages/web/src/workspaces/data-sources/NewSourceWizard.tsx`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/model-design.spec.ts`, `e2e/consistency.spec.ts`
   - Findings: MOD-01, MOD-02, MOD-03, MOD-04, MOD-05, MOD-06; SRC-01, SRC-12, SRC-13, SRC-14, SRC-16; SRC-05's wizard glyphs.

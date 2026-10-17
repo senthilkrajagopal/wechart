@@ -422,11 +422,12 @@ export function ChartEditorOverlay({
       </div>
     ) : draft?.wasLocalTo !== undefined ? (
       // Saved to a folder in this session (T133): shared once the dashboard is.
-      <span className="badge" data-testid="editor-ownership">
+      // A plain note, as designs 01 and 02 draw it (chart-editor-Q9; T690).
+      <span className="chart-editor__note" data-testid="editor-ownership">
         Local until saved · then shared from its folder
       </span>
     ) : opened.document.localToDashboardId !== undefined ? (
-      <span className="badge" data-testid="editor-ownership">
+      <span className="chart-editor__note" data-testid="editor-ownership">
         {opened.document.localToDashboardId === dashboardId
           ? 'Local · only on this dashboard'
           : 'Local to another dashboard'}

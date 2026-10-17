@@ -80,7 +80,7 @@ cube:
   # names: don't set those four again in `dataSource.env` or `seedFields`.
   # Published by the fork's CI for amd64 and arm64, and pinned by digest
   # (docs/deploy.md); a plain cubejs/cube image won't start with this cube.js.
-  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-c2602ac72a@sha256:c7334a52800d8fe30faa7277e9b0ebcc68701b6f10ad394ad267e5e361871884
+  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-407622a6b8@sha256:3e329db5926c6fa93e9ba5cda838dbabc4de41ddc24b28c92674220d5dd35061
   port: 4000
   # How long a Cube process may take to connect to xcube's schema, migrate it
   # and compile every model before it answers: its port stays closed until

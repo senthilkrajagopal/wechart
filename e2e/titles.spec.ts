@@ -105,7 +105,13 @@ test('a one-source chart’s legend and pills read short titles, the rest of the
   // The results' headers, by full title.
   await page.getByRole('tab', { name: 'Results', exact: true }).click();
   const headers = page.getByTestId('drawer-result-rows').getByRole('columnheader');
-  await expect(headers).toHaveText(['Orders Status', 'Orders Count', 'Orders Total Amount']);
+  // After the row's "#", each with its role chip before its title (T690).
+  await expect(headers).toHaveText([
+    '#',
+    'AaOrders Status',
+    'ΣOrders Count',
+    'ΣOrders Total Amount',
+  ]);
 
   // The Acceleration tab: the re-critique read "Stopped by orders.count:
   // orders has no pre-aggregations."

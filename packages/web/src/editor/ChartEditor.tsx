@@ -39,10 +39,10 @@ import { ChartTypeGallery } from './ChartTypeGallery';
 import { CustomizeTab } from './CustomizeTab';
 import { answerMetaOf } from '../query/answerMeta';
 import { QueryItemContext, useQueryItem, type QueryItem } from '../query/item';
-import { loadTile } from '../query/loadTile';
+import { elapsedOf, loadTile } from '../query/loadTile';
 import { AccelerationBadge, accelerationOf } from '../tiles/AccelerationBadge';
 import { ChartTile } from '../tiles/ChartTile';
-import { RollupOnlyWarning } from './RollupOnlyWarning';
+import { RollupOnlyWarning, refusedInRollupOnly, rollupOnlyKnown } from './RollupOnlyWarning';
 import { TileError } from '../tiles/TileError';
 import { TileSkeleton } from '../tiles/TileSkeleton';
 import { ResultsDrawer, type DrawerView } from './ResultsDrawer';
@@ -452,21 +452,44 @@ function EditorBody({
   const item = useQueryItem();
   const result = useQuery({
     queryKey: ['editor-preview', query, item ?? null],
-    queryFn: ({ signal }) => loadTile({ query, signal, item }),
+    queryFn: async ({ signal }) => {
+      const answer = await loadTile({ query, signal, item });
+      // How long it took, read here off the answer `loadTile` measured: kept
+      // beside it in the data, as TanStack's structural sharing hands back
+      // an object `elapsedOf` doesn't know after the first fetch (T690).
+      return { answer, elapsedMs: elapsedOf(answer) };
+    },
     enabled: !isEmpty(spec),
   });
+  const answer = result.data?.answer;
 
   // What Cube said of the answer besides its rows: what served it (T153).
-  const served = useMemo(() => answerMetaOf(result.data), [result.data]);
+  const served = useMemo(() => answerMetaOf(answer), [answer]);
+  const elapsedMs = result.data?.elapsedMs;
 
   // Memoised: a fresh array each render would defeat every memo below it, so
   // the signature — and with it the recommendation — would be recomputed on
   // every keystroke.
   const rows = useMemo(
-    () =>
-      ((result.data as { data?: unknown[] } | undefined)?.data ?? []) as Record<string, unknown>[],
-    [result.data],
+    () => ((answer as { data?: unknown[] } | undefined)?.data ?? []) as Record<string, unknown>[],
+    [answer],
   );
+  /**
+   * Whether Cube runs the model in rollup-only mode (T690, AC-147): as xcube
+   * says it (`GET /api/rollup-only`), null where it can't. Read once; a
+   * deployment's mode doesn't change under an editor.
+   */
+  const rollupOnly = useQuery({
+    queryKey: ['rollup-only'],
+    queryFn: async ({ signal }) => {
+      const response = await fetch('/api/rollup-only', { signal });
+      if (!response.ok) return null;
+      const said = ((await response.json()) as { rollupOnly?: unknown } | null)?.rollupOnly;
+      return typeof said === 'boolean' ? said : null;
+    },
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
   /**
    * Each dimension's distinct values in the chart's own result (T688,
    * EDI-04), for the field list: counted from the rows already come, with no
@@ -691,6 +714,25 @@ function EditorBody({
       return [];
     }
   }, [drawnSpec, titles]);
+  /**
+   * A cell's colour in the results grid (T690, EDI-18): the colour
+   * dimension's values each wear their series' colour as drawn — its own,
+   * chosen in Customize, or the palette's by place, as Customize shows it.
+   */
+  const colourMember = drawnSpec?.encoding?.['color']?.[0];
+  const seriesSettings = (options['series'] ?? {}) as Record<string, { colour?: unknown }>;
+  const swatchOf = (column: string, value: unknown): string | undefined => {
+    // Its column, or its grain's (`member.month`) for a time member on colour.
+    if (
+      colourMember === undefined ||
+      (column !== colourMember && !column.startsWith(`${colourMember}.`))
+    )
+      return undefined;
+    const at = drawnSeries.findIndex((one) => one.name === String(value));
+    if (at === -1) return undefined;
+    const own = seriesSettings[String(value)]?.colour;
+    return typeof own === 'string' ? own : DEFAULT_PALETTE[at % DEFAULT_PALETTE.length];
+  };
 
   /** The chart's cube or view, as the model titles it. */
   const sourceTitle =
@@ -726,15 +768,24 @@ function EditorBody({
             if (event.key === 'Enter') commitTitle();
           }}
         />
-        <span className="chart-editor__meta">
-          {sourceTitle}
-          {!isEmpty(spec) && result.isSuccess ? (
-            <>
-              {' · '}
+        {/* The answer's facts as design 01 pin 1 badges them (T690, EDI-01):
+            what served it, "● Live" or "✓ Pre-agg", the rollup-only sentence
+            in Live's tooltip (AC-147, chart-editor-Q4, Q5); then
+            "8 rows · 42 ms". The cube is named over the field list (T688). */}
+        {!isEmpty(spec) && result.isSuccess ? (
+          <>
+            <AccelerationBadge result={served} variant="head" />
+            <span className="badge chart-editor__facts" data-testid="result-facts">
               <span data-testid="result-row-count">{rows.length} rows</span>
-            </>
-          ) : null}
-        </span>
+              {elapsedMs === undefined ? null : (
+                <>
+                  {' · '}
+                  <span data-testid="result-ms">{Math.round(elapsedMs)} ms</span>
+                </>
+              )}
+            </span>
+          </>
+        ) : null}
         {head?.badges}
         <span className="chart-editor__spacer" />
         {/* Not while a change is being applied: an edit then would be lost
@@ -826,27 +877,38 @@ function EditorBody({
               <TileSkeleton chartType={shownType ?? 'bar'} />
             </div>
           ) : result.isError ? (
-            // Cube's own message, with Retry and the query behind a disclosure
-            // (AC-012, AC-042).
-            <TileError
-              error={result.error}
-              onRetry={() => {
-                void result.refetch();
-              }}
-            />
+            <>
+              {/* Refused because Cube runs rollup-only (T690, AC-147): in
+                  Cube's own words for it, xcube saying on or unable to say;
+                  never for another failure (T690's review). */}
+              {refusedInRollupOnly(rollupOnly.data, result.error) ? <RollupOnlyWarning /> : null}
+              {/* Cube's own message, with Retry and the query behind a
+                  disclosure (AC-012, AC-042). */}
+              <TileError
+                error={result.error}
+                onRetry={() => {
+                  void result.refetch();
+                }}
+              />
+            </>
           ) : (
             <>
               {/*
-                Where this answer came from, as the prototype's editor badges
-                it, and — when no pre-aggregation served it — the warning that
-                rollup-only mode would refuse the chart, on the chart itself
-                (T153, AC-147; its panel says the same). Read from the answer
-                the chart drew, so the two cannot disagree.
+                Design 01 pin 10's one-line status over the preview (T690,
+                EDI-13): the form drawn and how it was chosen. What served the
+                answer is the head's badge; the banner shows only where wechart
+                knows Cube runs in rollup-only mode, which would refuse a chart
+                no pre-aggregation serves (AC-147 as amended, chart-editor-Q4).
               */}
-              <div className="result-source" data-testid="result-source">
-                <AccelerationBadge result={served} />
-                {accelerationOf(served).accelerated ? null : <RollupOnlyWarning />}
-              </div>
+              {shownType === null || missing.length > 0 ? null : (
+                <p className="chart-editor__status" data-testid="preview-status">
+                  Showing <b>{CHART_TYPE_NAMES[shownType]}</b> ·{' '}
+                  {isManual(chartTypeState) ? 'chosen manually' : 'auto'}
+                </p>
+              )}
+              {!accelerationOf(served).accelerated && rollupOnlyKnown(rollupOnly.data, null) ? (
+                <RollupOnlyWarning />
+              ) : null}
               {missing.length > 0 ? (
                 // In the chart's place, what it still needs (AC-033), rather
                 // than empty axes.
@@ -906,6 +968,12 @@ function EditorBody({
         {isEmpty(spec) ? null : (
           <ResultsDrawer
             rows={rows}
+            // Design 02's facts and marks (T690): how long, what served it.
+            elapsedMs={elapsedMs}
+            accelerated={accelerationOf(served).accelerated}
+            // The columns in the wells' order (AC-301, EDI-19).
+            columns={[...spec.timeDimensions, ...spec.dimensions, ...spec.measures]}
+            swatchOf={swatchOf}
             query={query}
             underlyingQuery={underlyingQuery}
             formats={formats}

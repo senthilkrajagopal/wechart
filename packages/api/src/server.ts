@@ -907,6 +907,23 @@ export function buildServer({
   });
 
   /**
+   * Whether Cube runs the model in rollup-only mode (T690, AC-147 as amended
+   * by R76): as xcube's `GET …/revision` says it for the answering instance
+   * (research `xcube-407622a6b8.md`), null where wechart can't know — no
+   * xcube, an image that doesn't say, or xcube not answering. A chart's
+   * banner shows only on true.
+   */
+  app.get('/api/rollup-only', USER, async (request) => {
+    if (xcube === undefined) return { rollupOnly: null };
+    try {
+      return { rollupOnly: (await xcube.revision()).rollupOnly ?? null };
+    } catch (failure) {
+      request.log.warn({ failure }, 'whether Cube runs rollup-only could not be read');
+      return { rollupOnly: null };
+    }
+  });
+
+  /**
    * Who is signed in (AC-190, AC-252, AC-254): the name the top bar shows,
    * whether they are a Super-Admin, and the security mode, so the top bar can
    * show "Single-user mode" in place of Sign out.
