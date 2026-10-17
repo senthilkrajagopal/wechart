@@ -9548,7 +9548,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - "N pairs changed" counts only pairs set apart from the default;
       - the page now asks through `changesOf`, not `isDirty`. `isDirty` stays exported with its tests, which cover the content comparison both use.
     - **Found by the e2e run:** a dashboard stored as `interactions: { mode }` with no `crossFilter` made the cross-filtering card's foot throw. The foot now reads the default, which is what cross-filtering acts on.
-- [ ] T686 (AC-352, AC-126, AC-022) The chart page as design 06 draws it, with "Add to a dashboard…" as its picker *(added 2026-10-08 by T406)*
+- [x] T686 (AC-352, AC-126, AC-022) The chart page as design 06 draws it, with "Add to a dashboard…" as its picker *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/explore/LibraryChartPage.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/chart-page.spec.ts`
   - Findings: DSH-11, DSH-12, DSH-13, DSH-14, DSH-15, DSH-16.
   - Failing test:
@@ -9565,6 +9565,44 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - "Open ‹dashboard›" stays in ⋯, as design 06 pin 5 draws it.
     - A view-only user gets neither button.
   - Depends on: T681 (the tile head's badge, which the chart page's tile shares)
+  - **Built 2026-10-17** (lane B). The coordinator's six calls are recorded in `decisions-2026-10-08.md`, "Later decisions", T686-1 to T686-6.
+    - **⋯ (DSH-11), for everyone who opens the page:** Open ‹dashboard› (a local chart's), Copy link, View query, Download CSV, then Delete chart… where it's allowed.
+      - Copy link puts the page's address on the clipboard and says "Copied a link to this chart." in the head.
+      - View query opens the tile's dialog (`ViewQuery`) on the chart's Cube query.
+      - Download CSV saves the drawn rows, as a tile's does.
+      - Each item that can't run yet says why: a chart with no fields has no query, and one not drawn has nothing to download.
+    - **Updated (DSH-12):** "21 Sep by Ada Admin" where the chart's history is the user's to see, else the day alone (`updatedText`).
+    - **Crumbs, ownership and Lives on (DSH-13):**
+      - a local chart's crumbs step on to its dashboard (`FolderCrumbs`' `item`);
+      - the head reads "Local chart · only on ‹dashboard›", and adds "· on none of its tiles" where no tile shows it;
+      - Lives on, and Used in, list dashboards as Explore item rows: 32 px, ▦, the name and "Open ›".
+    - **The tile (DSH-14):** its rows in the head for every type on this page (`ChartTile`'s `countRows`). Values labelled at the bar ends went to backlog §1.
+    - **The pane and badge (DSH-15):**
+      - the pane on bg-surface with a border-subtle left rule; sections padded 12 and ruled off;
+      - section heads 12/16/600, uppercase, .04em apart;
+      - pills in their role's tint at 600, a measure with its aggregation at 400 ("Count count");
+      - the type badge 22 px, round, on bg-subtle, at 400, in core's names.
+    - **"＋ Add to a dashboard…" (DSH-16):** a 24 px button opening a 276 px picker (`AddToDashboard.tsx`): "Find a dashboard", then rows of ▦, name and folder. Tab, plus Escape back to its button (R75). Choosing a row adds the chart and closes the picker.
+    - **R76 dashboard-Q7:** a chart that lives only on a shared dashboard offers that dashboard's own button, "Edit in my workspace" or "Open my copy". Its dialog (`EditInWorkspaceDialog`, design 04 state D) names the dashboard. A view-only user gets neither; "Open ‹dashboard›" stays in ⋯.
+    - **Tests:**
+      - unit: `AddToDashboard.test.tsx`, `updatedText.test.ts`, and `tableHead.test.tsx`'s `countRows`;
+      - e2e: `chart-page.spec.ts` "the chart page as design 06 draws it (T686)".
+    - **Tests moved with the design:**
+      - `library-chart.spec.ts` and `security/copy-on-use.spec.ts` add through the picker;
+      - `chart-page.spec.ts` reads the new ownership words;
+      - `security/deleting.spec.ts` and `chart-delete.spec.ts` check that a reader's or a shared dashboard's ⋯ has no Delete, since ⋯ is now always there;
+      - `keyboard-coverage.spec.ts` reaches Delete chart… with End, last in ⋯.
+    - **The review (FAIL; one high finding and two low ones, all fixed):**
+      - View query named no item, so the API couldn't scope its SQL, which it refuses with security on. The dialog now asks for the chart (`QueryItemContext`, as `specFor` does). The e2e checks its SQL too.
+      - The picker's button is aria-disabled while an add runs, rather than disabled, so focus stays on it.
+      - The picker closes when focus leaves it, as the shell's popover does.
+      - The tests it flagged:
+        - Copy link is recorded as the app writes it (markings.spec's pattern), with no clipboard permission or read;
+        - the dashboard-Q7 test checks both of its branches.
+    - **Runs:**
+      - the full Chrome e2e: 803 passed, and the 2 that failed (filters:201, model-design:846, both failing before T686) passed on rerun;
+      - the security deleting and copy-on-use specs.
+    - **Not covered:** `security/deleting.spec.ts:138` ("is offered no way to put a chart on a dashboard…") fails the same way on the T685 commit, before T686. Its `.or()` meets two elements on the hidden chart, so it is not from this task.
 - [ ] T687 (AC-354, AC-360, AC-352) The Export pane docks beside the dashboard, which narrows, as design 13 draws it *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/dashboard/export/ExportPane.tsx`, `packages/web/src/shell/styles.ts`, `e2e/export.spec.ts`
   - Findings: DSH-17.

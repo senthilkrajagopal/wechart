@@ -105,7 +105,12 @@ test.describe('deleting a library chart (T517, AC-362)', () => {
       await expect(
         page.locator('.chart-page__head').getByText(new RegExp(`^In ${FOLDER} · version`)),
       ).toBeVisible();
-      await expect(page.getByRole('button', { name: `More actions for ${CHART}` })).toHaveCount(0);
+      // Its ⋯ holds what a reader may do, since design 06 (T686, DSH-11): Copy
+      // link, View query, Download CSV. Delete chart… is not among them.
+      await page.getByRole('button', { name: `More actions for ${CHART}` }).click();
+      const menu = page.getByRole('menu');
+      await expect(menu.getByRole('menuitem', { name: 'Copy link' })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: /^Delete/ })).toHaveCount(0);
     });
 
     test('sees the dashboard in the folder, and neither sees nor opens a library chart no dashboard of theirs shows (AC-263)', async ({
@@ -146,8 +151,9 @@ test.describe('deleting a library chart (T517, AC-362)', () => {
             .or(page.getByRole('list', { name: 'Dashboards using this chart' }))
             .or(page.getByText('This chart is no longer available.')),
         ).toBeVisible();
-        await expect(page.getByLabel('Dashboard', { exact: true })).toHaveCount(0);
-        await expect(page.getByRole('button', { name: 'Add to dashboard' })).toHaveCount(0);
+        // Design 06's picker's button (T686), none of it offered.
+        await expect(page.getByRole('button', { name: '＋ Add to a dashboard…' })).toHaveCount(0);
+        await expect(page.getByRole('searchbox', { name: 'Find a dashboard' })).toHaveCount(0);
         await expect(page.getByRole('link', { name: /Edit chart/ })).toHaveCount(0);
       }
     });

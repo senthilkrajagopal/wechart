@@ -72,8 +72,13 @@ test('offers to add the chart to another dashboard, and the list then includes i
   await page.goto(`/explore/charts/${chart.id}`);
   await expect(page.getByTestId('used-by-none')).toBeVisible();
 
-  await page.getByLabel('Dashboard', { exact: true }).selectOption({ label: `Target ${unique}` });
-  await page.getByRole('button', { name: 'Add to dashboard' }).click();
+  // Design 06's picker (T686): find it by name, and choose it.
+  await page.getByRole('button', { name: '＋ Add to a dashboard…' }).click();
+  await page.getByRole('searchbox', { name: 'Find a dashboard' }).fill(unique);
+  await page
+    .getByRole('dialog', { name: 'Add to a dashboard' })
+    .getByRole('button', { name: new RegExp(`^Target ${unique}`) })
+    .click();
 
   await expect(page.getByTestId(`using-${dashboard.id}`)).toBeVisible();
 });

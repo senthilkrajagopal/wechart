@@ -48,6 +48,9 @@ test('a delete dialog takes focus on its safe choice, closes on Escape, and give
   const more = page.getByRole('button', { name: `More actions for Chart ${unique}` });
   await more.focus();
   await page.keyboard.press('Enter');
+  // Last in ⋯, after the reading actions design 06 adds (T686, DSH-11): End reaches it.
+  await expect(page.getByRole('menuitem', { name: 'Copy link' })).toBeFocused();
+  await page.keyboard.press('End');
   await expect(page.getByRole('menuitem', { name: 'Delete chart…' })).toBeFocused();
   await page.keyboard.press('Enter');
 

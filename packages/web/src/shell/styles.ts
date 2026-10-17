@@ -1916,8 +1916,8 @@ a.btn:hover { background: var(--wc-bg-hover); }
 a.btn-primary { border-color: var(--wc-accent); }
 a.btn.btn-sm,
 a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
-/* Whose a local chart is (T463, design 06): "Lives on ‹dashboard› · only
-   there", with the dashboard's chip. */
+/* Whose a local chart is (T463, design 06 pin 2; T686): "Local chart · only
+   on ‹dashboard›", with the dashboard's chip. */
 .chart-home {
   display: inline-flex;
   align-items: center;
@@ -1951,27 +1951,120 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
   border-radius: 6px;
   background: var(--wc-bg-surface);
 }
-.chart-page__details { display: grid; gap: 16px; }
-.chart-page__section { display: grid; gap: 6px; }
+/* Design 06's pane (T686, DSH-15): on the surface, ruled off at its left,
+   each section padded 12 and ruled off below, its head 12/16/600 uppercase
+   .04em apart in the secondary ink. */
+.chart-page__details {
+  display: grid;
+  align-content: start;
+  border-left: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
+}
+.chart-page__section {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
 .chart-page__section h2 {
   margin: 0;
   color: var(--wc-text-secondary);
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
   font-weight: var(--wc-text-xs-strong-weight);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .chart-page__source { margin: 0; font-family: var(--wc-font-code); }
 .chart-page__none { margin: 0; color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
+.chart-page__updated { margin: 0; font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); }
 .chart-page__pills,
 .chart-page__used { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .chart-page__used { display: grid; }
+/* A field in its role's tint at 600, a measure with its aggregation at 400
+   (design 06; T686). */
 .field-pill {
-  padding: 2px 8px;
-  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: var(--wc-text-xs-size);
+  font-weight: 600;
+}
+.field-pill--measure { background: var(--wc-bg-role-measure-soft); color: var(--wc-role-measure); }
+.field-pill--dimension { background: var(--wc-bg-role-dimension-soft); color: var(--wc-role-dimension); }
+.field-pill__agg { font-weight: 400; }
+/* The type badge: 22 px, round, on bg-subtle at 400 (design 06; T686). */
+.badge.chart-page__type {
+  height: 22px;
+  border: 0;
   background: var(--wc-bg-subtle);
+  font-weight: 400;
+}
+/* A dashboard as an Explore item row: 32 px, its ▦, its name, "Open ›"
+   (design 06 pin 4; T686, DSH-13). */
+.chart-page__dashrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: var(--wc-text-primary);
+  font-size: var(--wc-text-xs-size);
+  text-decoration: none;
+}
+.chart-page__dashrow:hover { background: var(--wc-bg-hover); }
+.chart-page__dashrow-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-page__dashrow-open { margin-left: auto; color: var(--wc-text-muted); }
+.chart-page__dashrow > .itemicon::before,
+.chart-page__pick > .itemicon::before { content: '▦'; }
+.chart-page__note { flex-basis: 100%; margin: 0; }
+/* "＋ Add to a dashboard…" and its picker (design 06 state B; T686, DSH-16). */
+.chart-page__add { position: relative; justify-self: start; }
+.chart-page__picker {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  width: 276px;
+  padding: 4px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-raised);
+  box-shadow: var(--wc-shadow-pop);
+}
+.chart-page__pick-find { padding: 2px 2px 6px; }
+.chart-page__pick-find input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) {
+  width: 100%;
+  height: 28px;
   font-size: var(--wc-text-xs-size);
 }
-.chart-page__add { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chart-page__pick-list { display: grid; max-height: 240px; overflow: auto; margin: 0; padding: 0; list-style: none; }
+.chart-page__pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--wc-text-primary);
+  font-size: var(--wc-text-xs-size);
+  text-align: left;
+  cursor: pointer;
+}
+.chart-page__pick:hover,
+.chart-page__pick:focus-visible { background: var(--wc-bg-hover); }
+.chart-page__pick > .itemicon { width: 18px; height: 18px; }
+.chart-page__pick-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-page__pick-folder { margin-left: auto; color: var(--wc-text-muted); white-space: nowrap; }
+.chart-page__pick-none { margin: 0; padding: 6px; color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
 @media (max-width: 900px) {
   .chart-page__body { grid-template-columns: minmax(0, 1fr); }
 }

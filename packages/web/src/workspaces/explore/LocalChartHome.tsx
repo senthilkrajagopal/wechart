@@ -4,6 +4,7 @@ import { defaultStringifySearch } from '@tanstack/react-router';
 import { tileShowing } from '../../dashboard/model/document';
 import { dashboardOf, type StoredDocument } from '../../dashboard/model/stored';
 import { StateLine } from '../../shell/StatusIcon';
+import type { ItemWorkspace } from './placeOf';
 
 /**
  * Where a dashboard-local chart lives (T463, AC-126; phase-1 design 06, item
@@ -20,6 +21,15 @@ export interface ChartHome {
   readonly folderId: string | undefined;
   /** The tile showing the chart; none if no tile on it shows it any more. */
   readonly tileId: string | undefined;
+  /**
+   * The dashboard's place, as its own page reads it (T348), for a chart that
+   * lives only on a shared dashboard: edited through that dashboard's copy
+   * (T686; R76 dashboard-Q7).
+   */
+  readonly version: number;
+  readonly origin?: { readonly id: string; readonly version: number; readonly folderId?: string };
+  readonly targetFolderId?: string | undefined;
+  readonly workspace?: ItemWorkspace | undefined;
 }
 
 export function useChartHome(dashboardId: string | undefined, chartId: string) {
@@ -30,8 +40,17 @@ export function useChartHome(dashboardId: string | undefined, chartId: string) {
         `/api/documents/dashboard/${encodeURIComponent(dashboardId ?? '')}`,
       );
       if (!response.ok) throw new Error(`Request failed: ${String(response.status)}`);
-      const stored = (await response.json()) as StoredDocument;
-      const body = stored.body as { title?: unknown; folderId?: unknown } | undefined;
+      const stored = (await response.json()) as StoredDocument & {
+        readonly workspace?: ItemWorkspace;
+      };
+      const body = stored.body as
+        | {
+            title?: unknown;
+            folderId?: unknown;
+            targetFolderId?: unknown;
+            origin?: { id: string; version: number; folderId?: string };
+          }
+        | undefined;
       let tileId: string | undefined;
       try {
         tileId = tileShowing(dashboardOf(stored), chartId);
@@ -43,6 +62,10 @@ export function useChartHome(dashboardId: string | undefined, chartId: string) {
         title: typeof body?.title === 'string' && body.title !== '' ? body.title : 'its dashboard',
         folderId: typeof body?.folderId === 'string' ? body.folderId : undefined,
         tileId,
+        version: stored.version ?? 1,
+        ...(body?.origin === undefined ? {} : { origin: body.origin }),
+        targetFolderId: typeof body?.targetFolderId === 'string' ? body.targetFolderId : undefined,
+        workspace: stored.workspace,
       };
     },
     enabled: dashboardId !== undefined,
@@ -73,8 +96,9 @@ export function ChartHomeLine({ home }: { readonly home: ChartHome }) {
     <span className="chart-home" data-testid="chart-home">
       {/* The dashboard's chip, drawn by the stylesheet: not part of the words. */}
       <span className="itemicon ic-dash" aria-hidden="true" />
-      Lives on <b>{home.title}</b> ·{' '}
-      {home.tileId === undefined ? 'on none of its tiles' : 'only there'}
+      {/* Design 06 pin 2's words (T686, DSH-13), and that no tile shows it. */}
+      Local chart · only on <b>{home.title}</b>
+      {home.tileId === undefined ? ' · on none of its tiles' : null}
     </span>
   );
 }

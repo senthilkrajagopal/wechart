@@ -101,6 +101,12 @@ export interface ChartTileProps {
   /** A KPI standing alone, on its own page, at text-kpi-solo (T683; design 06 state B). */
   readonly kpiSolo?: boolean | undefined;
   /**
+   * Its rows said in its head whatever its type, as the chart page draws it
+   * (T686, DSH-14; design 06 pin 3). A dashboard says them for a table alone
+   * (design 04 pin 7).
+   */
+  readonly countRows?: boolean | undefined;
+  /**
    * The marked-items badge, in the header row beside the title (AC-201): the
    * prototype's `.mbadge`, rather than a line above that pushed the title down.
    */
@@ -207,6 +213,7 @@ export function ChartTile({
   served,
   rowsTotal,
   kpiSolo,
+  countRows,
   onItemClick,
   onShapeMark,
   onAxisRange,
@@ -360,7 +367,7 @@ export function ChartTile({
         {/* A table's rows, and how many it shows where its row limit cut
             them: "626 rows · first 100", at the head's end (T683; design
             04 pin 7). */}
-        {spec.chartType === 'table' ? (
+        {spec.chartType === 'table' || countRows === true ? (
           <span className="tile-head__count" data-testid="tile-row-count">
             {(() => {
               // Cube's own total where the query was told it (T683's review).

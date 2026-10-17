@@ -1,7 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
-import { readChartDocument, withMemberLabels } from '@wechart/core';
-import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  csvOf,
+  readChartDocument,
+  rowsText,
+  toChartSpec,
+  toCubeQuery,
+  withMemberLabels,
+} from '@wechart/core';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+
+import {
+  BYTE_ORDER_MARK,
+  csvFileName,
+  NO_CLIPBOARD,
+  pageClipboard,
+  saveFile,
+} from '../../dashboard/TileViewMenu';
+import { ViewQuery } from '../../dashboard/ViewQuery';
+import { dayOf } from '../../shell/formatTime';
+import { AddToDashboard } from './AddToDashboard';
+import { EditInWorkspaceDialog } from './EditInWorkspaceDialog';
 
 import { CHART_MISSING, formatsFrom, pickedWithFormats } from '../../dashboard/chartSpec';
 import { PencilIcon } from '../../dashboard/edit/EditChrome';
@@ -9,12 +28,13 @@ import { NOTHING_CHOSEN } from '../../dashboard/edit/templates';
 import { specFor } from '../../dashboard/DashboardPage';
 import { measureTypesOf } from '../../editor/fields';
 import { allMembers } from '../../filters/FilterBar';
+import { QueryItemContext, type QueryItem } from '../../query/item';
 import { metaQueryOf } from '../../query/meta';
 import { hasWorkspace, ME_QUERY } from '../../shell/me';
 import { ProposalBand } from './ProposalBand';
 import { ProposeFlow } from './ProposeFlow';
 import { approvedText, HistoryIcon, HistoryPanel, historyQuery } from '../history/HistoryPanel';
-import { FOLDERS_QUERY } from './folders';
+import { FOLDERS_QUERY, targetPathOf } from './folders';
 import { placeOf, type ItemWorkspace } from './placeOf';
 import { WorkspaceBand } from './WorkspaceBand';
 import { RestoreDialogs, useRestore } from '../history/restore';
@@ -31,7 +51,7 @@ import { checkChart, removeChart } from './deleteChecks';
 import { sayOnExplore } from './deletedToast';
 import { exploreHref } from './folders';
 import { browserTimeZone } from './projectFolder';
-import { SHARED_ROOT } from './roots';
+import { rootTitleOf, SHARED_ROOT } from './roots';
 
 /**
  * A library chart's page, as the prototype's `chartPage()` (AC-212): its
@@ -53,6 +73,27 @@ async function getJson<T>(url: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+/**
+ * An aggregation in words, as design 06's pill writes it ("sum"): Cube's
+ * camelCase split ("countDistinct" → "count distinct"; T686).
+ */
+const aggregationText = (aggregation: string) =>
+  aggregation.replace(/([a-z])([A-Z])/g, '$1 $2').replaceAll('_', ' ').toLocaleLowerCase();
+
+/**
+ * A chart's Updated section (T686, DSH-12; the coordinator's call): its last
+ * save's day, as every day is written (T477), and by whom where its history
+ * names an author the user may see. "21 Sep by Ada Admin", or "21 Sep".
+ */
+export function updatedText(
+  at: string,
+  author: { readonly name: string } | null,
+  now: Date = new Date(),
+): string {
+  const day = dayOf(new Date(at), now);
+  return author === null ? day : `${day} by ${author.name}`;
+}
+
 export interface LibraryChartPageProps {
   readonly chartId: string;
 }
@@ -70,7 +111,6 @@ function Detail({ title, children }: { readonly title: string; readonly children
 
 export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   const queryClient = useQueryClient();
-  const [target, setTarget] = useState('');
 
   /** Which folder the chart lives in, for its breadcrumb (AC-195). */
   const stored = useQuery({
@@ -84,6 +124,8 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
           origin?: { id: string; version: number; folderId?: string };
         };
         version?: number;
+        /** When it was last saved, for its Updated section (T686, DSH-12). */
+        updatedAt?: string;
         /** Where it lives, with sign-in on (T348). */
         workspace?: ItemWorkspace;
         // Where it lives, asked for here only, never by a tile (T348's review).
@@ -195,6 +237,65 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   /** The dashboard a local chart lives on (AC-126), and the tile showing it there. */
   const localTo = saved?.localToDashboardId;
   const home = useChartHome(localTo, chartId);
+  /**
+   * The dashboard's own place, for a chart that lives only on it: on a shared
+   * one, the chart is edited through that dashboard's copy (T686; R76
+   * dashboard-Q7, rule 71), as the dashboard's own header offers.
+   */
+  const homePlace =
+    home.data === undefined
+      ? undefined
+      : placeOf({
+          title: home.data.title,
+          folderId: home.data.folderId,
+          version: home.data.version,
+          ...(home.data.origin === undefined ? {} : { origin: home.data.origin }),
+          targetFolderId: home.data.targetFolderId,
+          workspace: home.data.workspace,
+          folders: folders.data,
+        });
+  /** Whether the dashboard's "Edit in my workspace" question is open (design 04 state D). */
+  const [copyingHome, setCopyingHome] = useState(false);
+  /**
+   * "Updated 21 Sep by Ada Admin" (T686, DSH-12; the coordinator's call): its
+   * last save's day, and by whom where its history is the user's to see.
+   */
+  const updated =
+    stored.data?.updatedAt === undefined
+      ? undefined
+      : updatedText(stored.data.updatedAt, currentVersion?.author ?? null);
+  /** "Copied a link to this chart.", said in the head a few seconds (T686, DSH-11). */
+  const [linkNote, setLinkNote] = useState('');
+  useEffect(() => {
+    if (linkNote === '') return undefined;
+    const shown = setTimeout(() => {
+      setLinkNote('');
+    }, 4000);
+    return () => {
+      clearTimeout(shown);
+    };
+  }, [linkNote]);
+  const copyLink = () => {
+    const clipboard = pageClipboard();
+    if (clipboard === null) {
+      setLinkNote(NO_CLIPBOARD);
+      return;
+    }
+    clipboard.writeText(globalThis.location.href).then(
+      () => {
+        setLinkNote('Copied a link to this chart.');
+      },
+      () => {
+        setLinkNote('The link could not be copied: the browser refused the clipboard.');
+      },
+    );
+  };
+  /** Its View query dialog (T686, DSH-11), as a tile's (AC-199). */
+  const [viewingQuery, setViewingQuery] = useState(false);
+  /** The item its queries serve: the chart's own, as `specFor` asks (T340, AC-268). */
+  const chartItem = useMemo<QueryItem>(() => ({ kind: 'chart', id: chartId }), [chartId]);
+  /** What Download CSV said it wrote (T686, DSH-11). */
+  const [downloaded, setDownloaded] = useState<string | undefined>(undefined);
   const spec =
     drawn.data !== undefined && 'spec' in drawn.data.chart ? drawn.data.chart.spec : undefined;
   const failure =
@@ -255,6 +356,18 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
     ...(definition?.wells.timeDimensions ?? []),
     ...(definition?.wells.dimensions ?? []),
   ];
+  /** Each measure's aggregation from the model (`count`, `sum`, …). */
+  const aggregations: Readonly<Record<string, string>> = measureTypesOf(meta.data);
+  /** The query it asks, for View query (T686, DSH-11), as a tile's: none until it can be read. */
+  const chartQuery = (() => {
+    const document = drawn.data?.document;
+    if (document === undefined) return undefined;
+    try {
+      return toCubeQuery(toChartSpec(document)) as Record<string, unknown>;
+    } catch {
+      return undefined;
+    }
+  })();
   const pills = (members: readonly string[], kind: 'measure' | 'dimension') =>
     // Nothing is said of its fields until the chart is read: "None" before
     // then would be untrue.
@@ -265,6 +378,13 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
         {members.map((member) => (
           <li key={member} className={`field-pill field-pill--${kind}`}>
             {titleOf(member)}
+            {/* A measure with its aggregation, in words (T686, DSH-15; design 06). */}
+            {kind === 'measure' && aggregations[member] !== undefined ? (
+              <>
+                {' '}
+                <span className="field-pill__agg">{aggregationText(aggregations[member])}</span>
+              </>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -287,7 +407,7 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
     // Asked only of one who may add it somewhere (T760's review).
     enabled: mayChange,
     queryFn: () =>
-      getJson<{ id: string; title: string; kind: string }[]>(
+      getJson<{ id: string; title: string; kind: string; folderId?: string | null }[]>(
         viaWorkspace ? '/api/workspace/dashboards' : '/api/folders/root/contents',
       ),
   });
@@ -316,7 +436,6 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['chart-dashboards', chartId] });
-      setTarget('');
     },
   });
 
@@ -354,29 +473,33 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
     router.history.push(exploreHref(stored.data?.body.folderId ?? SHARED_ROOT.id));
   };
 
-  /** Putting it on another dashboard (AC-022): only with a workspace (T760, AC-277). */
+  /** A dashboard's folder by name, for its row in the picker (design 06 state B). */
+  const folderName = (folderId: string | null | undefined) => {
+    if (folderId === null || folderId === undefined) return 'My workspace';
+    return (
+      rootTitleOf(folderId) ??
+      folders.data?.find((folder) => folder.id === folderId)?.title ??
+      'My workspace'
+    );
+  };
+  /**
+   * Putting it on another dashboard (AC-022): only with a workspace (T760,
+   * AC-277), through design 06's "＋ Add to a dashboard…" picker (T686,
+   * DSH-16).
+   */
   const addTo = !mayChange ? null : (
-    <div className="chart-page__add">
-      <label htmlFor="add-to-dashboard">Dashboard</label>
-      <select
-        id="add-to-dashboard"
-        value={target}
-        onChange={(event) => setTarget(event.target.value)}
-      >
-        <option value="">Choose a dashboard…</option>
-        {dashboards.map((dashboard) => (
-          <option key={dashboard.id} value={dashboard.id}>
-            {dashboard.title}
-          </option>
-        ))}
-      </select>
-      <button
-        type="button"
-        disabled={target === '' || addToDashboard.isPending}
-        onClick={() => addToDashboard.mutate(target)}
-      >
-        Add to dashboard
-      </button>
+    <>
+      <AddToDashboard
+        dashboards={dashboards.map((dashboard) => ({
+          id: dashboard.id,
+          title: dashboard.title,
+          folder: folderName(dashboard.folderId),
+        }))}
+        busy={addToDashboard.isPending}
+        onPick={(dashboardId) => {
+          addToDashboard.mutate(dashboardId);
+        }}
+      />
       {/* Under way, in words with its icon, not only by the button fading (AC-177). */}
       {addToDashboard.isPending ? <StateLine kind="run">Adding it…</StateLine> : null}
       {addToDashboard.data === undefined ? null : (
@@ -387,7 +510,7 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
       {addToDashboard.isError ? (
         <StateLine kind="err">{(addToDashboard.error as Error).message}</StateLine>
       ) : null}
-    </div>
+    </>
   );
 
   return (
@@ -436,12 +559,26 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
           <header className="chart-page__head">
             {/* The way back to its folder (AC-195), once the chart is read; to
             Explore's top if it cannot be. */}
-            {stored.isSuccess ? <FolderCrumbs folderId={stored.data.body.folderId} /> : null}
+            {stored.isSuccess ? (
+              <FolderCrumbs
+                folderId={stored.data.body.folderId}
+                // A local chart's crumbs step on to its dashboard (T686, DSH-13).
+                item={
+                  localTo === undefined || home.data === undefined
+                    ? undefined
+                    : {
+                        title: home.data.title,
+                        href: `/explore/dashboards/${encodeURIComponent(localTo)}`,
+                      }
+                }
+              />
+            ) : null}
             {stored.isError ? <FolderCrumbs folderId={undefined} /> : null}
             {/* Its title is the page's heading (AC-212). */}
             <h1 className="workspace-title">{saved?.title ?? 'Chart'}</h1>
             {typeText === undefined ? null : (
-              <span className="badge" data-testid="chart-type">
+              // Design 06's type badge, round on bg-subtle (T686, DSH-15).
+              <span className="badge chart-page__type" data-testid="chart-type">
                 {typeText}
               </span>
             )}
@@ -524,34 +661,110 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
                   ) : null}
                 </>
               )
-            ) : place?.kind === 'shared' ? null : (
-              // On a shared dashboard it is edited only in a copy of that
-              // dashboard (T348's review, AC-278): nothing to do here.
+            ) : place?.kind === 'shared' || homePlace?.kind === 'shared' ? (
+              /**
+               * On a shared dashboard it is edited only in a copy of that
+               * dashboard (T348's review, AC-278): the dashboard's own button,
+               * "Edit in my workspace" or "Open my copy", in place of design
+               * 06's in-place edit buttons (T686; R76 dashboard-Q7, rule 71).
+               * A view-only user gets neither.
+               */
+              homePlace?.kind !== 'shared' || homePlace.copy === undefined ? null : (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    const copyId = homePlace.copy?.copyId ?? null;
+                    if (copyId !== null)
+                      globalThis.location.assign(
+                        `/explore/dashboards/${encodeURIComponent(copyId)}?editing=true`,
+                      );
+                    else setCopyingHome(true);
+                  }}
+                >
+                  {homePlace.copy.label}
+                </button>
+              )
+            ) : (
               <LocalChartActions dashboardId={localTo} home={home} />
             )}
-            {/* Destructive and occasional actions in ⋯ (design 06, pin 5;
-                design 14, screen 2): Delete chart…, last. */}
-            {mayDelete ? (
-              <span ref={moreButton} className="chart-page__more">
-                <MenuButton
-                  label={`More actions for ${title}`}
-                  // A 32 px icon button, as design 14:391 draws it (T684).
-                  className="icon-button"
-                  items={[
-                    {
-                      key: 'delete',
-                      label: 'Delete chart…',
-                      danger: true,
-                      onSelect: () => {
-                        setDeleting(true);
-                      },
+            {/* Occasional and destructive actions in ⋯ (design 06, pin 5;
+                design 14, screen 2; T686, DSH-11): its dashboard, Copy link,
+                View query, Download CSV, then Delete chart… where allowed. */}
+            <span ref={moreButton} className="chart-page__more">
+              <MenuButton
+                label={`More actions for ${title}`}
+                // A 32 px icon button, as design 14:391 draws it (T684).
+                className="icon-button"
+                items={[
+                  ...(localTo === undefined || home.data === undefined
+                    ? []
+                    : [
+                        {
+                          key: 'open-dashboard',
+                          label: `Open ${home.data.title}`,
+                          onSelect: () => {
+                            globalThis.location.assign(
+                              `/explore/dashboards/${encodeURIComponent(localTo)}`,
+                            );
+                          },
+                        },
+                      ]),
+                  { key: 'copy-link', label: 'Copy link', onSelect: copyLink },
+                  {
+                    key: 'view-query',
+                    label: 'View query',
+                    ...(chartQuery === undefined
+                      ? { disabled: true, title: 'It has no query until it has fields.' }
+                      : {}),
+                    onSelect: () => {
+                      setViewingQuery(true);
                     },
-                  ]}
-                >
-                  <span aria-hidden="true">⋯</span>
-                </MenuButton>
-              </span>
-            ) : null}
+                  },
+                  {
+                    key: 'download-csv',
+                    label: 'Download CSV',
+                    ...(formatted === undefined
+                      ? { disabled: true, title: 'Nothing is drawn to download.' }
+                      : {}),
+                    onSelect: () => {
+                      if (formatted === undefined) return;
+                      saveFile(csvFileName(title), `${BYTE_ORDER_MARK}${csvOf(formatted)}`);
+                      setDownloaded(`Downloaded ${rowsText(formatted.rows.length)}.`);
+                    },
+                  },
+                  ...(mayDelete
+                    ? [
+                        {
+                          key: 'delete',
+                          label: 'Delete chart…',
+                          danger: true,
+                          separatorBefore: true,
+                          onSelect: () => {
+                            setDeleting(true);
+                          },
+                        },
+                      ]
+                    : []),
+                ]}
+              >
+                <span aria-hidden="true">⋯</span>
+              </MenuButton>
+            </span>
+            {linkNote === '' ? null : (
+              <StateLine
+                kind={linkNote.startsWith('Copied') ? 'ok' : 'err'}
+                testId="chart-link-copied"
+                className="chart-page__note"
+              >
+                {linkNote}
+              </StateLine>
+            )}
+            {downloaded === undefined ? null : (
+              <StateLine kind="ok" testId="chart-downloaded" className="chart-page__note">
+                {downloaded}
+              </StateLine>
+            )}
             {/* Where it lives (T348; design 04, states E and F). */}
             {place?.line === undefined || localTo !== undefined ? null : (
               <p className="dashboard__ownership">{place.line}</p>
@@ -596,6 +809,8 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
                     served={drawn.data?.answered}
                     // A KPI alone on its page, at text-kpi-solo (T683; design 06 state B).
                     kpiSolo
+                    // Its rows in its head, whatever its type (T686, DSH-14; design 06 pin 3).
+                    countRows
                     rowsTotal={drawn.data?.answered?.total}
                   />
                 </div>
@@ -621,8 +836,17 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
                   {home.data === undefined ? null : (
                     <ul aria-label="The dashboard this chart lives on" className="chart-page__used">
                       <li>
-                        <a href={`/explore/dashboards/${encodeURIComponent(localTo)}`}>
-                          {home.data.title}
+                        {/* An Explore item row (T686, DSH-13; design 06 pin 4):
+                            ▦, its name, and "Open ›". */}
+                        <a
+                          className="chart-page__dashrow"
+                          href={`/explore/dashboards/${encodeURIComponent(localTo)}`}
+                        >
+                          <span className="itemicon ic-dash" aria-hidden="true" />
+                          <span className="chart-page__dashrow-title">{home.data.title}</span>
+                          <span className="chart-page__dashrow-open" aria-hidden="true">
+                            Open ›
+                          </span>
                         </a>
                       </li>
                     </ul>
@@ -645,8 +869,16 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
                       <ul aria-label="Dashboards using this chart" className="chart-page__used">
                         {using.data.map((dashboard) => (
                           <li key={dashboard.id} data-testid={`using-${dashboard.id}`}>
-                            <a href={`/explore/dashboards/${encodeURIComponent(dashboard.id)}`}>
-                              {dashboard.title}
+                            {/* Item rows, as Lives on's (T686; design 06 pin 4). */}
+                            <a
+                              className="chart-page__dashrow"
+                              href={`/explore/dashboards/${encodeURIComponent(dashboard.id)}`}
+                            >
+                              <span className="itemicon ic-dash" aria-hidden="true" />
+                              <span className="chart-page__dashrow-title">{dashboard.title}</span>
+                              <span className="chart-page__dashrow-open" aria-hidden="true">
+                                Open ›
+                              </span>
                             </a>
                           </li>
                         ))}
@@ -654,6 +886,12 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
                     )
                   ) : null}
                   {addTo}
+                </Detail>
+              )}
+              {/* When it was last saved, and by whom (T686, DSH-12). */}
+              {updated === undefined ? null : (
+                <Detail title="Updated">
+                  <p className="chart-page__updated">{updated}</p>
                 </Detail>
               )}
             </aside>
@@ -669,6 +907,42 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
                 setDeleting(false);
                 // Back on the ⋯ it came from (design 14, keyboard).
                 moreButton.current?.querySelector<HTMLButtonElement>('button')?.focus();
+              }}
+            />
+          ) : null}
+          {viewingQuery && chartQuery !== undefined ? (
+            // Asked for this chart, as its drawing is (`specFor`): the item
+            // the API scopes its SQL by, and its workspace's model (T686's review).
+            <QueryItemContext.Provider value={chartItem}>
+              <ViewQuery
+                title={title}
+                query={chartQuery}
+                onClose={() => {
+                  setViewingQuery(false);
+                  // Back on the ⋯ it came from.
+                  moreButton.current?.querySelector<HTMLButtonElement>('button')?.focus();
+                }}
+              />
+            </QueryItemContext.Provider>
+          ) : null}
+          {copyingHome && localTo !== undefined && home.data !== undefined ? (
+            // Design 04 state D's question, naming the dashboard it copies
+            // (T686; R76 dashboard-Q7).
+            <EditInWorkspaceDialog
+              dashboardId={localTo}
+              title={home.data.title}
+              targetPath={
+                (home.data.folderId === undefined
+                  ? undefined
+                  : targetPathOf(folders.data ?? [], home.data.folderId)) ?? 'its folder'
+              }
+              onClose={() => {
+                setCopyingHome(false);
+              }}
+              onCopied={(copyId) => {
+                globalThis.location.assign(
+                  `/explore/dashboards/${encodeURIComponent(copyId)}?editing=true`,
+                );
               }}
             />
           ) : null}

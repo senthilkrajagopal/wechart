@@ -247,8 +247,13 @@ test.describe('as a read-write member, from the chart’s page (T527, AC-371)', 
       targetFolderId: ids.f,
     });
     await page.goto(`/explore/charts/${ids.chart}`);
-    await page.getByLabel('Dashboard', { exact: true }).selectOption({ label: title });
-    await page.getByRole('button', { name: 'Add to dashboard' }).click();
+    // Design 06's picker (T686): find it by name, and choose it.
+    await page.getByRole('button', { name: '＋ Add to a dashboard…' }).click();
+    await page.getByRole('searchbox', { name: 'Find a dashboard' }).fill(title);
+    await page
+      .getByRole('dialog', { name: 'Add to a dashboard' })
+      .getByRole('button', { name: new RegExp(`^${title}`) })
+      .click();
 
     await expect(page.getByTestId('added-as-copy')).toHaveText(
       `Added to “${title}” as its own copy: this chart isn’t kept in the folder that dashboard is shown in, or one above it.`,

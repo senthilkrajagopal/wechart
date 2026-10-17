@@ -122,6 +122,7 @@ AC-176 was un-ticked by T182's review. AC-187 was never met. AC-201, AC-220 and 
       - the add slot and template rows;
       - the filter-pill value control;
       - three border differences.
+    - **Chart page:** values labelled at the bar ends, as design 06 pin 3 draws them (direction §6's "selective" labels; DSH-14). This is chart-labelling behaviour, so T686 left it out (the coordinator's call, 2026-10-17).
     - **Model workspace:**
       - 32 px inputs;
       - the `.seg` tint;

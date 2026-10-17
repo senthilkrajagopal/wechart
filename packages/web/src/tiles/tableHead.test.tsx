@@ -58,6 +58,18 @@ describe('a table tile’s row count (DSH-03)', () => {
     expect(screen.getByTestId('tile-row-count').textContent).toBe('10,050 rows · first 100');
   });
 
+  // T686 (DSH-14; design 06 pin 3): on the chart page, every type says it.
+  it('says it for a chart drawn as a chart where the page asks, as the chart page does', () => {
+    render(
+      <ChartTile
+        title="By status"
+        countRows
+        spec={{ ...table(3, 3), chartType: 'bar', encoding: { x: ['orders.id'], y: ['orders.count'] } }}
+      />,
+    );
+    expect(screen.getByTestId('tile-row-count').textContent).toBe('3 rows');
+  });
+
   it('says none for a chart drawn as a chart', () => {
     render(
       <ChartTile

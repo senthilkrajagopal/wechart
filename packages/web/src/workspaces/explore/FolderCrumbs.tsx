@@ -14,7 +14,17 @@ import { rootTitleOf, SHARED_ROOT } from './roots';
  * waits on the names. Read with a plain fetch, as the settings' folder picker
  * reads them, so the header needs no query client of its own.
  */
-export function FolderCrumbs({ folderId }: { readonly folderId: string | undefined }) {
+export function FolderCrumbs({
+  folderId,
+  item,
+}: {
+  readonly folderId: string | undefined;
+  /**
+   * A last step after the folders: a local chart's dashboard (T686; design
+   * 06 pin 2: "← Explore / Shared / Company dashboard 01").
+   */
+  readonly item?: { readonly title: string; readonly href: string } | undefined;
+}) {
   const [folders, setFolders] = useState<readonly FolderNode[] | undefined>(undefined);
   // A folder the list does not have — deleted since — is no way back; the
   // shared root is, and both links then say so (T216's review).
@@ -53,6 +63,12 @@ export function FolderCrumbs({ folderId }: { readonly folderId: string | undefin
           <a href={exploreHref(crumb.id)}>{crumb.title}</a>
         </span>
       ))}
+      {item === undefined ? null : (
+        <span className="crumbs__step">
+          <span aria-hidden="true">/</span>
+          <a href={item.href}>{item.title}</a>
+        </span>
+      )}
     </nav>
   );
 }

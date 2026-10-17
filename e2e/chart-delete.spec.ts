@@ -163,7 +163,10 @@ test('refuses a shared dashboard’s own chart, which goes only with its dashboa
 
   await page.goto(`/explore/charts/${own}`);
   await expect(page.getByRole('heading', { name: `Own ${unique}` })).toBeVisible();
-  await expect(page.getByRole('button', { name: `More actions for Own ${unique}` })).toHaveCount(0);
+  // Its ⋯ holds the reading actions since design 06 (T686, DSH-11), never Delete chart….
+  await page.getByRole('button', { name: `More actions for Own ${unique}` }).click();
+  await expect(page.getByRole('menu').getByRole('menuitem', { name: 'Copy link' })).toBeVisible();
+  await expect(page.getByRole('menu').getByRole('menuitem', { name: /^Delete/ })).toHaveCount(0);
   const refused = await request.delete(`${API}/api/documents/chart/${own}`);
   expect(refused.status(), await refused.text()).toBe(409);
   expect((await request.get(`${API}/api/documents/chart/${own}`)).status()).toBe(200);
