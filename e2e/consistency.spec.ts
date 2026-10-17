@@ -170,7 +170,8 @@ test.describe('one dialog pattern (UX-106)', () => {
     const settings = page.getByTestId('dashboard-settings');
     await settings.getByLabel('Description', { exact: true }).fill('Changed');
     await page.keyboard.press('Escape');
-    const question = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    // Design 05 state C's question (T685).
+    const question = page.getByRole('alertdialog', { name: 'Discard your changes to settings?' });
     expect(await typeOf(question)).toEqual({
       title: { size: '16px', weight: '600' },
       body: { size: '14px', weight: '400' },

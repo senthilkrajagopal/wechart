@@ -521,7 +521,7 @@ describe('the dashboard settings page', () => {
      */
     const dialog = screen.getByRole('alertdialog');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
-    expect(screen.getByRole('heading', { name: 'Discard your changes?' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Discard your changes to settings?' })).toBeTruthy();
 
     // Focus is on the answer that loses nothing, so a stray Enter cannot throw
     // the work away.
@@ -789,5 +789,181 @@ describe('the settings page’s focus', () => {
     }
     // Nothing typed into the field behind it on the way.
     expect((name as HTMLInputElement).value).toBe('Half-finished');
+  });
+});
+
+/**
+ * T685 (AC-352, AC-070, AC-073; design 05 pins 1–6 and state C; DSH-07,
+ * DSH-08, DSH-10): the settings page as design 05 draws it. The count and
+ * the discard sentence follow the coordinator's call of 2026-10-17
+ * (`dirtyGuard.ts`, `changesOf`).
+ */
+describe('the settings page as design 05 draws it (T685)', () => {
+  const bar = () => screen.getByTestId('dashboard-settings').querySelector('header')!;
+
+  it('counts the unsaved changes beside the title, and says Esc cancels before Cancel', async () => {
+    show();
+    await openSettings();
+    const title = screen.getByRole('heading', { name: 'Dashboard settings', level: 1 });
+    expect(bar().textContent).not.toMatch(/unsaved/);
+    const hint = within(bar()).getByText('Esc cancels');
+    // Before Cancel and Save, after the spacer.
+    expect(
+      hint.compareDocumentPosition(screen.getByRole('button', { name: 'Cancel' })) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await userEvent.type(screen.getByLabelText('Name'), ' 2');
+    const unsaved = title.nextElementSibling as HTMLElement;
+    expect(unsaved.textContent).toBe('· 1 unsaved change');
+    // A state, with its icon (AC-177).
+    expect(unsaved.querySelector('[data-icon]')).not.toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Interactions' }));
+    await userEvent.click(screen.getByRole('radio', { name: /Cross-filtering/ }));
+    expect((title.nextElementSibling as HTMLElement).textContent).toBe('· 2 unsaved changes');
+  });
+
+  it('introduces the modes, and says what switching does below them', async () => {
+    show();
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Interactions' }));
+    expect(
+      screen.getByText(
+        'How readers explore this dashboard by clicking its charts. One mode is active at a time; the other mode’s settings are kept, not cleared.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Switching mode clears readers’ current marks and cross-filters. Saving here while the dashboard is in edit mode is one change you can undo, and Discard reverts it.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('gives each mode card design 05’s words, a picture, its gestures as keycaps and its foot', async () => {
+    show();
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Interactions' }));
+    const cards = [...document.querySelectorAll<HTMLElement>('.settings-modes__card')];
+    expect(cards).toHaveLength(2);
+    const [markings, crossFilter] = cards as [HTMLElement, HTMLElement];
+
+    expect(markings.textContent).toContain(
+      'Readers mark items in a named, coloured marking. Every tile that uses the marking highlights them, on every page tab, and details tiles can show only what is marked.',
+    );
+    expect(crossFilter.textContent).toContain(
+      'Clicking a mark filters or highlights the other tiles on the same tab, set for each pair of tiles. The selection shows as a chip readers can clear.',
+    );
+    for (const card of cards) {
+      const picture = card.querySelector('svg.settings-modes__picture');
+      expect(picture?.getAttribute('aria-hidden')).toBe('true');
+    }
+    const keys = (card: HTMLElement) =>
+      [...card.querySelectorAll('.settings-modes__gestures > span')].map((gesture) => [
+        gesture.querySelector('kbd')?.textContent,
+        gesture.textContent,
+      ]);
+    expect(keys(markings)).toEqual([
+      ['Click', 'Click marks'],
+      ['Ctrl/⌘', 'Ctrl/⌘ toggles'],
+      ['Drag', 'Drag rectangle'],
+      ['Alt+drag', 'Alt+drag lasso'],
+      ['Esc', 'Esc unmarks'],
+    ]);
+    // Cross-filtering has no Ctrl/⌘ to add: one selection per tile, so its
+    // keycap would promise what doesn't happen (accepted-differences.md).
+    expect(keys(crossFilter)).toEqual([
+      ['Click', 'Click filters'],
+      ['Esc', 'Esc clears'],
+    ]);
+
+    // The one chart tile follows the default marking.
+    expect(markings.querySelector('.settings-modes__foot')?.textContent).toBe(
+      '1 marking · used by 1 tile · limits 0Manage markings ›',
+    );
+    expect(crossFilter.querySelector('.settings-modes__foot')?.textContent).toBe(
+      'Default for tile pairs: Filter · 0 pairs changedSet tile pairs ›',
+    );
+  });
+
+  // A dashboard stored with its mode alone, as older ones and the e2e's are:
+  // cross-filtering's foot reads the default, rather than the page failing.
+  it('reads a dashboard that stored its mode without cross-filtering’s settings', async () => {
+    render(
+      <DashboardView
+        dashboardId="d1"
+        document={
+          {
+            ...DOC,
+            settings: { width: 'fixed', interactions: { mode: 'markings' } },
+          } as unknown as DashboardDocument
+        }
+        specs={{}}
+        onSave={vi.fn()}
+      />,
+    );
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Interactions' }));
+    const crossFilter = document.querySelectorAll<HTMLElement>('.settings-modes__card')[1]!;
+    expect(crossFilter.querySelector('.settings-modes__foot')?.textContent).toBe(
+      'Default for tile pairs: Filter · 0 pairs changedSet tile pairs ›',
+    );
+  });
+
+  // T685's review: a pair kept at what the default now is has not changed.
+  it('counts only the tile pairs that differ from the default', async () => {
+    render(
+      <DashboardView
+        dashboardId="d1"
+        document={{
+          ...DOC,
+          settings: {
+            width: 'fixed',
+            interactions: {
+              mode: 'markings',
+              crossFilter: {
+                defaultAction: 'highlight',
+                pairs: { 'a→b': 'highlight', 'b→a': 'none' },
+              },
+            },
+          },
+        }}
+        specs={{}}
+        onSave={vi.fn()}
+      />,
+    );
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Interactions' }));
+    const crossFilter = document.querySelectorAll<HTMLElement>('.settings-modes__card')[1]!;
+    expect(crossFilter.querySelector('.settings-modes__foot')?.textContent).toBe(
+      'Default for tile pairs: Highlight · 1 pair changedSet tile pairs ›',
+    );
+  });
+
+  it('opens the mode’s own section from its foot, choosing nothing', async () => {
+    show();
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Interactions' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Set tile pairs ›' }));
+    expect(screen.getByRole('heading', { name: 'Cross-filtering', level: 2 })).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Interactions' }));
+    // Still Markings: the link chose no mode.
+    expect((screen.getByRole('radio', { name: 'Markings' }) as HTMLInputElement).checked).toBe(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Manage markings ›' }));
+    expect(screen.getByRole('heading', { name: 'Markings', level: 2 })).toBeTruthy();
+    expect(bar().textContent).not.toMatch(/unsaved/);
+  });
+
+  it('names what changed in the discard question', async () => {
+    show();
+    await openSettings();
+    await userEvent.click(screen.getByRole('button', { name: 'Interactions' }));
+    await userEvent.click(screen.getByRole('radio', { name: /Cross-filtering/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    const dialog = screen.getByRole('alertdialog', { name: 'Discard your changes to settings?' });
+    expect(within(dialog).getByText(/^You changed/).textContent).toBe(
+      'You changed the interaction mode. Leaving now keeps the dashboard as it was.',
+    );
   });
 });

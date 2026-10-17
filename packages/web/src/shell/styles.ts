@@ -1,4 +1,4 @@
-import { themeCss } from '@wechart/ui';
+import { CATEGORICAL, themeCss } from '@wechart/ui';
 
 import { COLUMNS, GUTTER_PX } from '../dashboard/grid/geometry';
 import { PLEX_MONO_FACES } from './fonts';
@@ -6316,6 +6316,10 @@ main:has(.dashboard) {
   min-height: 0;
 }
 .dashboard--under-overlay { visibility: hidden; }
+/* In My workspace, Settings opens under the workspace band, which says whose
+   it is on every page inside the workspace (T685, DSH-06; design 04 pin 2,
+   rule 72): the band is one 32 px line. */
+main:has(> .workspace-band) .dashboard--overlaid:has(> .settings-page) { top: 32px; }
 /* The dashboard settings page, the prototype's settings overlay (T249,
    index.html 2107–2205): a 41 px head, a 220 px nav, and the section's
    content flat on the page, not in a card. */
@@ -6330,15 +6334,21 @@ main:has(.dashboard) {
   background: var(--wc-bg-surface);
 }
 /* 16 px as the prototype's h1; 600, not its 700 (direction.md §3). */
-.settings-page__title { margin: 0 0 0 8px; font-size: 16px; line-height: 20px; font-weight: 600; }
+/* Design 05 pin 1 (T685): at least 44 px, the designs' pane head; the title
+   16/22. */
+.settings-page__bar { min-height: 44px; }
+.settings-page__title { margin: 0 0 0 8px; font-size: 16px; line-height: 22px; font-weight: 600; }
 .settings-page__spacer { flex: 1; }
-.settings-page__unsaved {
+/* "· 1 unsaved change" beside the title, and "Esc cancels" before Cancel,
+   in xs muted ink. */
+.settings-page__unsaved,
+.settings-page__hint {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-muted);
 }
 .settings-page__actions { display: flex; gap: 8px; }
 /* A state said in the bar (saving, a refused save) takes a line of its own. */
@@ -6374,8 +6384,11 @@ main:has(.dashboard) {
   background: var(--wc-bg-accent-soft);
   color: var(--wc-accent);
   font-weight: 600;
+  /* Its accent edge (design 05 pin 2; T685). */
+  box-shadow: inset 2px 0 0 var(--wc-accent);
 }
-/* .settings-inner: flat, padded 16 24 48, at most 920 px. */
+/* Flat, padded 24/32 (T685; R76 dashboard-Q5: design 05's 20 top is off the
+   spacing scale), with 48 under the last. */
 .settings-page__panel {
   flex: 1;
   min-width: 0;
@@ -6384,12 +6397,15 @@ main:has(.dashboard) {
   display: grid;
   gap: 12px;
   align-content: start;
-  padding: 16px 24px 48px;
+  padding: 24px 32px 48px;
 }
 /* min-width 0: a wide cross-filter matrix scrolls in its own box rather than
    widening the grid's track and the panel with it (T249's review). */
 .settings-page__panel > * { max-width: 872px; min-width: 0; }
-.settings-page__panel > h2 { margin: 0; font-size: 18px; line-height: 20px; font-weight: 600; }
+.settings-page__panel > h2 { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; }
+/* The Interactions intro, 4 under the heading and 16 above the cards
+   (design 05; T685), against the panel's 12 px gap. */
+.settings-page__panel > .settings-page__intro--modes { margin: -8px 0 4px; max-width: 760px; }
 .settings-page__panel p { margin: 0; }
 .settings-page__later,
 .settings-page__intro { color: var(--wc-text-secondary); }
@@ -6408,6 +6424,10 @@ main:has(.dashboard) {
 }
 .settings-form__wide { grid-column: 1 / -1; }
 .settings-form textarea { font-size: 12px; line-height: 18px; }
+/* General's Name and Folder at 28/12, the page's compact controls, as its
+   description already is (T685, DSH-09; T476's Q2). */
+.settings-form input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']),
+.settings-form select { height: 28px; font-size: 12px; }
 /* The prototype's .warnbar for a section whose mode is not in use (F28). */
 .settings-page__inactive {
   display: flex;
@@ -6551,41 +6571,132 @@ main:has(.dashboard) {
    the target, not a 13px circle beside it. The prototype's .radio-card (T249,
    F27, mismatch 33): 12 px padding, radius 8, a strong rule; the chosen one
    ringed in the accent over a 40 % tint of its soft ground. */
+/* Design 05's metrics in §4's tokens (T685; R76 dashboard-Q5): cards padded
+   16 with a border-subtle rule, 16 apart, at §4's 6 px radius where the
+   design draws 8; the chosen one ringed in the accent over a 40 % tint. */
 .settings-modes { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
 .settings-modes legend { padding: 0 0 8px; font-weight: var(--wc-text-sm-strong-weight); }
+.settings-page__panel > .settings-modes { max-width: 1060px; }
 .settings-modes__cards {
   display: grid;
-  gap: 8px;
+  gap: 16px;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 .settings-modes__card {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--wc-border-strong);
-  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 16px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
   background: var(--wc-bg-surface);
-  cursor: pointer;
 }
-.settings-modes__card:hover { background: var(--wc-bg-hover); }
-.settings-modes__card:has(input:checked),
-.settings-modes__card:has(input:checked):hover {
+.settings-modes__card:has(input:checked) {
   border-color: var(--wc-accent);
   box-shadow: 0 0 0 1px var(--wc-accent);
   background: color-mix(in srgb, var(--wc-bg-accent-soft) 40%, var(--wc-bg-surface));
 }
-.settings-modes__card > input { flex: none; margin: 3px 0 0; }
-.settings-modes__text { display: grid; gap: 4px; }
+.settings-modes__choice { display: grid; gap: 12px; cursor: pointer; }
+.settings-modes__top { display: flex; align-items: flex-start; gap: 10px; }
+.settings-modes__top > input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; }
+.settings-modes__text { display: grid; gap: 2px; }
 .settings-modes__name { font-size: 14px; line-height: 20px; font-weight: 600; }
-.settings-modes__about { color: var(--wc-text-secondary); }
-.settings-modes__refs {
-  display: block;
-  margin-top: 2px;
-  font-size: 12px;
-  line-height: 16px;
+/* 14/20 where design 05 draws 13/19, which is off the type scale (R76
+   principle 2; accepted-differences.md). */
+.settings-modes__about {
+  font-size: var(--wc-text-sm-size);
+  line-height: var(--wc-text-sm-line);
   color: var(--wc-text-secondary);
 }
+/* The picture: 128 px on the page's ground, the product's own marks in the
+   first two series slots and the first marking (design 05 pin 4). */
+.settings-modes__illus {
+  display: grid;
+  place-items: center;
+  height: 128px;
+  overflow: hidden;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-page);
+}
+.settings-modes__picture { max-width: 100%; height: auto; }
+.settings-modes__frame { fill: var(--wc-bg-surface); stroke: var(--wc-border-subtle); }
+.settings-modes__s1 { fill: ${CATEGORICAL.light[0]}; }
+.settings-modes__s2 { fill: ${CATEGORICAL.light[1]}; }
+:root[data-theme='dark'] .settings-modes__s1 { fill: ${CATEGORICAL.dark[0]}; }
+:root[data-theme='dark'] .settings-modes__s2 { fill: ${CATEGORICAL.dark[1]}; }
+.settings-modes__marked { stroke: var(--wc-mk1); stroke-width: 1.5; }
+.settings-modes__clicked { fill: var(--wc-crossfilter); }
+.settings-modes__arrow { fill: none; stroke: var(--wc-text-muted); stroke-width: 1.5; }
+/* 12 px, the floor, where the design draws 11 (R76 components-Q5). */
+.settings-modes__caption { font-size: 12px; fill: var(--wc-text-secondary); }
+/* How readers use it: each gesture a chip with its key as a keycap. */
+.settings-modes__gestures { display: flex; flex-wrap: wrap; gap: 6px; }
+.settings-modes__gestures > span {
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+}
+/* 12 px where the design draws 11 (R76 components-Q5). */
+.settings-modes__gestures kbd {
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-primary);
+}
+/* What the mode is set up with, ruled off, its link at the end. */
+.settings-modes__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--wc-border-subtle);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-secondary);
+}
+.settings-modes__foot b { font-weight: 600; color: var(--wc-text-primary); }
+.settings-modes__swatches { display: inline-flex; gap: 4px; }
+.settings-modes__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--wc-border-strong);
+}
+button.settings-modes__link {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wc-accent);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: 600;
+  cursor: pointer;
+}
+button.settings-modes__link:hover { text-decoration: underline; }
+/* Under the cards, what switching does: an info line on the surface. */
+.settings-page__info {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 8px;
+  max-width: 1060px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-secondary);
+}
+.settings-page__panel > .settings-page__info { max-width: 1060px; }
+.settings-page__info > svg[data-icon] { margin-top: 1px; color: var(--wc-accent); }
 .settings-field { display: grid; gap: 4px; max-width: 420px; }
 .settings-field input {
   height: 32px;

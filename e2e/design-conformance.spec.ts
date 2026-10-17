@@ -3364,12 +3364,12 @@ test.describe('T249: the dashboard settings page', () => {
       .getByRole('navigation', { name: 'Settings sections' })
       .locator(`[data-section="${name}"]`);
 
-  test('the bar: 41 px, titled "Dashboard settings", its buttons 24 px and Save the primary', async ({
+  test('the bar: 44 px, titled "Dashboard settings", its buttons 24 px and Save the primary', async ({
     page,
   }) => {
     const settings = await openSettings(page);
-    // .settings-head { padding: 8px 16px; border-bottom: 1px solid var(--border-subtle);
-    //                  background: var(--bg-surface) } — 41 px measured
+    // Design 05 pin 1 (T685): .settings-head { min-height: 44px; padding: 8px 16px;
+    //   border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface) }
     const bar = settings.locator('.settings-page__bar');
     expect(
       await style(
@@ -3381,18 +3381,27 @@ test.describe('T249: the dashboard settings page', () => {
         'border-bottom-color',
       ),
     ).toEqual({
-      height: '41px',
+      height: '44px',
       'padding-left': '16px',
       'background-color': await token(page, 'bg-surface', 'background-color'),
       'border-bottom-width': '1px',
       'border-bottom-color': await token(page, 'border-subtle', 'background-color'),
     });
-    // .settings-head h1 { font-size: 16px } "Dashboard settings"
+    // .settings-head h1 { font-size: 16px; line-height: 22px } "Dashboard settings" (T685)
     const title = bar.getByRole('heading', { name: 'Dashboard settings', level: 1 });
-    expect(await style(title, 'font-size', 'font-weight')).toEqual({
+    expect(await style(title, 'font-size', 'line-height', 'font-weight')).toEqual({
       'font-size': '16px',
+      'line-height': '22px',
       'font-weight': '600',
     });
+    // "Esc cancels" in xs muted, before Cancel (design 05 pin 1; T685).
+    const hint = bar.getByText('Esc cancels', { exact: true });
+    expect(await style(hint, 'font-size', 'color')).toEqual({
+      'font-size': '12px',
+      color: await token(page, 'text-muted'),
+    });
+    const cancel = (await bar.getByRole('button', { name: /^Cancel$/ }).boundingBox())!;
+    expect((await hint.boundingBox())!.x).toBeLessThan(cancel.x);
     // .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; border-radius: 6px }
     for (const name of [/^← Back to/, /^Cancel$/, /^Save settings$/]) {
       expect(
@@ -3412,6 +3421,18 @@ test.describe('T249: the dashboard settings page', () => {
       color: await token(page, 'text-on-accent'),
       'font-weight': '600',
     });
+  });
+
+  test('the workspace band still says whose it is over Settings (T685, DSH-06; rule 72)', async ({
+    page,
+  }) => {
+    const settings = await openSettings(page);
+    const band = page.getByRole('note').filter({ hasText: 'My workspace' }).first();
+    await expect(band).toBeVisible();
+    const under = (await band.boundingBox())!;
+    const bar = (await settings.locator('.settings-page__bar').boundingBox())!;
+    // The bar starts where the band ends: neither covers the other.
+    expect(Math.round(bar.y)).toBe(Math.round(under.y + under.height));
   });
 
   test('the nav: 220 px, 32 px rows, the open section on the accent’s tint; the content flat', async ({
@@ -3450,6 +3471,13 @@ test.describe('T249: the dashboard settings page', () => {
       color: await token(page, 'accent'),
       'font-weight': '600',
     });
+    // .snav .it.on { box-shadow: inset 2px 0 0 var(--accent) } (design 05 pin 2; T685)
+    expect(await style(section(settings, 'General'), 'box-shadow')).toEqual({
+      'box-shadow': `${await token(page, 'accent')} 2px 0px 0px 0px inset`,
+    });
+    expect(await style(section(settings, 'Layout'), 'box-shadow')).toEqual({
+      'box-shadow': 'none',
+    });
     expect(await rowStyle('Layout')).toEqual({
       height: '32px',
       'padding-left': '24px',
@@ -3460,7 +3488,8 @@ test.describe('T249: the dashboard settings page', () => {
       'font-weight': '400',
     });
 
-    // .settings-inner { padding: 16px 24px 48px } — flat, no card round it
+    // Padded 24/32 (T685; R76 dashboard-Q5, design 05's 20 top on the
+    // spacing scale) and 48 below — flat, no card round it
     const panel = settings.getByRole('region', { name: 'General settings' });
     expect(
       await style(
@@ -3472,20 +3501,21 @@ test.describe('T249: the dashboard settings page', () => {
         'background-color',
       ),
     ).toEqual({
-      'padding-top': '16px',
-      'padding-left': '24px',
+      'padding-top': '24px',
+      'padding-left': '32px',
       'padding-bottom': '48px',
       'border-top-width': '0px',
       'background-color': 'rgba(0, 0, 0, 0)',
     });
-    // .settings-inner h2 { font-size: 18px }
+    // .content h2 { font-size: 18px; line-height: 24px } (design 05; T685)
     expect(
       await style(
         panel.getByRole('heading', { name: 'General', level: 2 }),
         'font-size',
+        'line-height',
         'font-weight',
       ),
-    ).toEqual({ 'font-size': '18px', 'font-weight': '600' });
+    ).toEqual({ 'font-size': '18px', 'line-height': '24px', 'font-weight': '600' });
     // .field > label 12/16/600 secondary; Name and Folder side by side (.formgrid), Description wide
     const name = panel.getByLabel('Name', { exact: true });
     const folder = panel.getByLabel('Folder', { exact: true });
@@ -3507,6 +3537,12 @@ test.describe('T249: the dashboard settings page', () => {
     const [nameBox, folderBox, descriptionBox] = await Promise.all(
       [name, folder, description].map((field) => field.boundingBox()),
     );
+    // Name and Folder 28/12, the page's compact controls (T685, DSH-09).
+    for (const field of [name, folder])
+      expect(await style(field, 'height', 'font-size')).toEqual({
+        height: '28px',
+        'font-size': '12px',
+      });
     expect(nameBox!.y).toBe(folderBox!.y);
     expect(folderBox!.x).toBeGreaterThan(nameBox!.x + nameBox!.width);
     expect(descriptionBox!.y).toBeGreaterThan(nameBox!.y + nameBox!.height);
@@ -3524,25 +3560,43 @@ test.describe('T249: the dashboard settings page', () => {
       exact: true,
     });
     await expect(markings).toBeChecked();
-    // .radio-card { padding: 12px; border: 1px solid var(--border-strong); border-radius: 8px }
-    // .radio-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) }
-    const card = (radio: Locator) => radio.locator('xpath=ancestor::label[1]');
+    // Design 05 in §4's tokens (T685; R76 dashboard-Q5): .card { padding: 16px;
+    // border: 1px solid var(--border-subtle) } at §4's 6 px radius, 16 apart;
+    // .card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) }
+    const card = (radio: Locator) =>
+      radio.locator('xpath=ancestor::div[contains(@class, "settings-modes__card")][1]');
     expect(await style(card(markings), 'padding-top', 'border-radius', 'border-top-color')).toEqual(
       {
-        'padding-top': '12px',
-        'border-radius': '8px',
+        'padding-top': '16px',
+        'border-radius': '6px',
         'border-top-color': await token(page, 'accent', 'background-color'),
       },
     );
     expect(await style(card(cross), 'border-top-color')).toEqual({
-      'border-top-color': await token(page, 'border-strong', 'background-color'),
+      'border-top-color': await token(page, 'border-subtle', 'background-color'),
+    });
+    const [left, right] = await Promise.all([card(markings), card(cross)].map((one) => one.boundingBox()));
+    expect(Math.round(right!.x - (left!.x + left!.width))).toBe(16);
+    // Each card's picture, 128 px on the page's ground (design 05 pin 4).
+    const picture = card(markings).locator('.settings-modes__illus');
+    expect(await style(picture, 'height', 'border-radius', 'background-color')).toEqual({
+      height: '128px',
+      'border-radius': '6px',
+      'background-color': await token(page, 'bg-page', 'background-color'),
+    });
+    // Its gestures as keycaps, never under the 12 px floor (R76 components-Q5).
+    const keycap = card(markings).locator('kbd').first();
+    expect(await style(keycap, 'font-size', 'font-weight')).toEqual({
+      'font-size': '12px',
+      'font-weight': '600',
     });
     // .radio-card input { accent-color: var(--accent) } — not the browser's blue (F27)
     expect(await style(markings, 'accent-color')).toEqual({
       'accent-color': await token(page, 'accent'),
     });
     // Each card says what the mode does (F27), read as the radio's description.
-    await expect(markings).toHaveAccessibleDescription(/marks items in a named, coloured marking/);
+    // Design 05's words (T685).
+    await expect(markings).toHaveAccessibleDescription(/mark items in a named, coloured marking/);
     await expect(cross).toHaveAccessibleDescription(/filters or highlights the other tiles/);
   });
 
@@ -3583,7 +3637,8 @@ test.describe('T249: the dashboard settings page', () => {
     settings = await openSettings(page);
     await settings.getByLabel('Description', { exact: true }).fill('Changed');
     await page.keyboard.press('Escape');
-    const question = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    // Design 05 state C's question (T685).
+    const question = page.getByRole('alertdialog', { name: 'Discard your changes to settings?' });
     await expect(question).toBeVisible();
     // Escape on the question is "Keep editing": the page and the change stay.
     await page.keyboard.press('Escape');
@@ -3604,7 +3659,9 @@ test.describe('T249: the dashboard settings page', () => {
     await page.keyboard.press('Escape');
     await expect(palette).toBeHidden();
     await expect(settings).toBeVisible();
-    await expect(page.getByRole('alertdialog', { name: 'Discard your changes?' })).toHaveCount(0);
+    await expect(
+      page.getByRole('alertdialog', { name: 'Discard your changes to settings?' }),
+    ).toHaveCount(0);
   });
 
   test('only the inactive section has the banner, and a change says it is unsaved (T249’s review)', async ({
@@ -3620,10 +3677,14 @@ test.describe('T249: the dashboard settings page', () => {
     await expect(banners).toHaveCount(1);
 
     const bar = settings.locator('.settings-page__bar');
-    await expect(bar.getByText('Unsaved changes')).toHaveCount(0);
+    // Counted beside the title (design 05 pin 1; T685).
+    await expect(bar.locator('.settings-page__unsaved')).toHaveCount(0);
     await section(settings, 'General').click();
     await settings.getByLabel('Description', { exact: true }).fill('Changed');
-    const unsaved = bar.getByText('Unsaved changes');
+    const unsaved = bar.locator('.settings-page__unsaved');
+    await expect(unsaved).toHaveText('· 1 unsaved change');
+    const title = (await bar.getByRole('heading', { level: 1 }).boundingBox())!;
+    expect((await unsaved.boundingBox())!.x).toBeLessThan(title.x + title.width + 16);
     await expect(unsaved).toBeVisible();
     // A state, with its icon (AC-177).
     await expect(bar.locator('.settings-page__unsaved [data-icon]')).toHaveCount(1);

@@ -9503,7 +9503,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **One pressed state (CMP-03).** `.btn.pressed`: accent-soft, the accent's border and ink, 600, kept on hover. History on the dashboard, the chart page and a data source, and Access, use it. Access closed is `btn btn-sm btn-ghost`, as 07:179 draws it (EXP-13). `.seg`'s pressed segment, Explore's Show and the SQL runner's run filter use `bg-accent-soft` in place of the 12 % accent mix (EDI-14, EXP-02). A segment keeps its divider and no accent border, as 2026-09-30 14:80 draws `.seg span.on`. The YAML diff's "Show all lines" takes the same ground.
     - **The description (dashboard-Q2).** `EditChrome` takes a `description`. The dashboard's shows on its own line directly under the title, above the ownership line, at 14/20 in text-secondary. Nothing shows for none or blank.
     - **Tests.** `e2e/consistency.spec.ts` "one button rule and one pressed state (T684)" covers four cases: a `.btn` at 32/0 12/14/400; the dashboard's head, History pressed and the description; no description; and `.seg` and Show pressed. The security suite covers Access as a ghost, then pressed (`access.spec.ts`), the data source's head (`data-sources.spec.ts`), and Data sources' ⋯ at 32 × 32 (`sql-runner.spec.ts`). `chart-page.spec.ts` now expects the quiet Edit chart as `btn` at 32 px (the review's one finding).
-- [ ] T685 (AC-352, AC-070, AC-073) The dashboard settings page as design 05 draws it *(added 2026-10-08 by T406)*
+- [x] T685 (AC-352, AC-070, AC-073) The dashboard settings page as design 05 draws it *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/dashboard/settings/SettingsPage.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/dashboard.spec.ts`
   - Findings: DSH-06, DSH-07, DSH-08, DSH-09, DSH-10.
   - Failing test:
@@ -9520,6 +9520,34 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the content padded 24/32, where the design's top of 20 is off the spacing scale;
     - the bar at 44 px, the designs' pane-head height.
   - Depends on: T684 (the bar's buttons)
+  - **Built 2026-10-17** (lane B).
+    - **The count and the question (the coordinator's call, 2026-10-17, overturnable):** one change per setting that differs from the saved dashboard, in the page's order: the name, the folder, the description, the interaction mode, the markings, the tiles' markings and limits, cross-filtering (its default and pairs), the page width. Anything else that differs is "the settings" (`changesOf`, `dirtyGuard.ts`).
+      - The bar reads "· 1 unsaved change" (or "· N unsaved changes") beside the title, with its idle icon (AC-177). Then come the spacer, "Esc cancels", Cancel and Save.
+      - The discard question reads "Discard your changes to settings?" and "You changed the interaction mode. Leaving now keeps the dashboard as it was." Two changes are joined by "and"; more take commas, with "and" before the last.
+      - The guard asks exactly when the count is above 0. The mode, cross-filtering and the markings are compared as in effect, so defaults written out are no change.
+    - **The mode cards (DSH-07, design 05 pins 3–6):**
+      - design 05's descriptions;
+      - a picture each (`ModePicture.tsx`), drawn in the first two series slots, the first marking and the cross-filter colour, its captions at 12 px;
+      - the gestures as keycaps at 12 px (R76 components-Q5);
+      - a foot outside the card's label: "N markings · used by N tiles · limits N", with the markings' swatches, and "Manage markings ›"; "Default for tile pairs: Filter · N pairs changed", and "Set tile pairs ›". Each link opens its section and chooses no mode.
+      - The intro sits above the cards and the info line below them. The legend "Interaction mode" is kept for screen readers, visually hidden.
+      - Cross-filtering draws no "Ctrl/⌘ adds", because a tile holds one selection (accepted-differences.md; R75).
+    - **The metrics (R76 dashboard-Q5):**
+      - the bar at least 44 px, its h1 16/22, the h2 18/24;
+      - the current nav row's accent edge;
+      - the panel padded 24/32 and 48 below;
+      - cards padded 16, border-subtle, radius 6, 16 apart, up to 1,060 px;
+      - General's Name and Folder at 28/12 (DSH-09).
+    - **The workspace band (DSH-06):** in My workspace, Settings opens under the band's 32 px line, so the band still shows.
+    - **Tests:**
+      - `dirtyGuard.test.ts` (`changesOf`, `changedSentence`) and `SettingsPage.test.tsx` "the settings page as design 05 draws it (T685)";
+      - e2e `design-conformance.spec.ts` T249's settings tests, moved to design 05 (the bar at 44 with "Esc cancels", the nav edge, 24/32 padding, 28/12 controls, the cards' metrics, picture and keycaps, the count beside the title), plus a new band-over-Settings test;
+      - `consistency.spec.ts`: the question's new name.
+    - **The review (PASS; three low findings, fixed):**
+      - a setting `changesOf` doesn't name one by one is still counted as "the settings";
+      - "N pairs changed" counts only pairs set apart from the default;
+      - the page now asks through `changesOf`, not `isDirty`. `isDirty` stays exported with its tests, which cover the content comparison both use.
+    - **Found by the e2e run:** a dashboard stored as `interactions: { mode }` with no `crossFilter` made the cross-filtering card's foot throw. The foot now reads the default, which is what cross-filtering acts on.
 - [ ] T686 (AC-352, AC-126, AC-022) The chart page as design 06 draws it, with "Add to a dashboard…" as its picker *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/explore/LibraryChartPage.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/chart-page.spec.ts`
   - Findings: DSH-11, DSH-12, DSH-13, DSH-14, DSH-15, DSH-16.

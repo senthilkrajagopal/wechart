@@ -1,14 +1,23 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { markingsFrom } from '@wechart/core';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import type { DashboardDocument } from '../model/document';
 import { CrossFilterMatrix } from './CrossFilterMatrix';
 import { MarkingsSettings } from './MarkingsSettings';
-import { markingNameProblem } from './markingsDraft';
-import { isDirty } from './dirtyGuard';
+import { chartTileMarkings, markingNameProblem } from './markingsDraft';
+import { changedSentence, changesOf } from './dirtyGuard';
+import { ModePicture } from './ModePicture';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import { ROOT_FOLDERS, rootTitleOf } from '../../workspaces/explore/roots';
-import { interactionsOf, labelOf, setMode, type InteractionMode } from './interactionMode';
+import {
+  DEFAULT_INTERACTIONS,
+  interactionsOf,
+  labelOf,
+  setMode,
+  type CrossFilterConfig,
+  type InteractionMode,
+} from './interactionMode';
 
 /**
  * The dashboard settings page (AC-069, direction.md "Dashboard settings
@@ -60,27 +69,56 @@ interface Card<T> {
   readonly label: string;
   /** What choosing it does, under its name (the prototype's radio card, F27). */
   readonly description?: string;
-  /** Where the mode comes from and what readers do, in the small print. */
-  readonly refs?: string;
+  /** A picture of what it does (design 05 pin 4). */
+  readonly picture?: ReactNode;
+  /** How readers use it, each a keycap and its word (design 05 pin 5). */
+  readonly gestures?: readonly (readonly [key: string, word: string])[];
+  /**
+   * What it is set up with, and the way to its section (design 05 pin 6):
+   * outside the card's label, so its link chooses no mode.
+   */
+  readonly foot?: ReactNode;
 }
 
-/** The prototype's two mode cards, in its words (dash-settings.js, interactions()). */
+/**
+ * Design 05's two mode cards, in its words (pins 3–6; T685). Cross-filtering
+ * draws no "Ctrl/⌘ adds": a tile holds one selection, so the keycap would
+ * promise what doesn't happen (accepted-differences.md).
+ */
 const MODE_CARDS: readonly Card<InteractionMode>[] = [
   {
     value: 'markings',
     label: 'Markings',
     description:
-      'Clicking, dragging a rectangle or lasso marks items in a named, coloured marking. Every tile that uses the same marking shows the marked share and fades the rest, across all page tabs. Details tiles can be limited to what is marked.',
-    refs: 'Spotfire-style · Ctrl/⌘ adds or toggles · Esc unmarks',
+      'Readers mark items in a named, coloured marking. Every tile that uses the marking highlights them, on every page tab, and details tiles can show only what is marked.',
+    picture: <ModePicture mode="markings" />,
+    gestures: [
+      ['Click', 'marks'],
+      ['Ctrl/⌘', 'toggles'],
+      ['Drag', 'rectangle'],
+      ['Alt+drag', 'lasso'],
+      ['Esc', 'unmarks'],
+    ],
   },
   {
     value: 'crossFilter',
     label: 'Cross-filtering and cross-highlighting',
     description:
-      'Clicking a bar or slice filters or highlights the other tiles. Each source → target pair can be set to Filter, Highlight or None.',
-    refs: 'Power BI / Superset-style · one selection per tile',
+      'Clicking a mark filters or highlights the other tiles on the same tab, set for each pair of tiles. The selection shows as a chip readers can clear.',
+    picture: <ModePicture mode="crossFilter" />,
+    gestures: [
+      ['Click', 'filters'],
+      ['Esc', 'clears'],
+    ],
   },
 ];
+
+/** "1 marking", "2 tiles": a count and its noun (T685). */
+const counted = (count: number, noun: string) =>
+  `${count.toLocaleString('en-US')} ${noun}${count === 1 ? '' : 's'}`;
+
+/** A pair action as the Cross-filtering section names it. */
+const ACTION_LABEL = { filter: 'Filter', highlight: 'Highlight', none: 'None' } as const;
 
 const WIDTH_CARDS: readonly Card<'fixed' | 'full'>[] = [
   { value: 'fixed', label: 'Fixed width, centred at 1,440 px' },
@@ -102,6 +140,7 @@ function RadioCards<T extends string>({
   cards,
   onChoose,
   note,
+  legendHidden = false,
 }: {
   readonly legend: string;
   readonly group: string;
@@ -109,44 +148,63 @@ function RadioCards<T extends string>({
   readonly cards: readonly Card<T>[];
   readonly onChoose: (value: T) => void;
   readonly note?: string;
+  /** The legend for the ear alone, where the section's heading already says it (T685). */
+  readonly legendHidden?: boolean;
 }) {
   const ids = useId();
   return (
     <fieldset className="settings-modes">
-      <legend>{legend}</legend>
+      <legend className={legendHidden ? 'visually-hidden' : undefined}>{legend}</legend>
       <div className="settings-modes__cards">
         {cards.map((card) => (
-          // The prototype's .radio-card (T249, F27): its name, then what it
-          // does and where it comes from. The radio is named by the name
-          // alone and described by the rest, so it is still "Markings".
-          <label key={card.value} className="settings-modes__card">
-            <input
-              type="radio"
-              name={group}
-              value={card.value}
-              checked={chosen === card.value}
-              aria-labelledby={`${ids}-${card.value}`}
-              aria-describedby={
-                card.description === undefined ? undefined : `${ids}-${card.value}-about`
-              }
-              onChange={() => {
-                onChoose(card.value);
-              }}
-            />
-            <span className="settings-modes__text">
-              <span id={`${ids}-${card.value}`} className="settings-modes__name">
-                {card.label}
-              </span>
-              {card.description === undefined ? null : (
-                <span id={`${ids}-${card.value}-about`}>
-                  <span className="settings-modes__about">{card.description}</span>{' '}
-                  {card.refs === undefined ? null : (
-                    <span className="settings-modes__refs">{card.refs}</span>
+          // Design 05's radio card (T685; the prototype's .radio-card, T249,
+          // F27): its name, what it does, a picture and the gestures, then
+          // its foot. The radio is named by the name alone and described by
+          // what it does, so it is still "Markings".
+          <div key={card.value} className="settings-modes__card">
+            <label className="settings-modes__choice">
+              <span className="settings-modes__top">
+                <input
+                  type="radio"
+                  name={group}
+                  value={card.value}
+                  checked={chosen === card.value}
+                  aria-labelledby={`${ids}-${card.value}`}
+                  aria-describedby={
+                    card.description === undefined ? undefined : `${ids}-${card.value}-about`
+                  }
+                  onChange={() => {
+                    onChoose(card.value);
+                  }}
+                />
+                <span className="settings-modes__text">
+                  <span id={`${ids}-${card.value}`} className="settings-modes__name">
+                    {card.label}
+                  </span>
+                  {card.description === undefined ? null : (
+                    <span id={`${ids}-${card.value}-about`} className="settings-modes__about">
+                      {card.description}
+                    </span>
                   )}
                 </span>
+              </span>
+              {card.picture === undefined ? null : (
+                <span className="settings-modes__illus">{card.picture}</span>
               )}
-            </span>
-          </label>
+              {card.gestures === undefined ? null : (
+                <span className="settings-modes__gestures">
+                  {card.gestures.map(([key, word]) => (
+                    <span key={key}>
+                      <kbd>{key}</kbd> {word}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </label>
+            {card.foot === undefined ? null : (
+              <div className="settings-modes__foot">{card.foot}</div>
+            )}
+          </div>
         ))}
       </div>
       {note === undefined ? null : <p className="settings-page__note">{note}</p>}
@@ -256,6 +314,12 @@ export function SettingsPage({
    * to undo.
    */
   const [draft, setDraft] = useState<DashboardDocument>(document);
+  /**
+   * What the draft has changed, one per setting (T685; the coordinator's
+   * call): counted in the bar, named in the discard question, and what the
+   * guard asks about.
+   */
+  const changes = changesOf(document, draft);
 
   /**
    * A view-mode save is a write, and the page waits for it (AC-185): open
@@ -297,7 +361,7 @@ export function SettingsPage({
 
   /** Leave, but not silently if there is something to lose. */
   const leave = () => {
-    if (isDirty(document, draft)) {
+    if (changes.length > 0) {
       asker.current =
         window.document.activeElement instanceof HTMLElement ? window.document.activeElement : null;
       setAsking(true);
@@ -345,6 +409,73 @@ export function SettingsPage({
     heading.current?.focus();
   }, []);
 
+  /**
+   * A mode card's foot (design 05 pin 6; T685): what the mode is set up
+   * with, read from the draft, and the way to its own section, which chooses
+   * no mode. The inactive mode's is shown too: its settings are kept.
+   */
+  const markingsFoot = () => {
+    const markings = markingsFrom(draft.markings);
+    const tiles = chartTileMarkings(draft);
+    return (
+      <>
+        <span className="settings-modes__swatches" aria-hidden="true">
+          {markings.map((marking) => (
+            <span
+              key={marking.id}
+              className="settings-modes__swatch"
+              style={{ background: `var(--wc-${marking.slot})` }}
+            />
+          ))}
+        </span>
+        <span>
+          {`${counted(markings.length, 'marking')} · used by ${counted(
+            tiles.filter((tile) => tile.marksWith !== '').length,
+            'tile',
+          )} · limits ${String(tiles.filter((tile) => tile.limitedBy.length > 0).length)}`}
+        </span>
+        <button
+          type="button"
+          className="settings-modes__link"
+          onClick={() => {
+            setOpen('Markings');
+          }}
+        >
+          Manage markings ›
+        </button>
+      </>
+    );
+  };
+  const crossFilterFoot = () => {
+    // A dashboard may have stored its mode alone, as older ones did: the
+    // default then, as cross-filtering would act on it.
+    const { defaultAction, pairs } =
+      (interactions.crossFilter as CrossFilterConfig | undefined) ??
+      DEFAULT_INTERACTIONS.crossFilter;
+    return (
+      <>
+        <span>
+          Default for tile pairs: <b>{ACTION_LABEL[defaultAction]}</b>
+          {/* Only those set apart from the default (T685's review): one
+              kept at what the default now is has not changed. */}
+          {` · ${counted(
+            Object.values(pairs ?? {}).filter((action) => action !== defaultAction).length,
+            'pair',
+          )} changed`}
+        </span>
+        <button
+          type="button"
+          className="settings-modes__link"
+          onClick={() => {
+            setOpen('Cross-filtering');
+          }}
+        >
+          Set tile pairs ›
+        </button>
+      </>
+    );
+  };
+
   const chooseMode = (mode: InteractionMode) => {
     setDraft({
       ...draft,
@@ -365,14 +496,18 @@ export function SettingsPage({
         {/* The prototype's settings head: Back, the page's title, then
             Cancel and the primary Save at the far end (T249, F26). */}
         <h1 className="settings-page__title">Dashboard settings</h1>
-        <span className="settings-page__spacer" />
-        {/* A state, with its icon as well as its words (AC-177). */}
-        {isDirty(document, draft) ? (
+        {/* Beside the title, how many (design 05 pin 1; T685): a state, with
+            its icon as well as its words (AC-177). */}
+        {changes.length > 0 ? (
           <span className="settings-page__unsaved">
+            {'· '}
             <StatusIcon kind="idle" />
-            Unsaved changes
+            {counted(changes.length, 'unsaved change')}
           </span>
         ) : null}
+        <span className="settings-page__spacer" />
+        {/* What Escape already does, said (design 05 pin 1). */}
+        <span className="settings-page__hint">Esc cancels</span>
         <div className="settings-page__actions">
           <button type="button" className="btn-sm" onClick={leave}>
             Cancel
@@ -389,7 +524,7 @@ export function SettingsPage({
                * that count is the only thing telling an editor whether they
                * have unsaved work (AC-074).
                */
-              if (!isDirty(document, draft)) {
+              if (changes.length === 0) {
                 onCancel();
                 return;
               }
@@ -557,14 +692,32 @@ export function SettingsPage({
              * once" — a radio group cannot express that, so the control itself
              * carries the rule instead of the handler having to.
              */
-            <RadioCards
-              legend="Interaction mode"
-              group="interaction-mode"
-              chosen={interactions.mode}
-              cards={MODE_CARDS}
-              onChoose={chooseMode}
-              note="The configuration of the mode you are not using is kept, not cleared."
-            />
+            // Design 05 pins 3–6 (T685): an intro, the two cards with their
+            // pictures, gestures and feet, and what switching does.
+            <>
+              <p className="settings-page__intro settings-page__intro--modes">
+                How readers explore this dashboard by clicking its charts. One mode is active at a
+                time; the other mode’s settings are kept, not cleared.
+              </p>
+              <RadioCards
+                legend="Interaction mode"
+                legendHidden
+                group="interaction-mode"
+                chosen={interactions.mode}
+                cards={MODE_CARDS.map((card) => ({
+                  ...card,
+                  foot: card.value === 'markings' ? markingsFoot() : crossFilterFoot(),
+                }))}
+                onChoose={chooseMode}
+              />
+              <p className="settings-page__info">
+                <StatusIcon kind="info" />
+                <span>
+                  Switching mode clears readers’ current marks and cross-filters. Saving here while
+                  the dashboard is in edit mode is one change you can undo, and Discard reverts it.
+                </span>
+              </p>
+            </>
           ) : open === 'Markings' ? (
             /**
              * The markings and the tiles that use them (AC-198), in the draft
@@ -644,7 +797,9 @@ export function SettingsPage({
         </section>
       </div>
 
-      {asking ? <DiscardSettingsDialog onDiscard={onCancel} onKeep={keepEditing} /> : null}
+      {asking ? (
+        <DiscardSettingsDialog changes={changes} onDiscard={onCancel} onKeep={keepEditing} />
+      ) : null}
     </div>
   );
 }
@@ -660,9 +815,12 @@ export function SettingsPage({
  * reading of "I did not mean that".
  */
 function DiscardSettingsDialog({
+  changes,
   onDiscard,
   onKeep,
 }: {
+  /** What would be lost, named in the question (design 05 state C). */
+  readonly changes: readonly string[];
   readonly onDiscard: () => void;
   readonly onKeep: () => void;
 }) {
@@ -698,8 +856,9 @@ function DiscardSettingsDialog({
         aria-labelledby="discard-settings-heading"
         className="dialog"
       >
-        <h2 id="discard-settings-heading">Discard your changes?</h2>
-        <p>These settings have not been saved. Leaving now loses them.</p>
+        {/* Design 05 state C: the question names what changed (T685). */}
+        <h2 id="discard-settings-heading">Discard your changes to settings?</h2>
+        <p>{`${changedSentence(changes)} Leaving now keeps the dashboard as it was.`}</p>
         <div className="dialog__actions">
           <button type="button" ref={safe} onClick={onKeep}>
             Keep editing

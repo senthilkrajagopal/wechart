@@ -1,4 +1,7 @@
+import { markingsFrom } from '@wechart/core';
+
 import type { DashboardDocument } from '../model/document';
+import { interactionsOf } from './interactionMode';
 
 /**
  * Whether the settings page is holding changes that have not been saved
@@ -16,6 +19,59 @@ import type { DashboardDocument } from '../model/document';
  */
 export function isDirty(saved: DashboardDocument, draft: DashboardDocument): boolean {
   return !same(saved, draft);
+}
+
+/**
+ * What the settings page has changed, one entry per setting that differs
+ * from the saved dashboard, in the page's order: for the bar's "· 1 unsaved
+ * change" and the discard question's "You changed the interaction mode."
+ * (T685; design 05 pin 1 and state C; the coordinator's call, 2026-10-17,
+ * overturnable).
+ *
+ * The mode, cross-filtering and the markings are compared as in effect, so
+ * defaults written out are no change, and the page asks before leaving
+ * exactly when this names something. Anything else that differs is "the
+ * settings", so a change never goes unasked about.
+ */
+export function changesOf(saved: DashboardDocument, draft: DashboardDocument): string[] {
+  const before = interactionsOf(saved.settings);
+  const after = interactionsOf(draft.settings);
+  const changed: [string, boolean][] = [
+    ['the name', saved.title !== draft.title],
+    ['the folder', saved.folderId !== draft.folderId],
+    ['the description', saved.description !== draft.description],
+    ['the interaction mode', before.mode !== after.mode],
+    ['the markings', !same(markingsFrom(saved.markings), markingsFrom(draft.markings))],
+    ['the tiles’ markings', !same(saved.pages, draft.pages)],
+    ['cross-filtering', !same(before.crossFilter, after.crossFilter)],
+    ['the page width', saved.settings.width !== draft.settings.width],
+  ];
+  const named = changed.filter(([, differs]) => differs).map(([name]) => name);
+  return !same(rest(saved), rest(draft)) ? [...named, 'the settings'] : named;
+}
+
+/**
+ * The dashboard less what `changesOf` names one by one: any setting it
+ * doesn't name stays in, so a new one is still asked about (T685's review).
+ */
+function rest(document: DashboardDocument): Record<string, unknown> {
+  const { title, folderId, description, settings, markings, pages, ...others } = document;
+  void [title, folderId, description, markings, pages];
+  const { width, interactions, ...otherSettings } = settings;
+  void [width, interactions];
+  return { ...others, settings: otherSettings };
+}
+
+/**
+ * The discard question's sentence (design 05 state C): "You changed the
+ * interaction mode.", two joined by "and", more by commas with "and" before
+ * the last.
+ */
+export function changedSentence(changes: readonly string[]): string {
+  const last = changes.at(-1);
+  if (last === undefined) return '';
+  const rest = changes.slice(0, -1);
+  return `You changed ${rest.length === 0 ? last : `${rest.join(', ')} and ${last}`}.`;
 }
 
 function same(a: unknown, b: unknown): boolean {
