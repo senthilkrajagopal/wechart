@@ -1,5 +1,6 @@
 import { createPrivateKey, createPublicKey, type KeyObject } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { isIP } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 import { AUDIT_RETENTION_DAYS } from './audit/retention';
@@ -56,13 +57,16 @@ export interface Config {
   /** The OIDC provider, with security on (AC-252). */
   readonly oidc?: OidcSettings;
   /**
-   * `WECHART_TRUST_PROXY`: the proxy in front of the API (nginx), whose
-   * `X-Forwarded-Proto` is believed — `true`, or its addresses, comma-separated.
-   * Behind a TLS-terminating proxy the API sees plain HTTP, and without this a
-   * Secure session cookie is silently never set (research/openid-client.md,
-   * Gotcha 3; T316's review).
+   * `WECHART_TRUST_PROXY`: the proxy in front of the API (nginx, or the
+   * Gateway's Envoy), whose `X-Forwarded-*` are believed: its addresses or
+   * ranges, comma-separated, in every security mode (T773). Behind a
+   * TLS-terminating proxy the API sees plain HTTP, and without this a Secure
+   * session cookie is silently never set (research/openid-client.md, Gotcha
+   * 3; T316's review); and `request.ip`, which the MCP limits count by, would
+   * be the proxy's (`mcp-deployment-and-tokens.md`, Finding 4). Never `true`
+   * nor a hop count, which believe any caller's `X-Forwarded-For` (§3).
    */
-  readonly trustProxy?: boolean | readonly string[];
+  readonly trustProxy?: readonly string[];
   /**
    * `WECHART_SUPER_ADMIN_GROUP`: the AD group whose members are Super-Admins,
    * exactly as the provider's groups claim carries it (T323, AC-256). Required
@@ -209,9 +213,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
 
+  const trustProxy = trustProxyOf(env);
   return {
     security,
-    ...(security === 'oidc' ? signInOf(env) : {}),
+    ...(trustProxy === undefined ? {} : { trustProxy }),
+    ...(security === 'oidc' ? signInOf(env, trustProxy) : {}),
     cubeApiUrl,
     cubeApiSecret,
     securityContext: parseSecurityContext(env['WECHART_SECURITY_CONTEXT']),
@@ -303,10 +309,40 @@ function keyOf(env: NodeJS.ProcessEnv, setting: string): string {
   }
 }
 
+/** An address, or a range as address/prefix, IPv4 or IPv6. */
+function isAddressOrRange(entry: string): boolean {
+  const [address = '', prefix, ...rest] = entry.split('/');
+  const family = isIP(address);
+  if (family === 0 || rest.length > 0) return false;
+  if (prefix === undefined) return true;
+  return /^\d{1,3}$/.test(prefix) && Number(prefix) <= (family === 4 ? 32 : 128);
+}
+
+/**
+ * The proxies whose `X-Forwarded-*` the API believes, in every security mode
+ * (T773, AC-474, AC-479): addresses and ranges only. `true` and a hop count
+ * are refused, as Fastify itself warns hop-count trust lets direct clients
+ * spoof `X-Forwarded-*` (`mcp-deployment-and-tokens.md` §3).
+ */
+function trustProxyOf(env: NodeJS.ProcessEnv): readonly string[] | undefined {
+  const proxy = env['WECHART_TRUST_PROXY'];
+  if (proxy === undefined || proxy.trim() === '') return undefined;
+  const entries = proxy.split(',').map((entry) => entry.trim());
+  const bad = entries.find((entry) => !isAddressOrRange(entry));
+  if (bad !== undefined)
+    throw new ConfigError(
+      `WECHART_TRUST_PROXY names the proxy’s addresses or ranges, comma-separated, such as ` +
+        `10.1.0.0/16: “${bad}” is none. Never true nor a hop count, which would believe any ` +
+        'caller’s X-Forwarded-For.',
+    );
+  return entries;
+}
+
 /** With security on, everything sign-in needs is required: a missing piece is a startup error. */
 function signInOf(
   env: NodeJS.ProcessEnv,
-): Pick<Config, 'publicUrl' | 'sessionSecret' | 'oidc' | 'trustProxy'> {
+  trustProxy: readonly string[] | undefined,
+): Pick<Config, 'publicUrl' | 'sessionSecret' | 'oidc'> {
   const required = (name: string): string => {
     const value = env[name];
     if (!value) throw new ConfigError(`${name} is required with WECHART_SECURITY=oidc.`);
@@ -321,21 +357,15 @@ function signInOf(
   }
   const backchannel = env['WECHART_OIDC_BACKCHANNEL_URL'];
   const publicUrl = required('WECHART_PUBLIC_URL').replace(/\/$/, '');
-  const proxy = env['WECHART_TRUST_PROXY'];
   // An https address is served through a TLS-terminating proxy here; without
   // trusting it, the Secure session cookie would never be set.
-  if (publicUrl.startsWith('https:') && !proxy) {
+  if (publicUrl.startsWith('https:') && trustProxy === undefined) {
     throw new ConfigError(
       'WECHART_PUBLIC_URL is https, so WECHART_TRUST_PROXY must name the proxy in front of the ' +
-        'API (or be "true"): without it the session cookie is never set.',
+        'API: without it the session cookie is never set.',
     );
   }
   return {
-    ...(proxy
-      ? {
-          trustProxy: proxy === 'true' ? true : proxy.split(',').map((address) => address.trim()),
-        }
-      : {}),
     publicUrl,
     sessionSecret,
     oidc: {

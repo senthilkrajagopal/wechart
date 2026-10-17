@@ -289,6 +289,36 @@ describe('the API answers for Cube (AC-007)', () => {
   });
 });
 
+/**
+ * T773 (AC-474, AC-479): with sign-in off too, the client's address behind
+ * the proxy `WECHART_TRUST_PROXY` names, and only behind it.
+ */
+describe('the client’s address behind a trusted proxy, with sign-in off (T773)', () => {
+  /** A server from the config as it is loaded, with a route answering `request.ip`. */
+  async function ipBehind(trusted: string) {
+    const app = buildServer({
+      config: loadConfig({ CUBE_API_SECRET: SECRET, WECHART_TRUST_PROXY: trusted }),
+    });
+    app.get('/test/ip', { config: { access: 'public' } }, async (request) => ({ ip: request.ip }));
+    const response = await app.inject({
+      method: 'GET',
+      url: '/test/ip',
+      // `inject`'s peer is 127.0.0.1.
+      headers: { 'x-forwarded-for': '203.0.113.9' },
+    });
+    await app.close();
+    return response.json<{ ip: string }>().ip;
+  }
+
+  it('is the forwarded address from a trusted peer', async () => {
+    expect(await ipBehind('127.0.0.1')).toBe('203.0.113.9');
+  });
+
+  it('is the peer’s own from a peer it doesn’t trust', async () => {
+    expect(await ipBehind('10.1.0.0/16')).toBe('127.0.0.1');
+  });
+});
+
 describe('who is signed in (AC-190)', () => {
   it('names phase 1’s single user, the owner every new document is given', async () => {
     // One user, no login (requirements §4) — the avatar reads the name here

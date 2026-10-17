@@ -240,7 +240,8 @@ describe('the session cookie and how long a sign-in lasts (T316’s review, AC-3
 
   it('is Secure and __Host- over HTTPS behind a trusted proxy', async () => {
     const app = buildServer({
-      config: { ...config(), publicUrl: 'https://wechart.example', trustProxy: true },
+      // `inject`'s peer is 127.0.0.1: the proxy, trusted by its address (T773: never `true`).
+      config: { ...config(), publicUrl: 'https://wechart.example', trustProxy: ['127.0.0.1'] },
       sessions: pgSessionStore(getDb()),
     });
     servers.push(app);

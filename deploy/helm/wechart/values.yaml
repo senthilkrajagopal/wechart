@@ -45,6 +45,12 @@ api:
   resources: {}
   # How many days audit records are kept (T370, AC-296): one year by default.
   auditRetentionDays: 365
+  # The proxies in front of the API whose X-Forwarded-* it believes, as
+  # addresses or CIDR ranges, comma-separated: the web nginx's and the
+  # Gateway's Envoy pods' (T773). In every security mode: the MCP limits count
+  # requests by the client's address behind them. Never "true" nor a hop
+  # count, which the API refuses. Empty: no proxy is trusted.
+  trustProxy: ''
 
 # wechart's metadata database: dashboards, charts, folders and the model.
 meta:

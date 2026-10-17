@@ -126,7 +126,8 @@ describe('signing out (T317, AC-253)', () => {
 
   it('clears the __Host- cookie over HTTPS as it was set: Secure, on the whole site', async () => {
     const app = buildServer({
-      config: { ...config, publicUrl: 'https://wechart.example', trustProxy: true },
+      // `inject`'s peer is 127.0.0.1: the proxy, trusted by its address (T773: never `true`).
+      config: { ...config, publicUrl: 'https://wechart.example', trustProxy: ['127.0.0.1'] },
       sessions: pgSessionStore(getDb()),
     });
     servers.push(app);

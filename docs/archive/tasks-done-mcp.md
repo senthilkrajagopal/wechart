@@ -111,3 +111,21 @@
       - API: `access-tokens-admin.test.ts` (5).
       - Unit: `AccessTokensTab.test.tsx` (6). `SecuritySurface.test.tsx` (2 new): the tab opens to a Super-Admin, is Not found to others, and is Not found with sign-in off. `SecurityPage.test.tsx`: the tab list now has four tabs signed in, and stays three with sign-in off.
       - e2e, `e2e/security/access-tokens.spec.ts`: Wren makes a token in her own context; `super` filters to her on the tab, revokes it, and Wren's list names Super Admin as who revoked it. `writer` gets Not found at `/security/tokens`, and 404 from the API.
+
+- [x] T773 [P] (AC-474, AC-479) Trust the proxy named in `WECHART_TRUST_PROXY` in every security mode, and set it from the Helm values
+  - Lane: MCP
+  - Files: `packages/api/src/config.ts` (+ `config.test.ts`), `packages/api/src/server.test.ts`, `deploy/helm/wechart/templates/api.yaml`, `deploy/helm/wechart/values.yaml`, `packages/api/src/deploy/trust-proxy.test.ts`.
+  - Today: `WECHART_TRUST_PROXY` is read only inside `signInOf()`, with sign-in on, and the chart never sets it (`mcp-deployment-and-tokens.md`, finding 4).
+  - Failing test: `config.test.ts`: with sign-in off and `WECHART_TRUST_PROXY=10.1.0.0/16`, the config's `trustProxy` is that list; `true` is refused, as hop-count trust is (research §3). `server.test.ts`: with sign-in off, a request from a trusted peer carrying `X-Forwarded-For: 203.0.113.9` has `request.ip` 203.0.113.9, and from an untrusted peer keeps the peer's address. `trust-proxy.test.ts`: `helm template` with `api.trustProxy` set renders it as `WECHART_TRUST_PROXY` on the API container, and renders none when unset.
+  - Depends on: none
+  - **Built 2026-10-17** (lane MCP, batch 2). **No AC ticked:** AC-474 needs the bad-token limit (T780), and AC-479 needs `/mcp`. This is their groundwork.
+    - **The config:** `trustProxyOf(env)` reads `WECHART_TRUST_PROXY` in both security modes. It takes comma-separated IPv4 or IPv6 addresses or CIDR ranges, checked with `node:net`'s `isIP` and a prefix of at most 32 or 128.
+      - `true`, a hop count (`1`), a name (`nginx`), a bad prefix, or an empty entry is a `ConfigError` naming the bad entry. Empty or unset means no proxy is trusted.
+      - The https check under sign-in uses the same value, and its message no longer offers `"true"`.
+      - `Config.trustProxy` is now `readonly string[]`, with no `boolean`. `server.ts` passes it to Fastify as a list.
+    - **Changed from before (the lane's call, overturnable):** with sign-in on, `WECHART_TRUST_PROXY=true` used to be accepted, and now refuses to start. Nothing in the repo set it: compose, Playwright and Helm don't.
+      - Two auth tests (`logout.test.ts`, `routes.test.ts`) built servers with `trustProxy: true`. They now name `inject`'s peer, `['127.0.0.1']`, which has the same effect on those requests.
+      - Names such as `loopback`, which Fastify's `proxy-addr` also takes, are refused too, since the research cites only addresses and CIDRs.
+    - **The chart:** `api.trustProxy` defaults to `''`. When set, `api.yaml` renders it as `WECHART_TRUST_PROXY` on the API container, after `WECHART_AUDIT_RETENTION_DAYS`. Neither docker-desktop values file sets it yet; the Gateway tasks (T792 on) know the Envoy pods' CIDR (`gateway-api.md`, open question 8).
+    - **`docs/deploy.md`'s "Limits today"** now says the chart sets it from `api.trustProxy`.
+    - **Tests:** `config.test.ts` (5, new), `server.test.ts` (2 new, through `loadConfig` and a test route answering `request.ip`), and `deploy/trust-proxy.test.ts` (2, new; runs `helm template` with the docker-desktop values). There is no e2e: nothing on a page changes.

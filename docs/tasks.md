@@ -1598,12 +1598,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 ### Lane MCP: the `/mcp` endpoint
 
-- [ ] T773 [P] (AC-474, AC-479) Trust the proxy named in `WECHART_TRUST_PROXY` in every security mode, and set it from the Helm values
-  - Lane: MCP
-  - Files: `packages/api/src/config.ts` (+ `config.test.ts`), `packages/api/src/server.test.ts`, `deploy/helm/wechart/templates/api.yaml`, `deploy/helm/wechart/values.yaml`, `packages/api/src/deploy/trust-proxy.test.ts`.
-  - Today: `WECHART_TRUST_PROXY` is read only inside `signInOf()`, with sign-in on, and the chart never sets it (`mcp-deployment-and-tokens.md`, finding 4).
-  - Failing test: `config.test.ts`: with sign-in off and `WECHART_TRUST_PROXY=10.1.0.0/16`, the config's `trustProxy` is that list; `true` is refused, as hop-count trust is (research §3). `server.test.ts`: with sign-in off, a request from a trusted peer carrying `X-Forwarded-For: 203.0.113.9` has `request.ip` 203.0.113.9, and from an untrusted peer keeps the peer's address. `trust-proxy.test.ts`: `helm template` with `api.trustProxy` set renders it as `WECHART_TRUST_PROXY` on the API container, and renders none when unset.
-  - Depends on: none
+- [x] T773 [P] (AC-474, AC-479) Trust the proxy named in `WECHART_TRUST_PROXY` in every security mode, and set it from the Helm values
 
 - [ ] T774 (AC-476) Serve `/mcp` only where an MCP host is configured, and say on the token pages that MCP isn't set up where none is
   - Lane: MCP

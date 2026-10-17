@@ -519,13 +519,10 @@ export function buildServer({
 }: BuildOptions): FastifyInstance {
   const app = Fastify({
     logger,
-    // Behind nginx, so `request.protocol` reads its X-Forwarded-Proto (T316's review).
-    ...(config.trustProxy === undefined
-      ? {}
-      : {
-          trustProxy:
-            config.trustProxy === true ? true : [...(config.trustProxy as readonly string[])],
-        }),
+    // Behind nginx or the Gateway, so `request.protocol` reads its
+    // X-Forwarded-Proto (T316's review) and `request.ip` its X-Forwarded-For,
+    // in every security mode (T773).
+    ...(config.trustProxy === undefined ? {} : { trustProxy: [...config.trustProxy] }),
   });
   /** The folder moves whose tree xcube was given before they were written (T715). */
   const treePutAhead = new WeakSet<FastifyRequest>();
