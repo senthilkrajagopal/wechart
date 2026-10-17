@@ -1388,7 +1388,7 @@ Traces to: `[R50]`; research `docs/research/sql-runner.md`. Its editor, browser,
 ## F41. The MCP server
 
 Purpose: let Claude Code, Claude.ai and Claude Desktop read wechart, edit in their owner's My workspace, and propose, as that owner, through the Model Context Protocol.
-Traces to: §P2.6 K, `[R78]`, `docs/inputs/2026-10-17-mcp-server.md`; research `docs/research/mcp-typescript-sdk.md`, `docs/research/fastify-rate-limit.md`. Rate limiting, a token's expiry values, its scope set, the groups its calls use, the output caps, the public exposure and the jobs operations wait on the open questions R78-1 … R78-11 (requirements §P2.8), and get their criteria once answered. Whatever limit is chosen, its answer must reach the client as 429: wechart's global error handler today turns the limiter's 429 into a 500.
+Traces to: §P2.6 K, `[R78]`, `docs/inputs/2026-10-17-mcp-server.md`; research `docs/research/mcp-typescript-sdk.md`, `docs/research/fastify-rate-limit.md`. The answers to R78-1 … R78-11 (requirements §P2.8, settled 2026-10-17) are AC-468 … AC-479 and the amended AC-441. wechart's global error handler today turns the limiter's 429 into a 500, which AC-472 rules out.
 
 - [ ] AC-430 WHEN a user makes a personal access token, THE SYSTEM SHALL require a name, one or more scopes and an expiry, show the token's text once, and from then on list the token to its owner with its name, scopes, when it was made, when it expires and when it was last used, never showing its text again; wechart SHALL keep no copy of the text from which the token could be used (`[R78]`; shown once and kept unusable, the coordinator's call).
       Fails when: a token is made with no expiry or no scope; its text can be read again after it is first shown, by the page or the API; the list lacks one of those fields; or the metadata database holds the token's text.
@@ -1412,8 +1412,8 @@ Traces to: §P2.6 K, `[R78]`, `docs/inputs/2026-10-17-mcp-server.md`; research `
       Fails when: a proposal made through MCP skips the publish check, lands without an approval, or differs from one the web app would make from the same item; or the list shows another user's proposal.
 - [ ] AC-440 IF an MCP client tries to approve or reject a proposal, its owner's own included, THEN THE SYSTEM SHALL refuse it and leave the proposal as it was, and SHALL list no tool that approves or rejects (`[R78]`, "Never").
       Fails when: `tools/list`, for a token with every scope, lists a tool that approves or rejects; or any request to `/mcp` changes a proposal's state to approved or rejected.
-- [ ] AC-441 THE SYSTEM SHALL offer through MCP no tool that creates, changes, tests, deletes or copies a data source; changes a shared folder directly (a subfolder made, a permission set, or an item renamed, moved or deleted, AC-291); switches the SQL runner; reads the audit trail; or makes, lists or revokes tokens (`[R78]`: data sources weren't chosen, and the rest are outside the three chosen groups).
-      Fails when: `tools/list`, for a token with every scope held by a Super-Admin, lists such a tool, or any request to `/mcp` does one of those things.
+- [ ] AC-441 THE SYSTEM SHALL offer through MCP no tool that creates, changes, tests, deletes or copies a data source; changes a shared folder directly (a subfolder made, a permission set, or an item renamed, moved or deleted, AC-291); switches the SQL runner or runs SQL in it, on a data source, on Cube Store or in the "Cube" group; reads the audit trail; or makes, lists or revokes tokens (`[R78]`: data sources weren't chosen, and the rest are outside the three chosen groups; no SQL runner, amended 2026-10-17, `[R78-11]`).
+      Fails when: `tools/list`, for a token with every scope held by a Super-Admin, lists such a tool, or any request to `/mcp` does one of those things, a SQL run included (amended 2026-10-17, `[R78-11]`).
 - [ ] AC-442 WHEN an event that AC-294 records is caused through MCP, THE SYSTEM SHALL record in it that it came through MCP and name the token; and WHEN a token is made or revoked, THE SYSTEM SHALL record that, with who, the token's name and when (the coordinator's call, from `[R78]` and AC-294).
       Fails when: a proposal made through MCP has an audit record that can't be told from one made in the web app, or lacks the token's name; or making or revoking a token leaves no audit record.
 - [ ] AC-443 THE SYSTEM SHALL return text that users wrote (names, titles, descriptions, markdown, reasons) and query rows only inside the data fields of tool results, marked there as data written by users, and SHALL keep its server instructions and every tool's name and description fixed text holding nothing users wrote (`[R78]`; research, Gotcha 12: the spec's "Sanitize tool outputs").
@@ -1422,11 +1422,35 @@ Traces to: §P2.6 K, `[R78]`, `docs/inputs/2026-10-17-mcp-server.md`; research `
       Fails when: Claude Code can't connect, list the tools or call a read tool with a valid token.
 - [ ] AC-445 WHEN a Claude.ai or Claude Desktop custom connector is set up with wechart's public `/mcp` URL and a personal access token as its fixed credential, THE SYSTEM SHALL let it, calling from Anthropic's cloud, list the token's tools and answer a read as the token's owner (`[R78]`, "Claude.ai / Desktop"; research, "Remote support by client").
       Fails when: such a connector can't connect from Anthropic's cloud, list the tools or call a read tool with a valid token.
+- [ ] AC-468 WHEN a user makes a personal access token, THE SYSTEM SHALL offer an expiry of 7, 30 or 90 days, with 30 chosen at the start, and SHALL make no token that lasts longer than 90 days, by the page or the API (`[R78-1]`).
+      Fails when: another expiry is offered; 30 days isn't chosen at the start; or a request to the API for a longer expiry makes a token.
+- [ ] AC-469 THE SYSTEM SHALL offer exactly three scopes for a token: read, workspace-edit, and proposals-and-jobs, with read always included; the read tools (AC-437) SHALL need read, the workspace edits (AC-438) workspace-edit, and proposals and jobs (AC-439, AC-477) proposals-and-jobs (`[R78-2]`).
+      Fails when: a token can be made without read, or with a scope outside those three; or a tool runs for a token lacking the scope it needs (with AC-433).
+- [ ] AC-470 WHEN a Super-Admin opens the personal access tokens of all users, THE SYSTEM SHALL list every user's tokens, with each one's owner, name, scopes, when it was made, when it expires and when it was last used, never its text, and let the Super-Admin revoke any of them, with the effect of AC-431; and SHALL show that list to no one else (`[R78-4]`).
+      Fails when: a token is missing from the Super-Admin's list; the list shows a token's text; a token the Super-Admin revoked still works; or anyone but a Super-Admin sees another user's tokens.
+- [ ] AC-471 WHEN a request to `/mcp` bears a valid token, THE SYSTEM SHALL decide its access with the groups of the token's owner's latest web sign-in, so that a change of groups takes effect from the owner's next web sign-in (`[R78-3]`).
+      Fails when: after the owner signs in again with a group removed, a call with the token still reaches a folder granted only to that group; or after they sign in with a group added, a call can't reach a folder granted to it.
+- [ ] AC-472 WHEN a token's requests to `/mcp` pass the deployment's limit, 60 a minute where none is set, THE SYSTEM SHALL answer each further request in that minute with 429 and a `Retry-After` header, running nothing; every request bearing the token SHALL count, and the count SHALL be kept in wechart's metadata database, so that it holds across every API replica (`[R78-5]`; research `docs/research/fastify-rate-limit.md`).
+      Fails when: with two API replicas and the limit at 60, a token's 61st request in a minute, across both, runs; the over-limit answer is a 500 or anything but 429; it lacks `Retry-After`; or a request that isn't `tools/call` goes uncounted.
+- [ ] AC-473 IF the rate-limit store can't be read or written, THEN THE SYSTEM SHALL refuse requests to `/mcp` with 503, running nothing, until it can (`[R78-5]`, "fail closed"; 503, the coordinator's call).
+      Fails when: with the store unavailable, a request to `/mcp` runs a tool, or is answered with anything but 503.
+- [ ] AC-474 WHEN requests to `/mcp` from one IP address bear a bad or missing token past the deployment's per-IP limit, THE SYSTEM SHALL answer that address's further such requests with 429 and a `Retry-After` header, with IPv6 addresses counted by their /64 prefix as the limiter does by default (`[R78-5]`; research `docs/research/fastify-rate-limit.md`, Gotchas 5 and 9).
+      Fails when: an address sending bad tokens past the limit gets anything but 429; or rotating addresses within one IPv6 /64 escapes the limit.
+- [ ] AC-475 WHEN a tool's result would hold more than 1,000 rows or 50,000 characters, THE SYSTEM SHALL return at most 1,000 rows and fewer than 50,000 characters, say in the result that it was cut and how much was left out, and give a cursor the client can pass to get the next page (`[R78-6]`; Claude Code's own caps, research Gotcha 13).
+      Fails when: a result holds more than 1,000 rows or 50,000 characters; a cut result doesn't say so; or following the cursors leaves out or repeats a row.
+- [ ] AC-476 WHERE the deployment's Helm values name a host for MCP, THE SYSTEM SHALL serve `/mcp` on that host only, over TLS, through an ingress of its own that serves no other path and lets in only the source addresses listed in the Helm values (Anthropic's published ranges and the enterprise network), and SHALL not serve `/mcp` on the web app's host (`[R78-7]`).
+      Fails when: the MCP host serves any path but `/mcp`, or serves it without TLS; a request from an address not listed reaches the API; or `/mcp` answers on the web app's host.
+- [ ] AC-477 WHEN an MCP client works with jobs, THE SYSTEM SHALL let it list the jobs, builds and schedules its owner may see (AC-297), and start a build with Run now or cancel one wherever its owner may in the web app; and SHALL offer no tool that makes, changes, pauses, resumes or deletes a schedule (`[R78-8]`).
+      Fails when: the list shows a job or schedule its owner can't see; Run now or Cancel works where its owner's web app wouldn't offer it; or any request to `/mcp` changes a schedule.
+- [ ] AC-478 WHEN an MCP tool is called, reads included, THE SYSTEM SHALL record an audit event with who, the token's name, the tool, the outcome and when, holding none of the call's argument values (`[R78-9]`, with AC-294 and AC-442).
+      Fails when: a call, a read included, leaves no event; an event lacks one of those; or an event holds an argument value, such as a filter value of a query.
+- [ ] AC-479 WHILE sign-in is off, THE SYSTEM SHALL let the single user make personal access tokens, and serve requests bearing them on `/mcp` as that user, with every other F41 criterion applying as it does with sign-in on (`[R78-10]`, with AC-254).
+      Fails when: with sign-in off, a valid token is refused, or a request with no token, a bad one, a foreign `Host` or `Origin`, or past the rate limit is served.
 
 ## F42. The SQL runner workspace
 
 Purpose: one workspace, beside Jobs and Schedules, to pick a data source, browse its tables and columns, write and run read-only SQL in tabs with typed parameters, keep personal saved queries, and turn a run into a cube or a chart in My workspace.
-Traces to: §P2.6 L, `[R78]`, `docs/inputs/2026-10-17-sql-runner-and-ask-key.md`; design study `docs/design/references-sql-runner.md` ("The experience, specified" and its mapping). Every F40 safety criterion applies to every run here unchanged. The tab shortcuts' keys, the "Cube" group's details, parameters on Cube Store and in the "Cube" group, and a saved query's name rules wait on the open questions R78-12 … R78-15 (requirements §P2.8). Two dependencies, not estimates: bound parameters need xcube's run route to take bound values (`docs/research/xcube-sql-runner.md`), and each driver's placeholder syntax and Cube's `/v1/cubesql` need research before planning.
+Traces to: §P2.6 L, `[R78]`, `docs/inputs/2026-10-17-sql-runner-and-ask-key.md`; design study `docs/design/references-sql-runner.md` ("The experience, specified" and its mapping). Every F40 safety criterion applies to every run here unchanged. The answers to R78-12 … R78-15 (requirements §P2.8, settled 2026-10-17) are AC-480 … AC-483. Two dependencies, not estimates: bound parameters need xcube's run route to take bound values (`docs/research/xcube-sql-runner.md`), and each driver's placeholder syntax and Cube's `/v1/cubesql` need research before planning.
 
 - [ ] AC-446 WHEN a Super-Admin or a read-write member opens SQL runner, THE SYSTEM SHALL show the workspace at `/sql`, with the open tab named in the address, so that reloading restores that tab, its data source and its text; and IF anyone else opens `/sql`, THEN THE SYSTEM SHALL show them none of it (`[R78]`; design study §1, Q15).
       Fails when: a read-only user sees the workspace or any of its content; or a reload opens another tab, or loses the tab's data source or text.
@@ -1472,6 +1496,14 @@ Traces to: §P2.6 L, `[R78]`, `docs/inputs/2026-10-17-sql-runner-and-ask-key.md`
       Fails when: a first visit opens on a data source or with focus elsewhere; one of those sentences is missing; or a tab can still run after its source is switched off or its access removed.
 - [ ] AC-467 WHEN a tab's source is chosen from the picker's "Cube" group, THE SYSTEM SHALL run its SQL through Cube's SQL API as the user, with their folder access and Cube's access policies applying as they do to a chart; say so in the tab's run line in place of the warning of AC-385; and list in the left pane the cubes and views the user may query, with their members (`[R78]`, "In the runner"; design study Q13a).
       Fails when: a cube or view the user may not query is listed, or its rows come back; a row a policy hides from the user's chart comes back here; the AC-385 warning shows on such a tab; or the run line doesn't say it goes through Cube.
+- [ ] AC-480 WHILE focus is in the SQL runner workspace, THE SYSTEM SHALL open a new tab on the current data source on Ctrl+Q, and select the previous or the next tab on Ctrl+Alt+[ or Ctrl+Alt+], on macOS too, with Control rather than ⌘; and no key SHALL close a tab, which closes with its × button (`[R78-12]`, approved under R75).
+      Fails when: one of those keys doesn't do that in the workspace; one does something new outside it; or any key closes a tab.
+- [ ] AC-481 WHILE the "Cube" group is in the picker, THE SYSTEM SHALL show it to everyone who may open the workspace (AC-446), with no switch; apply to its runs the caps of AC-377 … AC-379; record each run as AC-382 does, marked "Cube", and list it in History; and offer no Make a cube… or Make a chart… on its results, saying they already come from cubes (`[R78-13]`).
+      Fails when: a read-write member who may open the workspace doesn't see the group; it needs a switch; a run there returns more than 10,000 rows or runs past 30 seconds; a run leaves no audit event marked "Cube" or no History row; or Make a cube… or Make a chart… is enabled on its results.
+- [ ] AC-482 WHEN the SQL holds a `{{name}}` on Cube Store or in the "Cube" group, THE SYSTEM SHALL offer the parameters strip there only where research in `docs/research/` shows the source binds parameter values; elsewhere it SHALL hold Run, saying parameters aren't available on that source, and never write a value into the SQL text (`[R78-14]`).
+      Fails when: on a source without such research, a run with `{{name}}` reaches the database, or a value is written into its SQL text; or Run is held without saying why.
+- [ ] AC-483 WHEN a saved query is saved or renamed, THE SYSTEM SHALL require a name of at most 100 characters that none of its owner's other saved queries has, and allow a description of at most 1,000 characters, refusing anything else with the reason (`[R78-15]`).
+      Fails when: a saved query is saved with no name, a name over 100 characters, a name another of its owner's saved queries has, or a description over 1,000 characters; or a refusal doesn't say why.
 
 ## Non-goals (phase 1)
 
@@ -1519,7 +1551,9 @@ Copied from [requirements.md §P2.7](./requirements.md):
 - Around the MCP server `[R78]`:
   - approving or rejecting a proposal through MCP, ever;
   - creating, changing, testing or deleting data sources through MCP, in the first release;
-  - signing in through OAuth, so clients that need it aren't served in the first release.
+  - signing in through OAuth, so clients that need it aren't served in the first release;
+  - running SQL in the SQL runner through MCP, in the first release (`[R78-11]`);
+  - changing schedules through MCP (`[R78-8]`).
 - Brought into scope by R78 and to be specified later, so without criteria yet: the copilot, the ask shortcut (⌘J / Ctrl+J), the read-only login per data source, the refresh worker's build history, xcube's slice 7, the phase 3 keyboard items, and the four Northwind demo bugs (requirements §P2.6 M).
 - Tenancy: a subfolder redefining an ancestor's cube or data source under the same name, or one model over several identical databases. If it is needed later, it is a feature of its own, on Cube's security-context multitenancy, and needs xcube's support (2026-10-07, `[R71]` 2).
 
@@ -1644,15 +1678,26 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | §P2.6 K The audit marks MCP actions (the coordinator's call) | AC-442 |
 | §P2.6 K Tool outputs treated as untrusted data (the MCP specification, via the research) | AC-443 |
 | §P2.6 K Claude Code, Claude.ai and Claude Desktop on day one `[R78]` | AC-444, AC-445 |
-| §P2.6 K Rate limiting, the token's expiry values and scope set, the groups a token's calls use, output caps, the public exposure, the jobs operations: open (§P2.8, R78-1 … R78-11) | none yet |
+| §P2.6 K A token's lifetime: 7, 30 or 90 days, 30 by default, 90 at most `[R78-1]` | AC-468 |
+| §P2.6 K Three fixed scopes, read always included `[R78-2]` | AC-469, AC-433 |
+| §P2.6 K The groups of the owner's latest web sign-in `[R78-3]` | AC-471 |
+| §P2.6 K Super-Admins list and revoke any token `[R78-4]` | AC-470 |
+| §P2.6 K Rate limiting: a Postgres counter, per token, every call counted, 60 a minute as a deployment setting, closed on store failure, 429 with `Retry-After` past the global error handler, an IP limit on bad-token traffic `[R78-5]` | AC-472, AC-473, AC-474 |
+| §P2.6 K Output caps of 1,000 rows and 50,000 characters, with paging `[R78-6]` | AC-475 |
+| §P2.6 K A separate `/mcp` host with an allow-list, as Helm values `[R78-7]` | AC-476, AC-436 |
+| §P2.6 K Jobs: list, Run now and Cancel; no schedule edits `[R78-8]` | AC-477 |
+| §P2.6 K Every MCP tool call audited, with no argument values `[R78-9]` | AC-478 |
+| §P2.6 K Tokens with sign-in off `[R78-10]` | AC-479 |
+| §P2.6 K No SQL runner through MCP `[R78-11]` | AC-441 |
 | §P2.6 L The SQL runner as its own workspace beside Jobs and Schedules, shown to Super-Admins and read-write members `[R78]` | AC-001, AC-446, AC-447, AC-466 |
 | §P2.6 L The schema browser: find, PK and FK, Insert SELECT, Preview 100 rows only on request `[R78]` | AC-386, AC-448, AC-449 |
 | §P2.6 L Tabs bound to a data source, kept in the browser only; run states; one run across tabs; History of all runs `[R78]` | AC-381, AC-450, AC-451, AC-452, AC-465 |
-| §P2.6 L Typed parameters, bound, values only, names alone in the audit `[R78]` | AC-453, AC-454 |
-| §P2.6 L Keyboard: the statement at the cursor, Save and Find, autocomplete `[R78]` (the tab shortcuts' keys open, R78-12) | AC-387, AC-455, AC-456 |
-| §P2.6 L Personal saved queries, in ⌘K for their owner `[R78]` | AC-457 … AC-460 |
+| §P2.6 L Typed parameters, bound, values only, names alone in the audit `[R78]` | AC-453, AC-454, AC-482 |
+| §P2.6 L Keyboard: the statement at the cursor, Save and Find, autocomplete; the tab shortcuts Ctrl+Q and Ctrl+Alt+[ ] `[R78, R78-12]` | AC-387, AC-455, AC-456, AC-480 |
+| §P2.6 L Personal saved queries, in ⌘K for their owner `[R78]`; their name rules `[R78-15]` | AC-457 … AC-460, AC-483 |
 | §P2.6 L Make a cube and Make a chart, as drafts in My workspace `[R78]` | AC-461, AC-462, AC-463 |
 | §P2.6 L The data source's page keeps a "SQL runner" tab with the switch and "Open in SQL runner" `[R78]` | AC-373, AC-464 |
-| §P2.6 L Cube's SQL API as a "Cube" group in the picker `[R78]` | AC-467 |
+| §P2.6 L Cube's SQL API as a "Cube" group in the picker `[R78]`: for everyone who sees the workspace, no switch, R50's caps, audited and in History, no Make a cube `[R78-13]` | AC-467, AC-481 |
+| §P2.6 L Parameters on Cube Store and in the "Cube" group only where binding is shown to work `[R78-14]` | AC-482 |
 | §P2.6 M Brought into scope by R78, to be specified later | none yet |
 | Design 16, Jobs and Schedules, approved as drawn: partitions and each row's state, Run history, the queue and Cancel, wechart's schedules and their suspension, both kinds of schedule running, the refresh worker's status, the audit events, the Folder column and filter; its proposals P1–P5 and its drawn defaults Q1–Q12 `[R56]`; the refresh worker's own history still deferred `[R41]` | AC-145, AC-150, AC-151, AC-153 … AC-155, AC-234, AC-294, AC-297, AC-391 … AC-399 |
