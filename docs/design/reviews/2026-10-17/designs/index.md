@@ -1,5 +1,7 @@
 # Designs for approval — UI design 2026-10-17 (phase 2, R78)
 
+**Approved 2026-10-17** by the user: designs 17 and 18, "Approve with defaults (Recommended)" (R78 in `docs/requirements-log.md`). Every open question takes the way its design draws it, option (a), except where the user answered otherwise. See "Decided 2026-10-17" at the end.
+
 Two static mockups for R78: the SQL runner workspace (F42, with the amended F40 criteria) and personal access tokens for the MCP server (F41). They are numbered after designs 15 and 16 in `../../2026-10-01/designs/index.md`.
 
 - **Format:** the same as the 2026-10-01 designs. Each is a self-contained HTML file with inline CSS in direction.md's tokens, and Inter and IBM Plex Mono from Google Fonts, with no other requests. Open it in a browser. Each shows:
@@ -100,3 +102,34 @@ Each is drawn one way so the design is complete. The way drawn is only a default
   - (a) Add rules for design 18 once it's approved (shown once, never the text, Read locked, 7 / 30 / 90, Revoke confirmed with no Undo).
   - (b) None: the ACs suffice.
 - **D-Q2. The copilot's proposed rules 90–106** (references-copilot.md) now collide with 90–108 here. When the copilot is taken up, they would be renumbered from 109.
+
+## Decided 2026-10-17
+
+The user approved both designs: "Approve with defaults (Recommended)" (R78 in `docs/requirements-log.md`). Three questions were asked on their own; every other question takes the way its design draws it.
+
+**Design 17**
+- **17-Q1:** (a), drawn. Below 1,024 px both side panes fold to 40 px rails that open over the centre; the editor stays usable.
+- **17-Q2:** (a), drawn. One "Cube" group entry, "Cubes and views you may query", each cube's folder shown in the browser.
+- **17-Q3:** asked. "Research first (Recommended)": R78-12's keys are built only after `docs/research/keyboard-shortcuts-sql-runner.md` checks each supported browser, operating system and keyboard layout; a conflict found comes back to the user.
+- **17-Q4:** (a), drawn. A History row whose data source is no longer available reads "A data source no longer available to you" and opens with no source chosen (AC-381 amended).
+- **17-Q5:** (a), drawn. Choosing another data source changes it at once; the SQL stays, the result clears, its runs stay in History.
+- **17-Q6:** (a), drawn. An icon on the tab; its label in the tooltip and accessible name, and in full in the result head and History.
+- **17-Q7:** (a), drawn. Make a cube's folder starts at the data source's own folder when the user may write there, otherwise empty (AC-462 amended).
+- **17-Q8:** (a), drawn. No limit on open tabs; the tab strip scrolls.
+- **17-Q9:** asked. "Numbers as sum measures (Recommended)", option (a): numeric columns other than the key start as `sum` measures; the rest as dimensions typed string, number, time or boolean (AC-462 amended).
+
+**Design 18**
+- **18-Q1:** (a), drawn. Expired and revoked tokens sit under "No longer working", with the state, when and who revoked, and Remove; the audit keeps the record (AC-431 amended).
+- **18-Q2:** (a), drawn. A token's name is required, at most 100 characters, unlike the owner's other working tokens (AC-430 amended).
+- **18-Q3:** (a), drawn. Closing the shown-once dialog before copying asks first (AC-430 amended).
+- **18-Q4:** (a), drawn. "Revoked · by ‹Super-Admin›, ‹date›", the Super-Admin named (AC-431 amended).
+- **18-Q5:** (a), drawn. No limit on working tokens.
+- **18-Q6:** asked. "MCP off (Recommended)", option (a2): with no MCP host in the Helm values, nothing is served at `/mcp`, and the token pages say MCP isn't set up (AC-476 amended).
+- **18-Q7:** (a), drawn, but moot while Claude.ai and Claude Desktop are deferred (AC-445 retired). The token pages show Claude Code only.
+- **18-Q8:** (a), drawn. No per-token call list for the owner; Last used only.
+- **18-Q9:** (a), drawn. No rename.
+- **18-Q10:** (a), drawn. A read-only user sees Workspace edit and Proposals and jobs disabled, with the reason (AC-469 amended).
+
+**Not settled by this answer**
+- The proposals, 17-P1 ("Changed since saved"), 17-P2 (the one-time note that tabs are kept in this browser), 17-P3 (Cube Store's insert of `information_schema.tables`), 18-P1 ("Show its calls") and 18-P2 (the Claude Code command with the new token in it). The answer didn't name them, as R33's "Approve all with proposals" did, and no criterion holds them, so they are not planned.
+- D-Q1 and D-Q2, which are direction.md's, not the designs'.

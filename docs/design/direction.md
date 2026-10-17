@@ -2,7 +2,7 @@
 
 **Status:** proposed on 2026-09-19. Waiting for the user to accept it after reviewing the prototype.
 **Phase 2 (2026-09-25):** principles 6–9, §7e and rules 59–89 extend this direction to sign-in, folder access, workspaces, proposals, history, bookmarks, the audit trail, the country map and the box plot. Evidence: `references.md` › "Phase 2". **Accepted by the user on 2026-09-25.**
-**R78 (2026-10-17):** §7f and rules 90–108 extend it to the SQL runner workspace and personal access tokens. Evidence: `references-sql-runner.md` (its checklist rules 107–125, renumbered here and amended for R78's answers) and designs 17 and 18 (`reviews/2026-10-17/designs/`). **Proposed, waiting for the user's approval of designs 17 and 18.**
+**R78 (2026-10-17):** §7f and rules 90–108 extend it to the SQL runner workspace and personal access tokens. Evidence: `references-sql-runner.md` (its checklist rules 107–125, renumbered here and amended for R78's answers) and designs 17 and 18 (`reviews/2026-10-17/designs/`). **Accepted with designs 17 and 18 on 2026-10-17** ("Approve with defaults (Recommended)"; the defaults taken are in that review's `index.md`). Rule 107's Ctrl+Q and Ctrl+Alt+[ and ] wait on `docs/research/keyboard-shortcuts-sql-runner.md` (17-Q3, "Research first").
 **Sources:**
 
 - `references.md`: six enterprise BI products studied, with a committed direction.
@@ -494,7 +494,7 @@ Nothing in §2–§7d changes. No new colour and no new type size is added: ever
 - Over Cube's row limit, a warning band on the tile reads "Computed from _n_ of _N_ rows", with the status-warning icon.
 - Hover on a box: the category, n, minimum, Q1, median, Q3 and maximum (and the whisker ends when Tukey is on), in tabular numerals.
 
-## 7f. R78: the SQL runner workspace and personal access tokens (proposed 2026-10-17)
+## 7f. R78: the SQL runner workspace and personal access tokens (accepted 2026-10-17)
 
 **Direction** (`references-sql-runner.md` › Direction). A "SQL runner" workspace after Schedules, laid out as §2's three-pane workbench: a data source picker and lazy schema browser on the left; tabs bound to a data source in the centre, each with F40's warning, the CodeMirror editor, typed and bound parameters and a dense result grid; Saved and History on the right. Make a cube and Make a chart turn a finished run into drafts in My workspace. The data source's page keeps only the runner's switch and "Open in SQL runner". Personal access tokens for MCP live under the person's account, reached from the account menu, with every user's in Security for Super-Admins.
 

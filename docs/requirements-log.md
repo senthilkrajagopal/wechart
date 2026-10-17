@@ -281,6 +281,11 @@ Questions are Claude's; answers are the user's, verbatim.
   5. Q: Parameters on Dremio, which binds none? A: "Hold Run, say why (Recommended)". *As on Cube Store and in the "Cube" group (R78-14).*
   6. Q: The seed fixtures' flat picker list (T742-2)? A: "Keep as built (Recommended)". *No criterion changes.*
 - *The coordinator's call, overturnable:* a parameter is written `{{ name }}`, with optional spaces inside the braces; its name matches `[A-Za-z_][A-Za-z0-9_]*` and is case-sensitive.
+- **Designs 17 and 18** (2026-10-17, the user; `docs/design/reviews/2026-10-17/designs/index.md`):
+  1. Q: Approve designs 17 (the SQL runner workspace) and 18 (personal access tokens)? A: "Approve with defaults (Recommended)". *Each open question not asked below takes the way its design draws it, option (a): 17-Q1, 17-Q2, 17-Q4 … 17-Q8, and 18-Q1 … 18-Q5 and 18-Q7 … 18-Q10. The index records each. 18-Q7 (the Claude.ai and Desktop connector steps) is moot while those clients are deferred.*
+  2. Q: Make a cube's Kind and Cube type for each column (17-Q9)? A: "Numbers as sum measures (Recommended)". *Numeric columns other than the primary key start as measures of type `sum`, changeable among Cube's measure types; the rest start as dimensions typed string, number, time or boolean, from the database's type.*
+  3. Q: A deployment whose Helm values name no MCP host (18-Q6)? A: "MCP off (Recommended)". *Option (a2): with no host named, nothing is served at `/mcp`, and the token pages say MCP isn't set up.*
+  4. Q: Do R78-12's tab keys (Ctrl+Q, Ctrl+Alt+[ and ]) reach the page (17-Q3)? A: "Research first (Recommended)". *A research doc, `docs/research/keyboard-shortcuts-sql-runner.md`, checks each supported browser, operating system and keyboard layout before the keys are built; a conflict found comes back to the user.*
 
 **R77 — closing design conformance faster** (2026-10-08, the user)
 - The user, choosing all three options Claude offered: "Accept small visual differences and Skip the review round on pure-styling tasks and Close AC-187, the overall prototype check, on the per-surface results."
