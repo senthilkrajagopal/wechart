@@ -14484,3 +14484,36 @@ Search this file by task ID (`T123`) or AC ID.
       - The dead `.chart-editor__meta` CSS is gone.
       - Left as is: the drawer's height is clamped to half the editor only while it is dragged, not again when the window shrinks.
     - **Changed with the design:** the "Served/Not served from" wording is now "by" (Q5); the drawer's heads now start with "#" and each has its chip; the always-on banner is now the Acceleration note (R76, AC-147 amended).
+
+- [x] T691 (AC-344, AC-343, AC-187) The Model workspace's remaining differences and the shared pane chrome of Generate cubes and the data source wizard *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/workspaces/model/{FileTree,FileList,GenerateCubes}.tsx`, `packages/web/src/workspaces/data-sources/NewSourceWizard.tsx`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/model-design.spec.ts`, `e2e/consistency.spec.ts`
+  - Findings: MOD-01, MOD-02, MOD-03, MOD-04, MOD-05, MOD-06; SRC-01, SRC-12, SRC-13, SRC-14, SRC-16; SRC-05's wizard glyphs.
+  - Failing test:
+    - section headings and step numbers are 12 px;
+    - the pane's head is 44 px, with a 32 px ✕ icon button and the person icon;
+    - radios are 16 px;
+    - the tree's Jinja row is one 28 px row, with its tag at the right;
+    - the overview's Jinja kind is the tag;
+    - the overview's insets and column widths;
+    - the rail's even separators and muted steps;
+    - the 32 px mark;
+    - the chosen-type bar as drawn;
+    - "+ Data source" stays enabled, with its ring, while the pane is open.
+  - ~~Waits on: the model critique's Q3 ("All published"'s colour) and Q4 (comment lines tinted at rest), for those two items only.~~
+  - **Settled 2026-10-08 (R76: model-Q3, model-Q4, model-Q1, model-Q2, components-Q5).** Build:
+    - **model-Q3:** "All published" with its label in text-secondary and only its icon green, as designs 11 and 12 draw it.
+    - **model-Q4:** comment lines stay tinted only after "Show in YAML", as built (T482). Nothing to build.
+    - **model-Q1:** a read-only shared model file's head takes design 03 state A's look for the same state. That is a 32 px primary "Edit in my workspace" in the title row and the 22 px badge on the meta line, in the model's head and the overview, in place of the 24 px button and the "Read-only · in Shared" pill.
+    - **model-Q2:** backlog §6(a)'s eight calls are accepted as built. Nothing to build.
+    - **components-Q5:** MOD-01's 11 px headings and step numbers go to 12 px; the floor is absolute.
+  - Depends on: T684 (the pane head's icon button)
+  - **Built (2026-10-17, lane A):**
+    - The shared pane head (wizard, Generate cubes, Import, Export): 44 px, padded 5/8/5/16, a 16/22 title, the ✕ a 32 px `.icon-button` with design 01's `i-x`, and "in My workspace" with the person icon (`shell/paneIcons.tsx`).
+    - Headings (`.connection-form__legend`) and step numbers at 12; the rail's separators even (each step after the first `flex: 1 1 auto`), steps not reached text-muted; radios 16 px; the mark 32 px (24 in Generate's bar, design 11); the chosen-type bar on bg-page at 12/16, its name 12/600; tiles border-strong; Back and Next with `i-back` and `i-chev`.
+    - "+ Data source" stays enabled, ringed while the wizard is open; pressed again, it focuses the step's first tab stop.
+    - The tree's Jinja row one 28 px row, its tag at the end; "All published" text-secondary with a green icon.
+    - The overview padded 16/24, its title row 32 tall, its columns at design 12's widths, the Jinja Kind as the tag, the empty card 28/24.
+    - model-Q1: the 22 px badge and a 32 px primary in a file's head; the badge on a meta line in the overview.
+    - Calls T691-1 to T691-5 are in `docs/design/decisions-2026-10-08.md`, "Later decisions".
+  - **Tests.** e2e: `model-design.spec.ts` (three T691 tests; T479's "All published" colour per model-Q3), `consistency.spec.ts` ("the shared pane chrome (T691)": the wizard and the Export pane's head). Unit: `GenerateCubes.test` (Back and Next icons, the person icon).
+  - **The review (one round), fixed:** the Export pane's ✕ had lost its look with the shared rule (now the icon button, with an e2e); T691-2 now records that the overview has no primary, as no copy of a whole model exists; the opener focuses a tab stop, not a roving radio out of the tab order; a Jinja row with a draft's marks still wraps them.

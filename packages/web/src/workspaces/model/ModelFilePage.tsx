@@ -243,7 +243,8 @@ function EditInWorkspace({
   return (
     <button
       type="button"
-      className="btn-sm btn-primary model-editor__copy"
+      // A 32 px primary, as design 03 state A draws it (R76 model-Q1; T691).
+      className="btn btn-primary model-editor__copy"
       disabled={copying}
       aria-describedby={refusalId}
       onClick={() => {
@@ -295,7 +296,7 @@ function UseInWorkspace({
       <button
         ref={button}
         type="button"
-        className="btn-sm btn-primary model-editor__copy"
+        className="btn btn-primary model-editor__copy"
         onClick={() => {
           setFailure(undefined);
           setAsking(true);
@@ -2229,14 +2230,19 @@ export function ModelFilePage({
             <div className="model-page__overview">
               <div className="model-overview__title-row">
                 <h1 className="workspace-title">Model</h1>
-                {readOnly ? (
-                  <ReadOnlyBadge words={words} />
-                ) : (
+                {readOnly ? null : (
                   <MenuButton label="New" items={newItems}>
                     ＋ New ▾
                   </MenuButton>
                 )}
               </div>
+              {/* Read-only: the badge on a meta line under the title, as
+                  design 03 state A draws it (R76 model-Q1; T691). */}
+              {readOnly ? (
+                <div className="model-overview__meta">
+                  <ReadOnlyBadge words={words} />
+                </div>
+              ) : null}
               {files.isPending ? (
                 // State F: reading, the table's frame drawn beneath (no jump when it comes).
                 <>

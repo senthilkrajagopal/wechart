@@ -8,6 +8,7 @@ import {
 } from '@wechart/core';
 import { useEffect, useId, useRef, useState, type DragEvent } from 'react';
 
+import { CloseIcon } from '../../../shell/paneIcons';
 import { StatusIcon } from '../../../shell/StatusIcon';
 import { useFocusTrap } from '../../../shell/useFocusTrap';
 import { TargetTree } from '../../data-sources/TargetTree';
@@ -19,6 +20,7 @@ import {
   type SourceDecision,
 } from './ImportSources';
 import type { Target } from '../NewItemDialog';
+import { PersonIcon } from '../WorkspaceBand';
 
 /**
  * Importing a dashboard (T513; AC-356, AC-357, AC-359; design 13, screen 2
@@ -597,17 +599,17 @@ export function ImportPane({
           Import a dashboard
         </h2>
         <span className="source-pane__where">
-          <span className="source-pane__person" aria-hidden="true" />
+          <PersonIcon />
           into My workspace
         </span>
         <button
           type="button"
-          className="source-pane__close"
+          className="icon-button source-pane__close"
           aria-label="Close"
           disabled={importing.isPending}
           onClick={leave}
         >
-          ×
+          <CloseIcon />
         </button>
       </header>
 

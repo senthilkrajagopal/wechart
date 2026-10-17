@@ -534,6 +534,137 @@ test.describe('one button rule and one pressed state (T684)', () => {
 });
 
 /**
+ * T691 (AC-343, AC-187): the data source wizard's chrome as 2026-09-27
+ * design 01 draws it — the pane head Generate cubes shares (design 11), the
+ * step rail, the 32 px mark, the chosen-type bar, the type tiles, Back and
+ * Next with their icons, and "+ Data source" ringed while the pane is open
+ * (SRC-01, SRC-05, SRC-12, SRC-13, SRC-14, SRC-16).
+ */
+test.describe('the shared pane chrome (T691)', () => {
+  const tokenOf = (page: Page, token: string, property: 'color' | 'backgroundColor' = 'color') =>
+    page.evaluate(
+      ([name, prop]) => {
+        const probe = document.createElement('span');
+        probe.style[prop as 'color'] = `var(${name})`;
+        document.body.append(probe);
+        const colour = getComputedStyle(probe)[prop as 'color'];
+        probe.remove();
+        return colour;
+      },
+      [token, property],
+    );
+  const sizeOf = (locator: Locator) =>
+    locator.evaluate((node) => {
+      const box = node.getBoundingClientRect();
+      return [Math.round(box.width), Math.round(box.height)];
+    });
+
+  test('the data source wizard as design 01 draws its chrome', async ({ page }) => {
+    await page.goto('/data-sources');
+    const opener = page.getByRole('button', { name: '+ Data source' });
+    await opener.click();
+    const wizard = page.getByRole('dialog', { name: 'New data source' });
+    await expect(wizard).toBeVisible();
+
+    // "+ Data source" stays enabled, ringed as what opened the pane (01:230);
+    // pressed again, it takes you to the pane.
+    await expect(opener).toBeEnabled();
+    expect(await opener.evaluate((node) => getComputedStyle(node).boxShadow)).toMatch(
+      /0px 0px 0px 3px/,
+    );
+    await opener.click();
+    expect(await wizard.evaluate((node) => node.contains(document.activeElement))).toBe(true);
+
+    // The head: 44 px, the person icon, ✕ a 32 px icon button (01:141, 252).
+    const head = wizard.locator('.source-pane__head');
+    expect((await sizeOf(head))[1]).toBe(44);
+    await expect(head.locator('.source-pane__where svg')).toBeVisible();
+    const close = head.getByRole('button', { name: 'Close' });
+    expect(await sizeOf(close)).toEqual([32, 32]);
+    await expect(close.locator('svg')).toBeVisible();
+    await expect(close).toHaveText('');
+
+    // The rail: step numbers at 12, steps not reached in text-muted, and
+    // even separators (`.step-sep` flex 1; 01:149, 153).
+    const steps = wizard.locator('.source-pane__rail li');
+    expect(
+      await steps
+        .locator('.source-pane__step')
+        .evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).fontSize)),
+    ).toEqual(['12px', '12px', '12px', '12px']);
+    expect(await steps.nth(1).evaluate((node) => getComputedStyle(node).color)).toBe(
+      await tokenOf(page, '--wc-text-muted'),
+    );
+    const separators = await steps.evaluateAll((nodes) =>
+      nodes.slice(1).map((node) => parseFloat(getComputedStyle(node, '::before').width)),
+    );
+    expect(Math.max(...separators) - Math.min(...separators)).toBeLessThanOrEqual(1);
+
+    // "Which database?" at 12; the tiles bordered border-strong, marks 32 px (01:154–160).
+    const which = wizard.getByRole('heading', { name: 'Which database?' });
+    expect(await which.evaluate((node) => getComputedStyle(node).fontSize)).toBe('12px');
+    const tiles = wizard.getByRole('radiogroup', { name: 'Which database?' });
+    const redshift = tiles.getByRole('radio', { name: 'Amazon Redshift' });
+    expect(await redshift.evaluate((node) => getComputedStyle(node).borderTopColor)).toBe(
+      await tokenOf(page, '--wc-border-strong'),
+    );
+    expect(await sizeOf(redshift.locator('.driver-mark'))).toEqual([32, 32]);
+
+    // Chosen: the bar on bg-page at 12/16, the name 12 px strong, its mark 32.
+    await tiles.getByRole('radio', { name: 'PostgreSQL' }).click();
+    const next = wizard.getByRole('button', { name: 'Next: Connection' });
+    await expect(next.locator('svg')).toBeVisible();
+    await next.click();
+    const chosen = wizard.locator('.source-pane__chosen');
+    expect(
+      await chosen.evaluate((node) => [
+        getComputedStyle(node).backgroundColor,
+        getComputedStyle(node).fontSize,
+        getComputedStyle(node).lineHeight,
+      ]),
+    ).toEqual([await tokenOf(page, '--wc-bg-page', 'backgroundColor'), '12px', '16px']);
+    const name = chosen.locator('.source-pane__chosen-text b');
+    await expect(name).toHaveText('PostgreSQL');
+    expect(
+      await name.evaluate((node) => [
+        getComputedStyle(node).fontSize,
+        getComputedStyle(node).fontWeight,
+      ]),
+    ).toEqual(['12px', '600']);
+    expect(await sizeOf(chosen.locator('.driver-mark'))).toEqual([32, 32]);
+    // The headings of the connection's groups at 12 too (SRC-01).
+    expect(
+      new Set(
+        await wizard
+          .locator('.connection-form__legend')
+          .evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).fontSize)),
+      ),
+    ).toEqual(new Set(['12px']));
+    // Back and Next with design 01's i-back and i-chev, not "‹" and "›" (SRC-05).
+    const back = wizard.locator('.source-pane__foot').getByRole('button', { name: 'Back' });
+    await expect(back).toHaveText('Back');
+    await expect(back.locator('svg')).toBeVisible();
+    const toTest = wizard.getByRole('button', { name: 'Next: Test' });
+    await expect(toTest).toHaveText('Next: Test');
+    await expect(toTest.locator('svg')).toBeVisible();
+  });
+
+  test('the Export pane shares the head: 44 px, its ✕ a 32 px icon button (design 13; T691-4)', async ({
+    page,
+  }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await page.locator('.dashboard__header').getByRole('button', { name: 'More' }).click();
+    await page.getByRole('menuitem', { name: 'Export…' }).click();
+    const pane = page.getByRole('dialog', { name: 'Export dashboard' });
+    expect((await sizeOf(pane.locator('.source-pane__head')))[1]).toBe(44);
+    const close = pane.getByRole('button', { name: 'Close' });
+    expect(await sizeOf(close)).toEqual([32, 32]);
+    await expect(close.locator('svg')).toBeVisible();
+    await expect(close).toHaveText('');
+  });
+});
+
+/**
  * T477 (AC-187; UX-110; the coordinator's Q6–Q10 under R37): one date and
  * time format. Days first ("19 Sep"), one 24-hour clock, and each time's
  * tooltip the exact local time with UTC beside it.

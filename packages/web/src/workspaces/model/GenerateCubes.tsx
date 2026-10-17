@@ -11,6 +11,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 
+import { BackIcon, CloseIcon, NextIcon } from '../../shell/paneIcons';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import type { ListedSource } from '../data-sources/DataSourcesList';
@@ -20,6 +21,7 @@ import { DATA_SOURCES_QUERY } from '../data-sources/query';
 import { TargetTree } from '../data-sources/TargetTree';
 import type { Target } from '../explore/NewItemDialog';
 import { SHARED_ROOT } from '../explore/roots';
+import { PersonIcon } from '../explore/WorkspaceBand';
 import { modelFilesQuery } from './FileList';
 import { fileHref } from './inFolder';
 import { objectsOf } from './objects';
@@ -948,12 +950,17 @@ export function GenerateCubes({
         {/* As the new data source pane's head says it (T492, AC-350). */}
         {workspace === undefined ? null : (
           <span className="source-pane__where">
-            <span className="source-pane__person" aria-hidden="true" />
+            <PersonIcon />
             in My workspace
           </span>
         )}
-        <button type="button" className="source-pane__close" aria-label="Close" onClick={ask}>
-          ×
+        <button
+          type="button"
+          className="icon-button source-pane__close"
+          aria-label="Close"
+          onClick={ask}
+        >
+          <CloseIcon />
         </button>
       </header>
 
@@ -1740,7 +1747,8 @@ export function GenerateCubes({
               goTo(step - 1);
             }}
           >
-            <span aria-hidden="true">‹ </span>Back
+            <BackIcon />
+            Back
           </button>
         )}
         <span className="source-pane__spacer" />
@@ -1762,7 +1770,7 @@ export function GenerateCubes({
           onClick={primaryRefused ? undefined : onPrimary}
         >
           {primaryLabel}
-          {step === 0 ? <span aria-hidden="true"> ›</span> : null}
+          {step === 0 ? <NextIcon /> : null}
         </button>
       </footer>
 

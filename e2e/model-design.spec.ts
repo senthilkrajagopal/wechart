@@ -172,17 +172,26 @@ test('T479: the tree as design 03 note 1 — a Model head, folder rows, full-wid
     ]),
   ).toEqual([true, '-2px', 'solid']);
 
-  // All published, in the status colour (design 03's .status.ok; T479's review).
+  // All published: its label in text-secondary and only its icon in the
+  // status colour, as the later designs 11 and 12 draw `.status.ok.q`
+  // (R76 model-Q3, T691; it was design 03's green label, T479's review).
   expect(
     await head.locator('.model-tree__state').evaluate((node) => {
-      const probe = document.createElement('span');
-      probe.style.color = 'var(--wc-status-success)';
-      document.body.append(probe);
-      const success = getComputedStyle(probe).color;
-      probe.remove();
-      return getComputedStyle(node).color === success;
+      const colourOf = (token: string) => {
+        const probe = document.createElement('span');
+        probe.style.color = `var(${token})`;
+        document.body.append(probe);
+        const colour = getComputedStyle(probe).color;
+        probe.remove();
+        return colour;
+      };
+      const icon = node.querySelector('svg');
+      return [
+        getComputedStyle(node).color === colourOf('--wc-text-secondary'),
+        icon !== null && getComputedStyle(icon).color === colourOf('--wc-status-success'),
+      ];
     }),
-  ).toBe(true);
+  ).toEqual([true, true]);
 
   // A template the form can't open is tagged, read-only — said, not only hovered.
   const jinja = tree
@@ -1298,4 +1307,204 @@ test('T470: a bar over the form is a band across the pane, and a view’s tabs a
     'title',
     'Access policy',
   );
+});
+
+/** A colour token as the browser resolves it. */
+const tokenOf = (page: Page, token: string) =>
+  page.evaluate((name) => {
+    const probe = document.createElement('span');
+    probe.style.color = `var(${name})`;
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  }, token);
+
+/** A box's edges, rounded to the pixel. */
+const edgesOf = async (locator: import('@playwright/test').Locator) => {
+  const box = await locator.boundingBox();
+  return {
+    x: Math.round(box?.x ?? 0),
+    y: Math.round(box?.y ?? 0),
+    right: Math.round((box?.x ?? 0) + (box?.width ?? 0)),
+    bottom: Math.round((box?.y ?? 0) + (box?.height ?? 0)),
+    height: Math.round(box?.height ?? 0),
+  };
+};
+
+test('T691: the tree’s Jinja row, and the overview’s frame, columns and Jinja tag, as design 12 draws them (MOD-04, MOD-05, MOD-06)', async ({
+  page,
+}) => {
+  await page.goto('/model');
+  // The tree's Jinja row: one 28 px row, its name cut short to make room and
+  // its tag at the row's end (pin 3, note 3).
+  const jinja = page
+    .getByRole('navigation', { name: 'Model files' })
+    .getByRole('link', { name: /^templated_example\.yml/ });
+  const row = await edgesOf(jinja);
+  expect(row.height).toBe(28);
+  const tag = await edgesOf(jinja.locator('.model-tree__kind'));
+  // Its 12 px inset on the right, and on the name's line.
+  expect(row.right - tag.right).toBe(12);
+  const name = await edgesOf(jinja.locator('.model-tree__name'));
+  expect(Math.abs(name.y + name.height / 2 - (tag.y + tag.height / 2))).toBeLessThanOrEqual(1);
+
+  // The overview's frame: padded 16/24, its title row 32 tall, then the
+  // shared model's meta line, the note and the card, 12 apart (`.ov`).
+  const overview = page.locator('.model-page__overview');
+  const frame = await edgesOf(overview);
+  const title = await edgesOf(overview.locator('.model-overview__title-row'));
+  expect([title.y - frame.y, title.x - frame.x, title.height]).toEqual([16, 24, 32]);
+  const meta = await edgesOf(overview.locator('.model-overview__meta'));
+  const note = await edgesOf(overview.locator('.info-bar'));
+  const card = await edgesOf(overview.locator('.model-overview'));
+  expect([meta.y - title.bottom, note.y - meta.bottom, card.y - note.bottom]).toEqual([12, 12, 12]);
+  // Its columns at the drawn widths, Members taking the rest (12:220).
+  const widths = await overview
+    .getByRole('table', { name: 'Cubes and views' })
+    .locator('thead th')
+    .evaluateAll((cells) => cells.map((cell) => Math.round(cell.getBoundingClientRect().width)));
+  expect(widths.slice(0, 8)).toEqual([232, 92, 168, 88, 80, 60, 74, 80]);
+
+  // The Jinja row's Kind: the tag, with its lock (pin 9).
+  const template = overview
+    .locator('tbody tr')
+    .filter({ has: page.getByRole('link', { name: 'cubes/templated_example.yml', exact: true }) });
+  const kind = template.locator('td').nth(1).locator('.model-overview__code');
+  await expect(kind).toHaveText('Jinja template · read-only');
+  await expect(kind.locator('.secret-pasted__lock')).toBeVisible();
+  expect(
+    await kind.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return [
+        style.borderTopWidth,
+        style.borderTopStyle,
+        style.borderTopLeftRadius,
+        style.fontSize,
+        style.lineHeight,
+        style.fontWeight,
+        style.paddingLeft,
+        style.borderTopColor,
+        style.color,
+      ];
+    }),
+  ).toEqual([
+    '1px',
+    'solid',
+    '3px',
+    '12px',
+    '16px',
+    '600',
+    '5px',
+    await tokenOf(page, '--wc-border-strong'),
+    await tokenOf(page, '--wc-text-secondary'),
+  ]);
+
+  // An empty model's card: its words inset 28/24 (`.empty`, state B).
+  await page.route(
+    (url) => url.pathname === '/api/model/files' && url.searchParams.get('folder') === 'mine',
+    (route) => route.fulfill({ json: { files: [] } }),
+  );
+  await page.goto(MY_MODELS);
+  const empty = page.locator('.model-overview--empty');
+  await expect(empty).toBeVisible();
+  expect(
+    await empty.evaluate((node) => [
+      getComputedStyle(node).paddingTop,
+      getComputedStyle(node).paddingLeft,
+      getComputedStyle(node).rowGap,
+    ]),
+  ).toEqual(['28px', '24px', '8px']);
+});
+
+test('T691: a shared model, read-only, as design 03 state A draws the same state: a 32 px primary and the 22 px badge (R76 model-Q1)', async ({
+  page,
+}) => {
+  const badgeOf = (badge: import('@playwright/test').Locator) =>
+    badge.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return [
+        Math.round(node.getBoundingClientRect().height),
+        style.borderTopWidth,
+        style.fontSize,
+        style.fontWeight,
+        style.color,
+        style.backgroundColor,
+        node.querySelector('svg') !== null,
+      ];
+    });
+  const drawn = async () => [
+    22,
+    '0px',
+    '12px',
+    '400',
+    await tokenOf(page, '--wc-text-secondary'),
+    await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.backgroundColor = 'var(--wc-bg-subtle)';
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return colour;
+    }),
+    true,
+  ];
+
+  // A file's head: the badge beside its path, "Edit in my workspace" a 32 px primary.
+  await page.goto(ORDERS);
+  const head = page.getByRole('region', { name: 'Form editor' }).locator('.model-editor__head');
+  const badge = head.locator('.model-editor__read-only');
+  await expect(badge).toHaveText('Read-only · in Shared');
+  expect(await badgeOf(badge)).toEqual(await drawn());
+  const edit = head.getByRole('button', { name: 'Edit in my workspace' });
+  await expect(edit).toHaveClass(/\bbtn-primary\b/);
+  expect((await edgesOf(edit)).height).toBe(32);
+  expect((await edgesOf(head)).height).toBe(44);
+
+  // The overview: the badge on a meta line under the title row, not in it.
+  await page.goto('/model');
+  const overview = page.locator('.model-page__overview');
+  await expect(overview.locator('.model-overview__title-row .badge')).toHaveCount(0);
+  const meta = overview.locator('.model-overview__meta .model-editor__read-only');
+  await expect(meta).toHaveText('Read-only · in Shared');
+  expect(await badgeOf(meta)).toEqual(await drawn());
+});
+
+test('T691: Generate cubes’ pane chrome as design 11 draws it — a 44 px head, 12 px headings and steps, 16 px radios (MOD-01, MOD-02, MOD-03)', async ({
+  page,
+}) => {
+  await page.goto(MY_MODELS);
+  await page
+    .getByRole('navigation', { name: 'Model files' })
+    .getByRole('button', { name: 'Generate from a data source…' })
+    .click();
+  const pane = page.getByRole('dialog', { name: 'Generate cubes' });
+  // The head: 44 px, "in My workspace" with the person icon, ✕ a 32 px icon button.
+  const head = pane.locator('.source-pane__head');
+  expect((await edgesOf(head)).height).toBe(44);
+  await expect(head.locator('.source-pane__where svg')).toBeVisible();
+  const close = head.getByRole('button', { name: 'Close' });
+  expect(await close.evaluate((node) => node.getBoundingClientRect().toJSON())).toMatchObject({
+    width: 32,
+    height: 32,
+  });
+  await expect(close.locator('svg')).toBeVisible();
+  await expect(close).toHaveText('');
+  // Section headings and step numbers at 12 (the floor; R76 components-Q5).
+  const sizes = async (locator: import('@playwright/test').Locator) =>
+    locator.evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).fontSize));
+  const headings = pane.locator('h3.connection-form__legend');
+  await expect(headings.first()).toBeVisible();
+  expect(new Set(await sizes(headings))).toEqual(new Set(['12px']));
+  expect(await sizes(pane.locator('.source-pane__rail ol .source-pane__step'))).toEqual([
+    '12px',
+    '12px',
+    '12px',
+  ]);
+  // Radios 16 px (`.radio`).
+  const radio = pane.getByRole('radio', { name: 'public', exact: true });
+  expect(await radio.evaluate((node) => node.getBoundingClientRect().toJSON())).toMatchObject({
+    width: 16,
+    height: 16,
+  });
 });

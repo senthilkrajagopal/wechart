@@ -3,6 +3,7 @@ import { DRIVERS, type DriverType, type FieldValue } from '@wechart/core';
 import { useEffect, useId, useRef, useState, type FocusEvent, type ReactNode } from 'react';
 
 import { DiscardQuestion } from '../../shell/DiscardQuestion';
+import { CloseIcon } from '../../shell/paneIcons';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { fieldLabel, methodLabel } from '../../workspaces/data-sources/ConnectionForm';
 
@@ -365,11 +366,11 @@ export function ExportPane({
         </h2>
         <button
           type="button"
-          className="source-pane__close"
+          className="icon-button source-pane__close"
           aria-label="Close"
           onClick={requestClose}
         >
-          ×
+          <CloseIcon />
         </button>
       </header>
       <div className="source-pane__chosen export-pane__what">

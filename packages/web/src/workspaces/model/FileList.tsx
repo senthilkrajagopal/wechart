@@ -25,6 +25,9 @@ const COUNTED: readonly [kind: MemberKind, header: string][] = [
   ['segment', 'Segments'],
 ];
 
+/** File, Kind, Name and the counts at design 12's widths (12:220); Members takes the rest. */
+const COLUMN_WIDTHS = [232, 92, 168, 88, 80, 60, 74, 80] as const;
+
 /** Every kind a member may be, in the Members cell's and tooltip's order (pin 12). */
 const LISTED: readonly [kind: MemberKind, title: string][] = [
   ['dimension', 'Dimensions'],
@@ -264,6 +267,13 @@ export function FileList({
     <>
       <div className="model-overview" data-testid="model-files">
         <table className="grid-table model-overview__table" aria-label="Cubes and views">
+          {/* The drawn widths, Members taking the rest (design 12, 12:220; T691, MOD-06). */}
+          <colgroup>
+            {COLUMN_WIDTHS.map((width, at) => (
+              <col key={at} style={{ width }} />
+            ))}
+            <col />
+          </colgroup>
           <thead>
             <tr>
               <th scope="col" aria-sort={ascending ? 'ascending' : 'descending'}>

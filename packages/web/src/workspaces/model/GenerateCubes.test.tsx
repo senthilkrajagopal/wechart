@@ -176,7 +176,13 @@ describe('generating cubes from a data source (AC-139)', () => {
     // Step 1: the source, its one data source chosen already, by its driver's name; then the schema.
     const source = await within(dialog).findByRole('radio', { name: 'default PostgreSQL' });
     expect((source as HTMLInputElement).checked).toBe(true);
-    expect(foot(dialog)).toEqual(['Cancel', 'Next: Tables › *']);
+    // Back and Next with design 11's i-back and i-chev, not "‹" and "›" (T691, SRC-05).
+    expect(foot(dialog)).toEqual(['Cancel', 'Next: Tables *']);
+    expect(
+      [...dialog.querySelectorAll(':scope > footer button svg')].map((icon) =>
+        icon.getAttribute('data-icon'),
+      ),
+    ).toEqual(['chev']);
     expect(dialog.querySelector('.source-pane__foot-note')?.textContent).toBe('Choose a schema');
     const tables = await toTables(dialog);
     expect(within(dialog).getByText('2 tables · none chosen').isConnected).toBe(true);
@@ -204,7 +210,7 @@ describe('generating cubes from a data source (AC-139)', () => {
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_visits' }));
     expect(within(dialog).getByText('2 tables · 2 chosen').isConnected).toBe(true);
-    expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Generate 2 cubes *']);
+    expect(foot(dialog)).toEqual(['Back', 'Cancel', 'Generate 2 cubes *']);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 2 cubes' }));
 
     // Step 3: a cube per table, its YAML, and every column left out with why.
@@ -245,11 +251,11 @@ describe('generating cubes from a data source (AC-139)', () => {
     ).toBe(true);
 
     // Generated: adding them as drafts is the one primary (R36, AC-345).
-    expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Add 2 cubes as drafts *']);
+    expect(foot(dialog)).toEqual(['Back', 'Cancel', 'Add 2 cubes as drafts *']);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add 2 cubes as drafts' }));
     expect((await within(dialog).findByText('Added 2 cubes as drafts.')).isConnected).toBe(true);
     // Added: nothing to cancel, and Close the one primary.
-    expect(foot(dialog)).toEqual(['‹ Back', 'Close *']);
+    expect(foot(dialog)).toEqual(['Back', 'Close *']);
     expect(onAdded).toHaveBeenCalledWith([
       { path: 'cubes/chrome_stores.yml', content: STORES },
       { path: 'cubes/chrome_visits.yml', content: VISITS },
@@ -587,7 +593,7 @@ describe('generating cubes from a data source (AC-139)', () => {
     expect(
       (within(again).getByRole('checkbox', { name: 'chrome_stores' }) as HTMLInputElement).checked,
     ).toBe(false);
-    expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Generate cubes *']);
+    expect(foot(dialog)).toEqual(['Back', 'Cancel', 'Generate cubes *']);
     // The step's first control takes focus as it opens.
     expect(document.activeElement).toBe(
       within(dialog).getByRole('searchbox', { name: 'Search tables' }),
@@ -639,7 +645,7 @@ describe('generating cubes from a data source (AC-139)', () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(within(dialog).queryByRole('region', { name: 'cubes/chrome_stores.yml' })).toBeNull();
-    expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Generate 1 cube *']);
+    expect(foot(dialog)).toEqual(['Back', 'Cancel', 'Generate 1 cube *']);
   });
 
   /**
@@ -987,7 +993,7 @@ describe('generating cubes from a data source (AC-139)', () => {
     expect(
       (within(again).getByRole('checkbox', { name: 'chrome_visits' }) as HTMLInputElement).checked,
     ).toBe(true);
-    expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Generate 1 cube *']);
+    expect(foot(dialog)).toEqual(['Back', 'Cancel', 'Generate 1 cube *']);
   });
 });
 
@@ -1021,8 +1027,9 @@ describe('generating cubes in My workspace (T492, AC-350)', () => {
     expect(dialog.querySelector('.source-pane__head .source-pane__where')?.textContent).toBe(
       'in My workspace',
     );
-    // With the person icon, as the new data source pane's head has it.
-    expect(dialog.querySelectorAll('.source-pane__where > .source-pane__person')).toHaveLength(1);
+    // With the person icon, as the new data source pane's head has it
+    // (design 01's i-person, in place of the "◉" glyph; T691, SRC-12).
+    expect(dialog.querySelectorAll('.source-pane__where > svg')).toHaveLength(1);
     await reviewed(dialog);
 
     // Where they go is asked, and needed before they are added.

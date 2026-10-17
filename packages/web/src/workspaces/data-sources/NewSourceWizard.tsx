@@ -10,10 +10,12 @@ import {
 } from '@wechart/core';
 
 import { clockOf } from '../../shell/formatTime';
+import { BackIcon, CloseIcon, NextIcon } from '../../shell/paneIcons';
 import { InfoBar } from '../../shell/InfoBar';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import type { Target } from '../explore/NewItemDialog';
+import { PersonIcon } from '../explore/WorkspaceBand';
 import {
   ConnectionForm,
   fieldLabel,
@@ -465,24 +467,24 @@ export function NewSourceWizard({
               goTo(step - 1);
             }}
           >
-            ‹
+            <BackIcon />
           </button>
         )}
         <h2 id={heading}>New data source</h2>
         {inWorkspace ? (
           <span className="source-pane__where">
-            <span className="source-pane__person" aria-hidden="true" />
+            <PersonIcon />
             in My workspace
           </span>
         ) : null}
         <button
           type="button"
-          className="source-pane__close"
+          className="icon-button source-pane__close"
           aria-label="Close"
           disabled={busy === 'create'}
           onClick={leave}
         >
-          ×
+          <CloseIcon />
         </button>
       </header>
 
@@ -759,7 +761,8 @@ export function NewSourceWizard({
               goTo(step - 1);
             }}
           >
-            <span aria-hidden="true">‹ </span>Back
+            <BackIcon />
+            Back
           </button>
         )}
         <span className="source-pane__spacer" />
@@ -795,7 +798,8 @@ export function NewSourceWizard({
                 goTo(3);
               }}
             >
-              Next: {steps[3]} <span aria-hidden="true">›</span>
+              Next: {steps[3]}
+              <NextIcon />
             </button>
           </>
         ) : (
@@ -818,11 +822,13 @@ export function NewSourceWizard({
                   goTo(1);
                 }}
               >
-                Next: Connection <span aria-hidden="true">›</span>
+                Next: Connection
+                <NextIcon />
               </button>
             ) : step === 1 ? (
               <button type="button" className="btn btn-primary" onClick={toTest}>
-                Next: Test <span aria-hidden="true">›</span>
+                Next: Test
+                <NextIcon />
               </button>
             ) : step === 2 ? (
               <button

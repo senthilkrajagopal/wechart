@@ -70,10 +70,23 @@ export function DataSourcesPage() {
           {hasWorkspace ? (
             <button
               type="button"
-              className="btn btn-primary"
-              // One at a time: open, it is where the new one is made.
-              disabled={adding !== null}
+              // Enabled while the pane is open, ringed as what opened it
+              // (design 01's main screen; T691, SRC-16).
+              className={adding === null ? 'btn btn-primary' : 'btn btn-primary is-open'}
               onClick={(event) => {
+                // One at a time: pressed again while open, it takes you to
+                // the pane, as Generate cubes' opener does (T485's review).
+                // Its step's first tab stop (a roving radio group's chosen
+                // tile, not one out of the tab order), else its ✕.
+                if (adding !== null) {
+                  const stop = ':not(:disabled):not([tabindex="-1"])';
+                  document
+                    .querySelector<HTMLElement>(
+                      `.admin-page .source-pane__body :is(button, input, select, textarea, a[href])${stop}, .admin-page .source-pane__close${stop}`,
+                    )
+                    ?.focus();
+                  return;
+                }
                 // Safari doesn't focus a button it clicks: focused here, it is
                 // the opener the wizard gives focus back to (T496).
                 event.currentTarget.focus();

@@ -856,8 +856,11 @@ main > .proposal-band:first-child,
    the pane's width inside its gutters; a row per cube or view — a 28 px
    header in 12/600 on bg-subtle, 34 px rows at 12 px in tabular figures —
    the whole row opening its file. */
-.model-overview__title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.model-overview__title-row { display: flex; align-items: center; gap: 12px; min-height: 32px; margin-bottom: 12px; }
 .model-overview__title-row > .workspace-title { flex: 1; margin: 0; }
+/* A shared model, read-only: the badge on a meta line under the title, as
+   design 03 of 2026-09-27 draws state A (R76 model-Q1; T691). */
+.model-overview__meta { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .model-page__overview > .info-bar { max-width: none; }
 /* Not clipped: a bottom row's Members tooltip hangs below the card (T486's
    review); the header's corners rounded on its corner cells instead. */
@@ -904,9 +907,25 @@ main > .proposal-band:first-child,
   content: ' ↓';
   content: ' ↓' / '';
 }
-.model-overview__code { display: inline-flex; align-items: center; gap: 6px; color: var(--wc-text-secondary); }
+/* A template's Kind: design 12's .tag with its 12 px lock (pin 9; T691, MOD-05). */
+.model-overview__code {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 5px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 3px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 /* Members truncated to the cell; all of them, by kind, on hover or focus (pin 12). */
-.model-overview__members-td { width: 100%; max-width: 0; }
+/* Its column takes what the drawn widths leave (T691, MOD-06): a cell at
+   100% would squeeze them to their content. */
+.model-overview__members-td { max-width: 0; }
 .model-overview__members-cell { position: relative; display: block; }
 .model-overview__members {
   display: block;
@@ -938,8 +957,9 @@ main > .proposal-band:first-child,
 .model-overview__tip-kind { color: var(--wc-text-secondary); }
 .model-overview__none { color: var(--wc-text-muted); }
 /* State B: no files, what to do about it; the three ways to add as secondary buttons. */
-.model-overview--empty { display: grid; gap: 4px; padding: 24px; justify-items: start; }
-.model-overview__empty-title { margin: 0; font-weight: 600; }
+/* Design 12's .empty: inset 28/24, 8 apart, its title 14/20/600 (T691, MOD-06). */
+.model-overview--empty { display: grid; gap: 8px; padding: 28px 24px; justify-items: start; }
+.model-overview__empty-title { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
 .model-overview__empty-text { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
 .model-overview__empty-actions { display: flex; gap: 8px; margin-top: 4px; }
 /* State F: reading, the table's frame beneath — its 28 px header band and 34 px
@@ -1051,7 +1071,8 @@ main:has(.model-page) {
 .model-editor .seg button { white-space: nowrap; }
 .model-page__main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .model-page__main > .state-line { margin: var(--wc-surface-padding); }
-.model-page__overview { flex: 1; min-height: 0; overflow: auto; padding: var(--wc-surface-padding); }
+/* Design 12's .ov: padded 16/24 (T691, MOD-06). */
+.model-page__overview { flex: 1; min-height: 0; overflow: auto; padding: 16px 24px; }
 .model-page__overview > .info-bar { margin-bottom: 12px; }
 .model-tree { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--wc-border-subtle); background: var(--wc-bg-surface); }
 /* Design 03 note 1 (T479): a 44 px head, "Model" and the model's state; folder
@@ -1117,6 +1138,12 @@ main:has(.model-page) {
    fit beside it go under it, and a name longer than the row is cut short. */
 .model-tree__file { flex-wrap: wrap; }
 .model-tree__name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A template's row stays one 28 px row, its kind tag at the end: the name is
+   cut short to make room, whole in its tooltip (design 12 pin 3, note 3;
+   T691, MOD-04). */
+.model-tree__file:has(> .model-tree__kind):not(:has(> :is(.model-tree__tag, .model-tree__mark))) {
+  flex-wrap: nowrap;
+}
 .model-tree__tag,
 .model-tree__mark {
   display: inline-flex;
@@ -1246,7 +1273,8 @@ main:has(.model-page) {
   gap: 8px;
   align-items: center;
   min-height: 44px;
-  padding: 6px 12px;
+  /* 5 above and below: a 32 px button and the rule beneath fit the 44 (T691). */
+  padding: 5px 12px;
   border-bottom: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);
 }
@@ -1291,15 +1319,31 @@ main:has(.model-page) {
   white-space: nowrap;
 }
 /* Published, and the whole model: design 03's .status.ok, in the status colour (T479's review). */
-.model-editor__state--ok,
-.model-tree__state--ok { color: var(--wc-status-success); }
+.model-editor__state--ok { color: var(--wc-status-success); }
+/* "All published": its label text-secondary, only its icon green, as the
+   later designs 11 and 12 draw .status.ok.q (R76 model-Q3; T691). */
+.model-tree__state--ok { color: var(--wc-text-secondary); }
+.model-tree__state--ok > svg { color: var(--wc-status-success); }
 /* A shared model, read-only (T342; rules 70 and 71; design 03 of 2026-09-27,
    state A): where it is, with the eye, beside its path; "Edit in my
    workspace" at the head's end, and why it can't be pressed yet on the line
    under the head, beneath it. */
-.model-editor__read-only { flex: none; gap: 4px; white-space: nowrap; }
+/* Design 03 state A's .badge: 22 px on bg-subtle, no border, 12/400
+   text-secondary, with the eye (R76 model-Q1; T691). */
+.badge.model-editor__read-only {
+  flex: none;
+  gap: 4px;
+  height: 22px;
+  border: 0;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
 .model-editor__read-only > svg { flex: none; }
-.model-editor__head .model-editor__copy { display: inline-flex; gap: 4px; align-items: center; margin-left: auto; }
+/* Rule 71's primary at the head's end, a 32 px .btn as state A draws it. */
+.model-editor__head .model-editor__copy { flex: none; margin-left: auto; }
 /* Opened from Explore, under its folder's breadcrumb (rule 70): one line
    above the model's panes, as the data source settings' crumbs read. */
 .model-page__crumbs {
@@ -2643,14 +2687,17 @@ main:has(.admin-page--docked) {
   border-left: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);
 }
+/* Designs 11 and 01's .pane-head: at least 44 px, padded 5/8/5/16 round a
+   16/22 title and the 32 px ✕ (T691; MOD-02, SRC-12). */
 .source-pane__head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
+  min-height: 44px;
+  padding: 5px 8px 5px 16px;
   border-bottom: 1px solid var(--wc-border-subtle);
 }
-.source-pane__head h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
+.source-pane__head h2 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
 .source-pane__where {
   display: inline-flex;
   align-items: center;
@@ -2662,37 +2709,44 @@ main:has(.admin-page--docked) {
   color: var(--wc-text-secondary);
   font-size: var(--wc-text-xs-size);
 }
-.source-pane__person::before { content: '◉'; font-size: 10px; }
-.source-pane__close,
+/* "in My workspace" with design 01's i-person (rule 72). */
+.source-pane__where > svg { flex: none; }
+/* The ✕ is a 32 px .icon-button with the x icon (designs 01 and 11). */
+.source-pane__close { flex: none; margin-left: auto; }
+/* The sheet's own way back, before its title (state K): docked, the foot's Back is enough. */
 .source-pane__head-back {
-  margin-left: auto;
-  width: 28px;
-  height: 28px;
+  display: none;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: -8px;
   padding: 0;
   border: 0;
   background: none;
   color: var(--wc-text-secondary);
-  font-size: 20px;
-  line-height: 1;
 }
-/* The sheet's own way back, before its title (state K): docked, the foot's Back is enough. */
-.source-pane__head-back { display: none; margin-left: -6px; }
 /* The steps: numbered, a line between each, done ones ticked and a way
    back, the current one filled in the accent (UX-209). */
 .source-pane__rail { padding: 10px 16px; border-bottom: 1px solid var(--wc-border-subtle); }
-.source-pane__rail ol { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0; list-style: none; }
+/* Steps not reached in text-muted, done ones text-secondary (designs 01 and
+   11's .step; T691, SRC-13). */
+.source-pane__rail ol { display: flex; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .source-pane__rail li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: var(--wc-text-xs-size);
-  color: var(--wc-text-secondary);
+  color: var(--wc-text-muted);
 }
-.source-pane__rail li + li { flex: 1; }
+.source-pane__rail li.is-done { color: var(--wc-text-secondary); }
+/* Each separator flex 1 (.step-sep): every step after the first grows from
+   its own width by the same share, so the lines between them are even. */
+.source-pane__rail li + li { flex: 1 1 auto; }
 .source-pane__rail li + li::before {
   content: '';
   flex: 1;
-  min-width: 12px;
+  min-width: 6px;
   height: 1px;
   background: var(--wc-border-strong);
 }
@@ -2721,7 +2775,10 @@ main:has(.admin-page--docked) {
   height: 20px;
   border: 1px solid var(--wc-border-strong);
   border-radius: 999px;
-  font-size: 11px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-secondary);
+  /* 12, the floor (R76 components-Q5; MOD-01, SRC-01). */
+  font-size: 12px;
   font-weight: 600;
 }
 .source-pane__rail li.is-current .source-pane__step {
@@ -2735,20 +2792,24 @@ main:has(.admin-page--docked) {
   color: transparent;
   font-size: 0;
 }
-.source-pane__rail li.is-done .source-pane__step::before { content: '✓'; font-size: 11px; color: var(--wc-accent); }
+.source-pane__rail li.is-done .source-pane__step::before { content: '✓'; font-size: 12px; color: var(--wc-accent); }
 .source-pane__rail-short { display: none; margin: 0; align-items: center; gap: 8px; font-size: var(--wc-text-xs-size); font-weight: 600; }
 .source-pane__rail-short .source-pane__step { border-color: var(--wc-accent); background: var(--wc-accent); color: var(--wc-text-on-accent); }
-/* The chosen type, kept in view with the way to change it (UX-203). */
+/* The chosen type, kept in view with the way to change it (UX-203): design
+   01's .ctx, 12/16 on bg-page, the name 12 px strong (T691, SRC-14). */
 .source-pane__chosen {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--wc-border-subtle);
-  background: var(--wc-bg-subtle);
+  background: var(--wc-bg-page);
+  font-size: 12px;
+  line-height: 16px;
 }
-.source-pane__chosen-text { display: grid; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
-.source-pane__chosen-text b { font-size: var(--wc-text-sm-size); font-weight: 600; color: var(--wc-text-primary); }
+.source-pane__chosen-text { flex: 1; min-width: 0; display: grid; font-size: 12px; color: var(--wc-text-secondary); }
+.source-pane__chosen-text > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-pane__chosen-text b { font-size: 12px; font-weight: 600; color: var(--wc-text-primary); }
 .source-pane__chosen .link-button { margin-left: auto; color: var(--wc-accent); font-weight: 600; }
 .source-pane__body {
   flex: 1;
@@ -3330,7 +3391,8 @@ main:has(.export-pane--over) { padding-right: 480px; }
   gap: 10px;
   min-height: 64px;
   padding: 10px 12px;
-  border: 1px solid var(--wc-border-subtle);
+  /* Bordered border-strong, as design 01's .tile (T691, SRC-14). */
+  border: 1px solid var(--wc-border-strong);
   border-radius: 6px;
   background: var(--wc-bg-surface);
   text-align: left;
@@ -3344,18 +3406,28 @@ main:has(.export-pane--over) { padding-right: 480px; }
 .type-tile__name { font-size: var(--wc-text-sm-size); font-weight: 600; color: var(--wc-text-primary); }
 .type-tile__ways { font-size: var(--wc-text-xs-size); line-height: 16px; color: var(--wc-text-secondary); }
 .source-pane__types { display: grid; gap: 8px; }
+/* Design 01's .mono-tile: 32 px in the tiles and the chosen-type bar (T691,
+   SRC-14); Generate cubes' bar takes design 11's 24 px .mono-tile. */
 .driver-mark {
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: 1px solid var(--wc-border-subtle);
   border-radius: 6px;
   background: var(--wc-bg-subtle);
   color: var(--wc-text-primary);
   font-size: var(--wc-text-xs-size);
   font-weight: 600;
+}
+.generate-pane__where .driver-mark { width: 24px; height: 24px; border-radius: 5px; }
+/* Radios 16 px, accent-filled when chosen (design 11's .radio; T691, MOD-03). */
+.source-pane input[type='radio'] { flex: none; width: 16px; height: 16px; margin: 0; }
+/* What opened the pane, ringed while it is open (design 01's main screen;
+   T691, SRC-16): the accent ring the designs draw (--accent-ring). */
+.admin-page__head .btn-primary.is-open {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wc-accent) 35%, transparent);
 }
 
 /* A connection's three groups (design 02): where it connects, how it signs
@@ -3371,7 +3443,8 @@ main:has(.export-pane--over) { padding-right: 480px; }
   float: none;
   margin: 0;
   padding: 0;
-  font-size: 11px;
+  /* .sect > h3: 12, the floor (R76 components-Q5; T691, MOD-01, SRC-01). */
+  font-size: 12px;
   line-height: 16px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -3626,7 +3699,7 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
   .source-pane__rail-short { display: flex; }
   /* The sheet's actions are Back and the primary; × in its head closes it, and ‹ steps back (state K). */
   .source-pane__cancel { display: none; }
-  .source-pane__head-back { display: inline-block; }
+  .source-pane__head-back { display: inline-grid; }
   .admin-page--docked { grid-template-columns: minmax(0, 1fr); }
   .explore--source { grid-template-columns: minmax(0, 1fr); }
   /* Export too: a sheet over the page, which keeps its width (design 13's table). */
