@@ -257,3 +257,73 @@ function records(csv: string): string[][] {
   out.at(-1)?.push(field);
   return out;
 }
+
+/** The Export pane, opened from the ⋯ in the dashboard's header (design 13, pin 1). */
+async function openExport(page: import('@playwright/test').Page) {
+  const more = page.locator('.dashboard__header').getByRole('button', { name: 'More' });
+  await more.click();
+  await page.getByRole('menuitem', { name: 'Export…' }).click();
+  const pane = page.getByRole('dialog', { name: 'Export dashboard' });
+  await expect(pane).toBeVisible();
+  return { more, pane };
+}
+
+/**
+ * T687 (AC-354, AC-360, AC-352; DSH-17): the Export pane docks beside the
+ * dashboard, which narrows, as design 13 draws it (`1fr 480px`, pins 1–2):
+ * the header and the tiles end at the pane's left edge, so the tiles a
+ * dependency is outlined on stay in view, and the ⋯ that opened it shows
+ * pressed. A group with nothing to export is left out, with no "0 of 0";
+ * with all three empty, "Choose what goes with it" goes too (R76 dashboard-Q8).
+ */
+test('T687: Export docks beside the dashboard, which narrows, its ⋯ pressed; a group with nothing in it is left out', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/explore/dashboards/${await ordersDashboard(request)}`);
+  await expect(page.getByRole('table').first()).toBeVisible();
+  const { more, pane } = await openExport(page);
+  const edge = Math.round((await pane.boundingBox())?.x ?? 0);
+  expect(edge).toBe(1440 - 480);
+  const rightOf = async (locator: import('@playwright/test').Locator) => {
+    const box = await locator.boundingBox();
+    return Math.round((box?.x ?? 0) + (box?.width ?? 0));
+  };
+  // The header runs to the pane's edge, its buttons beside the pane, not under it.
+  expect(await rightOf(page.locator('.dashboard__header'))).toBe(edge);
+  expect(await rightOf(more)).toBeLessThanOrEqual(edge);
+  // The page of tiles, and every tile on it, end there too.
+  const tiles = page.getByTestId('dashboard-page');
+  expect(await rightOf(tiles)).toBeLessThanOrEqual(edge);
+  for (const head of await tiles.locator('.tile-head').all())
+    expect(await rightOf(head)).toBeLessThanOrEqual(edge);
+  // The ⋯ that opened it, pressed (the designs' .btn.pressed; T684).
+  await expect(more).toHaveClass(/\bis-pressed\b/);
+  // Below 1,024 px a full-screen sheet instead, the dashboard under it not
+  // narrowed (design 13, its narrow-window row; T687's review).
+  await page.setViewportSize({ width: 900, height: 900 });
+  expect(await page.locator('main').evaluate((node) => getComputedStyle(node).paddingRight)).toBe(
+    '0px',
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  // Its one chart is the dashboard's own: no library charts, so no such group.
+  const choose = pane.getByRole('region', { name: 'Choose what goes with it' });
+  await expect(choose).toBeVisible();
+  await expect(choose.getByText('Library charts it shows')).toHaveCount(0);
+  await expect(choose.getByText(/\b0 of 0\b/)).toHaveCount(0);
+  await expect(choose.getByText('Models its charts use')).toBeVisible();
+
+  // A dashboard with nothing on it: no group, and no heading over none.
+  const empty = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title: `Empty ${String(Date.now())}`, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  await page.goto(`/explore/dashboards/${empty.id}`);
+  const emptied = (await openExport(page)).pane;
+  await expect(emptied.getByRole('heading', { name: 'Always in the file' })).toBeVisible();
+  await expect(emptied.getByRole('heading', { name: 'Choose what goes with it' })).toHaveCount(0);
+  await expect(emptied.getByText(/\b0 of 0\b/)).toHaveCount(0);
+});

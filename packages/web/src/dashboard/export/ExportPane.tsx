@@ -256,6 +256,12 @@ export function ExportPane({
     ...(sources === 0 ? [] : [counted(sources, 'data source')]),
   ];
   const nothingChosen = chosen('libraryCharts').length + models + sources === 0;
+  /** Whether any group has something in it to offer (R76 dashboard-Q8). */
+  const anyGroup =
+    offered !== undefined &&
+    offered.libraryCharts.length +
+      (offered.viewOnly ? 0 : offered.models.length + offered.dataSources.length) >
+      0;
 
   const exporting = useMutation({
     mutationFn: async () => {
@@ -429,8 +435,14 @@ export function ExportPane({
               </p>
             </section>
 
-            <section className="export-pane__section" aria-labelledby={`${ids}-choose`}>
-              <div className="export-pane__choose">
+            <section
+              className="export-pane__section"
+              aria-labelledby={anyGroup ? `${ids}-choose` : undefined}
+            >
+              {/* A group with nothing in it is left out, no "0 of 0"
+                  (ExportGroup); with none to show, its heading goes too
+                  (R76 dashboard-Q8; T687). */}
+              <div className="export-pane__choose" hidden={!anyGroup}>
                 <h3 id={`${ids}-choose`} className="connection-form__legend">
                   Choose what goes with it
                 </h3>
@@ -603,7 +615,6 @@ export function ExportPane({
                       );
                     })}
                   </ExportGroup>
-
                 </>
               )}
 
@@ -710,6 +721,8 @@ function ExportGroup({
   useEffect(() => {
     if (box.current !== null) box.current.indeterminate = some;
   }, [some]);
+  // Nothing to export in it: left out, with no "0 of 0" (R76 dashboard-Q8; T687).
+  if (total === 0) return null;
   return (
     <div role="group" aria-labelledby={`${ids}-label`} className="export-group">
       <div className="export-group__head">

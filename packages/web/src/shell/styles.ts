@@ -2850,6 +2850,11 @@ main:has(.admin-page--docked) {
   height: auto;
   z-index: 6;
 }
+/* The dashboard narrows beside it ("1fr 480px", design 13 pins 1–2; T687,
+   DSH-17): its header, tiles and buttons end at the pane's edge. Two :has()
+   so it outranks the dashboard's own "main:has(.dashboard) { padding: 0 }",
+   which comes later and otherwise won. */
+main:has(.export-pane--over):has(.dashboard),
 main:has(.export-pane--over) { padding-right: 480px; }
 .export-pane h2:focus { outline: none; }
 .export-pane h2:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
@@ -2872,6 +2877,8 @@ main:has(.export-pane--over) { padding-right: 480px; }
 .export-lock { flex: none; color: var(--wc-text-secondary); }
 .export-pane__note { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 .export-pane__choose { display: flex; align-items: center; gap: 8px; }
+/* No group with anything in it: no heading over none (R76 dashboard-Q8; T687). */
+.export-pane__choose[hidden] { display: none; }
 .export-pane__choose h3 { margin-right: auto; }
 .export-pane__all { display: inline-flex; align-items: center; gap: 6px; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 .export-pane__all .link-button { color: var(--wc-accent); font-weight: 600; }
@@ -3706,6 +3713,7 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
   .explore--export,
   .explore--importing { grid-template-columns: minmax(0, 1fr); }
   .export-pane--over { width: auto; }
+  main:has(.export-pane--over):has(.dashboard),
   main:has(.export-pane--over) { padding-right: 0; }
   /* Generate cubes covers the page, as design 01's pane does (design 11 pin 1). */
   .model-page.model-page--generating { grid-template-columns: minmax(0, 1fr); }

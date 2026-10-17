@@ -1088,13 +1088,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [x] T684 (AC-187, AC-352) One button rule and one pressed state: every `.btn` 32/14, item heads at one height with History first, and the designs' `.btn.pressed` *(added 2026-10-08 by T406)*
 - [x] T685 (AC-352, AC-070, AC-073) The dashboard settings page as design 05 draws it *(added 2026-10-08 by T406)*
 - [x] T686 (AC-352, AC-126, AC-022) The chart page as design 06 draws it, with "Add to a dashboard…" as its picker *(added 2026-10-08 by T406)*
-- [ ] T687 (AC-354, AC-360, AC-352) The Export pane docks beside the dashboard, which narrows, as design 13 draws it *(added 2026-10-08 by T406)*
-  - Files: `packages/web/src/dashboard/export/ExportPane.tsx`, `packages/web/src/shell/styles.ts`, `e2e/export.spec.ts`
-  - Findings: DSH-17.
-  - Failing test: with Export open, the dashboard's header and tiles end at the pane's left edge, and the ⋯ shows pressed.
-  - ~~Waits on: the dashboard critique's Q8 (empty groups).~~
-  - **Settled 2026-10-08 (R76: dashboard-Q8).** Build: a group with nothing to export is left out, with no "0 of 0". If all three groups are empty, the "Choose what goes with it" heading goes too, and "Always in the file" still says what goes.
-  - Depends on: T684 (the header's buttons beside the pane)
+- [x] T687 (AC-354, AC-360, AC-352) The Export pane docks beside the dashboard, which narrows, as design 13 draws it *(added 2026-10-08 by T406)*
 - [x] T688 (AC-352, AC-187) The chart editor's inspector, field list and type gallery as design 01 and the prototype draw them *(added 2026-10-08 by T406)*
 - [x] T689 (AC-352, AC-028, AC-029, AC-217, AC-032, AC-220) The recommendation in the inspector: the type card, quick picks, the Recommended card, "Why this recommendation?" and the aggregation menu, as design 01 draws them *(added 2026-10-08 by T406)*
 - [x] T690 (AC-352, AC-036, AC-147, AC-301) The results drawer and the answer's facts as design 02 draws them *(added 2026-10-08 by T406)*

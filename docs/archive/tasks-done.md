@@ -14517,3 +14517,17 @@ Search this file by task ID (`T123`) or AC ID.
     - Calls T691-1 to T691-5 are in `docs/design/decisions-2026-10-08.md`, "Later decisions".
   - **Tests.** e2e: `model-design.spec.ts` (three T691 tests; T479's "All published" colour per model-Q3), `consistency.spec.ts` ("the shared pane chrome (T691)": the wizard and the Export pane's head). Unit: `GenerateCubes.test` (Back and Next icons, the person icon).
   - **The review (one round), fixed:** the Export pane's ✕ had lost its look with the shared rule (now the icon button, with an e2e); T691-2 now records that the overview has no primary, as no copy of a whole model exists; the opener focuses a tab stop, not a roving radio out of the tab order; a Jinja row with a draft's marks still wraps them.
+
+- [x] T687 (AC-354, AC-360, AC-352) The Export pane docks beside the dashboard, which narrows, as design 13 draws it *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/dashboard/export/ExportPane.tsx`, `packages/web/src/shell/styles.ts`, `e2e/export.spec.ts`
+  - Findings: DSH-17.
+  - Failing test: with Export open, the dashboard's header and tiles end at the pane's left edge, and the ⋯ shows pressed.
+  - ~~Waits on: the dashboard critique's Q8 (empty groups).~~
+  - **Settled 2026-10-08 (R76: dashboard-Q8).** Build: a group with nothing to export is left out, with no "0 of 0". If all three groups are empty, the "Choose what goes with it" heading goes too, and "Always in the file" still says what goes.
+  - Depends on: T684 (the header's buttons beside the pane)
+  - **Built (2026-10-17, lane A):**
+    - The cause: "main:has(.export-pane--over) { padding-right: 480px }" tied in specificity with "main:has(.dashboard) { padding: 0 }", which comes later and won. A second :has(.dashboard) selector now outranks it, and the narrow-window reset (a full-screen sheet below 1,024 px) carries the same selector.
+    - An empty ExportGroup renders nothing; with no group to show, the "Choose what goes with it" row is hidden and the section loses its name.
+    - Call T687-1 (view only, no library charts: the heading goes) is in `docs/design/decisions-2026-10-08.md`.
+  - **Tests.** e2e: `export.spec.ts` "T687: …" (the header, tiles and ⋯ end at the pane's edge at 1,440; no right padding at 900; ⋯ pressed; no empty group; an empty dashboard without the heading).
+  - **The review (one round), fixed:** the new selector had outranked the narrow-window reset, narrowing the dashboard behind the sheet; it now carries the same selector, with an e2e check at 900 px.
