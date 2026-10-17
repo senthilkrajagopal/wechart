@@ -1758,11 +1758,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T796 [P] (AC-001, AC-446) SQL runner in the switcher after Schedules, for Super-Admins and read-write members, opening the workspace at `/sql`, and Not found to anyone else
 
-- [ ] T797 (AC-386, AC-381, AC-304) The workspace's three panes: the picker and schema browser on the left, the tabs over the results in the centre, Saved and History on the right, folding to rails below 1,024 px, as design 17 screen 1 and state O draw them
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/SqlWorkspace.tsx` (+ test), `packages/web/src/workspaces/sql/sqlStyles.ts`, `e2e/security/sql-workspace.spec.ts`, `e2e/no-horizontal-scroll.spec.ts`.
-  - Failing test: `SqlWorkspace.test.tsx`: the left pane is 280 px (220–400, a 40 px rail), the right 320 px (280–480, a 40 px rail), and the centre splits editor and results 30 : 70 with the editor at least 200 px and the results at least 160 px (direction §7f, rule 91). The e2e: below 1,024 px both side panes are 40 px rails that open over the centre and the editor stays usable (design 17's Q1); at 390 px nothing scrolls sideways (AC-304).
-  - Depends on: T796
+- [x] T797 (AC-386, AC-381, AC-304) The workspace's three panes: the picker and schema browser on the left, the tabs over the results in the centre, Saved and History on the right, folding to rails below 1,024 px, as design 17 screen 1 and state O draw them
 
 - [ ] T798 (AC-447, AC-373, AC-383, AC-384) The data source picker: the sources the user may run SQL on, grouped by folder path, My workspace's first, Cube Store at the root while on, each with its driver and the runner's state; an off source only to those who may turn it on or see it off, opening the off panel
   - Lane: SQL

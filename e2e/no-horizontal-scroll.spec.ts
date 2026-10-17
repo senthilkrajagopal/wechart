@@ -50,6 +50,15 @@ test('a dashboard does not scroll sideways at 1,280 px, viewed or edited', async
   expect(await overflowOf(page)).toEqual(NONE);
 });
 
+test('the SQL runner workspace does not scroll sideways at 1,280 px (T797)', async ({ page }) => {
+  await page.goto('/sql');
+  await expect(page.getByRole('region', { name: 'SQL runner' })).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'Data source and schema' }),
+  ).toBeVisible();
+  expect(await overflowOf(page)).toEqual(NONE);
+});
+
 test('the chart editor does not scroll sideways at 1,280 px', async ({ page }) => {
   // A chart with fields in its wells, its result and preview drawn.
   await page.goto('/explore/charts/seed-chart-status/edit');

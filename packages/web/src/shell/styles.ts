@@ -1,6 +1,7 @@
 import { CATEGORICAL, themeCss } from '@wechart/ui';
 
 import { COLUMNS, GUTTER_PX } from '../dashboard/grid/geometry';
+import { SQL_CSS } from '../workspaces/sql/sqlStyles';
 import { PLEX_MONO_FACES } from './fonts';
 
 /**
@@ -10081,6 +10082,6 @@ export function installStyles(doc: Document = document): void {
   const style = doc.createElement('style');
   style.dataset['wechartTokens'] = '';
   // The code face's own files first, which --wc-font-code names (AC-223).
-  style.textContent = `${PLEX_MONO_FACES}\n${themeCss()}\n${SHELL_CSS}`;
+  style.textContent = `${PLEX_MONO_FACES}\n${themeCss()}\n${SHELL_CSS}\n${SQL_CSS}`;
   doc.head.append(style);
 }

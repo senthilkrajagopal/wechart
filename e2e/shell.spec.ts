@@ -22,6 +22,7 @@ const PAGES = [
   '/jobs',
   '/jobs#queries',
   '/schedules',
+  '/sql',
   '/security',
 ];
 
