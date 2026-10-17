@@ -86,11 +86,17 @@ describe('an item’s history (T357, AC-289)', () => {
       'Version 7',
       'Version 1',
     ]);
-    expect(rows.map((row) => within(row).getByTestId('version-by').textContent)).toEqual([
+    // The time at the right of its first line, then who (design 06, pins 3–5; T695, EXP-24).
+    expect(rows.map((row) => within(row).getByTestId('version-when').textContent)).toEqual([
       // No comma between a day and its time (T477; Q8).
-      'Today 15:02 by Mo Manager · approved by Ada Admin',
-      '22 Sep 10:14 by Ada Admin · self-approved',
-      '25 Aug 17:30 · before proposals',
+      'Today 15:02',
+      '22 Sep 10:14',
+      '25 Aug 17:30',
+    ]);
+    expect(rows.map((row) => within(row).getByTestId('version-by').textContent)).toEqual([
+      'by Mo Manager · approved by Ada Admin',
+      'by Ada Admin · self-approved',
+      'before proposals',
     ]);
     expect(within(rows[1]!).getByTestId('version-description').textContent).toBe('No description');
     expect(panel.textContent).toContain(
@@ -119,6 +125,112 @@ describe('an item’s history (T357, AC-289)', () => {
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'History' }));
     await userEvent.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalled();
+  });
+
+  /** T695 (EXP-21, EXP-24; design 06, pins 2 and 6). */
+  it('draws design 06’s pane: a head with a 32 px close, link-button actions, the note at its foot', async () => {
+    shown();
+    const panel = screen.getByRole('complementary', { name: 'History' });
+    const rows = await within(panel).findAllByRole('listitem');
+    const close = within(panel).getByRole('button', { name: 'Close History' });
+    expect(close.className).toBe('icon-button history-panel__close');
+    expect(close.querySelector('svg[data-icon="x"]')).not.toBeNull();
+    // View · Propose restoring… as link buttons; the current one View alone.
+    const actions = (row: HTMLElement) =>
+      within(row)
+        .getAllByRole('button')
+        .map((button) => [button.textContent, button.className]);
+    expect(actions(rows[1]!)).toEqual([
+      ['View', 'btn-link'],
+      ['Propose restoring…', 'btn-link'],
+    ]);
+    expect(actions(rows[0]!)).toEqual([['View', 'btn-link']]);
+    // The note pinned at the foot, after the list.
+    expect(panel.lastElementChild?.className).toBe('history-panel__limit');
+  });
+
+  it('puts More among the actions, between View and Propose restoring…', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              current: 8,
+              versions: [
+                history.versions[0],
+                { ...history.versions[1], description: 'A long description. '.repeat(10) },
+              ],
+            }),
+          ),
+        ),
+      ),
+    );
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <HistoryPanel
+          kind="dashboard"
+          id="d1"
+          onView={vi.fn()}
+          onRestore={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    const rows = await screen.findAllByRole('listitem');
+    expect(
+      within(rows[1]!)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['View', 'More', 'Propose restoring…']);
+  });
+
+  /**
+   * T695 (R76 explore-Q6, data-sources-Q5): where none is kept, the API lists
+   * the current version as the item is now, not kept: Current, "before
+   * proposals", and nothing to view or restore beyond the item itself.
+   */
+  it('lists a current version kept for none as before proposals, with nothing to view', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              current: 1,
+              versions: [
+                {
+                  version: 1,
+                  at: new Date(2026, 8, 20, 9, 0).toISOString(),
+                  title: 'Revenue',
+                  author: null,
+                  approver: null,
+                  description: null,
+                  proposalId: null,
+                  current: true,
+                  kept: false,
+                },
+              ],
+            }),
+          ),
+        ),
+      ),
+    );
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <HistoryPanel
+          kind="dashboard"
+          id="d1"
+          onView={vi.fn()}
+          onRestore={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    const [row] = await screen.findAllByRole('listitem');
+    expect(within(row!).getByTestId('version-head').textContent).toBe('Version 1Current');
+    expect(within(row!).getByTestId('version-by').textContent).toBe('before proposals');
+    expect(within(row!).queryAllByRole('button')).toEqual([]);
   });
 
   it('says so, with Retry, when it can’t be read', async () => {

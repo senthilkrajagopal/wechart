@@ -335,6 +335,21 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
           return { width: Math.round(box.width), height: Math.round(box.height) };
         }),
       ).toEqual({ width: 32, height: 32 });
+
+      // Its History docked at the window's right, full height, listing its
+      // current version, kept or not (T695, SRC-22; design 06, state D).
+      await head.getByRole('button', { name: 'History' }).click();
+      const panel = page.getByRole('complementary', { name: 'History' });
+      await expect(panel.getByTestId('version-head').first()).toHaveText(/Current$/);
+      const box = (await panel.boundingBox())!;
+      const bar = (await page.locator('.app-bar').boundingBox())!;
+      const viewport = page.viewportSize()!;
+      expect([
+        Math.round(box.width),
+        Math.round(box.x + box.width),
+        Math.round(box.y),
+        Math.round(box.y + box.height),
+      ]).toEqual([360, viewport.width, Math.round(bar.y + bar.height), viewport.height]);
     });
 
     test('draws its page as design 03 state A does: one white head band, the tabs across its foot, its mark and badges, and Cube’s use on one line (T698)', async ({

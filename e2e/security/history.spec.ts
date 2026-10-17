@@ -18,6 +18,8 @@ const BOARD = `Ledger ${RUN}`;
 const made = {
   folder: '',
   board: '',
+  /** A dashboard made in the folder directly, so no version is kept (T695). */
+  unkept: '',
   copy: '',
   project: '',
   restoreDraft: '',
@@ -44,8 +46,8 @@ test.describe('an item’s history, and restoring a version (T357, AC-289)', () 
           await context.request.delete(`/api/documents/folder/${made.project}`);
       }
       if (who === 'super') {
-        if (made.board !== '')
-          await context.request.delete(`/api/documents/dashboard/${made.board}`);
+        for (const id of [made.board, made.unkept])
+          if (id !== '') await context.request.delete(`/api/documents/dashboard/${id}`);
         if (made.folder !== '')
           await context.request.delete(`/api/documents/folder/${made.folder}`);
       }
@@ -72,6 +74,52 @@ test.describe('an item’s history, and restoring a version (T357, AC-289)', () 
         data: { kind: 'dashboard', title: BOARD, folderId: made.folder },
       });
       made.board = ((await board.json()) as { id: string }).id;
+    });
+
+    /**
+     * T695 (AC-289, AC-343; design 06, pins 2–8; EXP-21, EXP-22, EXP-24;
+     * R76 explore-Q6): the pane docked at the window's right, 360 px, from
+     * under the app bar to the foot, its 44 px head, h2 16/22 and 32 px
+     * close, the note pinned at its foot; a version 1 that no proposal kept
+     * listed as Current, "before proposals", with nothing to view.
+     */
+    test('docks History full height, and lists a version none was kept for', async ({ page }) => {
+      const unkept = await page.request.post('/api/documents', {
+        data: { kind: 'dashboard', title: `${BOARD} unkept`, folderId: made.folder },
+      });
+      made.unkept = ((await unkept.json()) as { id: string }).id;
+      await page.goto(`/explore/dashboards/${made.unkept}?panel=history`);
+      const panel = page.getByRole('complementary', { name: 'History' });
+      const row = panel.getByRole('listitem');
+      await expect(row.getByTestId('version-head')).toHaveText(['Version 1Current']);
+      await expect(row.getByTestId('version-by')).toHaveText(['before proposals']);
+      await expect(row.getByTestId('version-when')).toHaveText([/^Today \d\d:\d\d$/]);
+      await expect(row.getByRole('button')).toHaveCount(0);
+
+      const box = (await panel.boundingBox())!;
+      const bar = (await page.locator('.app-bar').boundingBox())!;
+      const viewport = page.viewportSize()!;
+      expect(Math.round(box.width)).toBe(360);
+      expect(Math.round(box.x + box.width)).toBe(viewport.width);
+      expect(Math.round(box.y)).toBe(Math.round(bar.y + bar.height));
+      expect(Math.round(box.y + box.height)).toBe(viewport.height);
+      const head = (await panel.locator('.history-panel__head').boundingBox())!;
+      expect(Math.round(head.height)).toBe(44);
+      const h2 = panel.getByRole('heading', { name: 'History' });
+      expect(
+        await h2.evaluate((each) => [
+          getComputedStyle(each).fontSize,
+          getComputedStyle(each).lineHeight,
+        ]),
+      ).toEqual(['16px', '22px']);
+      const close = (await panel.getByRole('button', { name: 'Close History' }).boundingBox())!;
+      expect([Math.round(close.width), Math.round(close.height)]).toEqual([32, 32]);
+      const note = (await panel.locator('.history-panel__limit').boundingBox())!;
+      expect(Math.round(note.y + note.height)).toBe(Math.round(box.y + box.height));
+      // The time at the row's right, under a rule.
+      const when = (await row.getByTestId('version-when').boundingBox())!;
+      expect(Math.round(box.x + box.width - (when.x + when.width))).toBe(16);
+      expect(await row.evaluate((each) => getComputedStyle(each).borderBottomWidth)).toBe('1px');
     });
   });
 
@@ -137,9 +185,11 @@ test.describe('an item’s history, and restoring a version (T357, AC-289)', () 
       await expect(panel.getByRole('heading', { name: 'History' })).toBeFocused();
       const rows = panel.getByRole('listitem');
       await expect(rows.getByTestId('version-head')).toHaveText(['Version 2Current', 'Version 1']);
+      // The time on the first line, at the right; who on the second (T695, EXP-24).
+      // No comma after the day, as every moment is written (T477, Q8).
+      await expect(rows.first().getByTestId('version-when')).toHaveText(/^Today \d\d:\d\d$/);
       await expect(rows.first().getByTestId('version-by')).toHaveText(
-        // No comma after the day, as every moment is written (T477, Q8).
-        /^Today \d\d:\d\d by Wren Writer · approved by Super Admin$/,
+        'by Wren Writer · approved by Super Admin',
       );
       await expect(rows.first().getByTestId('version-description')).toHaveText(
         `Adds a summary tab (${RUN}).`,

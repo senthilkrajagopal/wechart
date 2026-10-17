@@ -14579,3 +14579,22 @@ Search this file by task ID (`T123`) or AC ID.
     - **Tests.** API: `access/workspaces.test.ts` (T694). Unit: `FolderContents.test`, `proposalStatus.test`. e2e: `security/workspace-edit.spec.ts` (a new T694 test); menus changed by it in `explore.spec.ts`, `preaggregations.spec.ts`, `security/{explore-roles,propose,proposal-models,credential-canary,use-only-copy}.spec.ts`.
     - **The review (one round):** no bugs. Left: a chart row's "Edit in my workspace" and a dashboard row's dialog have no e2e of their own (the pages' tests cover the same copy calls); with two copies of one item, the row and the page could pick different ones (JS against Postgres ordering), which the copy endpoint's reuse makes unlikely; the copy lookup reads each workspace folder's contents once per shared listing.
     - **Failing before T694, as before:** `security/workspace-edit.spec.ts` (now :257, the chart page's Dashboard combobox), which skips the two serial tests after it.
+
+- [x] T695 (AC-289, AC-343) The History panel as design 06 draws it: docked full height, its rows, and the current version always listed *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/workspaces/history/HistoryPanel.tsx` (+ test), `packages/api/src/…/history` if the current version isn't returned, `packages/web/src/shell/styles.ts`, `e2e/security/history.spec.ts`
+  - Findings: EXP-21, EXP-22, EXP-24, SRC-22.
+  - Failing test:
+    - the panel is docked at 360 px full height, with a 44 px head, h2 16/22, a 32 px close, and the limit note pinned at the foot;
+    - an item with a kept version lists its newest, tagged Current, as design 06 pin 3 draws it; an item at "version 1" with nothing kept shows what Q6 decides (listed as Current, or a line saying none is kept yet);
+    - rows under rules, with the time at the right and View · More · Propose restoring… as link buttons.
+  - First, find why the panel was empty for a version-1 dashboard and a version-1 data source. Was it the content made before proposals, or an API gap?
+  - ~~Waits on: the Explore critique's Q6 and the data sources critique's Q5, the same question (an item with no kept version).~~ Explore's Q7 is settled by design 15 (History stays in the head).
+  - **Settled 2026-10-08 (R76: explore-Q6, data-sources-Q5).** Build: History always lists the current version, tagged Current, as design 06 pin 3 draws it, so the panel agrees with the head's "version 1".
+    - An item with no kept version, such as phase-1 content saved before proposals, lists it described as "before proposals", a phrase the panel already has.
+    - The Current row offers View only, with no restore.
+  - Depends on: T684 (History's pressed state)
+  - **Built 2026-10-17** (lane C). The calls are T695-1 to T695-3 in `decisions-2026-10-08.md`, "Later decisions".
+    - **Why it was empty:** an API gap. `/api/history` listed kept versions only, and an item made directly in a folder, or before proposals, has none. It now lists the current version where none is kept: the item as it is now, no author, `kept: false`.
+    - The panel is design 06's `.pane`: docked from under the app bar to the window's foot at its right edge (on a dashboard it fills the row beside it), a 44 px head with h2 16/22 and the 32 px close, the list scrolling between it and the limit note at the foot. Rows sit under rules with the time at the right of the first line, "by … · approved by …" on the second, the description at 12/16, and View · More · Propose restoring… as link buttons.
+    - **Tests.** API: `routes/history.test.ts` (T695). Unit: `HistoryPanel.test`. e2e: `security/history.spec.ts` (a new T695 test; the writer's rows split into time and who), `security/data-sources.spec.ts` and `security/workspace-edit.spec.ts` (the pane docked on a data source's and a chart's page).
+    - **The review (one round):** no bugs. Fixed: an assertion that could pass on an empty list. Left: T695-1 (the unkept Current row has no View, where R76 says "View only") is for the user to confirm; the unkept row's time is the item's last save, which a rename also moves.

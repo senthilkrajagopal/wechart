@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { dayOf, whenOf } from '../../shell/formatTime';
+import { CloseIcon } from '../../shell/paneIcons';
 import { StateLine } from '../../shell/StatusIcon';
 
 /**
@@ -29,6 +30,11 @@ export interface KeptVersion {
   readonly approver: Person | null;
   readonly description: string | null;
   readonly current: boolean;
+  /**
+   * False for the current version where none is kept, as content saved
+   * before proposals (T695): listed, with no kept copy to view or restore.
+   */
+  readonly kept?: boolean;
 }
 
 export const historyQuery = (kind: HistoryKind, id: string) => ({
@@ -61,16 +67,16 @@ export function approvedText(version: KeptVersion): string {
   return version.approver === null ? `saved ${day}` : `approved ${day} by ${version.approver.name}`;
 }
 
-const byText = (version: KeptVersion, now: Date) => {
-  const when = whenText(version.at, now);
-  if (version.author === null) return `${when} · before proposals`;
+/** Its second line, who and who let it in (design 06, pin 5); its time is on the first. */
+const byText = (version: KeptVersion) => {
+  if (version.author === null) return 'before proposals';
   const approval =
     version.approver === null
       ? ''
       : version.approver.key === version.author.key
         ? ' · self-approved'
         : ` · approved by ${version.approver.name}`;
-  return `${when} by ${version.author.name}${approval}`;
+  return `by ${version.author.name}${approval}`;
 };
 
 /** Long enough to be clamped to two lines, with More beside it. */
@@ -131,6 +137,8 @@ export function HistoryPanel({
 
   return (
     <aside ref={box} className="history-panel" aria-labelledby={`${ids}-heading`}>
+      {/* Design 06's .pane-head (pin 2; T695, EXP-21): 44 px over a rule,
+          h2 16/22, and the 32 px close icon button. */}
       <header className="history-panel__head">
         <h2 id={`${ids}-heading`} ref={heading} tabIndex={-1}>
           History
@@ -138,117 +146,135 @@ export function HistoryPanel({
         <span className="history-panel__sub">last 10 versions</span>
         <button
           type="button"
-          className="btn-ghost btn-sm"
+          className="icon-button history-panel__close"
           aria-label="Close History"
           onClick={onClose}
         >
-          ×
+          <CloseIcon />
         </button>
       </header>
 
-      {history.isPending ? (
-        <ul className="history-panel__list" aria-busy="true" aria-label="Loading versions">
-          {[0, 1, 2].map((each) => (
-            <li key={each} className="history-panel__skeleton" aria-hidden="true" />
-          ))}
-        </ul>
-      ) : history.isError ? (
-        <div role="alert" className="history-panel__error">
-          <StateLine kind="err">Couldn’t load this item’s history.</StateLine>
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={() => {
-              void history.refetch();
-            }}
-          >
-            Retry
-          </button>
-          <details>
-            <summary>Details</summary>
-            {history.error.message}
-          </details>
-        </div>
-      ) : history.data === null ? (
-        <p className="history-panel__none">This item’s history isn’t yours to see.</p>
-      ) : (
-        <ul className="history-panel__list">
-          {history.data.versions.map((version) => {
-            const long = (version.description ?? '').length > LONG;
-            const more = open.has(version.version);
-            return (
-              <li
-                key={version.version}
-                className="history-panel__row"
-                aria-current={viewing === version.version ? 'true' : undefined}
-              >
-                <p className="history-panel__version" data-testid="version-head">
-                  <strong>Version {version.version}</strong>
-                  {version.current ? <span className="history-panel__current">Current</span> : null}
-                </p>
-                <p className="history-panel__by" data-testid="version-by">
-                  {byText(version, now)}
-                </p>
-                <p
-                  className={`history-panel__description${version.description === null ? ' is-empty' : ''}${long && !more ? ' is-clamped' : ''}`}
-                  data-testid="version-description"
+      <div className="history-panel__body">
+        {history.isPending ? (
+          <ul className="history-panel__list" aria-busy="true" aria-label="Loading versions">
+            {[0, 1, 2].map((each) => (
+              <li key={each} className="history-panel__skeleton" aria-hidden="true" />
+            ))}
+          </ul>
+        ) : history.isError ? (
+          <div role="alert" className="history-panel__error">
+            <StateLine kind="err">Couldn’t load this item’s history.</StateLine>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                void history.refetch();
+              }}
+            >
+              Retry
+            </button>
+            <details>
+              <summary>Details</summary>
+              {history.error.message}
+            </details>
+          </div>
+        ) : history.data === null ? (
+          <p className="history-panel__none">This item’s history isn’t yours to see.</p>
+        ) : (
+          <ul className="history-panel__list">
+            {history.data.versions.map((version) => {
+              const long = (version.description ?? '').length > LONG;
+              const more = open.has(version.version);
+              // The current version kept for none is the item itself (T695).
+              const kept = version.kept !== false;
+              return (
+                <li
+                  key={version.version}
+                  className="history-panel__row"
+                  aria-current={viewing === version.version ? 'true' : undefined}
                 >
-                  {version.description ?? 'No description'}
-                </p>
-                {long ? (
-                  <button
-                    type="button"
-                    className="btn-link"
-                    aria-expanded={more}
-                    onClick={() => {
-                      setOpen((was) => {
-                        const next = new Set(was);
-                        if (more) next.delete(version.version);
-                        else next.add(version.version);
-                        return next;
-                      });
-                    }}
+                  {/* Its number, Current, and its time at the right (pins 3 and 4). */}
+                  <p className="history-panel__version">
+                    <span data-testid="version-head">
+                      <strong>Version {version.version}</strong>
+                      {version.current ? (
+                        <span className="history-panel__current">Current</span>
+                      ) : null}
+                    </span>
+                    <time
+                      className="history-panel__when"
+                      dateTime={version.at}
+                      data-testid="version-when"
+                    >
+                      {whenText(version.at, now)}
+                    </time>
+                  </p>
+                  <p className="history-panel__by" data-testid="version-by">
+                    {byText(version)}
+                  </p>
+                  <p
+                    className={`history-panel__description${version.description === null ? ' is-empty' : ''}${long && !more ? ' is-clamped' : ''}`}
+                    data-testid="version-description"
                   >
-                    {more ? 'Less' : 'More'}
-                  </button>
-                ) : null}
-                <div className="history-panel__actions">
-                  {onView === undefined ? null : (
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      aria-label={
-                        kind === 'data-source'
-                          ? `Compare version ${String(version.version)} with current`
-                          : `View version ${String(version.version)}`
-                      }
-                      onClick={() => {
-                        onView(version.version);
-                      }}
-                    >
-                      {/* A data source's settings are set against now (design 06, pin 6). */}
-                      {kind === 'data-source' ? 'Compare with current' : 'View'}
-                    </button>
-                  )}
-                  {/* Never "Restore": restoring is proposed and approved (pin 7). */}
-                  {version.current || onRestore === undefined ? null : (
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      aria-label={`Propose restoring version ${String(version.version)}…`}
-                      onClick={() => {
-                        onRestore({ ...version, approvedText: approvedText(version) });
-                      }}
-                    >
-                      Propose restoring…
-                    </button>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                    {version.description ?? 'No description'}
+                  </p>
+                  {/* View · More · Propose restoring… as link buttons (pin 6; EXP-24). */}
+                  <div className="history-panel__actions">
+                    {onView === undefined || !kept ? null : (
+                      <button
+                        type="button"
+                        className="btn-link"
+                        aria-label={
+                          kind === 'data-source'
+                            ? `Compare version ${String(version.version)} with current`
+                            : `View version ${String(version.version)}`
+                        }
+                        onClick={() => {
+                          onView(version.version);
+                        }}
+                      >
+                        {/* A data source's settings are set against now (design 06, pin 6). */}
+                        {kind === 'data-source' ? 'Compare with current' : 'View'}
+                      </button>
+                    )}
+                    {long ? (
+                      <button
+                        type="button"
+                        className="btn-link"
+                        aria-expanded={more}
+                        onClick={() => {
+                          setOpen((was) => {
+                            const next = new Set(was);
+                            if (more) next.delete(version.version);
+                            else next.add(version.version);
+                            return next;
+                          });
+                        }}
+                      >
+                        {more ? 'Less' : 'More'}
+                      </button>
+                    ) : null}
+                    {/* Never "Restore": restoring is proposed and approved (pin 7). */}
+                    {version.current || !kept || onRestore === undefined ? null : (
+                      <button
+                        type="button"
+                        className="btn-link"
+                        aria-label={`Propose restoring version ${String(version.version)}…`}
+                        onClick={() => {
+                          onRestore({ ...version, approvedText: approvedText(version) });
+                        }}
+                      >
+                        Propose restoring…
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+      {/* Pinned at its foot over a rule (pin 8; EXP-21). */}
       <p className="history-panel__limit">
         Only the last 10 versions are kept. Restoring one is proposed and approved like any change.
       </p>

@@ -5297,52 +5297,96 @@ code.schedules__sub { font-family: var(--wc-font-code); }
   min-width: 0;
   min-height: 0;
 }
-.with-panel[data-open='true'] > .history-panel { align-self: start; }
+/* Docked full height (T695, EXP-21; design 06's .pane): from under the app
+   bar to the window's foot, at its right edge, out over the page's padding,
+   and kept there as the page scrolls. */
+.with-panel[data-open='true'] > .history-panel {
+  position: sticky;
+  top: var(--wc-app-bar-height);
+  align-self: start;
+  justify-self: end;
+  width: 360px;
+  height: calc(100vh - var(--wc-app-bar-height));
+  margin: calc(-1 * var(--wc-surface-padding)) calc(-1 * var(--wc-surface-padding))
+    calc(-1 * var(--wc-surface-padding)) 0;
+}
 /* A dashboard keeps the window's height and scrolls in its own canvas, as it
    does alone (T357's review): every level between gets min-height 0. */
-main:has(.dashboard) > .with-panel[data-open='true'] { flex: 1; min-height: 0; padding-right: 16px; }
+main:has(.dashboard) > .with-panel[data-open='true'] { flex: 1; min-height: 0; gap: 0; }
+/* Its main has no padding and the window's height already: the pane fills
+   the row beside the dashboard (T695). */
+main:has(.dashboard) > .with-panel[data-open='true'] > .history-panel {
+  position: static;
+  align-self: stretch;
+  height: auto;
+  margin: 0;
+}
 @media (max-width: 1023px) {
   .with-panel[data-open='true'] { grid-template-columns: minmax(0, 1fr); }
+  .with-panel[data-open='true'] > .history-panel { position: static; justify-self: stretch; width: auto; height: auto; max-height: 70vh; margin: 0; border: 1px solid var(--wc-border-subtle); }
 }
 .history-panel {
-  position: sticky;
-  top: 0;
-  display: grid;
-  gap: 10px;
-  align-content: start;
-  max-height: calc(100vh - 96px);
-  overflow: auto;
-  padding: 12px 14px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--wc-bg-surface);
+  border-left: 1px solid var(--wc-border-subtle);
 }
-.history-panel__head { display: flex; align-items: baseline; gap: 8px; }
-.history-panel__head h2 { margin: 0; font-size: var(--wc-text-sm-size); font-weight: 600; }
-.history-panel__head > button { margin-left: auto; }
-.history-panel__sub { font-size: 12px; color: var(--wc-text-secondary); }
-.history-panel__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.history-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  min-height: 44px;
+  /* No block padding: 44 px, as T693-4 settled for the Access head. */
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.history-panel__head h2 {
+  margin: 0;
+  font-size: var(--wc-text-md-size);
+  line-height: var(--wc-text-md-line);
+  font-weight: var(--wc-text-md-weight);
+}
+.history-panel__sub { flex: 1; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.history-panel__close { flex: none; width: 32px; height: 32px; }
+.history-panel__body { flex: 1; min-height: 0; overflow: auto; }
+.history-panel__list { margin: 0; padding: 0; list-style: none; }
+/* Each version under a rule (pins 3-7; EXP-24). */
 .history-panel__row {
   display: grid;
   gap: 2px;
-  padding: 8px 10px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 6px;
+  min-height: 48px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
 }
-.history-panel__row[aria-current='true'] { border-color: var(--wc-accent); box-shadow: 0 0 0 1px var(--wc-accent); }
+.history-panel__row:hover { background: var(--wc-bg-hover); }
+.history-panel__row[aria-current='true'] { background: var(--wc-bg-hover); box-shadow: inset 2px 0 0 var(--wc-accent); }
 .history-panel__row p { margin: 0; }
-.history-panel__version { display: flex; align-items: center; gap: 8px; }
+.history-panel__version {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.history-panel__version strong { font-size: var(--wc-text-sm-size); line-height: 20px; font-weight: 600; }
+.history-panel__version > span { display: flex; align-items: center; gap: 8px; }
+.history-panel__when { margin-left: auto; color: var(--wc-text-secondary); white-space: nowrap; }
 .history-panel__current {
-  padding: 0 6px;
-  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
   background: var(--wc-bg-accent-soft);
   color: var(--wc-accent);
   font-size: 12px;
-  line-height: 18px;
   font-weight: 600;
 }
 .history-panel__by { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
-.history-panel__description { font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.history-panel__description { font-size: 12px; line-height: 16px; color: var(--wc-text-primary); overflow-wrap: anywhere; }
 .history-panel__description.is-empty { color: var(--wc-text-secondary); }
 .history-panel__description.is-clamped {
   display: -webkit-box;
@@ -5350,14 +5394,28 @@ main:has(.dashboard) > .with-panel[data-open='true'] { flex: 1; min-height: 0; p
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-/* Its actions on hover and focus (pin 6), kept in the tab order. */
-.history-panel__actions { display: flex; gap: 6px; margin-top: 4px; opacity: 0; }
+/* View, More and Propose restoring... as link buttons, on hover and focus
+   (pin 6), kept in the tab order. */
+.history-panel__actions { display: flex; gap: 12px; margin-top: 4px; opacity: 0; }
+.history-panel__actions:empty { display: none; }
+.history-panel__actions .btn-link { font-size: 12px; line-height: 16px; font-weight: 600; }
 .history-panel__row:hover .history-panel__actions,
 .history-panel__row:focus-within .history-panel__actions,
 .history-panel__row[aria-current='true'] .history-panel__actions { opacity: 1; }
-.history-panel__limit { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
-.history-panel__skeleton { height: 64px; border-radius: 6px; background: var(--wc-bg-subtle); }
-.history-panel__error { display: grid; gap: 6px; justify-items: start; }
+/* Pinned at the foot over a rule (pin 8). */
+.history-panel__limit {
+  flex: none;
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--wc-border-subtle);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-secondary);
+}
+.history-panel__none { margin: 12px 16px; }
+.history-panel__list[aria-busy='true'] { display: grid; gap: 8px; padding: 12px 16px; }
+.history-panel__skeleton { height: 48px; border-radius: 6px; background: var(--wc-bg-subtle); }
+.history-panel__error { display: grid; gap: 6px; justify-items: start; padding: 12px 16px; }
 /* A kept version in the item's place (state A). */
 .version-view { display: grid; gap: 10px; }
 .version-band {

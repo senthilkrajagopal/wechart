@@ -358,7 +358,13 @@ export interface DocumentWriter {
   get?(
     kind: 'folder' | 'dashboard' | 'chart',
     id: string,
-  ): Promise<{ id: string; body: Record<string, unknown>; version?: number } | null>;
+  ): Promise<{
+    id: string;
+    body: Record<string, unknown>;
+    version?: number;
+    /** When it was last saved (T695): History's current version where none is kept. */
+    updatedAt?: Date;
+  } | null>;
   update?(input: {
     kind: 'folder' | 'dashboard' | 'chart';
     id: string;
@@ -4539,12 +4545,15 @@ export function buildServer({
     let folderId: string | null;
     let current: number;
     let title: unknown;
+    /** When it was last saved: its current version's time where none is kept (T695). */
+    let at: Date;
     if (kind === 'data-source') {
       const source = await dataSources?.get(id);
       if (source == null) return undefined;
       folderId = source.folderId;
       current = source.version;
       title = source.name;
+      at = source.updatedAt;
     } else {
       const stored = await docs?.get?.(kind, id).catch(() => null);
       if (stored == null) return undefined;
@@ -4554,11 +4563,13 @@ export function buildServer({
       folderId = folderIdOf(stored.body);
       current = stored.version ?? 1;
       title = stored.body['title'];
+      // Every store but a test's double keeps the time.
+      at = stored.updatedAt ?? new Date();
     }
     // A shared item's alone: a workspace's has no history (AC-289).
     if (folderId === null || (await workspaceRootOf(folderId)) !== null) return undefined;
     if (!userOf(request).superAdmin && !mayWrite(seen, folderId)) return undefined;
-    return { seen, folderId, current, title };
+    return { seen, folderId, current, title, at };
   };
   const historyKindOf = (kind: string): HistoryKind | undefined =>
     (HISTORY_KINDS as readonly string[]).includes(kind) ? (kind as HistoryKind) : undefined;
@@ -4569,9 +4580,33 @@ export function buildServer({
     const item = kind === undefined ? undefined : await historyItem(request, kind, id);
     if (kind === undefined || item === undefined) return reply.code(404).send(NO_HISTORY);
     const kept = await versions!.list(kind, id);
+    /**
+     * The current version is always listed (T695; design 06, pin 3; R76
+     * explore-Q6, data-sources-Q5): where none is kept, as content saved
+     * before proposals, it is the item as it is now, with no author ("before
+     * proposals"), and `kept: false`, so no kept copy of it is asked for.
+     */
+    if (kept.length === 0)
+      return {
+        current: item.current,
+        versions: [
+          {
+            version: item.current,
+            at: item.at.toISOString(),
+            title: typeof item.title === 'string' ? item.title : '',
+            author: null,
+            approver: null,
+            description: null,
+            proposalId: null,
+            current: true,
+            kept: false,
+          },
+        ],
+      };
     return {
       current: item.current,
       versions: kept.map((each) => ({
+        kept: true,
         version: each.version,
         at: each.at,
         title: each.title,

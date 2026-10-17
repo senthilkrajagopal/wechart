@@ -776,6 +776,48 @@ describe('an item’s history (T354, AC-289)', () => {
   });
 
   /**
+   * T695 (AC-289; design 06, pin 3; R76 explore-Q6, data-sources-Q5): the
+   * current version is always listed, so the panel agrees with the head's
+   * "version 1". One kept for none, as content saved before proposals, is
+   * listed as the item is now, with no author: "before proposals", and
+   * marked not kept, so nothing offers to draw it from a kept copy.
+   */
+  it('lists the current version where none is kept, as before proposals', async () => {
+    const id = randomUUID();
+    made.push({ kind: 'dashboard', id });
+    await docs().create({
+      kind: 'dashboard',
+      id,
+      body: { schemaVersion: 1, title: `Unkept ${MARK}`, folderId: ids.sales, pages: [] },
+    });
+    const stored = (await docs().get('dashboard', id))!;
+    const answer = await as('writer', { method: 'GET', url: `/api/history/dashboard/${id}` });
+    expect(answer.statusCode, answer.body).toBe(200);
+    expect(answer.json()).toEqual({
+      current: 1,
+      versions: [
+        {
+          version: 1,
+          at: stored.updatedAt.toISOString(),
+          title: `Unkept ${MARK}`,
+          author: null,
+          approver: null,
+          description: null,
+          proposalId: null,
+          current: true,
+          kept: false,
+        },
+      ],
+    });
+    // A kept one says so.
+    const kept = (
+      await as('writer', { method: 'GET', url: `/api/history/dashboard/${ids.board}` })
+    ).json<{ versions: { kept: boolean }[] }>();
+    expect(kept.versions.length).toBeGreaterThan(0);
+    expect(kept.versions.every((each) => each.kept)).toBe(true);
+  });
+
+  /**
    * The single user's with sign-in off since R52 ("Workspace-only now"):
    * their approvals keep versions, as a Super-Admin reads them (T359,
    * AC-254). It had none until then, as proposals hadn't.

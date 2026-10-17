@@ -232,7 +232,9 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
         .getByRole('button', { name: `Actions for ${BOARD}` })
         .click();
       await page.getByRole('menuitem', { name: 'History' }).click();
-      await expect(page).toHaveURL(new RegExp(`/explore/dashboards/${made.board}\\?panel=history$`));
+      await expect(page).toHaveURL(
+        new RegExp(`/explore/dashboards/${made.board}\\?panel=history$`),
+      );
       await expect(page.getByRole('complementary', { name: 'History' })).toBeVisible();
       // A chart's too: its page reads the same address (T694).
       await page.goto(`/explore?folder=${made.folder}`);
@@ -243,6 +245,16 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
       await page.getByRole('menuitem', { name: 'History' }).click();
       await expect(page).toHaveURL(new RegExp(`/explore/charts/${made.chart}\\?panel=history$`));
       await expect(page.getByRole('complementary', { name: 'History' })).toBeVisible();
+      // Docked at the window's right, full height, on a chart's page too (T695).
+      const docked = (await page.getByRole('complementary', { name: 'History' }).boundingBox())!;
+      const bar = (await page.locator('.app-bar').boundingBox())!;
+      const viewport = page.viewportSize()!;
+      expect([
+        Math.round(docked.width),
+        Math.round(docked.x + docked.width),
+        Math.round(docked.y),
+        Math.round(docked.y + docked.height),
+      ]).toEqual([360, viewport.width, Math.round(bar.y + bar.height), viewport.height]);
 
       // In My workspace: the copy's row is two lines, its next step first.
       await page.goto(`/explore?folder=${made.boardProject}`);
