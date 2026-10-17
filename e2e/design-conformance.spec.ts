@@ -3069,9 +3069,11 @@ test.describe('T257: the chart editor', () => {
       color: await token(page, 'text-muted'),
       'background-color': 'rgba(0, 0, 0, 0)',
     });
-    // Inline after the pills, not a grid row of its own (T688's review).
+    // Inline after the pills, not a grid of its own (T688's review): its
+    // inline-block, as a flex item of the well, computes to "block" (CSS
+    // Display 3, blockification); the grid it lost to computed "grid".
     expect(await style(well.locator('.cube-picker--add'), 'display')).toEqual({
-      display: 'inline-block',
+      display: 'block',
     });
     // The picker it opens, as 2026-09-24 design 01 state A draws it, later
     // than the prototype's 240 px menu (R37; T688, EDI-11): 264 px, a filter
