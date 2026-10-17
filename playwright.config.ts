@@ -30,6 +30,16 @@ const baseURL = `http://localhost:${PORT}`;
  * covers Chrome, Firefox and Safari and CI covers all four. AC-180 is
  * demonstrated by the CI run, not by a local one.
  */
+/**
+ * `WECHART_E2E_CHROMIUM=1` runs the chrome project on Playwright's bundled
+ * headless Chromium instead of the installed Chrome. The installed app shows a
+ * Dock icon on macOS for every worker it starts; the bundled headless shell
+ * shows none. It is for day-to-day runs of the specs a task touches. A lane's
+ * full run, CI and AC-180 stay on real Chrome, so CI ignores the switch.
+ */
+export const chromeChannel =
+  process.env.WECHART_E2E_CHROMIUM && !process.env.CI ? {} : { channel: 'chrome' as const };
+
 const edgeProject = {
   name: 'edge',
   use: { ...devices['Desktop Edge'], channel: 'msedge' as const },
@@ -75,7 +85,7 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'chrome', use: { ...devices['Desktop Chrome'], channel: 'chrome' } },
+    { name: 'chrome', use: { ...devices['Desktop Chrome'], ...chromeChannel } },
     ...(process.env.CI ? [edgeProject] : []),
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
     { name: 'safari', use: { ...devices['Desktop Safari'] } },

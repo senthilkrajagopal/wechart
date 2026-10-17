@@ -23,6 +23,10 @@ const DEV_SIGNING_KEY_FILE = fileURLToPath(
  */
 export const SEED_TOKEN = 'the-security-suite-seed-token-0123456789';
 
+/** Real Chrome, or bundled headless Chromium with `WECHART_E2E_CHROMIUM=1` (see playwright.config.ts). */
+const chromeChannel =
+  process.env.WECHART_E2E_CHROMIUM && !process.env.CI ? {} : { channel: 'chrome' as const };
+
 const PORT = 5373;
 export const API_PORT = 4300;
 const baseURL = `http://localhost:${PORT}`;
@@ -57,7 +61,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chrome',
-      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      use: { ...devices['Desktop Chrome'], ...chromeChannel },
       testIgnore: /(xcube-unreachable|cube-store-long-run)\.spec\.ts/,
     },
     // xcube's binding, and a data source changed in place, are shown through
@@ -85,7 +89,7 @@ export default defineConfig({
     // `--project=cube-store-long-run --no-deps`.
     {
       name: 'cube-store-long-run',
-      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      use: { ...devices['Desktop Chrome'], ...chromeChannel },
       testMatch: /cube-store-long-run\.spec\.ts/,
       dependencies: ['chrome', 'firefox', 'safari'],
     },
@@ -94,7 +98,7 @@ export default defineConfig({
     // its own: `--project=xcube-unreachable --no-deps`.
     {
       name: 'xcube-unreachable',
-      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      use: { ...devices['Desktop Chrome'], ...chromeChannel },
       testMatch: /xcube-unreachable\.spec\.ts/,
       // After Cube Store's long run too, which needs compose's Cube up.
       dependencies: ['chrome', 'firefox', 'safari', 'cube-store-long-run'],
