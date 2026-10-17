@@ -133,3 +133,61 @@ The user approved both designs: "Approve with defaults (Recommended)" (R78 in `d
 **Not settled by this answer**
 - The proposals, 17-P1 ("Changed since saved"), 17-P2 (the one-time note that tabs are kept in this browser), 17-P3 (Cube Store's insert of `information_schema.tables`), 18-P1 ("Show its calls") and 18-P2 (the Claude Code command with the new token in it). The answer didn't name them, as R33's "Approve all with proposals" did, and no criterion holds them, so they are not planned.
 - D-Q1 and D-Q2, which are direction.md's, not the designs'.
+
+## Design 19, the compact dashboard header (for approval)
+
+Added on 2026-10-17, after designs 17 and 18 were approved, for the user's request in `docs/inputs/2026-10-17-compact-dashboard-header.md`: "nearly 30% of the page goes away for the dashboard header and the filters. Can we have a more compressed header that can be expanded with a slide down so that the complete header can be seen... default will be the compressed header." It isn't covered by the approval of 17 and 18 above.
+
+- **Format:** the same as designs 17 and 18: self-contained HTML in direction.md's tokens, with two 1,440 × 900 screens with pins and notes, states A–I, then keyboard and accessibility, the criteria it changes, and the questions.
+- **Where it comes from:**
+  - the study in `docs/design/references-compact-header.md` (Power BI, Looker, Superset, Metabase and Tableau; Spotfire's pages didn't load, so it isn't covered);
+  - today's CSS in `packages/web/src/shell/styles.ts` and the header in `dashboard/edit/EditChrome.tsx` and `DashboardView.tsx`;
+  - the designs it changes: 2026-09-24 design 04, and 2026-09-27 design 04 states E and F; design 13's ⋯; decision dashboard-Q2.
+- **Measured today:** app bar 48, header 128, page tabs 45 and filter bar 53, so **274 px of chrome: 30.4 % of 1,440 × 900, 38.1 % of 1,280 × 720**. Compact, it is **96 px (10.7 % / 13.3 %), 178 px less**. Expanded, it is 205 px (22.8 % / 28.5 %), still 69 px less than today.
+- **Rendering:** not opened in a browser. The Chrome tools didn't respond in this session, as for designs 17 and 18, so a pin may sit a few pixels off. Every height above is computed from the CSS, not taken from the drawing.
+- **Keyboard:** no new shortcut (R75). The toggle is a button (Tab, then Enter or Space). Esc closes the sheet under rule 85, only with focus in the header.
+- **Tokens:** no new colour, type size or weight; the 12 px floor and the 400 and 600 weights hold. The motion takes Fluent 2's `durationNormal` and `durationFast` and its decelerate and accelerate curves. The highlight's 2 s is wechart's own choice (Q6).
+
+| # | File | Addresses | What it shows | You are asked to approve |
+|---|---|---|---|---|
+| 19 | [19-compact-dashboard-header.html](19-compact-dashboard-header.html) | The user's request of 2026-10-17 · changes AC-196, AC-200, AC-119, AC-352, AC-343 · holds AC-098, AC-195, AC-206, AC-207, AC-176, AC-187, AC-304 · rules 1, 3, 13, 14, 17, 40, 50, 72, 85 | **Screen 1: compact, the default** (pins 1–8): the way back in one step; the title at `text-lg`; page tabs inline; compact marking chips; the actions as today; the Filters toggle with its count, last; the 48 px fixed row; the 178 px gained.<br>**Screen 2: expanded** (pins 1–8): the pressed toggle; the description; the ownership line; today's filter bar; it stays open while a filter is changed; the full chips; it pushes the tiles; the motion.<br>**States:**<br>• **A:** the heights, today, compact and expanded, at 1,440 × 900 and 1,280 × 720, and in My workspace, with no description, and with wrapping filters.<br>• **B** (AC-113, AC-119, AC-121, AC-200): a filter changed while collapsed: Filter to marked, the toggle's tooltip, a cross-filter, a bookmark applied, each with its announcement.<br>• **C** (AC-053, AC-056, AC-206): edit mode, the sheet open and no toggle.<br>• **D** (AC-304): 1,152 px; 390 px collapsed, expanded, and its ⋯.<br>• **E:** no filters ("Details").<br>• **F:** many filters.<br>• **G:** a long title.<br>• **H:** no description.<br>• **I:** focus and motion.<br>Then: keyboard and accessibility; every state as an icon and a label; the criteria and the questions. | 1. **One 48 px row by default:** "← ‹folder›", the title, the page tabs, the compact marking or cross-filter chips, the actions, and the Filters toggle with its count.<br>2. **The expanded sheet:** the description, the ownership line and today's filter bar, unchanged, pushing the tiles down.<br>3. **Closing:** the toggle, or Esc with focus in the header, innermost first, ahead of the dashboard's own Esc.<br>4. **Motion:** 200 ms opening, 150 ms closing, height only; none with reduced motion.<br>5. **Feedback while collapsed:** the count or chip changes, a 2 s highlight, one polite announcement.<br>6. **Persistence:** for the visit; every opening starts compact.<br>7. **Edit mode:** the sheet open, no toggle.<br>8. **Narrow widths** as drawn in D.<br>9. **The amendments** to AC-196, AC-200, AC-119, AC-352 and AC-343. |
+
+### Questions for you, design 19
+
+Each is drawn one way, the recommended one, listed first. The way drawn is only a default until you decide.
+
+- **19-Q1. Does the expanded sheet push the tiles or cover them?**
+  - Drawn: (a) it pushes them down, as Tableau's show/hide containers do; the top KPIs stay in view while a filter changes, and nothing needs a scrim or a click-outside rule.
+  - (b) It slides over the tiles with a shadow and closes on a click outside.
+- **19-Q2. Is the open or closed choice remembered?**
+  - Drawn: (a) for the visit only, across page tabs, bookmarks and edit mode; every opening starts compact, as the user asked. Superset stores nothing either.
+  - (b) Per person per dashboard, in this browser.
+  - (c) Per person, for every dashboard.
+  - (d) A per-dashboard default set by its author in Settings › Layout, as Power BI and Looker do.
+- **19-Q3. Edit mode.**
+  - Drawn: (a) the sheet is open and the toggle gone while editing; leaving edit mode restores the reader's state.
+  - (b) The toggle stays while editing, starting as the reader left it.
+- **19-Q4. The title's size in the compact row.**
+  - Drawn: (a) `text-lg` 20/26/600, §3's page title.
+  - (b) Keep `text-xl` 24/32, within the same 48 px row, with less room for the title before it's cut short.
+- **19-Q5. Page tabs that don't fit, in view mode.**
+  - Drawn: (a) inline, then "More ▾" with the rest, the open page always visible.
+  - (b) The strip scrolls, as in edit mode today.
+  - (c) Always a "Page: ‹name› ▾" menu button.
+- **19-Q6. Feedback when a filter changes while collapsed.**
+  - Drawn: (a) the count or chip changes, the toggle is highlighted for 2 s, and the change is announced politely.
+  - (b) As (a), and the sheet opens by itself when a filter is added from a tile.
+  - (c) The text and the announcement only, no highlight.
+- **19-Q7. Many filters in the open sheet.**
+  - Drawn: (a) the bar wraps as today, and the sheet grows with it.
+  - (b) The sheet keeps to a set number of rows, with "Show all filters". The number would be yours.
+- **19-Q8. The My workspace band above the header.**
+  - Drawn: (a) unchanged, as rule 72 requires.
+  - (b) Folded into the compact row as a "My workspace" chip with its person icon, saving 32 px (rule 72 amended).
+- **19-Q9. The breadcrumb.**
+  - Drawn: (a) one step, "← ‹folder›", with the whole path in its name and tooltip and in the ownership line. AC-195 holds as written.
+  - (b) The whole path inline before the title, cut short from the left.
+- **19-Q10. How the sheet closes.**
+  - Drawn: (a) its toggle, or Esc with focus in the header.
+  - (b) Also a click on the tiles, though that click marks or cross-filters too.
+- **19-D. Checklist rules.** `references-compact-header.md` §4 proposes six rules. Once design 19 is approved, they are numbered after whatever the copilot's rules take (D-Q2).

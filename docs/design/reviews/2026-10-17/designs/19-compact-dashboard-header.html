@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 19 · Compact dashboard header</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8; --role-measure: #a85400;
+    --crossfilter: #7a3fb0; --mk1: #151107;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --s1: #2a78d6; --s2: #eb6834; --grid: #ecebe7; --axis: #c9c7c1;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  b, strong, th, h1, h2, h3 { font-weight: 600; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head ul { margin: 0 0 6px; padding-left: 20px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .doc-head code { color: #f2f2f0; background: #333; padding: 0 4px; border-radius: 3px; font: 400 12px var(--font-code); }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .screen-label { background: #2b2b29; color: #e8e7e2; padding: 10px 32px; font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2, .states h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; }
+  .notes > p, .states > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .notes code, .states code, .decision code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .stategrid { display: grid; grid-template-columns: repeat(2, 676px); gap: 32px 24px; align-items: start; }
+  .state { display: grid; gap: 8px; align-content: start; }
+  .state.wide { grid-column: 1 / -1; }
+  .state > h3 { margin: 0; font-size: 14px; line-height: 20px; }
+  .state > p { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); max-width: 1180px; }
+  .row2 { display: grid; grid-template-columns: repeat(2, 676px); gap: 24px; align-items: start; }
+  .row3 { display: grid; grid-template-columns: repeat(3, 440px); gap: 24px; align-items: start; }
+  .frame { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg-page); box-shadow: 0 1px 2px rgba(0,0,0,.06); position: relative; }
+  .cap { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0 0 6px; }
+  .said { margin: 6px 0 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); display: flex; gap: 6px; align-items: flex-start; }
+  .said b { color: var(--text-primary); }
+  .decision { margin: 22px 0 0; padding: 16px 20px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-page); max-width: 1376px; }
+  .decision h3 { margin: 0 0 8px; font-size: 16px; line-height: 22px; }
+  .decision > p { margin: 0 0 10px; color: var(--text-secondary); font-size: 13px; line-height: 18px; }
+  .decision table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 18px; }
+  .decision th, .decision td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); }
+  .decision th { font-size: 12px; color: var(--text-secondary); background: var(--bg-subtle); }
+  .decision td.w { white-space: nowrap; font: 600 12px/18px var(--font-code); color: var(--note); }
+  .decision td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  svg.i { width: 16px; height: 16px; flex: none; }
+  svg.s { width: 14px; height: 14px; flex: none; }
+  svg.xs { width: 10px; height: 10px; flex: none; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; white-space: nowrap; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 240px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .reviews { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary); }
+  .count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--text-on-accent); font: 600 12px/18px var(--font-ui); text-align: center; font-variant-numeric: tabular-nums; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .iconbtn.sm { width: 24px; height: 24px; }
+  .iconbtn.on { background: var(--bg-subtle); color: var(--text-primary); }
+  .iconbtn.line { border: 1px solid var(--border-strong); background: var(--bg-surface); }
+  .acct { display: inline-flex; align-items: center; gap: 8px; font: 600 12px/16px var(--font-ui); padding: 2px 6px; border-radius: 6px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); flex: none; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.dis { opacity: .45; }
+  .btn.md { height: 28px; padding: 0 10px; font-size: 12px; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .ring { box-shadow: 0 0 0 3px var(--accent-ring); }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .menu { position: absolute; z-index: 70; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 4px; }
+  .mi { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; border-radius: 4px; font-size: 14px; white-space: nowrap; }
+  .mi.hl { background: var(--bg-hover); }
+  .mi.danger { color: var(--err); }
+  .mi .on { margin-left: auto; color: var(--accent); }
+  .msep { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+  .tip { position: absolute; z-index: 90; background: var(--text-primary); color: #f2f2f0; font-size: 12px; line-height: 16px; padding: 8px 10px; border-radius: 6px; box-shadow: var(--shadow-pop); }
+  .tip b { color: #fff; }
+  .band { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 24px; background: var(--bg-subtle); border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 24px; }
+  .legend div { display: flex; gap: 10px; align-items: center; min-height: 34px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; }
+  .legend div > span:last-child { margin-left: auto; color: var(--text-secondary); text-align: right; }
+  kbd.k { font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--bg-surface); color: var(--text-primary); white-space: nowrap; }
+
+  /* ---- design 19: the compact row ---- */
+  .dhrow { position: relative; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 24px; background: var(--bg-page); border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .dhrow.n { padding: 0 16px; }
+  .back { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; line-height: 16px; color: var(--text-primary); flex: none; }
+  .back.icon { width: 24px; padding: 0; justify-content: center; }
+  .sl { color: var(--text-muted); font-size: 12px; flex: none; }
+  .dtitle { margin: 0; font-size: 20px; line-height: 26px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+  .dtitle .ed { color: var(--text-secondary); font-weight: 400; }
+  .vrule { width: 1px; height: 24px; background: var(--border-subtle); flex: none; margin: 0 4px; }
+  .itabs { display: flex; align-self: stretch; gap: 2px; flex: none; }
+  .itabs > span { display: flex; align-items: center; gap: 4px; padding: 0 12px; font-size: 13px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .itabs > span.on { color: var(--text-primary); border-bottom-color: var(--accent); }
+  .itabs > span.add { color: var(--text-secondary); font-size: 12px; border-bottom: 0; }
+  .tog { gap: 6px; padding: 0 8px 0 10px; }
+  .tog.open { background: var(--bg-subtle); }
+  .tog.hl { background: var(--accent-soft); border-color: var(--accent); }
+  .tog .chev { color: var(--text-secondary); }
+  .tog.open .chev { transform: rotate(180deg); }
+  .mchip { display: inline-flex; align-items: center; gap: 6px; height: 24px; max-width: 240px; padding: 0 2px 0 8px; border: 1.5px solid var(--mk1); border-radius: 999px; background: var(--bg-surface); font-size: 12px; line-height: 16px; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
+  .mchip.full { max-width: 520px; }
+  .mchip .sw { width: 10px; height: 10px; border-radius: 3px; background: var(--mk1); box-shadow: inset 0 0 0 1px var(--border-strong); flex: none; }
+  .mchip .sum { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); }
+  .mchip .from { color: var(--text-muted); flex: none; }
+  .mchip .b { min-width: 20px; height: 20px; display: grid; place-items: center; border-radius: 999px; color: var(--text-secondary); flex: none; }
+  .xchip { display: inline-flex; align-items: center; gap: 6px; height: 24px; max-width: 240px; padding: 0 4px 0 10px; border: 1px solid var(--crossfilter); border-radius: 999px; background: color-mix(in srgb, var(--crossfilter) 12%, var(--bg-surface)); font-size: 12px; line-height: 16px; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
+  .xchip .what { font-weight: 600; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .xchip .from { color: var(--text-secondary); }
+  .fchip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 2px 0 8px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--bg-subtle); font-size: 12px; white-space: nowrap; }
+  /* ---- the sheet ---- */
+  .sheet { background: var(--bg-page); border-bottom: 1px solid var(--border-subtle); position: relative; }
+  .about { padding: 8px 24px; display: grid; gap: 4px; }
+  .about .full { margin: 0 0 2px; font-size: 20px; line-height: 26px; letter-spacing: -0.01em; }
+  .about .desc { margin: 0; font-size: 14px; line-height: 20px; color: var(--text-secondary); max-width: 860px; }
+  .about .own { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .about .own a { color: var(--accent); text-decoration: none; }
+  .fbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 52px; padding: 10px 24px; }
+  .fbar.n { padding: 10px 16px; }
+  .fw { position: relative; height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-surface); font-size: 13px; white-space: nowrap; }
+  .fw .scope { font-size: 12px; font-weight: 600; color: var(--text-muted); border: 1px solid var(--border-subtle); border-radius: 3px; padding: 0 4px; line-height: 18px; }
+  .fw b { font-weight: 600; }
+  .fw .x { width: 20px; height: 20px; display: grid; place-items: center; color: var(--text-secondary); }
+  .fw.sel { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .fw.open { border-color: var(--accent); }
+  .hint { font-size: 12px; line-height: 16px; color: var(--text-muted); }
+  .pop { position: absolute; z-index: 60; width: 280px; background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 12px; display: grid; gap: 8px; font-size: 14px; }
+  .inp { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 14px; }
+  .cbrow { display: flex; align-items: center; gap: 8px; height: 28px; font-size: 14px; }
+  .check { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--border-strong); background: var(--bg-surface); flex: none; display: inline-grid; place-items: center; }
+  .check.on { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+  /* ---- canvas ---- */
+  .dgrid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; padding: 16px 24px 40px; }
+  .tile { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; min-width: 0; position: relative; overflow: hidden; }
+  .tile.edit { border-style: dashed; border-color: var(--border-strong); }
+  .tile-head { display: flex; align-items: center; gap: 8px; min-height: 20px; margin-bottom: 8px; }
+  .tile-head h3 { margin: 0; font-size: 14px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .fresh { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--bg-subtle); color: var(--ok); font-size: 12px; white-space: nowrap; flex: none; }
+  .mbadge { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--bg-subtle); color: var(--text-secondary); font-size: 12px; font-weight: 600; white-space: nowrap; flex: none; }
+  .mbadge .sw { width: 8px; height: 8px; border-radius: 3px; background: var(--mk1); box-shadow: inset 0 0 0 1px var(--border-strong); }
+  .kpi-label { font-size: 14px; line-height: 20px; font-weight: 600; }
+  .kpi-val { font-size: 32px; line-height: 40px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; margin-top: 4px; }
+  .dsection { grid-column: 1 / -1; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 12px 12px; background: color-mix(in srgb, var(--bg-surface) 55%, var(--bg-page)); }
+  .dsection-head { display: flex; align-items: center; gap: 8px; height: 36px; }
+  .dsection-head h2 { margin: 0; font-size: 16px; line-height: 22px; }
+  .grid-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; width: 100%; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; height: 28px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table td { height: 24px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table .num { text-align: right; }
+  svg text { font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
+  /* ---- measurement marks (review notes, not product) ---- */
+  .meas { position: absolute; left: 0; right: 0; z-index: 250; border-top: 1.5px dashed var(--note); pointer-events: none; }
+  .meas > span { position: absolute; right: 56px; top: -10px; background: var(--note); color: #fff; font: 600 12px/16px var(--font-ui); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+  .meas.soft { border-top-color: color-mix(in srgb, var(--note) 55%, transparent); }
+  .meas.soft > span { background: #fff; color: var(--note); box-shadow: 0 0 0 1px var(--note); }
+  /* ---- the height chart in state A ---- */
+  .hchart { display: flex; gap: 40px; align-items: flex-end; }
+  .hgroup { display: grid; gap: 6px; }
+  .hgroup .bars { display: flex; gap: 14px; align-items: flex-start; }
+  .hbar { width: 120px; display: flex; flex-direction: column; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; background: var(--bg-surface); }
+  .hbar > div { display: flex; align-items: center; justify-content: center; font-size: 12px; line-height: 16px; text-align: center; overflow: hidden; }
+  .hbar .app { background: var(--text-secondary); color: #fff; }
+  .hbar .hdr { background: var(--border-strong); color: var(--text-primary); }
+  .hbar .tab { background: var(--bg-subtle); color: var(--text-primary); border-top: 1px solid var(--bg-surface); }
+  .hbar .fb { background: var(--accent-soft); color: var(--text-primary); border-top: 1px solid var(--bg-surface); }
+  .hbar .cv { background: var(--bg-surface); color: var(--text-secondary); }
+  .hcap { font-size: 12px; line-height: 16px; color: var(--text-secondary); text-align: center; width: 120px; }
+  .hcap b { color: var(--text-primary); display: block; }
+  .motion { display: flex; gap: 16px; align-items: flex-start; }
+  .motion .step { width: 200px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M2 9.5l1.6-5.2A1 1 0 0 1 4.6 3.6h6.8a1 1 0 0 1 1 .7L14 9.5v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z M2 9.5h3.5l1 1.5h3l1-1.5H14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 16 16"><path d="M13 8H3.5M7.5 4L3.5 8l4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="12.5" cy="8" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 16 16"><path d="M2 3h12l-4.6 5.4V13l-2.8-1.4V8.4z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2M8 4.6v.4" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="i-hist" viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.3 2.5v2.8h2.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.2l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-bm" viewBox="0 0 16 16"><path d="M4 2.5h8v11L8 10.6 4 13.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 16 16"><path d="M11.5 2.5l2 2L6 12H4v-2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 16 16"><path d="M5.5 3.5L2.5 6.5l3 3M2.8 6.5H10a3.5 3.5 0 0 1 0 7H7" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 16 16"><path d="M10.5 3.5l3 3-3 3M13.2 6.5H6a3.5 3.5 0 0 0 0 7h3" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-live" viewBox="0 0 16 16"><path d="M2.5 4.5h7M2.5 8h11M2.5 11.5h5" stroke="currentColor" stroke-width="1.6"/><circle cx="13" cy="4.5" r="1.8" fill="currentColor"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI design 2026-10-17 · Design 19 · for approval</div>
+    <h1>Compact dashboard header: one 48 px row by default, with the rest a slide-down that pushes the tiles</h1>
+    <p>The user, 2026-10-17: "nearly 30% of the page goes away for the dashboard header and the filters. Can we have a more compressed header that can be expanded with a slide down so that the complete header can be seen... default will be the compressed header." Measured from today's CSS, the chrome above the tiles is <b>274 px: 30.4 % of a 1,440 × 900 window and 38.1 % of 1,280 × 720</b> (app bar 48, header 128, page tabs 45, filter bar 53).</p>
+    <p>This design draws:</p>
+    <ul>
+      <li><b>The compact header, the default:</b> one 48 px row holding the way back, the title, the page tabs, a summary of what's marked or cross-filtered, the actions, and a Filters toggle that shows how many filters are set. With the app bar, the chrome is <b>96 px (10.7 % at 900, 13.3 % at 720), 178 px less than today</b>.</li>
+      <li><b>The expanded header:</b> the toggle slides down a sheet with the description, the ownership line and today's filter bar, unchanged. It pushes the tiles down and never covers them.</li>
+      <li><b>States:</b> the heights; a filter changed while the header is collapsed; edit mode; narrow widths; no filters; many filters; a long title; no description; and the keyboard and motion.</li>
+    </ul>
+    <p><b>Screens 1 and 2</b> are Wren Writer, a read-write member of Sales / EMEA, reading the shared dashboard "Revenue overview" in Markings mode, with two products marked and three of four filters set. Sign-in is on.</p>
+    <p><b>What doesn't change:</b> the app bar; the My workspace band and the proposal band above the header (rule 72); the filter bar's pills, popovers, scope tags and chips (AC-077, AC-200); the actions and their order (design 04 state E, design 13); the tiles and the canvas.</p>
+    <div class="ids">For the user's request of 2026-10-17 · changes AC-196, AC-200, AC-119, AC-352, AC-343 · holds AC-098, AC-195, AC-206, AC-207, AC-176, AC-187, AC-304 · rules 1, 3, 13, 14, 17, 40, 50, 72, 85 · designs 04 (2026-09-24), 04 states E and F (2026-09-27), 13 · decisions dashboard-Q2 · references-compact-header.md · names, values and counts are illustrative</div>
+  </header>
+
+  <!-- ======================= SCREEN 1 ======================= -->
+  <div class="screen-label">Screen 1 · The compact header, as every dashboard opens (1,440 × 900)</div>
+  <div class="screen" id="s1">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">2</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+
+    <div class="dhrow">
+      <span class="back"><svg class="s"><use href="#i-back"/></svg>EMEA</span><span class="sl">/</span>
+      <h1 class="dtitle">Revenue overview</h1>
+      <span class="vrule"></span>
+      <div class="itabs" role="tablist"><span class="on">Overview</span><span>By country</span><span>Detail</span></div>
+      <span class="spacer"></span>
+      <span class="mchip"><span class="sw"></span><b>Marking</b><span class="sum">Côte de Blaye, Raclette Courdavault</span><span class="b"><svg class="xs"><use href="#i-chevd"/></svg></span><span class="b"><svg class="xs"><use href="#i-x"/></svg></span></span>
+      <span class="btn"><svg class="s"><use href="#i-hist"/></svg>History</span>
+      <span class="btn"><svg class="s"><use href="#i-bm"/></svg>Bookmarks<svg class="s"><use href="#i-chevd"/></svg></span>
+      <span class="btn primary"><svg class="s"><use href="#i-pencil"/></svg>Edit in my workspace</span>
+      <span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span>
+      <span class="vrule"></span>
+      <span class="btn tog"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s chev"><use href="#i-chevd"/></svg></span>
+    </div>
+
+    <div class="dgrid">
+      <div class="tile" style="grid-column:span 3;height:96px"><span class="kpi-label">Revenue</span><span class="kpi-val">$1.27M</span></div>
+      <div class="tile" style="grid-column:span 3;height:96px"><span class="kpi-label">Orders</span><span class="kpi-val">830</span></div>
+      <div class="tile" style="grid-column:span 3;height:96px"><span class="kpi-label">Avg order value</span><span class="kpi-val">$1,525</span></div>
+      <div class="tile" style="grid-column:span 3;height:96px"><span class="kpi-label">Customers</span><span class="kpi-val">89</span></div>
+
+      <div class="tile" style="grid-column:span 7;height:300px">
+        <div class="tile-head"><h3>Revenue by month, EMEA</h3><span class="fresh"><svg class="xs"><use href="#s-ok"/></svg>Pre-agg · 4m</span></div>
+        <svg viewBox="0 0 760 240" width="100%" height="240" aria-hidden="true">
+          <g stroke="#ecebe7"><line x1="50" y1="30" x2="740" y2="30"/><line x1="50" y1="85" x2="740" y2="85"/><line x1="50" y1="140" x2="740" y2="140"/><line x1="50" y1="195" x2="740" y2="195"/></g>
+          <line x1="50" y1="210" x2="740" y2="210" stroke="#c9c7c1"/>
+          <g font-size="12" fill="#6e6c67" text-anchor="end"><text x="42" y="34">$60K</text><text x="42" y="89">$45K</text><text x="42" y="144">$30K</text><text x="42" y="199">$15K</text></g>
+          <g font-size="12" fill="#6e6c67" text-anchor="middle"><text x="70" y="230">Jan</text><text x="182" y="230">Mar</text><text x="294" y="230">May</text><text x="406" y="230">Jul</text><text x="518" y="230">Sep</text><text x="630" y="230">Nov</text></g>
+          <polyline fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" points="70,170 126,162 182,150 238,158 294,136 350,128 406,132 462,112 518,102 574,108 630,84 686,72"/>
+          <polyline fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" points="70,192 126,188 182,182 238,186 294,176 350,170 406,172 462,164 518,154 574,158 630,146 686,138"/>
+          <g font-size="12" font-weight="600"><text x="694" y="76" fill="#2a78d6">Germany</text><text x="694" y="142" fill="#eb6834">France</text></g>
+        </svg>
+      </div>
+      <div class="tile" style="grid-column:span 5;height:300px">
+        <div class="tile-head"><h3>Top products</h3><span class="mbadge"><span class="sw"></span>Marking · 2 marked</span></div>
+        <svg viewBox="0 0 520 240" width="100%" height="240" aria-hidden="true">
+          <g font-size="12" fill="#1f1f1e" text-anchor="end"><text x="150" y="30">Côte de Blaye</text><text x="150" y="74">Thüringer Rostbratw.</text><text x="150" y="118">Raclette Courdavault</text><text x="150" y="162">Tarte au sucre</text><text x="150" y="206">Camembert Pierrot</text></g>
+          <rect x="160" y="16" width="250" height="22" rx="3" fill="#2a78d6" stroke="#151107" stroke-width="1.5"/>
+          <rect x="160" y="60" width="142" height="22" rx="3" fill="#2a78d6" opacity=".28"/>
+          <rect x="160" y="104" width="125" height="22" rx="3" fill="#2a78d6" stroke="#151107" stroke-width="1.5"/>
+          <rect x="160" y="148" width="83" height="22" rx="3" fill="#2a78d6" opacity=".28"/>
+          <rect x="160" y="192" width="82" height="22" rx="3" fill="#2a78d6" opacity=".28"/>
+          <g font-size="12" fill="#5c5b57"><text x="418" y="32">$141K</text><text x="310" y="76">$80K</text><text x="293" y="120">$71K</text><text x="251" y="164">$47K</text><text x="250" y="208">$47K</text></g>
+        </svg>
+      </div>
+
+      <div class="dsection">
+        <div class="dsection-head"><span class="iconbtn sm"><svg class="xs"><use href="#i-chevd"/></svg></span><h2>Detail</h2><span class="xs muted">1 item</span></div>
+        <div class="tile" style="height:260px">
+          <div class="tile-head"><h3>Latest orders</h3><span class="fresh" style="color:var(--text-secondary)">● Live</span><span class="spacer"></span><span class="xs muted tnum">830 rows · first 100</span></div>
+          <table class="grid-table">
+            <thead><tr><th>Order ID</th><th>Ordered at</th><th>Customer</th><th>Country</th><th>Category</th><th>Product</th><th class="num">Revenue</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">10248</td><td>Oct 14, 2026</td><td>Vins et alcools Chevalier</td><td>France</td><td>Beverages</td><td>Côte de Blaye</td><td class="num">$2,635</td></tr>
+              <tr><td class="mono">10249</td><td>Oct 14, 2026</td><td>Toms Spezialitäten</td><td>Germany</td><td>Beverages</td><td>Côte de Blaye</td><td class="num">$1,581</td></tr>
+              <tr><td class="mono">10250</td><td>Oct 13, 2026</td><td>Blondesddsl père et fils</td><td>France</td><td>Beverages</td><td>Côte de Blaye</td><td class="num">$4,216</td></tr>
+              <tr><td class="mono">10251</td><td>Oct 13, 2026</td><td>Frankenversand</td><td>Germany</td><td>Beverages</td><td>Côte de Blaye</td><td class="num">$790</td></tr>
+              <tr><td class="mono">10252</td><td>Oct 12, 2026</td><td>Lehmanns Marktstand</td><td>Germany</td><td>Beverages</td><td>Côte de Blaye</td><td class="num">$1,054</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="meas" style="top:96px"><span>Chrome ends at 96 px · 10.7 % of 900</span></div>
+    <div class="meas soft" style="top:274px"><span>Today's chrome ended here, at 274 px · 30.4 %</span></div>
+
+    <span class="pin" style="left:6px;top:60px">1</span>
+    <span class="pin" style="left:178px;top:60px">2</span>
+    <span class="pin" style="left:446px;top:60px">3</span>
+    <span class="pin" style="left:654px;top:60px">4</span>
+    <span class="pin" style="left:990px;top:60px">5</span>
+    <span class="pin" style="left:1410px;top:84px">6</span>
+    <span class="pin" style="left:6px;top:96px">7</span>
+    <span class="pin" style="left:6px;top:262px">8</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 1: what's new, and why</h2>
+    <p>A reader opens a dashboard to read its tiles. Today a third of a laptop window is title, tabs and filters before the first number. The compact row keeps on screen what a reader acts on (where it lives, which page, what's narrowing it, and what they can do) and folds what they read once: the description, the ownership line and each filter's pill.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>The way back, one step</b><span class="t">Today's crumbs row becomes a 24 px ghost link, "← EMEA", naming the dashboard's folder. Its accessible name and tooltip give the whole path ("Back to Shared / Sales / EMEA"), and the ownership line in the sheet names it too (Q9).</span><span class="fix">AC-195 · design 04 state E</span></div></li>
+      <li><span class="n">2</span><div><b>The title at <code>text-lg</code></b><span class="t">20/26/600, §3's page title, in place of 24/32 (Q4). It stays the page's <code>h1</code>. A title too long for the row is cut short with "…", the whole of it in its tooltip and at the top of the sheet (state G).</span><span class="fix">§3 · dashboard-Q2</span></div></li>
+      <li><span class="n">3</span><div><b>Page tabs, inline</b><span class="t">The same tablist (13/600, §7d), each tab as tall as the row, its 2 px accent underline on the row's rule. A 1 px rule sets them off from the title. Tabs that don't fit go behind "More ▾", and the open page is never among them (state D, Q5). One Tab stop, arrows along it, as built (T182).</span><span class="fix">AC-207 · AC-018 · §7d</span></div></li>
+      <li><span class="n">4</span><div><b>What's marked, while collapsed</b><span class="t">One compact chip per non-empty marking, bordered 1.5 px in its colour: the swatch, the name, and its values cut short at 240 px. It keeps the full chip's menu and ×. The tile it came from is in its tooltip, its accessible name and its menu's heading. Beyond two chips, "+n". In cross-filter mode it's the cross-filter chip instead (state B4). When the sheet is open, these give way to the full chips in the bar.</span><span class="fix">AC-098 · AC-200 · AC-119 · rule 50</span></div></li>
+      <li><span class="n">5</span><div><b>The actions, as today</b><span class="t">History, Bookmarks, the primary (here "Edit in my workspace"; Edit, Open my copy or Propose… where each applies), the gear where it shows today, and ⋯ with Export… and Delete…. Same order and controls as design 04 state E and design 13. Nothing is added: no Share, no new menu.</span><span class="fix">AC-278 · AC-289 · AC-292 · AC-354</span></div></li>
+      <li><span class="n">6</span><div><b>The Filters toggle, last</b><span class="t">A 32 px button: the funnel, "Filters", the number of filters set, and a chevron, as Looker's filters icon carries a count when its bar is collapsed. It's a disclosure button (<code>aria-expanded="false"</code>). Its tooltip and accessible description say "3 of 4 filters set: Ordered at, Country, Category". Last in the row, so the next Tab goes straight into the sheet it opens.</span><span class="fix">AC-196 (amended) · references-compact-header.md §2 Looker</span></div></li>
+      <li><span class="n">7</span><div><b>48 px, fixed above the tiles</b><span class="t">The app bar's height: a 32 px control with 8 px above and below (§4), padded 24 px from the sides (§7d), on <code>bg-page</code>, ruled in <code>border-subtle</code>. It's fixed as the header, tabs and filter bar are today; the canvas scrolls beneath it.</span><span class="fix">AC-196 · §2 · §4</span></div></li>
+      <li><span class="n">8</span><div><b>178 px more for tiles</b><span class="t">Chrome 96 px instead of 274: the canvas grows from 626 to 804 px (+28 %) here, and from 446 to 624 px (+40 %) at 1,280 × 720. On this dashboard the Detail section's table comes into view without scrolling. The dashed lines are review marks, not product.</span><span class="fix">state A</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= SCREEN 2 ======================= -->
+  <div class="screen-label">Screen 2 · Expanded: the sheet slides down and pushes the tiles, with a filter being changed</div>
+  <div class="screen" id="s2">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">2</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+
+    <div class="dhrow" style="border-bottom-color:transparent">
+      <span class="back"><svg class="s"><use href="#i-back"/></svg>EMEA</span><span class="sl">/</span>
+      <h1 class="dtitle">Revenue overview</h1>
+      <span class="vrule"></span>
+      <div class="itabs" role="tablist"><span class="on">Overview</span><span>By country</span><span>Detail</span></div>
+      <span class="spacer"></span>
+      <span class="btn"><svg class="s"><use href="#i-hist"/></svg>History</span>
+      <span class="btn"><svg class="s"><use href="#i-bm"/></svg>Bookmarks<svg class="s"><use href="#i-chevd"/></svg></span>
+      <span class="btn primary"><svg class="s"><use href="#i-pencil"/></svg>Edit in my workspace</span>
+      <span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span>
+      <span class="vrule"></span>
+      <span class="btn tog open"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s chev"><use href="#i-chevd"/></svg></span>
+    </div>
+    <div class="sheet" id="details" role="region" aria-label="Filters and details">
+      <div class="about" style="border-top:1px solid var(--border-subtle)">
+        <p class="desc">Monthly revenue, orders and top products for the EMEA region, from the sales model. Figures are net of returns.</p>
+        <p class="own">In <a>Shared / Sales / EMEA</a> · version 7 · approved 22 Sep by Ada Admin</p>
+      </div>
+      <div class="fbar">
+        <span class="fw"><span class="scope">Dashboard</span><span>Ordered at: <b>2026</b></span><svg class="s sec"><use href="#i-chevd"/></svg><span class="x"><svg class="xs"><use href="#i-x"/></svg></span></span>
+        <span class="fw"><span class="scope">Dashboard</span><span>Country: <b>Germany, France</b></span><svg class="s sec"><use href="#i-chevd"/></svg><span class="x"><svg class="xs"><use href="#i-x"/></svg></span></span>
+        <span class="fw"><span class="scope">Dashboard</span><span>Status: <b>all</b></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+        <span class="fw open ring"><span class="scope">Tab</span><span>Category: <b>Beverages</b></span><svg class="s sec"><use href="#i-chevd"/></svg><span class="x"><svg class="xs"><use href="#i-x"/></svg></span></span>
+        <span class="spacer"></span>
+        <span class="mchip full"><span class="sw"></span><b>Marking</b><span class="sum">Côte de Blaye, Raclette Courdavault</span><span class="from">from Top products</span><span class="b"><svg class="xs"><use href="#i-chevd"/></svg></span><span class="b"><svg class="xs"><use href="#i-x"/></svg></span></span>
+      </div>
+      <div class="pop" style="left:708px;top:102px">
+        <div class="inp"><svg class="s"><use href="#i-search"/></svg>Find a category</div>
+        <div class="cbrow"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span>Beverages</div>
+        <div class="cbrow"><span class="check"></span>Condiments</div>
+        <div class="cbrow"><span class="check"></span>Confections</div>
+        <div class="cbrow"><span class="check"></span>Dairy Products</div>
+        <div class="cbrow"><span class="check"></span>Grains/Cereals</div>
+        <div class="cbrow"><span class="check"></span>Seafood</div>
+        <span class="xs sec">Applies to this tab · 8 categories</span>
+      </div>
+    </div>
+
+    <div class="dgrid">
+      <div class="tile" style="grid-column:span 3;height:96px"><span class="kpi-label">Revenue</span><span class="kpi-val">$1.27M</span></div>
+      <div class="tile" style="grid-column:span 3;height:96px"><span class="kpi-label">Orders</span><span class="kpi-val">830</span></div>
+      <div class="tile" style="grid-column:span 3;height:96px"><span class="kpi-label">Avg order value</span><span class="kpi-val">$1,525</span></div>
+      <div class="tile" style="grid-column:span 3;height:96px"><span class="kpi-label">Customers</span><span class="kpi-val">89</span></div>
+      <div class="tile" style="grid-column:span 7;height:300px">
+        <div class="tile-head"><h3>Revenue by month, EMEA</h3><span class="fresh"><svg class="xs"><use href="#s-ok"/></svg>Pre-agg · 4m</span></div>
+        <svg viewBox="0 0 760 240" width="100%" height="240" aria-hidden="true">
+          <g stroke="#ecebe7"><line x1="50" y1="30" x2="740" y2="30"/><line x1="50" y1="85" x2="740" y2="85"/><line x1="50" y1="140" x2="740" y2="140"/><line x1="50" y1="195" x2="740" y2="195"/></g>
+          <line x1="50" y1="210" x2="740" y2="210" stroke="#c9c7c1"/>
+          <polyline fill="none" stroke="#2a78d6" stroke-width="2" points="70,170 126,162 182,150 238,158 294,136 350,128 406,132 462,112 518,102 574,108 630,84 686,72"/>
+          <polyline fill="none" stroke="#eb6834" stroke-width="2" points="70,192 126,188 182,182 238,186 294,176 350,170 406,172 462,164 518,154 574,158 630,146 686,138"/>
+        </svg>
+      </div>
+      <div class="tile" style="grid-column:span 5;height:300px">
+        <div class="tile-head"><h3>Top products</h3><span class="mbadge"><span class="sw"></span>Marking · 2 marked</span></div>
+      </div>
+    </div>
+
+    <div class="meas" style="top:205px"><span>Expanded: chrome ends at 205 px · 22.8 % — still 69 px less than today</span></div>
+
+    <span class="pin" style="left:1410px;top:84px">1</span>
+    <span class="pin" style="left:6px;top:110px">2</span>
+    <span class="pin" style="left:6px;top:134px">3</span>
+    <span class="pin" style="left:6px;top:170px">4</span>
+    <span class="pin" style="left:680px;top:208px">5</span>
+    <span class="pin" style="left:1410px;top:164px">6</span>
+    <span class="pin" style="left:6px;top:226px">7</span>
+    <span class="pin" style="left:1126px;top:60px">8</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 2: the complete header, slid down</h2>
+    <p>The sheet holds what the compact row folded. Its filter bar is today's, pill for pill; only where it sits changes. It pushes the tiles down rather than covering them, so the KPIs a filter changes first stay in view while it's being changed (Q1).</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>The toggle, pressed</b><span class="t"><code>aria-expanded="true"</code>, on <code>bg-subtle</code>, its chevron turned up. Its name doesn't change ("Filters, 3 set"); the state is in <code>aria-expanded</code>, as the disclosure pattern asks. It's the only control that opens the sheet, and one of two that close it.</span><span class="fix">APG disclosure · rule 85</span></div></li>
+      <li><span class="n">2</span><div><b>The description</b><span class="t"><code>text-sm</code>, text-secondary, at most 860 px wide, as dashboard-Q2 decided. It's the first line of the sheet, so it's read when the reader asks for it. With none, the sheet starts at the ownership line (state H).</span><span class="fix">dashboard-Q2 (moved, not overturned) · AC-197</span></div></li>
+      <li><span class="n">3</span><div><b>The ownership line</b><span class="t">12/16, as design 04 state E writes it: where it lives (the folder as a link, the full path), its version, and who approved it.</span><span class="fix">design 04 state E · AC-343</span></div></li>
+      <li><span class="n">4</span><div><b>Today's filter bar, unchanged</b><span class="t">Each pill with its scope tag (rule 14), its field at 400 and its value at 600, × where a value is set. 10 px padding, 32 px pills, wrapping when there are more (state F). The hint shows here while nothing is set (state E).</span><span class="fix">AC-077 · AC-196 · rule 14</span></div></li>
+      <li><span class="n">5</span><div><b>It stays open while a filter is changed</b><span class="t">The Category popover opens over the tiles, as today. Esc closes the popover, with focus back on its pill; a second Esc closes the sheet, with focus on the toggle. Changing a value doesn't close anything, and neither does a click on a tile.</span><span class="fix">rule 85 · keyboard table below</span></div></li>
+      <li><span class="n">6</span><div><b>The full chips come back</b><span class="t">While the sheet is open, the compact chip leaves the row (screen 1 pin 4), and the bar shows today's full chip: name, values, "from Top products", menu and unmark. The row's actions don't move; the space between absorbs it.</span><span class="fix">AC-200 · AC-098</span></div></li>
+      <li><span class="n">7</span><div><b>It pushes; it never covers</b><span class="t">The canvas starts 109 px lower (56 for the description and ownership line, 53 for the bar) and keeps its scroll position (rule 40). Nothing is hidden behind the sheet, so nothing needs a scrim, a focus trap or a click-outside rule.</span><span class="fix">rule 40 · Q1</span></div></li>
+      <li><span class="n">8</span><div><b>The motion</b><span class="t">Only the height moves: 200 ms opening (Fluent's <code>durationNormal</code>, <code>curveDecelerateMid</code> <code>cubic-bezier(0,0,0,1)</code>), 150 ms closing (<code>durationFast</code>, <code>curveAccelerateMid</code> <code>cubic-bezier(1,0,1,1)</code>), with no fade. Under <code>prefers-reduced-motion: reduce</code> it opens and closes at once (state I).</span><span class="fix">WCAG 2.3.3 · references-compact-header.md §4</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= STATES ======================= -->
+  <section class="states">
+    <h2>States A–I</h2>
+    <p>One state for each part of the brief. Unless a frame says otherwise, it is screen 1's dashboard and reader. Frames of the row show its right end, where the summary and the toggle are; "…" marks the cut.</p>
+    <div class="stategrid">
+
+      <!-- A -->
+      <div class="state wide">
+        <h3>A · How much room the chrome takes: today, compact, expanded (measured from today's CSS; direction §2, §4)</h3>
+        <p>Drawn at 0.4 scale. Today's header is 128 px: 12 padding, the 24 px crumbs row, a 12 gap, the 32 px title row, then the description (6 + 20) and the ownership line (6 + 16). Page tabs are 45 px (8 + 36 + 1) and the filter bar 53 px (10 + 32 + 10 + 1). The canvas's own 16 px top padding is not counted.</p>
+        <div class="hchart">
+          <div class="hgroup">
+            <div class="cap" style="margin:0"><b style="color:var(--text-primary)">1,440 × 900</b></div>
+            <div class="bars">
+              <div><div class="hbar" style="height:360px"><div class="app" style="height:19px">48</div><div class="hdr" style="height:51px">header 128</div><div class="tab" style="height:18px">tabs 45</div><div class="fb" style="height:21px">filters 53</div><div class="cv" style="flex:1">canvas 626</div></div><div class="hcap"><b>Today</b>274 px · 30.4 %</div></div>
+              <div><div class="hbar" style="height:360px"><div class="app" style="height:19px">48</div><div class="hdr" style="height:19px">row 48</div><div class="cv" style="flex:1">canvas 804</div></div><div class="hcap"><b>Compact</b>96 px · 10.7 %</div></div>
+              <div><div class="hbar" style="height:360px"><div class="app" style="height:19px">48</div><div class="hdr" style="height:19px">row 48</div><div class="tab" style="height:22px">about 56</div><div class="fb" style="height:21px">filters 53</div><div class="cv" style="flex:1">canvas 695</div></div><div class="hcap"><b>Expanded</b>205 px · 22.8 %</div></div>
+            </div>
+          </div>
+          <div class="hgroup">
+            <div class="cap" style="margin:0"><b style="color:var(--text-primary)">1,280 × 720</b></div>
+            <div class="bars">
+              <div><div class="hbar" style="height:288px"><div class="app" style="height:19px">48</div><div class="hdr" style="height:51px">header 128</div><div class="tab" style="height:18px">tabs 45</div><div class="fb" style="height:21px">filters 53</div><div class="cv" style="flex:1">canvas 446</div></div><div class="hcap"><b>Today</b>274 px · 38.1 %</div></div>
+              <div><div class="hbar" style="height:288px"><div class="app" style="height:19px">48</div><div class="hdr" style="height:19px">row 48</div><div class="cv" style="flex:1">canvas 624</div></div><div class="hcap"><b>Compact</b>96 px · 13.3 %</div></div>
+              <div><div class="hbar" style="height:288px"><div class="app" style="height:19px">48</div><div class="hdr" style="height:19px">row 48</div><div class="tab" style="height:22px">about 56</div><div class="fb" style="height:21px">filters 53</div><div class="cv" style="flex:1">canvas 515</div></div><div class="hcap"><b>Expanded</b>205 px · 28.5 %</div></div>
+            </div>
+          </div>
+          <div class="decision" style="margin:0;flex:1">
+            <table>
+              <thead><tr><th>Case</th><th class="num">Today</th><th class="num">Compact</th><th class="num">Saved</th></tr></thead>
+              <tbody>
+                <tr><td>Screen 1, at 1,440 × 900</td><td class="num">274 · 30.4 %</td><td class="num">96 · 10.7 %</td><td class="num">178 px · 19.8 pts</td></tr>
+                <tr><td>Screen 1, at 1,280 × 720</td><td class="num">274 · 38.1 %</td><td class="num">96 · 13.3 %</td><td class="num">178 px · 24.7 pts</td></tr>
+                <tr><td>In My workspace (+ 32 band), 900</td><td class="num">306 · 34.0 %</td><td class="num">128 · 14.2 %</td><td class="num">178 px</td></tr>
+                <tr><td>In My workspace, 720</td><td class="num">306 · 42.5 %</td><td class="num">128 · 17.8 %</td><td class="num">178 px</td></tr>
+                <tr><td>No description, 900</td><td class="num">248 · 27.6 %</td><td class="num">96 · 10.7 %</td><td class="num">152 px</td></tr>
+                <tr><td>Filters wrapping to 2 rows, 900</td><td class="num">314 · 34.9 %</td><td class="num">96 · 10.7 %</td><td class="num">218 px</td></tr>
+                <tr><td>Expanded, against today, 900</td><td class="num">274</td><td class="num">205 · 22.8 %</td><td class="num">69 px</td></tr>
+              </tbody>
+            </table>
+            <p style="margin:8px 0 0;font-size:12px;line-height:16px">The compact row is the same 48 px whatever the dashboard holds; only today's chrome and the sheet grow with the description and the filters.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- B -->
+      <div class="state wide">
+        <h3>B · A filter changes while the header is collapsed (AC-113, AC-119, AC-121, AC-200; rule 3)</h3>
+        <p>The text carries every change: the count on the toggle, or a compact chip that appears, changes or goes. For 2 s the toggle also takes <code>accent-soft</code> and an <code>accent</code> border, to draw the eye; nothing moves, so reduced motion keeps it. Each change is said once in the dashboard's existing polite live region. The sheet never opens by itself (Q6).</p>
+        <div class="row2">
+          <div><p class="cap">B1 · Before: two products marked, three filters set</p>
+            <div class="frame"><div class="dhrow" style="justify-content:flex-end"><span class="muted">…</span><span class="spacer"></span><span class="mchip"><span class="sw"></span><b>Marking</b><span class="sum">Côte de Blaye, Raclette Courdavault</span><span class="b"><svg class="xs"><use href="#i-chevd"/></svg></span><span class="b"><svg class="xs"><use href="#i-x"/></svg></span></span><span class="btn primary"><svg class="s"><use href="#i-pencil"/></svg>Edit in my workspace</span><span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span><span class="vrule"></span><span class="btn tog"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s chev"><use href="#i-chevd"/></svg></span></div></div>
+          </div>
+          <div><p class="cap">B2 · After "Filter to marked" in Top products' ⋯ menu: the marking is cleared and a filter is added</p>
+            <div class="frame"><div class="dhrow" style="justify-content:flex-end"><span class="muted">…</span><span class="spacer"></span><span class="btn primary"><svg class="s"><use href="#i-pencil"/></svg>Edit in my workspace</span><span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span><span class="vrule"></span><span class="btn tog hl"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">4</span><svg class="s chev"><use href="#i-chevd"/></svg></span></div></div>
+            <p class="said"><svg class="s" style="margin-top:1px"><use href="#i-live"/></svg><span>Announced: <b>"Filter added: Product is Côte de Blaye or Raclette Courdavault. 4 filters set."</b> The compact marking chip goes with the marking (AC-113).</span></p>
+          </div>
+        </div>
+        <div class="row3" style="margin-top:16px">
+          <div><p class="cap">B3 · The toggle's tooltip, on hover or focus</p>
+            <div class="frame" style="height:150px"><div class="dhrow" style="justify-content:flex-end"><span class="muted">…</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span><span class="vrule"></span><span class="btn tog ring"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">4</span><svg class="s chev"><use href="#i-chevd"/></svg></span></div>
+              <div class="tip" style="right:12px;top:52px;width:300px"><b>4 of 5 filters set</b><br>Ordered at · Country · Category · Product (from Top products)<br>Show filters and details</div></div>
+            <p class="said">The same text is the toggle's accessible description, so a screen reader hears "Filters, 4 set, collapsed, button. 4 of 5 filters set: …".</p>
+          </div>
+          <div><p class="cap">B4 · Cross-filter mode: a click on a bar in a tile</p>
+            <div class="frame"><div class="dhrow" style="justify-content:flex-end"><span class="muted">…</span><span class="spacer"></span><span class="xchip"><span class="what">Category = Beverages</span><span class="iconbtn sm" style="width:18px;height:18px"><svg class="xs"><use href="#i-x"/></svg></span></span><span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span><span class="vrule"></span><span class="btn tog"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s chev"><use href="#i-chevd"/></svg></span></div></div>
+            <p class="said"><svg class="s" style="margin-top:1px"><use href="#i-live"/></svg><span>Announced: <b>"Cross-filter: Category is Beverages, from Revenue by category."</b> The chip's tooltip and name add "from Revenue by category"; its × or Esc (focus outside the header) clears it (AC-119). Two or more: the first, then "+n".</span></p>
+          </div>
+          <div><p class="cap">B5 · A bookmark applied from the row's Bookmarks</p>
+            <div class="frame"><div class="dhrow" style="padding:0 12px"><div class="itabs"><span>Overview</span><span class="on">By country</span><span>Detail</span></div><span class="spacer"></span><span class="btn tog hl"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">2</span><svg class="s chev"><use href="#i-chevd"/></svg></span></div></div>
+            <p class="said"><svg class="s" style="margin-top:1px"><use href="#i-live"/></svg><span>Announced: <b>"Bookmark applied: Q3 review. Page By country. 2 filters set. Nothing marked."</b> The page, the count and the chips all change; the sheet stays as it was (AC-121).</span></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- C -->
+      <div class="state wide">
+        <h3>C · Edit mode: the sheet is open and the toggle is gone while editing (AC-053, AC-056, AC-206, AC-207; rule 72)</h3>
+        <p>Shown in My workspace, where a shared dashboard is edited (AC-278). The row reads "Editing ‹name›" and carries the edit bar where the actions were; "+ Page tab" follows the inline tabs. The sheet is open for the whole session so the author sees and arranges what readers will open: a pressed pill selects its filter for Properties (T468). Tabs that don't fit scroll within the strip, as they do today, so every tab stays a drop target (AC-056). Leaving edit mode puts the header back as the reader left it (Q3).</p>
+        <div class="frame" style="width:1376px">
+          <div class="band"><svg class="s"><use href="#i-person"/></svg>My workspace · only you can see this</div>
+          <div class="dhrow" style="border-bottom-color:transparent">
+            <span class="back"><svg class="s"><use href="#i-back"/></svg>My workspace</span><span class="sl">/</span>
+            <h1 class="dtitle"><span class="ed">Editing </span>Revenue overview</h1>
+            <span class="vrule"></span>
+            <div class="itabs"><span class="on">Overview</span><span>By country</span><span>Detail</span><span class="add"><svg class="xs"><use href="#i-plus"/></svg>Page tab</span></div>
+            <span class="spacer"></span>
+            <span class="btn md"><svg class="s"><use href="#i-undo"/></svg>Undo</span>
+            <span class="btn md"><svg class="s"><use href="#i-redo"/></svg>Redo</span>
+            <span class="btn">Discard (2 changes)</span>
+            <span class="btn primary">Save</span>
+            <span class="iconbtn"><svg class="i"><use href="#i-gear"/></svg></span>
+          </div>
+          <div class="sheet">
+            <div class="about" style="border-top:1px solid var(--border-subtle)">
+              <p class="desc">Monthly revenue, orders and top products for the EMEA region, from the sales model. Figures are net of returns.</p>
+              <p class="own">Copied from <a>Sales / EMEA › Revenue overview</a> · version 7 · Target: Sales / EMEA</p>
+            </div>
+            <div class="fbar">
+              <span class="fw"><span class="scope">Dashboard</span><span>Ordered at: <b>2026</b></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+              <span class="fw sel"><span class="scope">Dashboard</span><span>Country: <b>Germany, France</b></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+              <span class="fw"><span class="scope">Dashboard</span><span>Status: <b>all</b></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+              <span class="fw"><span class="scope">Tab</span><span>Category: <b>Beverages</b></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+              <span class="spacer"></span><span class="hint">Marking is off while editing</span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 300px;height:120px">
+            <div class="dgrid" style="padding-top:16px"><div class="tile edit" style="grid-column:span 3;height:88px"><span class="kpi-label">Revenue</span></div><div class="tile edit" style="grid-column:span 3;height:88px"><span class="kpi-label">Orders</span></div><div class="tile edit" style="grid-column:span 3;height:88px"><span class="kpi-label">Avg order value</span></div><div class="tile edit" style="grid-column:span 3;height:88px"><span class="kpi-label">Customers</span></div></div>
+            <div style="background:var(--bg-surface);border-left:1px solid var(--border-subtle)"><div style="display:flex;gap:2px;height:37px;border-bottom:1px solid var(--border-subtle);padding:0 12px"><span class="xs strong sec" style="display:flex;align-items:center;padding:0 10px">Add</span><span class="xs strong sec" style="display:flex;align-items:center;padding:0 10px">Outline</span><span class="xs strong" style="display:flex;align-items:center;padding:0 10px;color:var(--accent);border-bottom:2px solid var(--accent)">Properties</span></div><div class="xs sec" style="padding:10px 16px">Filter · Country · Dashboard</div></div>
+          </div>
+        </div>
+        <p class="said">Heights while editing: band 32 + row 48 + sheet 109 = 189 px under the app bar (237 px in all), against today's 306 px for the same page.</p>
+      </div>
+
+      <!-- D -->
+      <div class="state wide">
+        <h3>D · Narrow widths (direction §2 breakpoints; AC-304)</h3>
+        <p><b>1,024–1,279 px:</b> one row. History and Bookmarks keep their names in their tooltips and accessible names but show only their icons; tabs that don't fit go behind "More ▾". <b>Below 1,024 px</b> (view only): the row keeps the way back, the title, the toggle and ⋯; History and Bookmarks move into ⋯. With more than one page, the pages are a "Page: ‹name› ▾" menu button on a 40 px second row. The sheet opens the same way, full width, padded 16 px, with the pills one under another: direction §2's "the filter bar becomes a sheet".</p>
+        <p class="cap" style="margin-top:4px">D1 · 1,152 px, collapsed</p>
+        <div class="frame" style="width:1152px">
+          <div class="dhrow">
+            <span class="back"><svg class="s"><use href="#i-back"/></svg>EMEA</span><span class="sl">/</span>
+            <h1 class="dtitle">Revenue overview</h1>
+            <span class="vrule"></span>
+            <div class="itabs"><span class="on">Overview</span><span>By country</span><span>More<svg class="xs"><use href="#i-chevd"/></svg></span></div>
+            <span class="spacer"></span>
+            <span class="mchip" style="max-width:180px"><span class="sw"></span><b>Marking</b><span class="sum">Côte de Blaye, Raclette Courdavault</span><span class="b"><svg class="xs"><use href="#i-x"/></svg></span></span>
+            <span class="iconbtn line" title="History"><svg class="s"><use href="#i-hist"/></svg></span>
+            <span class="iconbtn line" title="Bookmarks"><svg class="s"><use href="#i-bm"/></svg></span>
+            <span class="btn primary"><svg class="s"><use href="#i-pencil"/></svg>Edit in my workspace</span>
+            <span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span>
+            <span class="vrule"></span>
+            <span class="btn tog"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s chev"><use href="#i-chevd"/></svg></span>
+          </div>
+        </div>
+        <div class="row3" style="margin-top:16px;grid-template-columns:392px 392px 392px">
+          <div><p class="cap">D2 · 390 px, collapsed</p>
+            <div class="frame" style="width:392px">
+              <div class="topbar" style="gap:8px"><span class="iconbtn"><svg class="i"><use href="#i-menu"/></svg></span><div class="brand"><span class="brand-mark">we</span>wechart</div><span class="spacer"></span><span class="avatar">WW</span></div>
+              <div class="dhrow n"><span class="back icon"><svg class="s"><use href="#i-back"/></svg></span><h1 class="dtitle" style="font-size:16px;line-height:22px">Revenue overview</h1><span class="spacer"></span><span class="btn tog"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s chev"><use href="#i-chevd"/></svg></span><span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span></div>
+              <div style="height:40px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--border-subtle)"><span class="btn md">Page: <b>Overview</b><svg class="s"><use href="#i-chevd"/></svg></span></div>
+              <div style="padding:16px;display:grid;gap:12px"><div class="tile" style="height:88px"><span class="kpi-label">Revenue</span><span class="kpi-val">$1.27M</span></div><div class="tile" style="height:88px"><span class="kpi-label">Orders</span><span class="kpi-val">830</span></div></div>
+            </div>
+            <p class="said">136 px of chrome (48 + 48 + 40); 96 with a single page. The title is <code>text-md</code> 16/22 here so it keeps room beside the toggle; it is cut short before the toggle shrinks.</p>
+          </div>
+          <div><p class="cap">D3 · 390 px, expanded</p>
+            <div class="frame" style="width:392px">
+              <div class="topbar" style="gap:8px"><span class="iconbtn"><svg class="i"><use href="#i-menu"/></svg></span><div class="brand"><span class="brand-mark">we</span>wechart</div><span class="spacer"></span><span class="avatar">WW</span></div>
+              <div class="dhrow n" style="border-bottom-color:transparent"><span class="back icon"><svg class="s"><use href="#i-back"/></svg></span><h1 class="dtitle" style="font-size:16px;line-height:22px">Revenue overview</h1><span class="spacer"></span><span class="btn tog open"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s chev"><use href="#i-chevd"/></svg></span><span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span></div>
+              <div class="sheet">
+                <div class="about" style="padding:8px 16px;border-top:1px solid var(--border-subtle)"><p class="desc">Monthly revenue, orders and top products for the EMEA region, from the sales model.</p><p class="own">In <a>Shared / Sales / EMEA</a> · version 7 · approved 22 Sep by Ada Admin</p></div>
+                <div class="fbar n" style="flex-direction:column;align-items:stretch">
+                  <span class="fw"><span class="scope">Dashboard</span><span>Ordered at: <b>2026</b></span><span class="spacer"></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+                  <span class="fw"><span class="scope">Dashboard</span><span>Country: <b>Germany, France</b></span><span class="spacer"></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+                  <span class="fw"><span class="scope">Dashboard</span><span>Status: <b>all</b></span><span class="spacer"></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+                  <span class="fw"><span class="scope">Tab</span><span>Category: <b>Beverages</b></span><span class="spacer"></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+                  <span class="mchip full" style="max-width:none"><span class="sw"></span><b>Marking</b><span class="sum">Côte de Blaye, Raclette C…</span><span class="b"><svg class="xs"><use href="#i-x"/></svg></span></span>
+                </div>
+              </div>
+              <div style="height:40px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--border-subtle)"><span class="btn md">Page: <b>Overview</b><svg class="s"><use href="#i-chevd"/></svg></span></div>
+            </div>
+            <p class="said">The page row stays under the sheet, so the row the reader uses most keeps its place in the page.</p>
+          </div>
+          <div><p class="cap">D4 · 390 px, the ⋯ menu</p>
+            <div class="frame" style="width:392px;height:300px">
+              <div class="dhrow n"><span class="back icon"><svg class="s"><use href="#i-back"/></svg></span><h1 class="dtitle" style="font-size:16px;line-height:22px">Revenue overview</h1><span class="spacer"></span><span class="btn tog"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s chev"><use href="#i-chevd"/></svg></span><span class="iconbtn on"><svg class="i"><use href="#i-dots"/></svg></span></div>
+              <div class="menu" style="right:8px;top:46px;width:240px">
+                <div class="mi"><svg class="s"><use href="#i-hist"/></svg>History</div>
+                <div class="mi hl"><svg class="s"><use href="#i-bm"/></svg>Bookmarks…</div>
+                <div class="msep"></div>
+                <div class="mi">Export…</div>
+                <div class="msep"></div>
+                <div class="mi danger">Delete dashboard…</div>
+              </div>
+            </div>
+            <p class="said">Edit and the gear aren't offered below 1,024 px, as built (view only, T250). Bookmarks… opens the same 320 px popover, under the row.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- E -->
+      <div class="state">
+        <h3>E · No filters (AC-196)</h3>
+        <p>The toggle reads "Details", with the info icon and no count, and still opens the sheet: the description, the ownership line, and the bar with only its hint. With no filters, no description and no ownership line, the sheet is the hint alone, and the toggle still says "Details".</p>
+        <div class="frame"><div class="dhrow" style="justify-content:flex-end;border-bottom-color:transparent"><span class="muted">…</span><span class="spacer"></span><span class="btn primary"><svg class="s"><use href="#i-pencil"/></svg>Edit in my workspace</span><span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span><span class="vrule"></span><span class="btn tog open"><svg class="s"><use href="#i-info"/></svg>Details<svg class="s chev"><use href="#i-chevd"/></svg></span></div>
+          <div class="sheet"><div class="about" style="border-top:1px solid var(--border-subtle)"><p class="desc">Monthly revenue and orders for the EMEA region.</p><p class="own">In <a>Shared / Sales / EMEA</a> · version 7</p></div><div class="fbar"><span class="hint">Click, drag or Alt+drag to mark · Ctrl/⌘ adds or toggles · Esc unmarks</span></div></div>
+        </div>
+      </div>
+
+      <!-- F -->
+      <div class="state">
+        <h3>F · Many filters (AC-077, rule 14)</h3>
+        <p>Collapsed, the count is all there is: "Filters 7", with "7 of 12 filters set" and their names in its tooltip and description. Expanded, the bar wraps as it does today, 40 px a row; the sheet grows with it and still pushes (Q7).</p>
+        <div class="frame">
+          <div class="dhrow" style="justify-content:flex-end;border-bottom-color:transparent"><span class="muted">…</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span><span class="vrule"></span><span class="btn tog open"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">7</span><svg class="s chev"><use href="#i-chevd"/></svg></span></div>
+          <div class="sheet" style="border-top:1px solid var(--border-subtle)"><div class="fbar">
+            <span class="fw"><span class="scope">Dashboard</span><span>Year: <b>2026</b></span></span>
+            <span class="fw"><span class="scope">Dashboard</span><span>Country: <b>Germany +1</b></span></span>
+            <span class="fw"><span class="scope">Dashboard</span><span>Status: <b>all</b></span></span>
+            <span class="fw"><span class="scope">Tab</span><span>Category: <b>Beverages</b></span></span>
+            <span class="fw"><span class="scope">Dashboard</span><span>Channel: <b>Online</b></span></span>
+            <span class="fw"><span class="scope">Tile</span><span>Region: <b>all</b></span></span>
+            <span class="fw"><span class="scope">Dashboard</span><span>Segment: <b>Retail</b></span></span>
+            <span class="fw"><span class="scope">Dashboard</span><span>Rep: <b>all</b></span></span>
+            <span class="fw"><span class="scope">Tab</span><span>Margin: <b>≥ 10 %</b></span></span>
+            <span class="fw"><span class="scope">Dashboard</span><span>Ship via: <b>all</b></span></span>
+            <span class="fw"><span class="scope">Dashboard</span><span>Customer: <b>all</b></span></span>
+            <span class="fchip">Product is Côte de Blaye or Raclette… <span class="iconbtn sm" style="width:20px;height:20px"><svg class="xs"><use href="#i-x"/></svg></span></span>
+          </div></div>
+        </div>
+      </div>
+
+      <!-- G -->
+      <div class="state">
+        <h3>G · A long title (rule 1; AC-195)</h3>
+        <p>The title gives way before the tabs and the actions: it is cut short with "…" at whatever room is left, never below 160 px. Its tooltip has the whole of it, and so does the <code>h1</code> a screen reader reads. Open, the sheet starts with the whole title at <code>text-lg</code>, shown only when the row cut it short (it is <code>aria-hidden</code>, since the <code>h1</code> already says it).</p>
+        <div class="frame">
+          <div class="dhrow" style="border-bottom-color:transparent"><span class="back"><svg class="s"><use href="#i-back"/></svg>EMEA</span><span class="sl">/</span><h1 class="dtitle" style="max-width:300px">Quarterly revenue, margin and fulfilment review for the EMEA regional leads</h1><span class="vrule"></span><div class="itabs"><span class="on">Overview</span><span>Detail</span></div><span class="spacer"></span><span class="muted">…</span></div>
+          <div class="sheet"><div class="about" style="border-top:1px solid var(--border-subtle)"><p class="full" aria-hidden="true">Quarterly revenue, margin and fulfilment review for the EMEA regional leads</p><p class="desc">Reviewed each quarter with the regional leads.</p><p class="own">In <a>Shared / Sales / EMEA</a> · version 12 · approved 3 Oct by Ada Admin</p></div></div>
+        </div>
+      </div>
+
+      <!-- H -->
+      <div class="state">
+        <h3>H · No description (dashboard-Q2)</h3>
+        <p>Nothing stands in for a missing description: the sheet starts at the ownership line (8 + 16 + 8 = 32 px, then the 53 px bar; 85 px in all). With sign-in off and no ownership line, the sheet is the bar alone, 53 px. The compact row is the same either way.</p>
+        <div class="frame">
+          <div class="dhrow" style="justify-content:flex-end;border-bottom-color:transparent"><span class="muted">…</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span><span class="vrule"></span><span class="btn tog open"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s chev"><use href="#i-chevd"/></svg></span></div>
+          <div class="sheet"><div class="about" style="border-top:1px solid var(--border-subtle)"><p class="own">In <a>Shared / Sales / EMEA</a> · version 7 · approved 22 Sep by Ada Admin</p></div>
+            <div class="fbar"><span class="fw"><span class="scope">Dashboard</span><span>Ordered at: <b>2026</b></span></span><span class="fw"><span class="scope">Dashboard</span><span>Country: <b>Germany, France</b></span></span><span class="fw"><span class="scope">Tab</span><span>Category: <b>Beverages</b></span></span></div></div>
+        </div>
+      </div>
+
+      <!-- I -->
+      <div class="state">
+        <h3>I · Focus and motion (rule 85; WCAG 2.3.3)</h3>
+        <p>The toggle is ringed with the 3 px <code>accent-ring</code> when focused, distinct from the 2 s change highlight (B2), which is a ground and a 1 px border. The sheet's height grows from 0 to its own over 200 ms, decelerating, and shrinks over 150 ms, accelerating. With reduced motion, the 0 ms column is all there is.</p>
+        <div class="motion">
+          <div class="step"><p class="cap">Focused, collapsed</p><div class="frame"><div class="dhrow" style="padding:0 12px;justify-content:flex-end"><span class="btn tog ring"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s chev"><use href="#i-chevd"/></svg></span></div></div></div>
+          <div class="step"><p class="cap">Opening, at 60 ms</p><div class="frame"><div class="dhrow" style="padding:0 12px;justify-content:flex-end;border-bottom-color:transparent"><span class="btn tog open ring"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s chev"><use href="#i-chevd"/></svg></span></div><div class="sheet" style="height:80px;overflow:hidden;border-top:1px solid var(--border-subtle)"><div class="about" style="padding:8px 12px"><p class="desc">Monthly revenue, orders and…</p><p class="own">In Shared / Sales / EMEA · v7</p></div><div class="fbar" style="padding:10px 12px"><span class="fw"><span class="scope">Dashboard</span>2026</span></div></div></div></div>
+          <div class="step"><p class="cap">Open, at 200 ms</p><div class="frame"><div class="dhrow" style="padding:0 12px;justify-content:flex-end;border-bottom-color:transparent"><span class="btn tog open ring"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s chev"><use href="#i-chevd"/></svg></span></div><div class="sheet" style="border-top:1px solid var(--border-subtle)"><div class="about" style="padding:8px 12px"><p class="desc">Monthly revenue, orders and…</p><p class="own">In Shared / Sales / EMEA · v7</p></div><div class="fbar" style="padding:10px 12px"><span class="fw"><span class="scope">Dashboard</span>2026</span></div></div></div></div>
+        </div>
+        <p class="said">The sheet's contents are <code>inert</code> while it moves and <code>hidden</code> once closed, so nothing in a closed sheet takes focus or is read.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= KEYBOARD ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Keyboard and accessibility</h2>
+    <p>R75: no new shortcut. The toggle is an ordinary button reached with Tab, pressed with Enter or Space, as the WAI-ARIA disclosure pattern defines. Esc closes the sheet only because rule 85 already makes Esc close every panel; it isn't part of the disclosure pattern itself.</p>
+    <div class="decision" style="margin-top:0">
+      <table>
+        <thead><tr><th style="width:210px">Moment</th><th style="width:220px">Keys</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>Focus order, collapsed</td><td><kbd class="k">Tab</kbd></td><td>The way back → the page tabs (one stop; <kbd class="k">←</kbd> <kbd class="k">→</kbd> along them, as built) → More, when shown → each compact chip's menu and × → History → Bookmarks → the primary → the gear → ⋯ → the toggle → the canvas. The title is a heading, not a stop.</td></tr>
+          <tr><td>The toggle</td><td><kbd class="k">Enter</kbd> · <kbd class="k">Space</kbd></td><td>A <code>button</code> with <code>aria-expanded</code> and <code>aria-controls</code> naming the sheet. Its name is "Filters, 3 set" ("Details" with no filters); its description is the tooltip's text (B3). Focus stays on it when it opens, and the next Tab goes into the sheet: the full title link, if shown, then each pill, the chips, and on to the canvas.</td></tr>
+          <tr><td>The sheet</td><td>—</td><td>A <code>region</code> named "Filters and details", directly after the row in the DOM. Closed, it is <code>hidden</code>; moving, <code>inert</code>. The filter bar inside keeps its own <code>section aria-label="Filters"</code> and every key it has today.</td></tr>
+          <tr><td>Esc, in order</td><td><kbd class="k">Esc</kbd></td><td>Innermost first. (1) An open filter popover, chip menu, Bookmarks popover or ⋯ closes, focus back on its control, as today. (2) Otherwise, with focus anywhere in the header (the row or the sheet) and the sheet open, the sheet closes and focus moves to the toggle. (3) Otherwise, today's dashboard-wide Esc: unmark all, or clear the cross-filters (AC-119). Esc on a focused tile still unmarks that tile only (AC-094) and never closes the sheet.</td></tr>
+          <tr><td>Closing with focus inside</td><td><kbd class="k">Enter</kbd> on the toggle · <kbd class="k">Esc</kbd></td><td>Focus never stays inside a hidden sheet: it goes to the toggle.</td></tr>
+          <tr><td>Announcements</td><td>—</td><td>Opening and closing are conveyed by <code>aria-expanded</code> alone, with no live text. A filter, marking, cross-filter or bookmark change while collapsed is said once, politely, through the dashboard's existing live region (B2, B4, B5), and not again by the toggle.</td></tr>
+          <tr><td>Below 1,024 px</td><td><kbd class="k">Enter</kbd> · <kbd class="k">↑</kbd> <kbd class="k">↓</kbd></td><td>"Page: Overview" is a menu button whose items are the pages, the current one checked; History and Bookmarks are menu items in ⋯.</td></tr>
+          <tr><td>Reduced motion</td><td>—</td><td><code>@media (prefers-reduced-motion: reduce)</code>: no transition. The 2 s highlight stays, since it doesn't move.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Every state as an icon and a label</h3>
+      <div class="legend">
+        <div><span class="btn tog sm" style="height:24px"><svg class="xs"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="xs"><use href="#i-chevd"/></svg></span><span></span><span>collapsed; 3 filters set</span></div>
+        <div><span class="btn tog sm open" style="height:24px"><svg class="xs"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="xs chev"><use href="#i-chevd"/></svg></span><span></span><span>expanded: ground, chevron up</span></div>
+        <div><span class="btn tog sm" style="height:24px"><svg class="xs"><use href="#i-filter"/></svg>Filters<svg class="xs"><use href="#i-chevd"/></svg></span><span></span><span>filters, none set: no count</span></div>
+        <div><span class="btn tog sm" style="height:24px"><svg class="xs"><use href="#i-info"/></svg>Details<svg class="xs"><use href="#i-chevd"/></svg></span><span></span><span>no filters on the dashboard</span></div>
+        <div><span class="btn tog sm hl" style="height:24px"><svg class="xs"><use href="#i-filter"/></svg>Filters<span class="count">4</span><svg class="xs"><use href="#i-chevd"/></svg></span><span></span><span>just changed: the new count, 2 s</span></div>
+        <div><span class="mchip" style="max-width:200px"><span class="sw"></span><b>Marking</b><span class="sum">Côte de Blaye +1</span></span><span></span><span>a marking, while collapsed</span></div>
+        <div><span class="xchip"><span class="what">Category = Beverages</span></span><span></span><span>a cross-filter, while collapsed</span></div>
+        <div><span class="btn sm ghost" style="padding:0"><svg class="xs"><use href="#i-back"/></svg>EMEA</span><span></span><span>the way back, one step</span></div>
+        <div><span class="xs strong">More <svg class="xs"><use href="#i-chevd"/></svg></span><span></span><span>pages that don't fit</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= ACs AND QUESTIONS ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Criteria this changes, and questions for you</h2>
+    <p>The criteria are those whose words a compact header would change; the rest hold as written. The questions are each drawn one way, the recommended one, and that is only a default until you decide.</p>
+    <div class="decision" style="margin-top:0">
+      <h3>Acceptance criteria</h3>
+      <table>
+        <thead><tr><th style="width:80px">AC</th><th>Today</th><th>With design 19</th></tr></thead>
+        <tbody>
+          <tr><td class="w">AC-196</td><td>Header, page tabs and filter bar fixed above the tiles; "show the filter bar at all times", with a hint while nothing is set.</td><td><b>Amend.</b> The compact row is fixed, and the filters' summary (the toggle's count) shows at all times. The full bar, hint included, is in the sheet.</td></tr>
+          <tr><td class="w">AC-200</td><td>A chip per non-empty marking "in the filter bar", naming the marking, its values and the tile it came from, with a menu and unmark.</td><td><b>Amend.</b> While collapsed, the chip is the compact one in the row: name and values shown, the source tile in its tooltip, name and menu heading. Expanded, as today.</td></tr>
+          <tr><td class="w">AC-119</td><td>The cross-filter chip names member, value and source tile; cleared by dismissing it or by Escape.</td><td><b>Amend.</b> The source tile as in AC-200. Esc clears cross-filters unless focus is in the header with the sheet open, when it closes the sheet first.</td></tr>
+          <tr><td class="w">AC-352</td><td>The dashboard view as 2026-09-24 design 04, unless a 2026-09-27 design differs.</td><td><b>Amend:</b> "or design 19 (2026-10-17)" for the header, tabs and filter band.</td></tr>
+          <tr><td class="w">AC-343</td><td>Phase-2 surfaces as 2026-09-27 designs 01–10.</td><td><b>Amend:</b> design 04 state E's header rows give way to design 19.</td></tr>
+          <tr><td class="w">AC-195</td><td>A breadcrumb back to the folder.</td><td>Holds if the one-step "← ‹folder›" counts as the breadcrumb (Q9 (a)); else amend.</td></tr>
+          <tr><td class="w">AC-098 · AC-206 · AC-207 · AC-176 · AC-304</td><td>Marking chips name and summarise; "Editing ‹name›" and "+ Page tab" in the tab row; the tab strip on an empty page; keyboard reach; no sideways scroll at 390 px.</td><td>Hold as drawn (screen 1 pin 4, C, D).</td></tr>
+          <tr><td class="w">AC-187</td><td>The header and page tabs in the prototype's styles, a later approved design counting as conformance.</td><td>Holds once design 19 is approved; the 24 px title and the 45 px tab row are what move.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Questions — your decision</h3>
+      <table>
+        <thead><tr><th style="width:36px">#</th><th style="width:300px">Question</th><th>Drawn as (recommended), and the alternatives</th><th style="width:130px">Where</th></tr></thead>
+        <tbody>
+          <tr><td>Q1</td><td>Does the expanded sheet push the tiles down or cover them?</td><td><b>Drawn (a):</b> it pushes, as Tableau's show/hide containers do; the top KPIs stay in view while a filter changes, and nothing needs a scrim or a click-outside rule. (b) It slides over the tiles, with a shadow, and closes on a click outside.</td><td class="w">screen 2 pin 7</td></tr>
+          <tr><td>Q2</td><td>Is the open or closed choice remembered?</td><td><b>Drawn (a):</b> for the visit only: kept across page tabs, bookmarks and edit mode, and every opening starts compact, as you asked (Superset stores nothing either). (b) Per person per dashboard, in this browser. (c) Per person, for every dashboard. (d) A per-dashboard default its author sets in Settings › Layout, as Power BI and Looker do.</td><td class="w">screen 1</td></tr>
+          <tr><td>Q3</td><td>Edit mode.</td><td><b>Drawn (a):</b> the sheet is open and the toggle gone while editing, so the author arranges the filter bar and sees the description readers will open; leaving puts back the reader's state. (b) The toggle stays while editing, starting as the reader left it.</td><td class="w">C</td></tr>
+          <tr><td>Q4</td><td>The title's size in the compact row.</td><td><b>Drawn (a):</b> <code>text-lg</code> 20/26/600, §3's page title, which leaves the tabs and actions room on one row. (b) Keep <code>text-xl</code> 24/32, still within the 48 px row, with less room for the title before it's cut short.</td><td class="w">screen 1 pin 2</td></tr>
+          <tr><td>Q5</td><td>Page tabs that don't fit, in view mode.</td><td><b>Drawn (a):</b> inline, then "More ▾" with the rest, the open page always visible. (b) The strip scrolls, as in edit mode today. (c) Always a "Page: ‹name› ▾" menu button, at every width.</td><td class="w">screen 1 pin 3, D1</td></tr>
+          <tr><td>Q6</td><td>Feedback when a filter changes while collapsed.</td><td><b>Drawn (a):</b> the count or chip changes, the toggle is highlighted for 2 s, and the change is announced politely. (b) The same, and the sheet opens by itself when a filter is added from a tile. (c) The text and the announcement only, no highlight.</td><td class="w">B</td></tr>
+          <tr><td>Q7</td><td>Many filters in the open sheet.</td><td><b>Drawn (a):</b> the bar wraps, as today, and the sheet grows with it. (b) The sheet keeps to a set number of rows, with "Show all filters"; the number would be yours.</td><td class="w">F</td></tr>
+          <tr><td>Q8</td><td>The My workspace band (32 px) above the header.</td><td><b>Drawn (a):</b> unchanged, as rule 72 requires. (b) Folded into the compact row as a "My workspace" chip, with person icon and label, saving 32 px (rule 72 amended).</td><td class="w">C</td></tr>
+          <tr><td>Q9</td><td>The breadcrumb.</td><td><b>Drawn (a):</b> one step, "← ‹folder›", with the whole path in its name and tooltip and in the ownership line. (b) The whole path inline before the title, cut short from the left.</td><td class="w">screen 1 pin 1</td></tr>
+          <tr><td>Q10</td><td>How the sheet closes.</td><td><b>Drawn (a):</b> its toggle, or Esc with focus in the header. (b) Also a click anywhere on the tiles, though such a click marks or cross-filters too.</td><td class="w">screen 2 pin 5</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+</body>
+</html>
