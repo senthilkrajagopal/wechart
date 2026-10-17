@@ -29,7 +29,7 @@ describe('My workspace, however the API names it (T343)', () => {
   });
 
   it('is shown as a root only where the API counts one: none for a read-only user', () => {
-    expect(visibleRoots({ root: 3, mine: 1 }).map((root) => root.id)).toEqual(['root', 'mine']);
+    expect(visibleRoots({ root: 3, mine: 1 }).map((root) => root.id)).toEqual(['mine', 'root']);
     expect(visibleRoots({ root: 3 }).map((root) => root.id)).toEqual([SHARED_ROOT.id]);
     // Until the counts come: the shared root alone, not a workspace that may not be theirs.
     expect(visibleRoots(undefined).map((root) => root.id)).toEqual([SHARED_ROOT.id]);
@@ -38,18 +38,15 @@ describe('My workspace, however the API names it (T343)', () => {
   it('shows the shared root only where the API counts it: none to someone no grant reaches (T331)', () => {
     // Design 09, state G: signed in with access to nothing, no tree root.
     expect(visibleRoots({})).toEqual([]);
-    expect(visibleRoots({ mine: 2 }, { workspaceFirst: true }).map((root) => root.id)).toEqual([
-      'mine',
-    ]);
+    expect(visibleRoots({ mine: 2 }).map((root) => root.id)).toEqual(['mine']);
   });
 
-  it('comes first when asked, as design 04 draws it (T498)', () => {
-    expect(
-      visibleRoots({ root: 3, mine: 1 }, { workspaceFirst: true }).map((root) => root.id),
-    ).toEqual(['mine', 'root']);
-    expect(visibleRoots({ root: 3 }, { workspaceFirst: true }).map((root) => root.id)).toEqual([
-      'root',
-    ]);
+  // T498 put it first with sign-in on; R76's explore-Q3 (T693) puts it first
+  // in both modes, sign-in off included, as design 04 draws it.
+  it('comes first, sign-in on or off, as design 04 draws it (T498, T693)', () => {
+    expect(visibleRoots({ root: 3, mine: 1 }).map((root) => root.id)).toEqual(['mine', 'root']);
+    expect(visibleRoots({ mine: 1, root: 3 }).map((root) => root.id)).toEqual(['mine', 'root']);
+    expect(visibleRoots({ root: 3 }).map((root) => root.id)).toEqual(['root']);
   });
 });
 

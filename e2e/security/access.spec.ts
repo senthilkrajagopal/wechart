@@ -142,6 +142,42 @@ test.describe('as a Super-Admin', () => {
     ).toBeVisible();
   });
 
+  // T693 (EXP-14, EXP-25; R76 explore-Q5): docked, the panel hides the
+  // header's search, so the head keeps one row — name, chip, Rename, Access
+  // pressed, then New at the right (design 07, main); its own head 44 px,
+  // padded 8 8 8 16 as design 07's .pane-head (pin 2), level with the tree's.
+  test('keeps the folder’s head on one row while docked, the search hidden, its own head 44 px', async ({
+    page,
+  }) => {
+    const panel = await openAccess(page, ids.c);
+    const main = page.getByTestId('explore-contents');
+    const head = main.locator('.explore__head');
+    await expect(main.getByRole('searchbox', { name: 'Search dashboards and charts' })).toHaveCount(0);
+    const title = await main.getByRole('heading', { level: 1 }).boundingBox();
+    const newButton = await main.getByRole('button', { name: 'New', exact: true }).boundingBox();
+    const headBox = await head.boundingBox();
+    // One row: New level with the name, at the head's right edge.
+    expect(Math.abs((newButton?.y ?? 0) + (newButton?.height ?? 0) / 2 - ((title?.y ?? 0) + (title?.height ?? 0) / 2))).toBeLessThanOrEqual(1);
+    expect((headBox?.x ?? 0) + (headBox?.width ?? 0) - ((newButton?.x ?? 0) + (newButton?.width ?? 0))).toBeCloseTo(0, 0);
+    expect(headBox?.height).toBeLessThanOrEqual(36);
+
+    const panelHead = panel.getByRole('heading', { level: 2 }).locator('..');
+    expect((await panelHead.boundingBox())?.height).toBe(44);
+    const tree = page.getByRole('complementary', { name: 'Folders' });
+    const treeHead = tree.getByRole('heading', { name: 'Folders' }).locator('..');
+    expect((await panelHead.boundingBox())?.y).toBe((await treeHead.boundingBox())?.y);
+    expect(
+      await panelHead.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return [style.paddingRight, style.paddingLeft].join(' ');
+      }),
+    ).toBe('8px 16px');
+
+    // Closed again, the search comes back.
+    await page.getByRole('button', { name: 'Access', exact: true }).click();
+    await expect(main.getByRole('searchbox', { name: 'Search dashboards and charts' })).toBeVisible();
+  });
+
   test('shows inherited groups locked with their source, and an unset list’s inheritance', async ({
     page,
   }) => {

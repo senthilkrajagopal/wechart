@@ -40,12 +40,11 @@ export function rootTitleOf(id: string): string | undefined {
  * someone no grant reaches (design 09, state G), and until the counts come,
  * shown alone. Each with its count, where known.
  *
- * With sign-in on My workspace comes first, above the shared tree (design 04
- * of 2026-09-27, pin 1); with one user, phase 1's order stays.
+ * My workspace comes first, above the shared tree (design 04 of 2026-09-27,
+ * pin 1), in both modes: with sign-in off too (R76 explore-Q3, T693).
  */
 export function visibleRoots(
   counts: Readonly<Record<string, number>> | undefined,
-  { workspaceFirst = false }: { readonly workspaceFirst?: boolean } = {},
 ): (RootFolder & { readonly itemCount?: number })[] {
   const shown = ROOT_FOLDERS.filter((root) =>
     counts === undefined ? root.id !== MY_WORKSPACE.id : counts[root.id] !== undefined,
@@ -55,10 +54,8 @@ export function visibleRoots(
   });
   // Built in order, not sorted: a comparator that says only "mine first" is
   // one engines may apply either way round (T498's review; Firefox did).
-  return workspaceFirst
-    ? [
-        ...shown.filter((root) => root.id === MY_WORKSPACE.id),
-        ...shown.filter((root) => root.id !== MY_WORKSPACE.id),
-      ]
-    : shown;
+  return [
+    ...shown.filter((root) => root.id === MY_WORKSPACE.id),
+    ...shown.filter((root) => root.id !== MY_WORKSPACE.id),
+  ];
 }

@@ -158,4 +158,22 @@ describe('a menu button', () => {
 
     expect(screen.queryAllByRole('menu')).toHaveLength(0);
   });
+
+  // T693 (EXP-07): a menu as wide as its design draws it, where one is given;
+  // otherwise the stylesheet's.
+  it('opens its menu at the width it is given, and at the stylesheet’s otherwise', async () => {
+    render(
+      <MenuButton label="Wide" items={items(vi.fn())} menuWidth={250}>
+        Wide
+      </MenuButton>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Wide' }));
+    expect(screen.getByRole('menu').style.width).toBe('250px');
+    expect(screen.getByRole('menu').style.minWidth).toBe('250px');
+    await userEvent.keyboard('{Escape}');
+
+    const { trigger } = show();
+    await userEvent.click(trigger);
+    expect(screen.getByRole('menu').style.width).toBe('');
+  });
 });

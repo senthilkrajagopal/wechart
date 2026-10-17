@@ -144,6 +144,8 @@ export function CreateMenu({
       label="New"
       items={items}
       testId="explore-new"
+      // Design 13's 250 px, Import and its aside on one line (T693, EXP-07).
+      menuWidth={250}
       {...(heading === undefined ? {} : { heading })}
     >
       ＋ New ▾

@@ -997,3 +997,72 @@ describe('a folder shown by kind (T525, AC-370; design 14, I2)', () => {
     expect(screen.queryByText('This folder is empty.')).toBeNull();
   });
 });
+
+/**
+ * T693 (AC-343, AC-187): the list as design 14 draws it (screen 1) — a
+ * folder's Owner "—", a model's and a data source's name in the code face, a
+ * row with a second line on design 14's 44 px `td`, and each row's ⋯ the
+ * 24 px `.iconbtn.sm`, its menu at the design's width.
+ */
+describe('the list as design 14 draws it (T693)', () => {
+  const at = '2026-09-19T12:00:00.000Z';
+  const model: CatalogItem = {
+    kind: 'model',
+    id: 'sales.yml',
+    title: 'sales.yml',
+    owner: 'Ada Admin',
+    updatedAt: at,
+    declares: { cubes: 2, views: 1 },
+  };
+  const source: CatalogItem = {
+    kind: 'data-source',
+    id: 's1',
+    title: 'emea_replica',
+    owner: 'Ada Admin',
+    updatedAt: at,
+    driver: 'postgres',
+  };
+  const shared: CatalogItem = { ...items[2]!, owner: 'admin' };
+  const described: CatalogItem = { ...items[0]!, description: 'What it is for' };
+
+  it('gives a folder "—" for its Owner, and a model or data source its author (EXP-10)', () => {
+    render(<FolderContents items={[shared, model, source]} />);
+    expect(within(rowFor('f1')).getAllByRole('cell')[3]?.textContent).toBe('—');
+    expect(within(rowFor('sales.yml')).getAllByRole('cell')[3]?.textContent).toBe('Ada Admin');
+    expect(within(rowFor('s1')).getAllByRole('cell')[3]?.textContent).toBe('Ada Admin');
+  });
+
+  it('names a model and a data source in the code face, the rest not (EXP-03)', () => {
+    render(<FolderContents items={[model, source, ...items]} />);
+    for (const name of ['sales.yml', 'emea_replica'])
+      expect(screen.getByRole('button', { name }).classList).toContain('is-code');
+    for (const name of ['Revenue', 'Revenue by region', 'Archive'])
+      expect(screen.getByRole('button', { name }).classList).not.toContain('is-code');
+  });
+
+  it('marks a row with a second line, and only that row (design 14’s td)', () => {
+    render(<FolderContents items={[described, items[1]!, items[2]!]} />);
+    expect(rowFor('d1').classList).toContain('is-two-line');
+    expect(rowFor('c1').classList).not.toContain('is-two-line');
+    expect(rowFor('f1').classList).not.toContain('is-two-line');
+  });
+
+  it('puts each row’s ⋯ on the small icon button, its menu at the design’s width (EXP-07, EXP-27)', async () => {
+    render(
+      <FolderContents
+        items={[items[0]!, items[2]!, model]}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        deletes={() => true}
+      />,
+    );
+    const widths: Record<string, string> = { d1: '210px', f1: '196px', 'sales.yml': '170px' };
+    for (const [id, width] of Object.entries(widths)) {
+      const button = within(rowFor(id)).getByRole('button', { name: /^Actions for / });
+      expect(button.className).toBe('icon-button icon-button--sm folder-contents__menu');
+      await userEvent.click(button);
+      expect(screen.getByRole('menu').style.width).toBe(width);
+      await userEvent.keyboard('{Escape}');
+    }
+  });
+});

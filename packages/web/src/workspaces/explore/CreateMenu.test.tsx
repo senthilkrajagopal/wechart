@@ -142,4 +142,11 @@ describe('the New menu (AC-192, T331)', () => {
 
     expect(await offered()).toEqual(['▦Dashboard', '◢Chart', '▣Folder']);
   });
+
+  // T693 (EXP-07): 250 px, as design 13 draws it with Import (state G).
+  it('opens at design 13’s 250 px', async () => {
+    render(<CreateMenu onCreate={vi.fn()} onImport={vi.fn()} heading="New in My workspace" />);
+    await offered();
+    expect(screen.getByRole('menu', { name: 'New' }).style.width).toBe('250px');
+  });
 });

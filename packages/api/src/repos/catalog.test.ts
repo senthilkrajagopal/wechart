@@ -7,6 +7,7 @@ import { referencesOf } from '../model/references';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID, catalog } from './catalog';
 import { documents } from './documents';
 import { folderXcubeIds } from './folder-xcube-ids';
+import { versionStore } from './versions';
 
 /**
  * AC-017: WHEN the user opens Explore, THE SYSTEM SHALL show a folder tree and
@@ -776,6 +777,76 @@ describe('the tree’s counts and roots (AC-194)', () => {
           .execute();
       if (sources.length > 0)
         await getDb().deleteFrom('data_sources').where('id', 'in', sources).execute();
+    }
+  });
+
+  /**
+   * T693 (EXP-10; design 14, screen 1): a model's and a data source's Owner is
+   * its author — who wrote the version it is at, its newest kept — and none
+   * before it has a version.
+   */
+  it('names a model’s and a data source’s owner as its newest version’s author (T693)', async () => {
+    const here = await folder('Authored');
+    const fileId = randomUUID();
+    const sourceId = randomUUID();
+    const plainId = randomUUID();
+    const path = `authored/${fileId}.yml`;
+    const kept = versionStore(getDb());
+    try {
+      await getDb()
+        .insertInto('model_files')
+        .values({ id: fileId, folder_id: here, path, content: 'cubes: []\n' })
+        .execute();
+      await getDb()
+        .insertInto('data_sources')
+        .values([
+          { id: sourceId, folder_id: here, name: `authored_${sourceId}`, type: 'postgres', settings: '{}' },
+          { id: plainId, folder_id: here, name: `plain_${plainId}`, type: 'postgres', settings: '{}' },
+        ])
+        .execute();
+      const version = (kind: 'model' | 'data-source', itemId: string, n: number, name: string) =>
+        kept.keep({
+          kind,
+          itemId,
+          version: n,
+          content: {},
+          folderId: here,
+          title: itemId,
+          author: { key: name.toLowerCase(), name },
+          approver: null,
+          description: null,
+          proposalId: null,
+        });
+      await version('model', fileId, 1, 'Wren Writer');
+      await version('model', fileId, 2, 'Ada Admin');
+      await version('data-source', sourceId, 1, 'Ada Admin');
+      // The plain one's newest version names no author: none, not an older one's (T693's review).
+      await version('data-source', plainId, 1, 'Wren Writer');
+      await kept.keep({
+        kind: 'data-source',
+        itemId: plainId,
+        version: 2,
+        content: {},
+        folderId: here,
+        title: plainId,
+        author: null,
+        approver: null,
+        description: null,
+        proposalId: null,
+      });
+
+      const contents = await cat().contents(here);
+
+      expect(contents.find((item) => item.kind === 'model')?.owner).toBe('Ada Admin');
+      expect(contents.find((item) => item.id === sourceId)?.owner).toBe('Ada Admin');
+      expect(contents.find((item) => item.id === plainId)?.owner).toBeNull();
+    } finally {
+      await getDb()
+        .deleteFrom('item_versions')
+        .where('item_id', 'in', [fileId, sourceId, plainId])
+        .execute();
+      await getDb().deleteFrom('model_files').where('id', '=', fileId).execute();
+      await getDb().deleteFrom('data_sources').where('id', 'in', [sourceId, plainId]).execute();
     }
   });
 });

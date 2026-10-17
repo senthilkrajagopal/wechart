@@ -14531,3 +14531,34 @@ Search this file by task ID (`T123`) or AC ID.
     - Call T687-1 (view only, no library charts: the heading goes) is in `docs/design/decisions-2026-10-08.md`.
   - **Tests.** e2e: `export.spec.ts` "T687: …" (the header, tiles and ⋯ end at the pane's edge at 1,440; no right padding at 900; ⋯ pressed; no empty group; an empty dashboard without the heading).
   - **The review (one round), fixed:** the new selector had outranked the narrow-window reset, narrowing the dashboard behind the sheet; it now carries the same selector, with an e2e check at 900 px.
+
+- [x] T693 (AC-187, AC-343, AC-369, AC-370) Explore's list, head, tree and menus as designs 14 and 04 draw them *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/workspaces/explore/{ExplorePage,FolderContents,FolderTree}.tsx`, `packages/web/src/shell/{MenuButton.tsx,styles.ts}` (+ tests), `e2e/design-conformance.spec.ts`, `e2e/explore.spec.ts`
+  - Findings: EXP-02, EXP-03, EXP-04, EXP-05, EXP-07, EXP-10, EXP-11, EXP-12, EXP-14, EXP-25, EXP-26, EXP-27 (`docs/design/critiques/2026-10-08-explore-access-signin.md`).
+  - Failing test:
+    - Show at 28 px on accent-soft;
+    - names at 14/600, with models and data sources at 13 px in the code face;
+    - menus' items 30/14 at their designs' widths;
+    - Owner "—" for folders and the author for models;
+    - the footnote in text-secondary;
+    - an empty folder's 34 px row;
+    - one header row with Access open;
+    - the Access head at 44 px;
+    - the Type column in text-primary;
+    - a row's ⋯ at 24 × 24.
+  - ~~Waits on: the Explore critique's Q2 (tree text size), Q3 (the tree with sign-in off), Q4 (Show in My workspace) and Q5 (the header with a panel docked), for those items.~~
+  - **Settled 2026-10-08 (R76: explore-Q2, explore-Q3, explore-Q4, explore-Q5).** Build:
+    - **explore-Q2:** the folder tree's rows at 14 px (`text-sm`) and its heading at 16 px (`text-md`), as designs 04, 07, 09 and 14 draw them. direction §3's 12 px "tree rows" now names only the field and file trees.
+    - **explore-Q3:** My workspace is the first root in both modes, sign-in off included, with the person icon and the divider.
+    - **explore-Q4:** the Show (kind) filter stays in My workspace, as built.
+    - **explore-Q5:** while a panel such as Access is docked, the folder header's search is hidden, so the header keeps one row with New on it.
+  - Depends on: T684 (Access's ghost and pressed states)
+  - **Built 2026-10-17** (lane B2). The calls are T693-1 to T693-5 in `decisions-2026-10-08.md`, "Later decisions".
+    - The API names a model's and a data source's owner as its newest kept version's author (`repos/catalog.ts`); the web shows a folder's as "—".
+    - `MenuButton` takes `menuWidth`; Explore's menus take `.mi` 30/14 by a rule scoped to `.explore`.
+    - `visibleRoots` puts My workspace first in both modes; its option is gone.
+    - **Tests.** API: `repos/catalog.test.ts` (T693). Unit: `FolderContents.test`, `MenuButton.test`, `CreateMenu.test`, `roots.test`. e2e: `design-conformance.spec.ts` (T244's tree, table and empty-row tests re-based on design 14, and a new T693 test), `security/access.spec.ts` (the head on one row while docked, the panel's head at 44).
+    - **Files changed:** `repos/catalog.ts` (+ test), `MenuButton.tsx`, `styles.ts`, `explore/{ExplorePage,FolderContents,CreateMenu,roots}` (+ tests), `e2e/design-conformance.spec.ts`, `e2e/security/access.spec.ts`. `FolderTree.tsx` and `explore.spec.ts` needed no change.
+    - **The review (one round), fixed:** the owner is the newest version's author even where that version names none (then none), not an older one's; a stale comment on the roots' order.
+    - **Left for later:** a workspace row with its origin line is about 36 px until T694 makes it 44; with a pane docked, clearing a search's last character unmounts the focused search box, so focus falls to the page (T693-5 as recorded).
+    - **Failing before T693, at 082e8b06 too:** `no-horizontal-scroll.spec.ts:53` (the chart editor at 1,280 px, 7 px wide) and `security/workspace-edit.spec.ts:164` (the chart page's Dashboard combobox).

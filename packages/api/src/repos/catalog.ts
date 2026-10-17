@@ -294,6 +294,24 @@ export function catalog(db: Kysely<Database>) {
         .where('folder_id', '=', folderId)
         .orderBy('name')
         .execute();
+      // A model's and a data source's owner: its newest kept version's author
+      // (T693, EXP-10; design 14, screen 1). None before it has a version.
+      const authored = [...models.map((model) => model.id), ...sources.map((source) => source.id)];
+      const authors = new Map<string, string | null>();
+      if (authored.length > 0) {
+        const kept = await db
+          .selectFrom('item_versions')
+          .select(['kind', 'item_id', 'author_name', 'author_key'])
+          .where('kind', 'in', ['model', 'data-source'])
+          .where('item_id', 'in', authored)
+          .orderBy('version', 'desc')
+          .execute();
+        for (const row of kept) {
+          const key = `${row.kind}:${row.item_id}`;
+          // The newest only: one naming no author leaves the owner none (T693's review).
+          if (!authors.has(key)) authors.set(key, row.author_name ?? row.author_key);
+        }
+      }
       return [
         ...rows.map((row) => ({
           ...toItem(row),
@@ -305,7 +323,7 @@ export function catalog(db: Kysely<Database>) {
             kind: 'model',
             id: model.path,
             title: model.path.slice(model.path.lastIndexOf('/') + 1),
-            owner: null,
+            owner: authors.get(`model:${model.id}`) ?? null,
             updatedAt: model.updated_at,
             localToDashboardId: null,
             description: null,
@@ -345,7 +363,7 @@ export function catalog(db: Kysely<Database>) {
           kind: 'data-source',
           id: source.id,
           title: source.name,
-          owner: null,
+          owner: authors.get(`data-source:${source.id}`) ?? null,
           updatedAt: source.updated_at,
           localToDashboardId: null,
           description: null,

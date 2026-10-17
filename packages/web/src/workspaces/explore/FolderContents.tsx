@@ -224,6 +224,21 @@ const BUILT_ON_CLASS: Record<CatalogItem['kind'], string> = {
 
 const plural = (count: number, one: string) => `${String(count)} ${one}${count === 1 ? '' : 's'}`;
 
+/** A model's and a data source's name, `.strong.mono` at 13 px (design 14:319–320; T693). */
+const NAMED_IN_CODE = new Set<CatalogItem['kind']>(['model', 'data-source']);
+
+/**
+ * Each row's ⋯ menu at design 14's width (T693, EXP-07): a folder's 196
+ * (screen 1), a model's 170 (D1), a dashboard's and the rest 210 (B1).
+ */
+const MENU_WIDTH: Record<CatalogItem['kind'], number> = {
+  folder: 196,
+  dashboard: 210,
+  chart: 210,
+  model: 170,
+  'data-source': 210,
+};
+
 /**
  * Whether Explore opens a row: every kind. A data source opens in its
  * settings (T462, UX-222), and a model in its own folder, beside that
@@ -511,10 +526,15 @@ export function FolderContents({
         ) : null}
         {items.map((item, index) => {
           const targets = onMove ? targetsFor(item, folders) : [];
+          // A second line under the name: design 14's 44 px td, not td.one.
+          const twoLine =
+            (item.kind === 'folder' && Boolean(item.description)) ||
+            (workspace === undefined && item.kind === 'dashboard' && Boolean(item.description));
           return (
             <tr
               key={`${item.kind}:${item.id}`}
               data-testid={`item-${item.id}`}
+              className={twoLine ? 'is-two-line' : undefined}
               ref={(element) => {
                 rowRefs.current[index] = element;
               }}
@@ -590,13 +610,25 @@ export function FolderContents({
                       {opens(item) ? (
                         <button
                           type="button"
-                          className="folder-contents__open"
+                          className={
+                            NAMED_IN_CODE.has(item.kind)
+                              ? 'folder-contents__open is-code'
+                              : 'folder-contents__open'
+                          }
                           onClick={() => onOpen?.(item)}
                         >
                           {item.title}
                         </button>
                       ) : (
-                        <span className="folder-contents__title">{item.title}</span>
+                        <span
+                          className={
+                            NAMED_IN_CODE.has(item.kind)
+                              ? 'folder-contents__title is-code'
+                              : 'folder-contents__title'
+                          }
+                        >
+                          {item.title}
+                        </span>
                       )}
                       {/* The prototype's second line: what the dashboard is for,
                           or the folder (T524; design 14, P1); in the workspace,
@@ -631,7 +663,10 @@ export function FolderContents({
                   {shortDate(item.updatedAt)}
                 </time>
               </td>
-              {workspace === undefined ? <td>{item.owner ?? '—'}</td> : null}
+              {/* A folder is no one's: "—", as design 14 draws it (EXP-10). */}
+              {workspace === undefined ? (
+                <td>{item.kind === 'folder' ? '—' : (item.owner ?? '—')}</td>
+              ) : null}
               <td
                 className="folder-contents__actions"
                 ref={(element) => {
@@ -645,8 +680,10 @@ export function FolderContents({
                 {menuOf(item, targets).length === 0 ? null : (
                   <MenuButton
                     label={`Actions for ${item.title}`}
-                    className="btn-ghost btn-sm folder-contents__menu"
+                    // Design 14's .iconbtn.sm, 24 × 24 (EXP-27).
+                    className="icon-button icon-button--sm folder-contents__menu"
                     items={menuOf(item, targets)}
+                    menuWidth={MENU_WIDTH[item.kind]}
                   >
                     <span aria-hidden="true">⋯</span>
                   </MenuButton>

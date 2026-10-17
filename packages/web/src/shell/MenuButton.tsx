@@ -54,6 +54,11 @@ export interface MenuButtonProps {
    * T692). The menu keeps `label` as its name, which its button has too.
    */
   readonly heading?: string;
+  /**
+   * The menu's width where its design draws one (T693, EXP-07): design 13's
+   * New at 250, design 14's folder row at 196. Otherwise the stylesheet's.
+   */
+  readonly menuWidth?: number;
 }
 
 export function MenuButton({
@@ -66,6 +71,7 @@ export function MenuButton({
   disabled = false,
   describedBy,
   heading,
+  menuWidth,
 }: MenuButtonProps) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -168,6 +174,7 @@ export function MenuButton({
           // Focusable by script, never by Tab: focus lives on its items.
           tabIndex={-1}
           className={`menu-button__menu menu-button__menu--${align}`}
+          style={menuWidth === undefined ? undefined : { width: menuWidth, minWidth: menuWidth }}
           onKeyDown={onMenuKey}
         >
           {heading === undefined ? null : (

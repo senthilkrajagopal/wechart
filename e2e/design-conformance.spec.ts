@@ -874,14 +874,21 @@ test.describe('T244: Explore’s tree, header and table', () => {
       'border-bottom-color': await token(page, 'border-subtle'),
     });
 
-    // .file { height: 28px; padding: 0 12px 0 (12 + depth × 14)px; font-size: 12px },
-    // full width and square (F8, mismatches 10–11).
+    // The head's "Folders": design 14's .tree-head, 16/600 (EXP-04; R76
+    // explore-Q2, T693).
+    expect(
+      await style(pane.getByRole('heading', { name: 'Folders' }), 'font-size', 'font-weight'),
+    ).toEqual({ 'font-size': '16px', 'font-weight': '600' });
+
+    // .file { height: 28px; padding: 0 12px 0 (12 + depth × 14)px }, full
+    // width and square (F8, mismatches 10–11), at design 14's .trow 14 px
+    // (EXP-04; R76 explore-Q2, T693).
     const shared = pane.getByRole('button', { name: 'Shared', exact: true });
     expect(
       await style(shared, 'height', 'font-size', 'padding-left', 'padding-right', 'border-radius'),
     ).toEqual({
       height: '28px',
-      'font-size': '12px',
+      'font-size': '14px',
       'padding-left': '12px',
       'padding-right': '12px',
       'border-radius': '0px',
@@ -911,8 +918,8 @@ test.describe('T244: Explore’s tree, header and table', () => {
       color: await token(page, 'text-secondary'),
       'font-weight': '600',
     });
-    // Each row's chip: .itemicon.ic-folder at 18 px — ◉ for My workspace, ▣
-    // for a folder (F7, mismatch 14).
+    // Each row's chip: .itemicon.ic-folder at 18 px, ▣ for a folder (F7,
+    // mismatch 14).
     const chip = (row: Locator) => row.locator('.itemicon');
     const chipStyle = {
       width: '18px',
@@ -927,9 +934,24 @@ test.describe('T244: Explore’s tree, header and table', () => {
     const glyph = (row: Locator) =>
       chip(row).evaluate((element) => getComputedStyle(element, '::before').content);
     expect(await glyph(finance)).toBe('"▣"');
-    expect(await glyph(pane.getByRole('button', { name: 'My workspace', exact: true }))).toBe(
-      '"◉"',
-    );
+    // My workspace, with sign-in off too, is the first root: the person on
+    // the dimension role's tint, then the rule (design 04, pin 1; EXP-05; R76
+    // explore-Q3, T693). Phase 1's ◉ in last place is gone.
+    const tree = pane.getByRole('tree');
+    const mine = pane.getByRole('button', { name: 'My workspace', exact: true });
+    await expect(tree.getByRole('treeitem').first()).toHaveAccessibleName('My workspace');
+    expect(await style(chip(mine), 'width', 'background-color', 'color')).toEqual({
+      width: '18px',
+      'background-color': await token(page, 'bg-role-dimension-soft', 'background-color'),
+      color: await token(page, 'role-dimension'),
+    });
+    await expect(chip(mine).locator('svg')).toHaveCount(1);
+    expect(
+      await tree
+        .getByRole('treeitem')
+        .first()
+        .evaluate((item) => getComputedStyle(item, '::after').height),
+    ).toBe('1px');
 
     // .file:hover { background: var(--bg-hover) } — and nothing else (N13).
     await marketing.hover();
@@ -1032,7 +1054,7 @@ test.describe('T244: Explore’s tree, header and table', () => {
     expect((await heading.boundingBox())?.y).toBeCloseTo(titleAt ?? 0, 0);
   });
 
-  test('the table: 34 px rows under a 28 px header, 12/600 names beside a 22 px chip, and each column in the prototype’s ink', async ({
+  test('the table: 34 px rows under a 28 px header, 14/20/600 names beside a 22 px chip, and each column in its design’s ink', async ({
     page,
     request,
   }) => {
@@ -1064,8 +1086,12 @@ test.describe('T244: Explore’s tree, header and table', () => {
       'padding-top': '0px',
       'padding-left': '8px',
     });
+    // A row with a second line, the dashboard's description, is design 14's
+    // 44 px td; a one-line row its td.one, 34 (T693: the name's 14/20 over a
+    // 16 px line no longer fits 34).
+    const heights = { [sub]: 34, [board]: 44, [chart]: 34 };
     for (const id of [sub, board, chart]) {
-      expect((await row(id).boundingBox())?.height).toBe(34);
+      expect((await row(id).boundingBox())?.height).toBe(heights[id]);
       expect(await style(row(id).getByRole('cell').first(), 'padding-top', 'padding-left')).toEqual(
         {
           'padding-top': '0px',
@@ -1079,7 +1105,8 @@ test.describe('T244: Explore’s tree, header and table', () => {
         'background-color': 'rgba(0, 0, 0, 0)',
       });
 
-    // The name: .strong at 12 px (mismatch 17), beside its kind's 22 px chip —
+    // The name: design 14's .nm .strong, 14/20/600 (EXP-03, T693; it was the
+    // prototype's 12 px, mismatch 17), beside its kind's 22 px chip —
     // .itemicon.ic-folder, .ic-dash, .ic-chart (F20, mismatch 20).
     const chips = {
       [sub]: ['bg-subtle', 'text-secondary', '"▣"'],
@@ -1088,8 +1115,9 @@ test.describe('T244: Explore’s tree, header and table', () => {
     } as const;
     for (const [id, [ground, ink, glyph]] of Object.entries(chips)) {
       const name = row(id).getByRole('rowheader').getByRole('button').first();
-      expect(await style(name, 'font-size', 'font-weight')).toEqual({
-        'font-size': '12px',
+      expect(await style(name, 'font-size', 'line-height', 'font-weight')).toEqual({
+        'font-size': '14px',
+        'line-height': '20px',
         'font-weight': '600',
       });
       const chip = row(id).locator('.itemicon');
@@ -1107,12 +1135,14 @@ test.describe('T244: Explore’s tree, header and table', () => {
       );
     }
 
-    // Type: .sec (mismatch 18). Built on: a chart's source in the code face,
-    // a dashboard's tabs .sec, a folder's items .muted (N2, mismatch 19).
+    // Type: design 14 gives it no colour class, so text-primary (EXP-26,
+    // T693; it was the prototype's .sec, mismatch 18). Built on: a chart's
+    // source in the code face, a dashboard's tabs .sec, a folder's items
+    // .muted (N2, mismatch 19).
     const cells = (id: string) => row(id).getByRole('cell');
     for (const id of [sub, board, chart])
       expect(await style(cells(id).nth(0), 'color')).toEqual({
-        color: await token(page, 'text-secondary'),
+        color: await token(page, 'text-primary'),
       });
     expect((await style(cells(chart).nth(1), 'font-family'))['font-family']).toMatch(
       /^"?IBM Plex Mono"?/,
@@ -1123,12 +1153,14 @@ test.describe('T244: Explore’s tree, header and table', () => {
     expect(await style(cells(sub).nth(1), 'color')).toEqual({
       color: await token(page, 'text-muted'),
     });
-    // A folder row keeps its date and owner, though browse() leaves them
-    // blank (F20): AC-017 fails on a blank column for an item that has the
-    // value (T244's review).
+    // A folder row keeps its date, though browse() leaves it blank (F20):
+    // AC-017 fails on a blank column for an item that has the value (T244's
+    // review). Its Owner is design 14's "—" (EXP-10, T693): a folder is no
+    // one's, and AC-017 asks owners of dashboards and charts.
     // Day first (T477, Q6): "19 Sep", "30 Dec 2025".
     await expect(cells(sub).nth(2)).toHaveText(/^\d{1,2} [A-Z][a-z]{2}( \d{4})?$/);
-    await expect(cells(sub).nth(3)).toHaveText('admin');
+    await expect(cells(sub).nth(3)).toHaveText('—');
+    await expect(cells(board).nth(3)).not.toHaveText('—');
 
     // .grid-table tbody tr:hover td { background: var(--bg-hover) } (mismatch 22).
     await cells(board).nth(2).hover();
@@ -1150,17 +1182,74 @@ test.describe('T244: Explore’s tree, header and table', () => {
       color: await token(page, 'text-secondary'),
     });
 
-    // The footnote under the card: <p class="xs muted"> (F22, mismatch 23).
-    // A shared folder's says where the rest is made (design 04, state C;
-    // T331), with sign-in off too (T359, AC-254).
+    // The footnote under the card. A shared folder's says where the rest is
+    // made (design 04, state C; T331), with sign-in off too (T359, AC-254),
+    // in design 14's <p class="xs sec"> (EXP-11, T693; it was the
+    // prototype's .xs.muted, F22, mismatch 23).
     const note = contents(page).getByText(
       'To add a dashboard, chart, model or data source here, create it in My workspace with this folder as its target.',
     );
     expect(await style(note, 'font-size', 'line-height', 'color')).toEqual({
       'font-size': '12px',
       'line-height': '16px',
-      color: await token(page, 'text-muted'),
+      color: await token(page, 'text-secondary'),
     });
+  });
+
+  // T693 (AC-343, AC-187; design 14 screen 1, design 04, design 13 state G).
+  test('Show at 28 px, a model named at 13 px in the code face, each ⋯ 24 px, and menus’ items 30/14 at their designs’ widths', async ({
+    page,
+    request,
+  }) => {
+    // .seg span { height: 26px } in a 1 px border: "the control is 28 px",
+    // the chosen one on accent-soft (pin 3; EXP-02).
+    await page.goto('/explore?folder=root');
+    const main = contents(page);
+    const show = main.getByRole('radiogroup', { name: 'Show' });
+    await expect(show).toBeVisible();
+    expect((await show.locator('.kind-filter__choices').boundingBox())?.height).toBe(28);
+    expect(await style(show.locator('.kind-filter__choice.is-chosen'), 'background-color')).toEqual({
+      'background-color': await token(page, 'bg-accent-soft', 'background-color'),
+    });
+
+    // A model's name: .strong.mono at 13 px (14:319; EXP-03).
+    const model = main.getByRole('row').filter({ has: page.locator('.itemicon[data-icon="model"]') }).first();
+    await expect(model).toBeVisible();
+    const modelName = model.getByRole('rowheader').getByRole('button').first();
+    const named = await style(modelName, 'font-size', 'font-weight', 'font-family');
+    expect(named['font-size']).toBe('13px');
+    expect(named['font-weight']).toBe('600');
+    expect(named['font-family']).toMatch(/^"?IBM Plex Mono"?/);
+
+    // A row's ⋯: .iconbtn.sm, 24 × 24 (EXP-27).
+    const unique = String(Date.now());
+    const home = await make(request, 'folder', 'root', `Menus ${unique}`);
+    const sub = await make(request, 'folder', home, `Sub ${unique}`);
+    await page.goto(`/explore?folder=${home}`);
+    const dots = main.getByTestId(`item-${sub}`).getByRole('button', { name: `Actions for Sub ${unique}` });
+    const box = await dots.boundingBox();
+    expect([box?.width, box?.height]).toEqual([24, 24]);
+
+    // Its menu: design 14's 196 px, its items .mi, 30 px at 14 (EXP-07).
+    await dots.click();
+    const menu = page.getByRole('menu', { name: `Actions for Sub ${unique}` });
+    expect((await menu.boundingBox())?.width).toBe(196);
+    const item = menu.getByRole('menuitem', { name: 'Rename' });
+    expect(await style(item, 'height', 'font-size', 'padding-left')).toEqual({
+      height: '30px',
+      'font-size': '14px',
+      'padding-left': '8px',
+    });
+    await page.keyboard.press('Escape');
+
+    // New in My workspace: design 13's 250 px, Import and its aside on one line.
+    await page.goto('/explore?folder=mine');
+    await main.getByRole('button', { name: 'New', exact: true }).click();
+    const newMenu = page.getByRole('menu', { name: 'New' });
+    expect((await newMenu.boundingBox())?.width).toBe(250);
+    const importItem = newMenu.getByRole('menuitem', { name: /Import a dashboard/ });
+    expect((await importItem.boundingBox())?.height).toBe(30);
+    await page.keyboard.press('Escape');
   });
 
   test('the list scrolls under a sticky header, and the page, the tree and the head row stay put', async ({
@@ -1211,7 +1300,7 @@ test.describe('T244: Explore’s tree, header and table', () => {
     expect(await scroller.evaluate((list) => list.scrollTop)).toBeGreaterThan(0);
   });
 
-  test('an empty folder, and a search that finds nothing, keep the header over a centred 120 px row', async ({
+  test('an empty folder, and a search that finds nothing, keep the header over a 34 px row at 14 px', async ({
     page,
     request,
   }) => {
@@ -1230,12 +1319,14 @@ test.describe('T244: Explore’s tree, header and table', () => {
         'Owner',
         'Actions',
       ]);
-      // <tr><td colspan="5" style="height:120px;text-align:center" class="sec">
+      // Design 14's <td class="one empty">: a 34 px row at 14 px, secondary,
+      // left-aligned (E2, F3, I2; EXP-12, T693). It was the prototype's
+      // centred 120 px row at 12 (F24, F25).
       const cell = table.getByRole('cell', { name: text, exact: true });
-      expect((await cell.boundingBox())?.height).toBeCloseTo(120, 0);
+      expect((await cell.boundingBox())?.height).toBeCloseTo(34, 0);
       expect(await style(cell, 'text-align', 'font-size', 'color')).toEqual({
-        'text-align': 'center',
-        'font-size': '12px',
+        'text-align': 'left',
+        'font-size': '14px',
         color: await token(page, 'text-secondary'),
       });
     };

@@ -172,6 +172,8 @@ textarea { height: auto; padding: 6px 8px; }
   color: var(--wc-text-secondary);
 }
 .icon-button:hover:not(:disabled) { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
+/* The designs' .iconbtn.sm: 24 x 24, as a list row's ⋯ (design 14; T693, EXP-27). */
+.icon-button.icon-button--sm { width: 24px; height: 24px; min-height: 0; }
 
 .app-bar {
   /* Sticky so the workspace switcher, search and theme control stay reachable
@@ -845,6 +847,16 @@ main > .proposal-band:first-child,
 .menu-button__item:hover:not(:disabled),
 .menu-button__item:focus-visible { background: var(--wc-bg-hover); }
 .menu-button__item.is-danger { color: var(--wc-status-error); }
+/* Explore's menus are designs 04, 13 and 14's .menu and .mi: a border-subtle
+   edge, items 30 px at 14, padded 0 8, on one line (T693, EXP-07). The
+   editor's and the dashboard's pickers keep the 2026-09-24 designs' 28 at 12. */
+.explore .menu-button__menu { border-color: var(--wc-border-subtle); }
+.explore .menu-button__item {
+  height: 30px;
+  padding: 0 8px;
+  font-size: var(--wc-text-sm-size);
+  white-space: nowrap;
+}
 
 /* The Model workspace's files (T137, AC-131), as design 12's overview (T486). */
 /* Spacing only: the overview's size is .workspace-title's, the page title
@@ -1912,8 +1924,10 @@ fieldset.model-field > legend {
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
 }
-/* The workspace's own, in the secondary text colour (design 04, pin 8). */
-.explore__note--workspace { color: var(--wc-text-secondary); }
+/* The workspace's own, in the secondary text colour (design 04, pin 8), and a
+   shared folder's, design 14's p.xs.sec (T693, EXP-11). */
+.explore__note--workspace,
+.explore__note--shared { color: var(--wc-text-secondary); }
 
 /* A library chart's page (AC-212), the prototype's chartPage(): a head row
    with the title, its type and Edit chart; the chart; a 300 px details pane
@@ -2114,8 +2128,9 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
    selection, run the pane's full width. */
 .folder-tree,
 .folder-tree ul { margin: 0; padding: 0; list-style: none; }
-/* A folder with its count at the end: the prototype's .file, 28 px at 12 px,
-   square and full width (F8, mismatches 10–11). */
+/* A folder with its count at the end: the prototype's .file, 28 px, square
+   and full width (F8, mismatches 10–11), at design 14's .trow 14 px (R76
+   explore-Q2; T693, EXP-04). */
 .folder-tree__label {
   display: flex;
   width: 100%;
@@ -2128,8 +2143,8 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
   background: none;
   color: var(--wc-text-primary);
   font: inherit;
-  font-size: var(--wc-text-xs-size);
-  line-height: var(--wc-text-xs-line);
+  font-size: var(--wc-text-sm-size);
+  line-height: var(--wc-text-sm-line);
   text-align: left;
   cursor: pointer;
 }
@@ -2202,11 +2217,12 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
   padding: 8px 12px;
   border-bottom: 1px solid var(--wc-border-subtle);
 }
+/* "Folders": design 14's .tree-head, 16/600 (R76 explore-Q2; T693, EXP-04). */
 .explore__pane-head h2 {
   margin: 0;
-  font-size: var(--wc-text-sm-size);
-  line-height: var(--wc-text-sm-line);
-  font-weight: var(--wc-text-sm-strong-weight);
+  font-size: var(--wc-text-md-size);
+  line-height: var(--wc-text-md-line);
+  font-weight: 600;
 }
 .explore__pane-head button { margin-left: auto; }
 
@@ -2274,12 +2290,15 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
   background: var(--wc-bg-surface);
   border-left: 1px solid var(--wc-border-subtle);
 }
+/* 44 px, level with the tree's head (T693, EXP-25): design 07's .pane-head
+   padding 8 8 8 16 round a 32 px close would make it 49, so the block
+   padding goes and the 44 holds the close. */
 .access-panel__head {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  padding: 8px 8px 8px 16px;
+  padding: 0 8px 0 16px;
   border-bottom: 1px solid var(--wc-border-subtle);
 }
 .access-panel__head h2 {
@@ -3755,9 +3774,18 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 /* .grid-table th { position: sticky; top: 0 }: the header stays while the
    list scrolls beneath it (F23). */
 .folder-contents thead th { position: sticky; top: 0; z-index: 1; }
-/* Empty, a centred 120 px row under the header (F24, F25). */
-.folder-contents tbody tr.folder-contents__empty-row { height: 120px; cursor: auto; }
-.folder-contents td.folder-contents__empty { text-align: center; }
+/* A row with a second line, design 14's td at 44 px; one line is its td.one,
+   34 (T693). */
+.folder-contents tbody tr.is-two-line { height: 44px; }
+/* Empty, design 14's td.one.empty: a 34 px row at 14 px, secondary,
+   left-aligned (E2, F3, I2; T693, EXP-12). */
+.folder-contents tbody tr.folder-contents__empty-row { height: 34px; cursor: auto; }
+.folder-contents tbody td.folder-contents__empty {
+  text-align: left;
+  font-size: var(--wc-text-sm-size);
+  line-height: var(--wc-text-sm-line);
+}
+.folder-contents td.folder-contents__empty .btn-link { font-size: var(--wc-text-sm-size); }
 /* A row's name with its type's chip, as the prototype's browse() draws it;
    its actions behind a ⋯ menu at the end (AC-193). At 16 px a line, so a
    name over its description fits the 34 px row. */
@@ -3775,13 +3803,21 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   background: none;
   color: inherit;
   font: inherit;
-  font-weight: var(--wc-text-xs-strong-weight);
-  line-height: var(--wc-text-xs-line);
   text-align: left;
 }
+/* Design 14's .nm .strong, 14/20/600; a model's and a data source's name
+   .strong.mono at 13 px (14:319–320; T693, EXP-03). */
+.folder-contents__open,
+.folder-contents__title {
+  font-size: var(--wc-text-sm-size);
+  line-height: var(--wc-text-sm-line);
+  font-weight: 600;
+}
+.folder-contents__open.is-code,
+.folder-contents__title.is-code { font-family: var(--wc-font-code); font-size: 13px; }
 .folder-contents__open:hover:not(:disabled):not([aria-disabled='true']) { background: none; }
-/* Type .sec; Built on .muted, .sec or .mono by kind (N2, mismatches 18–19). */
-.folder-contents td.folder-contents__type,
+/* Type in the primary ink, design 14 giving it no class (T693, EXP-26);
+   Built on .muted, .sec or .mono by kind (N2, mismatches 18–19). */
 .folder-contents td.is-secondary { color: var(--wc-text-secondary); }
 .folder-contents td.is-muted { color: var(--wc-text-muted); }
 .folder-contents td.is-code { font-family: var(--wc-font-code); }
@@ -5137,11 +5173,12 @@ code.schedules__sub { font-family: var(--wc-font-code); }
   border: 1px solid var(--wc-border-strong);
   border-radius: 4px;
 }
+/* Design 14's .seg span, 26 px in the 1 px border: the control is 28 (T693, EXP-02). */
 .kind-filter__choice {
   position: relative;
   display: inline-flex;
   align-items: center;
-  height: 28px;
+  height: 26px;
   padding: 0 10px;
   border-left: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);

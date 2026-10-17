@@ -386,10 +386,10 @@ export function ExplorePage() {
    * Unknown until who is asking is.
    */
   const viaWorkspace = me.data !== undefined;
-  // My workspace only where the API counts one (T343, AC-277); with sign-in
-  // on, first in the tree (T498; design 04, pin 1). The shared root only
+  // My workspace only where the API counts one (T343, AC-277); first in the
+  // tree, sign-in on or off (T498, T693; design 04, pin 1). The shared root only
   // where a grant lets them see it (T331, AC-194).
-  const roots = visibleRoots(rootCounts.data, { workspaceFirst: signedIn });
+  const roots = visibleRoots(rootCounts.data);
   /**
    * Signed in with access to no folder at all (T331; design 09, state G;
    * rule 61): no tree root, no New, no "+ Folder", and a note that names no
@@ -733,6 +733,8 @@ export function ExplorePage() {
     addingSource === null &&
     exportOf === null &&
     !importing;
+  /** A pane docked beside the list: Access, Export, a new data source's, or an import's. */
+  const paneDocked = accessOpen || exportOf !== null || addingSource !== null || importing;
   const titleOf = (id: string) =>
     rootTitleOf(id) ?? (folders.data ?? []).find((folder) => folder.id === id)?.title ?? id;
   /** A folder by its path below its root, "Sales / EMEA", or a root by its name (design 07, pin 2). */
@@ -1019,19 +1021,27 @@ export function ExplorePage() {
               className="icon-button"
               testId="folder-more"
               items={headerMenu}
+              // Design 14's head menus, 210 px (T693, EXP-07).
+              menuWidth={210}
             >
               <span aria-hidden="true">⋯</span>
             </MenuButton>
           )}
           <span className="explore__spacer" />
-          <input
-            type="search"
-            className="explore__search"
-            aria-label="Search dashboards and charts"
-            placeholder="Search dashboards and charts"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
+          {/* While a pane is docked beside the list, the search is hidden, so
+              the head keeps one row with New at its right (R76 explore-Q5;
+              design 07, main; T693). Not while a search is under way: its
+              words stay where they can be changed. */}
+          {paneDocked && !searching ? null : (
+            <input
+              type="search"
+              className="explore__search"
+              aria-label="Search dashboards and charts"
+              placeholder="Search dashboards and charts"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          )}
           <CreateMenu
             // What the user may make here (T331, AC-192): a shared folder's
             // read-write members a folder alone, the workspace every kind, a
@@ -1316,7 +1326,8 @@ export function ExplorePage() {
               </p>
             ) : inShared ? (
               role.creates.length > 0 ? (
-                <p className="explore__note">
+                // Design 14's p.xs.sec (EXP-11, T693).
+                <p className="explore__note explore__note--shared">
                   To add a dashboard, chart, model or data source here, create it in My workspace
                   with this folder as its target.
                 </p>
