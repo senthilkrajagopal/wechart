@@ -1754,11 +1754,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T798 (AC-447, AC-373, AC-383, AC-384) The data source picker: the sources the user may run SQL on, grouped by folder path, My workspace's first, Cube Store at the root while on, each with its driver and the runner's state; an off source only to those who may turn it on or see it off, opening the off panel
 
-- [ ] T799 (AC-466) A first visit: one tab, "Query 1", no data source, focus on the picker, and the sentences for no source and for none available, as design 17 state H draws them
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/SqlWorkspace.tsx`, `packages/web/src/workspaces/sql/EmptyStates.tsx` (+ test), `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: `EmptyStates.test.tsx`: on a first visit there is one tab, "Query 1", no data source chosen, focus on the picker and "Choose a data source to write SQL against."; for a member who may run SQL on no source, "No data source runs SQL for you yet. A Super-Admin turns the SQL runner on for each data source. Your own data sources in My workspace need no switch." with a link to Data sources (AC-466).
-  - Depends on: T798
+- [x] T799 (AC-466) A first visit: one tab, "Query 1", no data source, focus on the picker, and the sentences for no source and for none available, as design 17 state H draws them
 
 - [ ] T800 (AC-450) Editor tabs, each bound to one data source: "+", the tab's ⋯ with Rename…, Duplicate, Close and Close other tabs, a changed source keeping the SQL and clearing the result, the state in the tooltip and accessible name, and asking before closing unsaved text
   - Lane: SQL

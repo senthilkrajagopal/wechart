@@ -1,11 +1,20 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 import { NotFound } from '../../shell/NotFound';
 import { ME_QUERY } from '../../shell/me';
 import { StateLine } from '../../shell/StatusIcon';
 import { hiddenWorkspacesFor } from '../../shell/WorkspaceSwitcher';
 import { sourceQuery } from '../data-sources/SourceSettings';
+import { ChooseASource, NoSourceToRun } from './EmptyStates';
 import { OffPanel } from './OffPanel';
 import { SQL_SOURCES_QUERY } from './sources';
 import { SourcePicker } from './SourcePicker';
@@ -88,6 +97,17 @@ function Workbench({ superAdmin }: { readonly superAdmin: boolean }) {
   /** The data source chosen in the picker; tabs hold it from T800. */
   const [chosen, setChosen] = useState('');
   const chosenRow = sources.data?.find((row) => row.id === chosen);
+  /**
+   * Whether to ask them to choose one (AC-466, H1) rather than say none runs
+   * SQL for them (H2): a source listed on, or their own; and for a
+   * Super-Admin, any listed, since they may turn one on. H2 is a member's
+   * (T799's review; lane SQL's call, overturnable).
+   */
+  const runsAny =
+    sources.data?.some((row) => row.runner !== 'off' || superAdmin) === true;
+  const ids = useId();
+  const picker = useRef<HTMLButtonElement>(null);
+  const leftRail = useRef<HTMLButtonElement>(null);
   const [left, setLeft] = useState<number>(LEFT_PANE.start);
   const [right, setRight] = useState<number>(RIGHT_PANE.start);
   const [share, setShare] = useState<number>(SPLIT.editor);
@@ -98,6 +118,14 @@ function Workbench({ superAdmin }: { readonly superAdmin: boolean }) {
   const below = useRef<HTMLDivElement>(null);
   const split = useRef<{ readonly y: number; readonly from: number } | null>(null);
   const leftShown = leftFolded ? LEFT_PANE.rail : left;
+
+  // A first visit: focus on the picker (AC-466; design 17, H1), or, where
+  // the left pane is a rail, on the rail's button that opens it.
+  useEffect(() => {
+    (leftFolded ? leftRail : picker).current?.focus();
+    // On opening only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const rightShown = rightFolded ? RIGHT_PANE.rail : right;
 
   // A pane opened over the centre, then unfolded by a wider window: closed,
@@ -135,6 +163,7 @@ function Workbench({ superAdmin }: { readonly superAdmin: boolean }) {
       <SidePane
         side="left"
         label="Data source and schema"
+        railRef={leftRail}
         folded={leftFolded}
         open={leftFolded && open === 'left'}
         width={left}
@@ -150,7 +179,12 @@ function Workbench({ superAdmin }: { readonly superAdmin: boolean }) {
           {sources.isError ? (
             <StateLine kind="err">{sources.error.message}</StateLine>
           ) : (
-            <SourcePicker rows={sources.data ?? []} value={chosen} onChoose={setChosen} />
+            <SourcePicker
+              rows={sources.data ?? []}
+              value={chosen}
+              onChoose={setChosen}
+              buttonRef={picker}
+            />
           )}
         </div>
         <h2 className="sql-pane__head">Schema</h2>
@@ -160,9 +194,29 @@ function Workbench({ superAdmin }: { readonly superAdmin: boolean }) {
         data-testid="sql-centre"
         style={{ '--sql-editor': `${String(Math.round(share * 1000) / 10)}%` } as CSSProperties}
       >
-        <div className="sql-centre__tabs" data-testid="sql-tabs-area" />
+        <div className="sql-centre__tabs" data-testid="sql-tabs-area">
+          {/* A first visit's one tab (AC-466; design 17, H1); more come with T800. */}
+          <div role="tablist" aria-label="SQL tabs" className="sql-tabs">
+            <button
+              type="button"
+              role="tab"
+              id={`${ids}-tab-1`}
+              aria-selected="true"
+              aria-controls={`${ids}-panel-1`}
+              className="sql-tabs__tab"
+            >
+              Query 1
+            </button>
+          </div>
+        </div>
         {/* The split is of what lies below the tabs (T797's review). */}
-        <div ref={below} className="sql-centre__split">
+        <div
+          ref={below}
+          className="sql-centre__split"
+          role="tabpanel"
+          id={`${ids}-panel-1`}
+          aria-labelledby={`${ids}-tab-1`}
+        >
           {chosenRow?.runner === 'off' ? (
             // In the editor's place: nothing here runs (design 17, B2).
             <div className="sql-centre__off">
@@ -170,7 +224,13 @@ function Workbench({ superAdmin }: { readonly superAdmin: boolean }) {
             </div>
           ) : (
             <>
-              <div className="sql-centre__editor" data-testid="sql-editor-area" />
+              <div className="sql-centre__editor" data-testid="sql-editor-area">
+                {chosenRow !== undefined || sources.data === undefined ? null : runsAny ? (
+                  <ChooseASource />
+                ) : (
+                  <NoSourceToRun />
+                )}
+              </div>
               <span
                 className="sql-centre__grip"
                 title="Drag to resize · double-click to reset"
@@ -229,9 +289,12 @@ function SidePane({
   onResize,
   onOpen,
   children,
+  railRef,
 }: {
   readonly side: Side;
   readonly label: string;
+  /** Its rail's button, for the workspace to put focus on. */
+  readonly railRef?: RefObject<HTMLButtonElement | null>;
   readonly folded: boolean;
   readonly open: boolean;
   readonly width: number;
@@ -240,7 +303,8 @@ function SidePane({
   readonly children: ReactNode;
 }) {
   const body = useRef<HTMLDivElement>(null);
-  const rail = useRef<HTMLButtonElement>(null);
+  const own = useRef<HTMLButtonElement>(null);
+  const rail = railRef ?? own;
   const dragged = useRef<{ readonly x: number; readonly from: number } | null>(null);
   const start = side === 'left' ? LEFT_PANE.start : RIGHT_PANE.start;
   // Opened from its rail: focus into it once it shows, so Tab goes on from there.
@@ -270,7 +334,7 @@ function SidePane({
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('pointerdown', onPress);
     };
-  }, [open]);
+  }, [open, rail]);
   const endDrag = () => {
     dragged.current = null;
   };
@@ -301,11 +365,7 @@ function SidePane({
           </svg>
         </button>
       </div>
-      <div
-        ref={body}
-        className="sql-pane__body"
-        tabIndex={-1}
-      >
+      <div ref={body} className="sql-pane__body" tabIndex={-1}>
         {children}
       </div>
       <span

@@ -75,6 +75,37 @@ main:has(.sql-workspace) {
   line-height: var(--wc-text-xs-line);
   color: var(--wc-text-secondary);
 }
+/* The editor tabs, in the page-tab style, 13 px (direction §7f, §7d). */
+.sql-tabs { display: flex; align-items: flex-end; gap: 2px; height: 100%; padding: 0 8px; }
+.sql-tabs__tab {
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  font-size: 13px;
+  color: var(--wc-text-secondary);
+  white-space: nowrap;
+}
+.sql-tabs__tab[aria-selected='true'] {
+  border-bottom-color: var(--wc-accent);
+  color: var(--wc-text-primary);
+  font-weight: var(--wc-text-sm-strong-weight);
+}
+/* An empty state: an icon and one sentence, and an action where there is
+   one (design 17, state H; rule 104). */
+.sql-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding: var(--wc-surface-padding);
+  color: var(--wc-text-secondary);
+}
+.sql-empty > svg { flex: none; margin-top: 3px; color: var(--wc-text-muted); }
+.sql-empty > p { flex: 1 1 240px; margin: 0; max-width: 60ch; }
+.sql-empty > .btn { flex: none; }
 /* An off source chosen: its panel in the editor's place (design 17, B2). */
 .sql-centre__off { flex: 1; min-height: 0; overflow: auto; padding: var(--wc-surface-padding); }
 

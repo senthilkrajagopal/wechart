@@ -400,6 +400,34 @@ test.describe('the data source picker (T798, AC-447)', () => {
       await expect(page.getByTestId('sql-editor-area')).toHaveCount(0);
     });
   });
+  test.describe('as writer, on a first visit (T799, AC-466)', () => {
+    test.use({ role: 'writer' });
+
+    test('one tab, “Query 1”, no data source, focus on the picker, and the sentence to choose one', async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+
+      const tabs = page.getByRole('tablist', { name: 'SQL tabs' }).getByRole('tab');
+      await expect(tabs).toHaveText(['Query 1']);
+      await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
+      await expect(pickerButton(page)).toHaveText(/Choose…/);
+      await expect(pickerButton(page)).toBeFocused();
+      await expect(page.getByText('Choose a data source to write SQL against.')).toBeVisible();
+      await expect(page.getByTestId('sql-picker-chosen')).toHaveCount(0);
+    });
+
+    test('below 1,024 px, focus on the rail’s button that opens the picker', async ({ page }) => {
+      await page.setViewportSize({ width: 900, height: 800 });
+      await page.goto('/sql');
+
+      await expect(
+        leftPane(page).getByRole('button', { name: 'Data source and schema' }),
+      ).toBeFocused();
+      await expect(page.getByText('Choose a data source to write SQL against.')).toBeVisible();
+    });
+  });
   // Who sees a folder only from below, or reads it, is the API's to hold
   // (`routes/sql-sources.test.ts`): here those users have no workspace to
   // open the picker in.
