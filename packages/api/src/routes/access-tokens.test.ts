@@ -228,3 +228,131 @@ describe('“Token made” in the audit trail (T767, AC-442)', () => {
     expect(JSON.stringify(record)).not.toContain(text.slice(4, 68));
   });
 });
+
+interface Stopped extends Listed {
+  state: 'revoked' | 'expired';
+  stoppedAt: string;
+  revokedBy: { name: string } | null;
+}
+const stoppedOf = async (who: string): Promise<Stopped[]> => {
+  const answer = await as(who, { method: 'GET', url: '/api/account/tokens' });
+  expect(answer.statusCode, answer.body).toBe(200);
+  return answer.json<{ stopped: Stopped[] }>().stopped.filter((each) => each.name.includes(MARK));
+};
+const madeId = async (who: string, name: string) => {
+  const made = await make(who, { name, scopes: ['read'] });
+  expect(made.statusCode, made.body).toBe(201);
+  return made.json<{ token: Listed }>().token.id;
+};
+const revoke = (who: string, id: string) =>
+  as(who, { method: 'DELETE', url: `/api/account/tokens/${id}` });
+const remove = (who: string, id: string) =>
+  as(who, { method: 'POST', url: `/api/account/tokens/${id}/remove` });
+
+describe('revoking your own token (T768, AC-431)', () => {
+  it('moves it under no longer working as “Revoked”, with when and the revoker’s name', async () => {
+    const name = `revoked ${MARK}`;
+    const id = await madeId('writer', name);
+    const before = Date.now() - 1000;
+    const answer = await revoke('writer', id);
+    expect(answer.statusCode, answer.body).toBe(204);
+
+    expect((await listOf('writer')).map((each) => each.id)).not.toContain(id);
+    const stopped = (await stoppedOf('writer')).find((each) => each.id === id);
+    expect(stopped).toEqual({
+      id,
+      name,
+      scopes: ['read'],
+      createdAt: expect.any(String),
+      expiresAt: expect.any(String),
+      lastUsedAt: null,
+      state: 'revoked',
+      stoppedAt: expect.any(String),
+      revokedBy: { name: 'Wren Writer' },
+    });
+    expect(Date.parse(stopped!.stoppedAt)).toBeGreaterThanOrEqual(before);
+    // Its name is free again.
+    expect((await make('writer', { name, scopes: ['read'] })).statusCode).toBe(201);
+  });
+
+  it('lists a token past its expiry as “Expired”, with when', async () => {
+    const id = await madeId('writer', `lapsed ${MARK}`);
+    const expired = new Date(Date.now() - 60_000);
+    await getDb()
+      .updateTable('personal_access_tokens')
+      .set({ expires_at: expired })
+      .where('id', '=', id)
+      .execute();
+    const stopped = (await stoppedOf('writer')).find((each) => each.id === id);
+    expect(stopped).toMatchObject({ state: 'expired', revokedBy: null });
+    expect(Date.parse(stopped!.stoppedAt)).toBe(expired.getTime());
+    // Too late to revoke: it already doesn't work.
+    expect((await revoke('writer', id)).statusCode).toBe(409);
+  });
+
+  it('answers 404 for another user’s token, and leaves it working', async () => {
+    const id = await madeId('super', `supers ${MARK}`);
+    const answer = await revoke('writer', id);
+    expect(answer.statusCode).toBe(404);
+    expect((await listOf('super')).map((each) => each.id)).toContain(id);
+    expect((await remove('writer', id)).statusCode).toBe(404);
+    expect((await revoke('writer', randomUUID())).statusCode).toBe(404);
+    expect((await revoke('writer', 'not-an-id')).statusCode).toBe(404);
+  });
+});
+
+describe('Remove (T768, AC-431)', () => {
+  it('takes a stopped token off the list, and its audit records stay', async () => {
+    const name = `removed ${MARK}`;
+    const since = new Date(Date.now() - 1000);
+    const id = await madeId('writer', name);
+    expect((await revoke('writer', id)).statusCode).toBe(204);
+    const answer = await remove('writer', id);
+    expect(answer.statusCode, answer.body).toBe(204);
+    expect((await stoppedOf('writer')).map((each) => each.id)).not.toContain(id);
+    expect((await listOf('writer')).map((each) => each.id)).not.toContain(id);
+
+    const { records } = await audit().list({
+      events: ['token-made', 'token-revoked'],
+      since,
+      limit: 200,
+    });
+    expect(
+      records
+        .filter((each) => each.item?.id === id)
+        .map((each) => each.event)
+        .sort(),
+    ).toEqual(['token-made', 'token-revoked']);
+  });
+
+  it('refuses a working token: it must be revoked first', async () => {
+    const id = await madeId('writer', `working ${MARK}`);
+    const answer = await remove('writer', id);
+    expect(answer.statusCode).toBe(409);
+    expect((await listOf('writer')).map((each) => each.id)).toContain(id);
+  });
+});
+
+describe('“Token revoked” in the audit trail (T768, AC-442)', () => {
+  it('records who revoked it, the owner’s and the token’s name, and when', async () => {
+    const name = `laptop revoked ${MARK}`;
+    const id = await madeId('writer', name);
+    const before = new Date(Date.now() - 1000);
+    expect((await revoke('writer', id)).statusCode).toBe(204);
+    const { records } = await audit().list({
+      events: ['token-revoked'],
+      since: before,
+      limit: 200,
+    });
+    const record = records.find((each) => each.item?.id === id);
+    expect(record).toMatchObject({
+      event: 'token-revoked',
+      actor: { name: 'Wren Writer' },
+      folderId: null,
+      item: { kind: 'access-token', id, title: name },
+      summary: `Wren Writer’s ${name}`,
+      details: { name, owner: { name: 'Wren Writer' } },
+    });
+    expect(record!.at.getTime()).toBeGreaterThanOrEqual(before.getTime());
+  });
+});

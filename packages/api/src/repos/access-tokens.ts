@@ -18,6 +18,22 @@ export interface AccessToken {
   readonly lastUsedAt: Date | null;
 }
 
+/** A token that no longer works, under its owner's "No longer working" (T768, AC-431). */
+export interface StoppedAccessToken extends AccessToken {
+  readonly state: 'revoked' | 'expired';
+  /** When it was revoked, or when it expired. */
+  readonly stoppedAt: Date;
+  /** Who revoked it, by name; none for one that expired. */
+  readonly revokedBy: { readonly name: string } | null;
+}
+
+/** Whom a token belongs to, for a revoke's audit record. */
+export interface TokenOwned {
+  readonly id: string;
+  readonly name: string;
+  readonly owner: { readonly key: string; readonly name: string };
+}
+
 export interface NewAccessToken {
   readonly owner: { readonly key: string; readonly name: string };
   readonly name: string;
@@ -47,9 +63,13 @@ const tokenOf = (row: {
 
 const LISTED = ['id', 'name', 'scopes', 'created_at', 'expires_at', 'last_used_at'] as const;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Personal access tokens (T767, AC-430): kept as a digest; a working one is
- * neither revoked nor past its expiry.
+ * neither revoked nor past its expiry. One that stopped stays, unusable,
+ * under its owner's "No longer working" until removed from there (T768,
+ * AC-431).
  */
 export function accessTokenStore(db: Kysely<Database>) {
   const working = (ownerKey: string, now: Date) =>
@@ -60,6 +80,68 @@ export function accessTokenStore(db: Kysely<Database>) {
       .where('expires_at', '>', now);
 
   return {
+    /** A token's owner and name, by id; none for an id no token has. */
+    async owned(id: string): Promise<TokenOwned | undefined> {
+      if (!UUID.test(id)) return undefined;
+      const row = await db
+        .selectFrom('personal_access_tokens')
+        .select(['id', 'name', 'owner_key', 'owner_name'])
+        .where('id', '=', id)
+        .executeTakeFirst();
+      return row === undefined
+        ? undefined
+        : { id: row.id, name: row.name, owner: { key: row.owner_key, name: row.owner_name } };
+    },
+
+    /** Stops a working token now, by `by`; false where it no longer worked. */
+    async revoke(id: string, by: { key: string; name: string }, now: Date): Promise<boolean> {
+      if (!UUID.test(id)) return false;
+      const done = await db
+        .updateTable('personal_access_tokens')
+        .set({ revoked_at: now, revoked_by_key: by.key, revoked_by_name: by.name })
+        .where('id', '=', id)
+        .where('revoked_at', 'is', null)
+        .where('expires_at', '>', now)
+        .executeTakeFirst();
+      return done.numUpdatedRows > 0n;
+    },
+
+    /** An owner's tokens that no longer work and aren't removed, the latest to stop first. */
+    async stopped(ownerKey: string, now: Date): Promise<StoppedAccessToken[]> {
+      const rows = await db
+        .selectFrom('personal_access_tokens')
+        .select([...LISTED, 'revoked_at', 'revoked_by_name'])
+        .where('owner_key', '=', ownerKey)
+        .where('removed_at', 'is', null)
+        .where((where) =>
+          where.or([where('revoked_at', 'is not', null), where('expires_at', '<=', now)]),
+        )
+        .execute();
+      return rows
+        .map((row): StoppedAccessToken => ({
+          ...tokenOf(row),
+          state: row.revoked_at === null ? 'expired' : 'revoked',
+          stoppedAt: row.revoked_at ?? row.expires_at,
+          revokedBy: row.revoked_at === null ? null : { name: row.revoked_by_name ?? 'Someone' },
+        }))
+        .sort((a, b) => b.stoppedAt.getTime() - a.stoppedAt.getTime() || (a.id < b.id ? 1 : -1));
+    },
+
+    /** Takes a stopped token off its owner's list; false for a working one, or one already removed. */
+    async remove(id: string, now: Date): Promise<boolean> {
+      if (!UUID.test(id)) return false;
+      const done = await db
+        .updateTable('personal_access_tokens')
+        .set({ removed_at: now })
+        .where('id', '=', id)
+        .where('removed_at', 'is', null)
+        .where((where) =>
+          where.or([where('revoked_at', 'is not', null), where('expires_at', '<=', now)]),
+        )
+        .executeTakeFirst();
+      return done.numUpdatedRows > 0n;
+    },
+
     async create(token: NewAccessToken): Promise<AccessToken> {
       const row = await db
         .insertInto('personal_access_tokens')

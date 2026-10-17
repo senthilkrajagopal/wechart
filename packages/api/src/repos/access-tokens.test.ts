@@ -61,4 +61,37 @@ describe('the token store (T767)', () => {
     expect(await store().workingNamed(OWNER, 'first', now)).toBe(true);
     expect(await store().workingNamed(`other-${OWNER}`, 'first', now)).toBe(false);
   });
+
+  it('revokes a working token once, lists it stopped, and removes it from there (T768)', async () => {
+    await make('lapsed', new Date(Date.now() - DAY));
+    const made = await make('to revoke', new Date(Date.now() + DAY));
+    const by = { key: 'admin-key', name: 'Ada Admin' };
+    expect(await store().revoke(made.id, by, new Date())).toBe(true);
+    // A second time: it is no longer working.
+    expect(await store().revoke(made.id, by, new Date())).toBe(false);
+
+    const now = new Date();
+    const stopped = await store().stopped(OWNER, now);
+    const revoked = stopped.find((each) => each.id === made.id);
+    expect(revoked).toEqual({
+      ...made,
+      state: 'revoked',
+      stoppedAt: expect.any(Date),
+      revokedBy: { name: 'Ada Admin' },
+    });
+    const lapsed = stopped.find((each) => each.name === 'lapsed');
+    expect(lapsed?.state).toBe('expired');
+    expect(lapsed?.revokedBy).toBe(null);
+    expect(lapsed?.stoppedAt).toEqual(lapsed?.expiresAt);
+    // Newest stop first: the one just revoked before the one expired a day ago.
+    const names = stopped.map((each) => each.name);
+    expect(names.indexOf('to revoke')).toBe(0);
+    expect(names.indexOf('lapsed')).toBeGreaterThan(0);
+
+    expect(await store().remove(made.id, now)).toBe(true);
+    expect((await store().stopped(OWNER, now)).map((each) => each.id)).not.toContain(made.id);
+    // A working token isn't removed.
+    const working = await make('kept', new Date(Date.now() + DAY));
+    expect(await store().remove(working.id, now)).toBe(false);
+  });
 });

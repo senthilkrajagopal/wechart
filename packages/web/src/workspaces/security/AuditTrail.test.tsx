@@ -1146,6 +1146,44 @@ describe('a token made (T767, AC-442; design 18, state I)', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'Token made' }));
     await waitFor(() => expect(lastQuery(asked).get('events')).toBe('token-made'));
   });
+
+  it('shows “Token revoked” (T768) with its own icon, by whom, and the owner’s token', async () => {
+    const ADA = { key: 'ada', name: 'Ada Admin', identity: 'ada@corp.example' };
+    const REVOKED = {
+      ...MADE,
+      id: 't2',
+      at: today(15, 2, 11),
+      actor: ADA,
+      event: 'token-revoked',
+      item: { kind: 'access-token', id: 'pat-2', title: 'Claude Code · laptop' },
+      summary: 'Wren Writer’s Claude Code · laptop',
+      details: { name: 'Claude Code · laptop', owner: { name: 'Wren Writer' } },
+    };
+    const asked = serve({ first: { records: [REVOKED, MADE], total: 2, retentionDays: 365 } });
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+    const [revoked, made] = within(table()).getAllByRole('row').slice(1);
+    expect(
+      within(revoked!)
+        .queryAllByRole('cell')
+        .slice(1)
+        .map((cell) => cell.textContent),
+    ).toEqual([
+      'ada@corp.example',
+      'Token revoked',
+      '—',
+      'Access token · Claude Code · laptop',
+      'Wren Writer’s Claude Code · laptop',
+    ]);
+    const iconOf = (row: HTMLElement, label: string) =>
+      (within(row).getByText(label).previousElementSibling as HTMLElement).dataset['icon'];
+    expect(iconOf(revoked!, 'Token revoked')).toBe('revoked');
+    expect(iconOf(made!, 'Token made')).toBe('key');
+
+    await userEvent.click(screen.getByRole('button', { name: /^Event/ }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Token revoked' }));
+    await waitFor(() => expect(lastQuery(asked).get('events')).toBe('token-revoked'));
+  });
 });
 
 /** T405 (AC-176; direction.md rule 85): the inspector and the Event picker from the keyboard. */

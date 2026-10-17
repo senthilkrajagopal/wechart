@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { actorOf, recordIn } from '../audit/record';
 import { USER } from '../auth/guard';
@@ -76,8 +76,68 @@ export function registerAccessTokens(
 ): void {
   app.get('/api/account/tokens', USER, async (request) => {
     const user = userOf(request);
-    const tokens = await store.working(user.key, now());
-    return { tokens: tokens.map(shown) };
+    const at = now();
+    const [tokens, stopped] = await Promise.all([
+      store.working(user.key, at),
+      store.stopped(user.key, at),
+    ]);
+    return {
+      tokens: tokens.map(shown),
+      // "No longer working" (T768, AC-431; design 18's Q1 and Q4).
+      stopped: stopped.map((token) => ({
+        ...shown(token),
+        state: token.state,
+        stoppedAt: token.stoppedAt.toISOString(),
+        revokedBy: token.revokedBy,
+      })),
+    };
+  });
+
+  /** The user's own token by the route's id, or the 404 already sent: another's is as none. */
+  const ownOf = async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = userOf(request);
+    const { id } = request.params as { id: string };
+    const token = await store.owned(id);
+    if (token === undefined || token.owner.key !== user.key) {
+      await reply.status(404).send({ error: 'You have no token with that id.' });
+      return undefined;
+    }
+    return { user, token };
+  };
+
+  // Revoke your own (T768, AC-431, AC-442): at once, with no Undo.
+  app.delete('/api/account/tokens/:id', USER, async (request, reply) => {
+    const own = await ownOf(request, reply);
+    if (own === undefined) return reply;
+    const { user, token } = own;
+    if (!(await store.revoke(token.id, { key: user.key, name: user.name }, now())))
+      return reply.status(409).send({ error: 'That token already no longer works.' });
+    await recordIn(
+      audit,
+      {
+        actor: actorOf(user),
+        event: 'token-revoked',
+        folderId: null,
+        item: { kind: 'access-token', id: token.id, title: token.name },
+        // Design 18, state I: "Wren Writer’s Claude Code · laptop".
+        summary: `${token.owner.name}’s ${token.name}`,
+        details: { name: token.name, owner: { name: token.owner.name } },
+      },
+      request.log,
+    );
+    return reply.status(204).send();
+  });
+
+  // Remove from "No longer working" (T768, AC-431; Q1): its audit records stay.
+  app.post('/api/account/tokens/:id/remove', USER, async (request, reply) => {
+    const own = await ownOf(request, reply);
+    if (own === undefined) return reply;
+    if (!(await store.remove(own.token.id, now())))
+      return reply.status(409).send({
+        error:
+          'Only a token listed under No longer working can be removed: revoke a working one first.',
+      });
+    return reply.status(204).send();
   });
 
   app.post('/api/account/tokens', USER, async (request, reply) => {

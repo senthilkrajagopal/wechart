@@ -31,8 +31,9 @@ export const EVENTS = [
   ['build-started', 'Build started'],
   ['build-cancelled', 'Build cancelled'],
   ['schedule-change', 'Schedule change'],
-  // A personal access token made (T767, AC-442; design 18, state I).
+  // A personal access token made or revoked (T767, T768, AC-442; design 18, state I).
   ['token-made', 'Token made'],
+  ['token-revoked', 'Token revoked'],
 ] as const;
 export type AuditEvent = (typeof EVENTS)[number][0];
 const EVENT_LABEL = Object.fromEntries(EVENTS) as Record<AuditEvent, string>;
@@ -289,6 +290,11 @@ const EVENT_ICONS: Record<AuditEvent, { name: string; paths: readonly string[]; 
         'M2.2 10.5a2.8 2.8 0 1 0 5.6 0a2.8 2.8 0 1 0-5.6 0z',
         'M7 8.5l6-6M11 4.5l1.8 1.8M9.4 6.1l1.4 1.4',
       ],
+    },
+    // Design 18's revoked: a struck circle, drawn in outline as the trail's icons are.
+    'token-revoked': {
+      name: 'revoked',
+      paths: ['M1.5 8a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0-13 0z', 'M4.6 11.4l6.8-6.8'],
     },
   };
 

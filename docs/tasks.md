@@ -1586,11 +1586,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T767 [P] (AC-430, AC-468, AC-469, AC-442) Make a personal access token through the API: a name, the three scopes with read always in, 7, 30 or 90 days, its text shown once and kept only as a digest, and "Token made" in the audit trail
 
-- [ ] T768 (AC-431, AC-442) Revoke your own token through the API, keep a token that stops working under "No longer working" with its state, when and who revoked it, and Remove it from there; "Token revoked" in the audit trail
-  - Lane: MCP
-  - Files: `packages/api/src/repos/access-tokens.ts` (+ test), `packages/api/src/routes/access-tokens.ts` (+ test).
-  - Failing test: `routes/access-tokens.test.ts`: after `DELETE /api/account/tokens/:id`, the list puts the token under no longer working as "Revoked", with when and the revoker's name; a token past its expiry is listed as "Expired" with when; `POST …/:id/remove` takes a stopped token off the list and its audit records stay; another user's token answers 404 and is unchanged; the audit trail gains "Token revoked" with who, the token's name and when (AC-431, AC-442).
-  - Depends on: T767
+- [x] T768 (AC-431, AC-442) Revoke your own token through the API, keep a token that stops working under "No longer working" with its state, when and who revoked it, and Remove it from there; "Token revoked" in the audit trail
 
 - [ ] T769 (AC-430, AC-468, AC-469, AC-479) The Access tokens page at `/account/tokens`, from the account menu and the single-user chip, with its list and the New token dialog, as design 18 screens 1 and 2 draw them
   - Lane: MCP

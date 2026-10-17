@@ -188,6 +188,8 @@ export interface PersonalAccessTokenTable {
   revoked_at: Date | null;
   revoked_by_key: string | null;
   revoked_by_name: string | null;
+  /** Taken off its owner's "No longer working" (T768, AC-431). */
+  removed_at: Date | null;
 }
 
 /** A member who took a calculation request up, opening it into their workspace (T384, AC-051). */

@@ -14682,3 +14682,20 @@ Search this file by task ID (`T123`) or AC ID.
   - Failing test: `WorkspaceSwitcher.test.tsx`: for a Super-Admin and a read-write member the entries are Explore, Data sources, Jobs, Schedules, SQL runner, then Security for a Super-Admin; a read-only user's switcher has no SQL runner (AC-001). `e2e/security/sql-workspace.spec.ts`: SQL runner opens `/sql`; a read-only user opening `/sql` sees Not found and none of the workspace (AC-446).
   - Depends on: none
   - **Built 2026-10-17** (lane SQL). AC-001 is ticked; AC-446 stays open for T801 (the open tab in the address, restored on reload). The workspace shows nothing until `/api/me` answers, and Not found if it can't be read. The bar at 1,024 px needed T796-1 (`decisions-2026-10-08.md`, "Later decisions"): the tabs pad 4 and the bar's gap is 8 below 1,280. The switcher lists in `AppShell.test.tsx`, `smoke.spec.ts`, `routing.spec.ts`, `security/explore-roles.spec.ts` and `security/sign-in.spec.ts` gain SQL runner.
+
+### P2.24 Lane MCP (ticked after 2026-10-17)
+
+- [x] T768 (AC-431, AC-442) Revoke your own token through the API, keep a token that stops working under "No longer working" with its state, when and who revoked it, and Remove it from there; "Token revoked" in the audit trail
+  - Lane: MCP
+  - Files: `packages/api/src/repos/access-tokens.ts` (+ test), `packages/api/src/routes/access-tokens.ts` (+ test).
+  - Failing test: `routes/access-tokens.test.ts`: after `DELETE /api/account/tokens/:id`, the list puts the token under no longer working as "Revoked", with when and the revoker's name; a token past its expiry is listed as "Expired" with when; `POST …/:id/remove` takes a stopped token off the list and its audit records stay; another user's token answers 404 and is unchanged; the audit trail gains "Token revoked" with who, the token's name and when (AC-431, AC-442).
+  - Depends on: T767
+  - **Built 2026-10-17** (lane MCP). No AC is ticked yet: AC-431's 401 on `/mcp` and AC-442's MCP mark are later tasks.
+    - **The API:**
+      - `DELETE /api/account/tokens/:id` answers 204 and records `token-revoked`.
+      - `POST /api/account/tokens/:id/remove` answers 204.
+      - `GET` answers `{ tokens, stopped }`. Each stopped entry adds `state` (`revoked` or `expired`), `stoppedAt` (when it was revoked, or its expiry) and `revokedBy: { name } | null`, the latest to stop first.
+      - Another user's token, or an unknown id, gets the same 404.
+      - Revoking a token that already doesn't work, or removing a working one, gets 409. Neither case is in the AC; both are the lane's call.
+    - **Remove:** a new migration, `1758670001000_access-token-removal.cjs`, adds `removed_at`. The row stays, unusable, and every audit record of it stays too. The column needed its own migration because T767's had already reached the shared test database.
+    - **The audit:** event `token-revoked`, whose actor is the revoker. The summary is "‹owner's name›’s ‹token's name›", as design 18 state I draws it. `AuditTrail.tsx` gained "Token revoked" and design 18's struck circle (+ 1 test).
