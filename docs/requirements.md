@@ -566,6 +566,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - A rejected proposal goes back to the author's workspace unchanged, with the approver's reason (optional, up to 1,000 characters). The folder is untouched `[R18]`.
 - While a proposal waits, the folder's readers see the old version. The folder's read-write members see a Reviews list with a count in the app, and that is the only notice `[R12]`.
 - An approved item replaces a same-named item in the folder. The **last 10 versions** are kept and can be restored `[R17]`.
+  - History always lists the current version, tagged Current, with View and no restore (R76). Where no version was kept, View opens the item as it is now ("View opens it as now (Recommended)", 2026-10-17, `[R78]`).
 
 *What needs no approval:* creating subfolders, setting permissions, renaming, moving and deleting are direct for read-write members `[R17]`. Where they touch models, data sources or folders holding them, they apply only if every module they affect still compiles `[R27; IP 5]`.
 
@@ -671,6 +672,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **Clients on day one** `[R78]`: Claude Code, and Claude.ai and Claude Desktop custom connectors.
   - Claude.ai and Desktop connectors call from Anthropic's cloud, so `/mcp` must be reachable from the public internet (research, "Remote support by client"). How it is exposed was settled in R78-7, below.
   - Both client kinds accept a fixed credential that they send on every request (research, option C).
+  - **Superseded** `[R78]` ("Defer Claude.ai", 2026-10-17): **day one is Claude Code only.** Claude.ai and Desktop move to §P2.6 M, deferred. On Team and Enterprise plans an organisation Owner enters the connector's token once and Claude sends it for every member, so the calls couldn't act as each member, as personal tokens must (`docs/research/mcp-deployment-and-tokens.md`, finding 1). Claude Code connects from the user's own machine, inside the enterprise network (same research).
 - **Operations in the first release** `[R78]`:
   - **read and explore;**
   - **edit in My workspace;**
@@ -697,10 +699,12 @@ With security on, a deployment that names no Super-Admin group refuses to start 
     - per token, with every MCP call counting;
     - 60 calls a minute, as a deployment setting;
     - closed when the store fails: nothing runs;
-    - traffic with a bad or missing token limited per IP;
+    - traffic with a bad or missing token limited per IP, 20 a minute by default, changeable per deployment ("20 per minute (Recommended)", 2026-10-17);
     - over the limit, a 429 with `Retry-After`.
   - **Output caps** (R78-6): a tool returns at most 1,000 rows and under 50,000 characters, says when it was cut, and offers the next page.
   - **Exposure** (R78-7): a separate host serving only `/mcp`, over TLS, allow-listed to Anthropic's published IP ranges and the enterprise network, set as Helm values.
+    - **Superseded in part** `[R78]` (2026-10-17): with Claude.ai deferred, the allow-list covers the enterprise network only. Anthropic's outbound range, `160.79.104.0/21` (`docs/research/mcp-deployment-and-tokens.md`), stays a documented Helm value, off by default, for later.
+    - **The route** ("Gateway API (Recommended)", 2026-10-17): the Helm chart has no ingress and ingress-nginx is retired (same research), so `/mcp` is exposed by a Gateway API HTTPRoute attached to a Gateway the deployment names. Which Gateway implementation is still being researched.
   - **Jobs** (R78-8): jobs, builds and schedules listed as the owner may see them, with Run now and Cancel as the owner may use them in the UI, and no schedule edits.
   - **Audit** (R78-9): every MCP tool call, reads included, is recorded with who, the token, the tool and the outcome, and no argument values.
   - **Sign-in off** (R78-10): tokens work, acting as the single user.
@@ -732,11 +736,15 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **Settled 2026-10-17** `[R78]` (§P2.8, R78-12 … R78-15):
   - **The "Cube" group** (R78-13) is shown to everyone who sees the workspace, with no switch. R50's caps apply, each run is audited as a SQL run marked "Cube" and listed in History, and Make a cube and Make a chart aren't offered on it.
   - **Parameters on Cube Store and in the "Cube" group** (R78-14) are offered only where research shows the source binds them. Elsewhere Run is held, saying parameters aren't available there.
+    - **Dremio too** ("Hold Run, say why (Recommended)", 2026-10-17). The research binds values on PostgreSQL, Redshift, MySQL, Snowflake, BigQuery, SQL Server and Oracle, and on none of Dremio, Cube Store and Cube's SQL API (`docs/research/sql-parameter-binding.md`). On those three, a SQL holding a parameter isn't run, and Run says why.
+  - **Binding needs xcube** (`docs/research/sql-parameter-binding.md`): xcube's run route takes no values today. The change has been asked of the Cube-expert session (`to-xcube/2026-10-17-1900-sql-run-bound-parameters.md`).
+  - *The coordinator's call, overturnable:* a parameter is written `{{ name }}`, with optional spaces inside the braces. Its name matches `[A-Za-z_][A-Za-z0-9_]*` and is case-sensitive.
   - **A saved query's name** (R78-15) is required, unique among its owner's saved queries, and at most 100 characters. Its description is optional, at most 1,000 characters.
 
 **M. Brought into scope by R78, to be specified later** `[R78]`
 - The copilot (chat) panel, editing in My workspace, with a Super-Admin setting the provider, models and keys globally `[docs/inputs/2026-10-17-copilot-chat.md]`. It lifts phase 1's non-goal "AI and chat authoring" when it is taken up.
 - The ask shortcut, read as ⌘J / Ctrl+J, opening the copilot `[docs/inputs/2026-10-17-sql-runner-and-ask-key.md]`.
+- **Claude.ai and Claude Desktop as MCP clients**, deferred ("Defer Claude.ai", 2026-10-17). On Team and Enterprise plans a connector's token is entered once by an organisation Owner and sent for every member, so the calls would all act as the token's owner rather than each member (`docs/research/mcp-deployment-and-tokens.md`, finding 1). Taking them up needs a sign-in that acts per member, such as OAuth.
 - A read-only login per data source.
 - The refresh worker's build history `[R41]`.
 - xcube's slice 7.
@@ -847,16 +855,16 @@ Values R78 and the design study left open, found while writing the spec. The use
 | R78-2 | **Three fixed scopes:** read, workspace-edit, proposals-and-jobs; read always included |
 | R78-3 | **The groups of the owner's latest web sign-in** |
 | R78-4 | **Super-Admins may list and revoke any user's tokens** |
-| R78-5 | **A Postgres counter, per token, every MCP call counted, 60 a minute as a deployment setting, closed when the store fails, and an IP limit on bad-token traffic** |
+| R78-5 | **A Postgres counter, per token, every MCP call counted, 60 a minute as a deployment setting, closed when the store fails, and an IP limit on bad-token traffic**, 20 a minute by default (2026-10-17) |
 | R78-6 | **At most 1,000 rows and under 50,000 characters per result, said when cut, with paging** |
-| R78-7 | **A separate host serving only `/mcp`, allow-listed to Anthropic's IP ranges and the enterprise network, as a Helm value** |
+| R78-7 | **A separate host serving only `/mcp`, allow-listed to Anthropic's IP ranges and the enterprise network, as a Helm value**; later the same day, with Claude.ai deferred, the enterprise network only, through a Gateway API HTTPRoute |
 | R78-8 | **Jobs, builds and schedules listed; Run now and Cancel; no schedule edits** |
 | R78-9 | **Every tool call audited, reads included, with no argument values** |
 | R78-10 | **Tokens work with sign-in off,** as the single user |
 | R78-11 | **No SQL runner through MCP** in the first release |
 | R78-12 | **Ctrl+Q new tab; Ctrl+Alt+[ and Ctrl+Alt+] previous and next; close with ×** |
 | R78-13 | **The "Cube" group for everyone who sees the workspace, no switch, R50's caps, audited and in History, no Make a cube** |
-| R78-14 | **Parameters only where binding is shown to work**; elsewhere Run is held, saying so |
+| R78-14 | **Parameters only where binding is shown to work**; elsewhere Run is held, saying so. Dremio is held too (2026-10-17) |
 | R78-15 | **Name required, unique per owner, at most 100 characters; description optional, at most 1,000** |
 
 The questions as first asked:

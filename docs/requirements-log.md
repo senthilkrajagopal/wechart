@@ -273,6 +273,14 @@ Questions are Claude's; answers are the user's, verbatim.
     - R78-13: the "Cube" group is shown to everyone who sees the workspace, with no switch, R50's caps, audited as a SQL run marked "Cube", listed in History, and Make a cube disabled there;
     - R78-14: parameters are offered only where research shows binding works; elsewhere Run is held, saying parameters aren't available on that source;
     - R78-15: a saved query's name is required, unique per owner and at most 100 characters; its description is optional, at most 1,000 characters.
+- **Six more answers** (2026-10-17, the user; from the research `docs/research/mcp-deployment-and-tokens.md` and `docs/research/sql-parameter-binding.md`, and two design leftovers):
+  1. Q: On Team/Enterprise a connector's fixed token is organisation-wide, so how should Claude.ai/Desktop work? A: "Defer Claude.ai". *Day one is Claude Code only. Claude.ai and Desktop wait, since a token an organisation Owner enters is sent for every member, so the calls couldn't act as each member (research finding 1). AC-445 is retired; the allow-list covers the enterprise network, with Anthropic's `160.79.104.0/21` kept as a documented Helm value, off by default.*
+  2. Q: The chart has no ingress and ingress-nginx is retired; which? A: "Gateway API (Recommended)". *`/mcp` is exposed through a Gateway API HTTPRoute on a configurable Gateway. Which implementation is still being researched.*
+  3. Q: The per-IP limit on bad-token traffic? A: "20 per minute (Recommended)". *AC-474's default, changeable per deployment.*
+  4. Q: History's Current row where no version was kept (T695-1)? A: "View opens it as now (Recommended)". *This overturns T695-1's "no View": View opens the item as it is now.*
+  5. Q: Parameters on Dremio, which binds none? A: "Hold Run, say why (Recommended)". *As on Cube Store and in the "Cube" group (R78-14).*
+  6. Q: The seed fixtures' flat picker list (T742-2)? A: "Keep as built (Recommended)". *No criterion changes.*
+- *The coordinator's call, overturnable:* a parameter is written `{{ name }}`, with optional spaces inside the braces; its name matches `[A-Za-z_][A-Za-z0-9_]*` and is case-sensitive.
 
 **R77 — closing design conformance faster** (2026-10-08, the user)
 - The user, choosing all three options Claude offered: "Accept small visual differences and Skip the review round on pure-styling tasks and Close AC-187, the overall prototype check, on the per-surface results."
