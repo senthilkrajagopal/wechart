@@ -95,7 +95,7 @@ Acceptance criteria are global and sequential. A criterion is checked only when 
 Purpose: one workbench for authoring and administration, addressable by URL.
 Traces to: `[R2]`, `[docs/inputs §8]`, direction.md §2.
 
-- [ ] AC-001 WHEN the application loads, THE SYSTEM SHALL show a top bar whose workspace switcher lists Explore to every user; Data sources, Jobs, Schedules and SQL runner, in that order, to Super-Admins and read-write members; and Security to Super-Admins. It SHALL list no Model workspace (phase 2: `[P2 input, R18, R19, R23]`; SQL runner added 2026-10-17, `[R78]`).
+- [x] AC-001 WHEN the application loads, THE SYSTEM SHALL show a top bar whose workspace switcher lists Explore to every user; Data sources, Jobs, Schedules and SQL runner, in that order, to Super-Admins and read-write members; and Security to Super-Admins. It SHALL list no Model workspace (phase 2: `[P2 input, R18, R19, R23]`; SQL runner added 2026-10-17, `[R78]`).
       Fails when: the switcher shows a "Dashboards" or "Model" entry, omits an entry the user's role may use, or shows one it may not; or SQL runner isn't the entry after Schedules (amended 2026-10-17, `[R78]`).
 - [x] AC-002 WHEN the user opens a workspace, a dashboard, a chart or a model file, THE SYSTEM SHALL change the URL so that reloading it restores the same surface and the same selected object.
       Fails when: after reload the application shows a different workspace, dashboard, chart or file than the URL names.

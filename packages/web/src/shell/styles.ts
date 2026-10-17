@@ -245,12 +245,13 @@ textarea { height: auto; padding: 6px 8px; }
   /* Never on two lines (T696, CMP-07). */
   white-space: nowrap;
 }
-/* Between 1,024 and 1,279 px, which no design draws, the tabs pad 8 a side,
-   so a Super-Admin's five fit beside the 260 px search (T696-3). */
+/* Between 1,024 and 1,279 px, which no design draws, the tabs pad 4 a side
+   and the bar's gap is 8, so a Super-Admin's six, SQL runner among them, fit
+   beside the 260 px search (T696-3; T796-1, which took them from 8 and 12:
+   SQL runner overflowed the bar by 55 px at 1,024 in real Chrome). */
 @media (max-width: 1279.98px) {
-  .workspace-switcher a { padding: 0 8px; }
-  /* And the bar's gap 12, not 16: real Chrome's Inter needed 12 px more. */
-  .app-bar { gap: 12px; }
+  .workspace-switcher a { padding: 0 4px; }
+  .app-bar { gap: 8px; }
 }
 .workspace-switcher a:hover { color: var(--wc-text-primary); }
 .workspace-switcher a[aria-current='page'] {

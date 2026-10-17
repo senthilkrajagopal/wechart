@@ -14673,3 +14673,12 @@ Search this file by task ID (`T123`) or AC ID.
     - **The audit:** event `token-made`, with no folder. The item is `access-token` and its name; the summary is "‹name› · ‹n› days", as design 18 state I draws it.
     - **Beyond the listed files:** `AuditTrail.tsx` gained the "Token made" label, design 18's key icon and the "Access token" kind (+ 2 tests). Without them, a token-made record would crash the Security audit page, since `EVENT_ICONS[event]` would be undefined. `main.ts` wires the store in.
     - **Tests:** `mcp/tokenText.test.ts`, `repos/access-tokens.test.ts`, `routes/access-tokens.test.ts` and `AuditTrail.test.tsx`.
+
+### P2.24 Lane SQL: the workspace (ticked after 2026-10-17)
+
+- [x] T796 [P] (AC-001, AC-446) SQL runner in the switcher after Schedules, for Super-Admins and read-write members, opening the workspace at `/sql`, and Not found to anyone else
+  - Lane: SQL
+  - Files: `packages/web/src/shell/WorkspaceSwitcher.tsx` (+ test), `packages/web/src/router/routes.tsx`, `packages/web/src/workspaces/sql/SqlWorkspace.tsx` (+ test), `e2e/security/sql-workspace.spec.ts`.
+  - Failing test: `WorkspaceSwitcher.test.tsx`: for a Super-Admin and a read-write member the entries are Explore, Data sources, Jobs, Schedules, SQL runner, then Security for a Super-Admin; a read-only user's switcher has no SQL runner (AC-001). `e2e/security/sql-workspace.spec.ts`: SQL runner opens `/sql`; a read-only user opening `/sql` sees Not found and none of the workspace (AC-446).
+  - Depends on: none
+  - **Built 2026-10-17** (lane SQL). AC-001 is ticked; AC-446 stays open for T801 (the open tab in the address, restored on reload). The workspace shows nothing until `/api/me` answers, and Not found if it can't be read. The bar at 1,024 px needed T796-1 (`decisions-2026-10-08.md`, "Later decisions"): the tabs pad 4 and the bar's gap is 8 below 1,280. The switcher lists in `AppShell.test.tsx`, `smoke.spec.ts`, `routing.spec.ts`, `security/explore-roles.spec.ts` and `security/sign-in.spec.ts` gain SQL runner.

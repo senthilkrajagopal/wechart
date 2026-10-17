@@ -15,6 +15,7 @@ const WORKSPACES = [
   { path: '/data-sources', label: 'Data sources' },
   { path: '/jobs', label: 'Jobs' },
   { path: '/schedules', label: 'Schedules' },
+  { path: '/sql', label: 'SQL runner' },
   { path: '/security', label: 'Security' },
 ];
 

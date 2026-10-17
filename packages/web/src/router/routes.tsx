@@ -36,6 +36,7 @@ import { CUBE_STORE_ID } from '../workspaces/data-sources/cubeStore';
 import { CubeStorePage } from '../workspaces/data-sources/CubeStorePage';
 import { SourceSettings } from '../workspaces/data-sources/SourceSettings';
 import { SchedulesPage } from '../workspaces/schedules/SchedulesPage';
+import { SqlWorkspace } from '../workspaces/sql/SqlWorkspace';
 import { ModelFilePage } from '../workspaces/model/ModelFilePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
 import { LocalChartActions, useChartHome } from '../workspaces/explore/LocalChartHome';
@@ -219,6 +220,8 @@ const WORKSPACE_CONTENT: Partial<Record<string, () => React.ReactNode>> = {
   // Their frames and what they are for; managing either waits (AC-233).
   schedules: () => <SchedulesPage />,
   'data-sources': () => <DataSourcesPage />,
+  // F42's workspace, which decides for itself whom it is shown to (T796).
+  sql: () => <SqlWorkspace />,
   // The model's files as a tree beside the editor, none open yet (T234, AC-222).
   model: () => <ModelFilePage />,
 };

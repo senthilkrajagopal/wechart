@@ -219,6 +219,7 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
         'Data sources',
         'Jobs',
         'Schedules',
+        'SQL runner',
         'Security',
       ]);
       // Below 1,024 px the menu holds the same.
@@ -227,6 +228,7 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
         'Data sources',
         'Jobs',
         'Schedules',
+        'SQL runner',
         'Security',
       ]);
       // A link into the Model workspace still opens it (T331).
@@ -350,11 +352,17 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
   test.describe('as writer, a read-write member of Roles', () => {
     test.use({ role: 'writer' });
 
-    test('lists Explore, Data sources, Jobs and Schedules in the bar, and no Model or Security', async ({
+    test('lists Explore, Data sources, Jobs, Schedules and SQL runner in the bar, and no Model or Security', async ({
       page,
     }) => {
       await explore(page);
-      expect(await entries(page)).toEqual(['Explore', 'Data sources', 'Jobs', 'Schedules']);
+      expect(await entries(page)).toEqual([
+        'Explore',
+        'Data sources',
+        'Jobs',
+        'Schedules',
+        'SQL runner',
+      ]);
     });
 
     test('sees Roles and Inner, counted with its models and data sources, and nothing of Hidden', async ({

@@ -135,7 +135,10 @@ test.describe('signed in as super, the account menu’s badge', () => {
     await expect(badge.locator('svg')).toHaveCount(1);
   });
 
-  /** T696 (CMP-07, T696-3): a Super-Admin's five workspaces, the search at 260, at 1,024. */
+  /**
+   * T696 (CMP-07, T696-3): a Super-Admin's workspaces, the search at 260, at
+   * 1,024. Six since SQL runner joined them (T796, AC-001).
+   */
   test('fits the bar at 1,024: every workspace on one line, the search at 260', async ({
     page,
   }) => {
@@ -145,7 +148,7 @@ test.describe('signed in as super, the account menu’s badge', () => {
       .getByRole('banner')
       .getByRole('navigation', { name: 'Workspaces' })
       .getByRole('link');
-    await expect(links).toHaveCount(5);
+    await expect(links).toHaveCount(6);
     for (const link of await links.all())
       expect(
         await link.evaluate((each) => {

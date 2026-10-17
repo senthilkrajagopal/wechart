@@ -54,9 +54,10 @@ describe('app shell (AC-001)', () => {
     const bar = screen.getByRole('banner');
     const switcher = within(bar).getByRole('navigation', { name: /workspace/i });
 
-    // The single user holds every permission: every entry but Model (T331).
+    // The single user holds every permission: every entry but Model (T331),
+    // SQL runner included (T796).
     await waitFor(() => {
-      expect(within(switcher).getAllByRole('link')).toHaveLength(5);
+      expect(within(switcher).getAllByRole('link')).toHaveLength(6);
     });
     expect(within(switcher).queryByRole('link', { name: 'Model' })).toBeNull();
   });
@@ -87,7 +88,7 @@ describe('the narrow menu (T396, AC-304)', () => {
     await waitFor(() => {
       expect(
         within(screen.getByTestId('narrow-menu')).getAllByRole('link', { hidden: true }),
-      ).toHaveLength(5);
+      ).toHaveLength(6);
     });
     const button = within(screen.getByRole('banner')).getByRole('button', { name: 'Menu' });
     expect(button.getAttribute('aria-expanded')).toBe('false');
@@ -108,6 +109,7 @@ describe('the narrow menu (T396, AC-304)', () => {
       'Data sources',
       'Jobs',
       'Schedules',
+      'SQL runner',
       'Security',
     ]);
     expect(within(panel).getByRole('link', { name: 'Jobs' }).getAttribute('aria-current')).toBe(
@@ -228,7 +230,7 @@ describe('the bar by role (T331, AC-001)', () => {
     });
     renderShell(<AppShell workspace="explore" />);
 
-    const expected = ['Explore', 'Data sources', 'Jobs', 'Schedules'];
+    const expected = ['Explore', 'Data sources', 'Jobs', 'Schedules', 'SQL runner'];
     await waitFor(() => {
       expect(entries(bar())).toEqual(expected);
     });

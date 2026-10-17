@@ -25,21 +25,26 @@ export const WORKSPACES = [
   { id: 'data-sources', label: 'Data sources', path: '/data-sources' },
   { id: 'jobs', label: 'Jobs', path: '/jobs' },
   { id: 'schedules', label: 'Schedules', path: '/schedules' },
+  // After Schedules (AC-001 as amended, R78; design 17, state A; T796).
+  { id: 'sql', label: 'SQL runner', path: '/sql' },
   { id: 'security', label: 'Security', path: '/security' },
 ] as const satisfies readonly Workspace[];
 
 export type WorkspaceId = (typeof WORKSPACES)[number]['id'];
 
-/** What only those who write somewhere may use: their folders' data sources, builds and schedules. */
-const WRITERS: readonly WorkspaceId[] = ['data-sources', 'jobs', 'schedules'];
+/**
+ * What only those who write somewhere may use: their folders' data sources,
+ * builds, schedules and SQL runner.
+ */
+const WRITERS: readonly WorkspaceId[] = ['data-sources', 'jobs', 'schedules', 'sql'];
 
 /**
  * The workspaces a user may not open, left out of the switcher (AC-001;
  * design 09, state A):
  *
  * - Explore is every user's.
- * - Data sources, Jobs and Schedules are Super-Admins' and read-write
- *   members' (T364, T371).
+ * - Data sources, Jobs, Schedules and SQL runner are Super-Admins' and
+ *   read-write members' (T364, T371, T796).
  * - Security is Super-Admins' (T500).
  *
  * With sign-in off the one user holds every permission, as a Super-Admin does

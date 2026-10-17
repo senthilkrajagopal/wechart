@@ -1764,11 +1764,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 ### Lane SQL: the workspace
 
-- [ ] T796 [P] (AC-001, AC-446) SQL runner in the switcher after Schedules, for Super-Admins and read-write members, opening the workspace at `/sql`, and Not found to anyone else
-  - Lane: SQL
-  - Files: `packages/web/src/shell/WorkspaceSwitcher.tsx` (+ test), `packages/web/src/router/routes.tsx`, `packages/web/src/workspaces/sql/SqlWorkspace.tsx` (+ test), `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: `WorkspaceSwitcher.test.tsx`: for a Super-Admin and a read-write member the entries are Explore, Data sources, Jobs, Schedules, SQL runner, then Security for a Super-Admin; a read-only user's switcher has no SQL runner (AC-001). `e2e/security/sql-workspace.spec.ts`: SQL runner opens `/sql`; a read-only user opening `/sql` sees Not found and none of the workspace (AC-446).
-  - Depends on: none
+- [x] T796 [P] (AC-001, AC-446) SQL runner in the switcher after Schedules, for Super-Admins and read-write members, opening the workspace at `/sql`, and Not found to anyone else
 
 - [ ] T797 (AC-386, AC-381, AC-304) The workspace's three panes: the picker and schema browser on the left, the tabs over the results in the centre, Saved and History on the right, folding to rails below 1,024 px, as design 17 screen 1 and state O draw them
   - Lane: SQL

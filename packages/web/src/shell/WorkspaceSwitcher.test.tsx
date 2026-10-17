@@ -6,16 +6,17 @@ import { hiddenWorkspacesFor, WORKSPACES, WorkspaceSwitcher } from './WorkspaceS
 
 /**
  * AC-001: WHEN the application loads, THE SYSTEM SHALL show a top bar whose
- * workspace switcher lists Explore to every user; Data sources, Jobs and
- * Schedules to Super-Admins and read-write members; and Security to
- * Super-Admins. It SHALL list no Model workspace.
+ * workspace switcher lists Explore to every user; Data sources, Jobs,
+ * Schedules and SQL runner, in that order, to Super-Admins and read-write
+ * members; and Security to Super-Admins. It SHALL list no Model workspace.
  * Fails when: the switcher shows a "Dashboards" or "Model" entry, omits an
- * entry the user's role may use, or shows one it may not.
+ * entry the user's role may use, or shows one it may not; or SQL runner isn't
+ * the entry after Schedules (amended 2026-10-17, R78; T796).
  *
  * These assert the whole list rather than the presence of each name: an entry
  * too many has to fail this file.
  */
-const EVERY = ['Explore', 'Data sources', 'Jobs', 'Schedules', 'Security'];
+const EVERY = ['Explore', 'Data sources', 'Jobs', 'Schedules', 'SQL runner', 'Security'];
 
 const labelsFor = (me: Me | undefined) => {
   render(<WorkspaceSwitcher current="explore" hidden={hiddenWorkspacesFor(me)} />);
@@ -76,7 +77,14 @@ describe('workspace switcher (AC-001)', () => {
     render(<WorkspaceSwitcher current="explore" />);
 
     const hrefs = screen.getAllByRole('link').map((entry) => entry.getAttribute('href'));
-    expect(hrefs).toEqual(['/explore', '/data-sources', '/jobs', '/schedules', '/security']);
+    expect(hrefs).toEqual([
+      '/explore',
+      '/data-sources',
+      '/jobs',
+      '/schedules',
+      '/sql',
+      '/security',
+    ]);
   });
 
   it('exports the workspace list the rest of the app routes from, Model’s address kept', () => {
@@ -88,6 +96,7 @@ describe('workspace switcher (AC-001)', () => {
       'Data sources',
       'Jobs',
       'Schedules',
+      'SQL runner',
       'Security',
     ]);
     expect(WORKSPACES.find((workspace) => workspace.id === 'model')?.path).toBe('/model');
@@ -108,12 +117,13 @@ describe('the switcher by role (T331, AC-001)', () => {
     expect(labelsFor(signedIn({ superAdmin: true, readWrite: true }))).toEqual(EVERY);
   });
 
-  it('lists Explore, Data sources, Jobs and Schedules to a read-write member, and no Security', () => {
+  it('lists Explore, Data sources, Jobs, Schedules and SQL runner to a read-write member, and no Security', () => {
     expect(labelsFor(signedIn({ readWrite: true }))).toEqual([
       'Explore',
       'Data sources',
       'Jobs',
       'Schedules',
+      'SQL runner',
     ]);
   });
 

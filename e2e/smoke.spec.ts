@@ -29,6 +29,7 @@ test('the app shell renders in this browser', async ({ page }) => {
     'Data sources',
     'Jobs',
     'Schedules',
+    'SQL runner',
     'Security',
   ]);
   await expect(page).toHaveTitle('wechart');
