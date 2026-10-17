@@ -286,6 +286,7 @@ Questions are Claude's; answers are the user's, verbatim.
   2. Q: Make a cube's Kind and Cube type for each column (17-Q9)? A: "Numbers as sum measures (Recommended)". *Numeric columns other than the primary key start as measures of type `sum`, changeable among Cube's measure types; the rest start as dimensions typed string, number, time or boolean, from the database's type.*
   3. Q: A deployment whose Helm values name no MCP host (18-Q6)? A: "MCP off (Recommended)". *Option (a2): with no host named, nothing is served at `/mcp`, and the token pages say MCP isn't set up.*
   4. Q: Do R78-12's tab keys (Ctrl+Q, Ctrl+Alt+[ and ]) reach the page (17-Q3)? A: "Research first (Recommended)". *A research doc, `docs/research/keyboard-shortcuts-sql-runner.md`, checks each supported browser, operating system and keyboard layout before the keys are built; a conflict found comes back to the user.*
+  5. Q (after that research, e32d86e5: Ctrl+Alt+[ / ] type characters on many European Windows layouts and are VoiceOver's on macOS): What should we do for previous/next tab? A: "Drop it; tab bar only (Recommended)". *Ctrl+Q stays; tabs are chosen with the tab bar. AC-480 and T827 amended.*
 
 **R77 — closing design conformance faster** (2026-10-08, the user)
 - The user, choosing all three options Claude offered: "Accept small visual differences and Skip the review round on pure-styling tasks and Close AC-187, the overall prototype check, on the per-surface results."
