@@ -161,6 +161,99 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
       await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
     });
 
+    /**
+     * T694 (EXP-09, EXP-15; design 14, B1; design 04, pins 3 and 7; AC-278,
+     * AC-289): each row's ⋯ offers what its page does, by its kind and
+     * place, and a workspace row is two lines, 44 px.
+     */
+    test('finds each row’s ⋯ by its kind and place, and My workspace’s rows on two lines', async ({
+      page,
+    }) => {
+      await page.goto(`/explore?folder=${made.folder}`);
+      const contents = page.getByTestId('explore-contents');
+      const entries = (menu: ReturnType<typeof page.getByRole>) =>
+        menu
+          .locator('[role="menuitem"], [role="separator"]')
+          .evaluateAll((all) =>
+            all.map((each) =>
+              each.getAttribute('role') === 'separator' ? '—' : (each.textContent ?? ''),
+            ),
+          );
+      // The dashboard, which the writer has a copy of: Open my copy.
+      await contents
+        .getByTestId(`item-${made.board}`)
+        .getByRole('button', { name: `Actions for ${BOARD}` })
+        .click();
+      const boardMenu = page.getByRole('menu', { name: `Actions for ${BOARD}` });
+      await expect(boardMenu).toBeVisible();
+      expect(await entries(boardMenu)).toEqual([
+        'Open',
+        'Open my copy',
+        'History',
+        'Export…',
+        '—',
+        'Rename',
+        'Move to…',
+        '—',
+        'Delete…',
+      ]);
+      await page.keyboard.press('Escape');
+      // The chart, not yet copied: Edit in my workspace, and no Export….
+      await contents
+        .getByTestId(`item-${made.chart}`)
+        .getByRole('button', { name: `Actions for ${CHART}` })
+        .click();
+      const chartMenu = page.getByRole('menu', { name: `Actions for ${CHART}` });
+      await expect(chartMenu).toBeVisible();
+      expect(await entries(chartMenu)).toEqual([
+        'Open',
+        'Edit in my workspace',
+        'History',
+        '—',
+        'Rename',
+        'Move to…',
+        '—',
+        'Delete…',
+      ]);
+      await page.keyboard.press('Escape');
+
+      // Open my copy opens the copy to be edited, as the dashboard's own button does.
+      await contents
+        .getByTestId(`item-${made.board}`)
+        .getByRole('button', { name: `Actions for ${BOARD}` })
+        .click();
+      await page.getByRole('menuitem', { name: 'Open my copy' }).click();
+      await expect(page).toHaveURL(new RegExp(`/explore/dashboards/${made.copy}\\?editing=true$`));
+
+      // History opens the dashboard with its History beside it.
+      await page.goto(`/explore?folder=${made.folder}`);
+      await contents
+        .getByTestId(`item-${made.board}`)
+        .getByRole('button', { name: `Actions for ${BOARD}` })
+        .click();
+      await page.getByRole('menuitem', { name: 'History' }).click();
+      await expect(page).toHaveURL(new RegExp(`/explore/dashboards/${made.board}\\?panel=history$`));
+      await expect(page.getByRole('complementary', { name: 'History' })).toBeVisible();
+      // A chart's too: its page reads the same address (T694).
+      await page.goto(`/explore?folder=${made.folder}`);
+      await contents
+        .getByTestId(`item-${made.chart}`)
+        .getByRole('button', { name: `Actions for ${CHART}` })
+        .click();
+      await page.getByRole('menuitem', { name: 'History' }).click();
+      await expect(page).toHaveURL(new RegExp(`/explore/charts/${made.chart}\\?panel=history$`));
+      await expect(page.getByRole('complementary', { name: 'History' })).toBeVisible();
+
+      // In My workspace: the copy's row is two lines, its next step first.
+      await page.goto(`/explore?folder=${made.boardProject}`);
+      const copy = contents.getByTestId(`item-${made.copy}`);
+      await expect(copy).toHaveClass(/\bis-two-line\b/);
+      expect(Math.round((await copy.boundingBox())?.height ?? 0)).toBe(44);
+      await copy.getByRole('button', { name: `Actions for ${BOARD}` }).click();
+      await expect(page.getByRole('menuitem').first()).toHaveText(`Propose to ${FOLDER}…`);
+      await page.keyboard.press('Escape');
+    });
+
     test('is offered a copy of a shared library chart, never its editor, and the copy goes back by proposal', async ({
       page,
     }) => {

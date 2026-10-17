@@ -91,7 +91,8 @@ test.describe('proposing from the workspace, and a rejection’s band (T358, AC-
 
       const row = await workspaceRow(page);
       await row.getByRole('button', { name: `Actions for ${TITLE}` }).click();
-      await page.getByRole('menuitem', { name: 'Propose…' }).click();
+      // Named for its target (T694; design 04, pin 7).
+      await page.getByRole('menuitem', { name: /^Propose to .+…$/ }).click();
       const dialog = page.getByRole('dialog', { name: `Propose to ${FOLDER}` });
       await expect(dialog.getByTestId('propose-item')).toHaveText(
         `Chart · ${TITLE} — new in this folder`,

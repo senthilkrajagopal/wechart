@@ -573,7 +573,8 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
         .getByTestId(`item-${made.boards[0]!}`)
         .getByRole('button', { name: /^Actions for/ })
         .click();
-      await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText(['Export…']);
+      // A reader's: Open and Export… alone, no copy or History (T694; design 14, B1).
+      await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText(['Open', 'Export…']);
       await page.keyboard.press('Escape');
     });
 

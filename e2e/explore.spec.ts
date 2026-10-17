@@ -402,8 +402,15 @@ test("rename and move are in each row's menu, and a move never offers where the 
 
   await chartRow.getByRole('button', { name: `Actions for A typed ${made.unique}` }).click();
   const menu = page.getByRole('menu', { name: `Actions for A typed ${made.unique}` });
-  // Delete… last, set apart (T517; design 14, pin 8).
-  await expect(menu.getByRole('menuitem')).toHaveText(['Rename', 'Move to…', 'Delete…']);
+  // Delete… last, set apart (T517; design 14, pin 8); Open first, then the
+  // copy it landed from, still in My workspace (T694; design 14, B1).
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    'Open',
+    'Open my copy',
+    'Rename',
+    'Move to…',
+    'Delete…',
+  ]);
   await menu.getByRole('menuitem', { name: 'Move to…' }).click();
   const chartTargets = chartRow.getByRole('combobox', { name: `Move A typed ${made.unique} to` });
   await expect(chartTargets).toBeFocused();

@@ -29,7 +29,9 @@ import { isMyWorkspace, ROOT_FOLDERS, SHARED_ROOT, rootTitleOf, visibleRoots } f
 import { WorkspaceBand } from './WorkspaceBand';
 import { ProposeFlow } from './ProposeFlow';
 import { REVIEWS_QUERY } from '../reviews/reviews';
-import { statusOfItem } from './proposalStatus';
+import { statusOfItem, waitingProposalOf } from './proposalStatus';
+import { EditInWorkspaceDialog } from './EditInWorkspaceDialog';
+import { browserTimeZone } from './projectFolder';
 import { ExportPane } from '../../dashboard/export/ExportPane';
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { ImportPane } from './import/ImportPane';
@@ -436,6 +438,46 @@ export function ExplorePage() {
   // What is being proposed (T358), and each item's latest proposal, for its
   // status past Draft (design 04; design 05, state M).
   const [proposing, setProposing] = useState<CatalogItem | null>(null);
+  /**
+   * A shared dashboard being copied from its row's "Edit in my workspace"
+   * (T694; design 14, B1), with design 04 state D's question.
+   */
+  const [copyingDashboard, setCopyingDashboard] = useState<CatalogItem | null>(null);
+  /** A shared chart copied from its row, then opened in the editor, as its page does (T694). */
+  const copyChart = useMutation({
+    mutationFn: async (chartId: string) => {
+      const response = await fetch('/api/workspace/copies', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        // Into a project folder of its own, named in the user's time (T523, AC-368).
+        body: JSON.stringify({ kind: 'chart', id: chartId, timeZone: browserTimeZone() }),
+      });
+      const answer = (await response.json().catch(() => null)) as { id?: string } | null;
+      if (!response.ok || answer?.id === undefined)
+        throw new Error(`It could not be copied (${String(response.status)}).`);
+      return answer.id;
+    },
+    onSuccess: (copyId) => {
+      globalThis.location.assign(`/explore/charts/${encodeURIComponent(copyId)}/edit`);
+    },
+  });
+  /**
+   * A row's "Edit in my workspace" or "Open my copy" (T694, AC-278): the copy
+   * opens to be edited, as the item's own page's button does.
+   */
+  const editInWorkspace = (item: CatalogItem) => {
+    const copyId = item.copy?.id ?? null;
+    if (item.kind === 'dashboard') {
+      if (copyId === null) setCopyingDashboard(item);
+      else
+        globalThis.location.assign(
+          `/explore/dashboards/${encodeURIComponent(copyId)}?editing=true`,
+        );
+    } else if (item.kind === 'chart') {
+      if (copyId === null) copyChart.mutate(item.id);
+      else globalThis.location.assign(`/explore/charts/${encodeURIComponent(copyId)}/edit`);
+    }
+  };
   const myProposals = useQuery({ ...REVIEWS_QUERY, enabled: inOwnWorkspace, retry: false });
   // Asked of a shared folder while it is searched too: what it offers (New,
   // below) stays what the user may do there.
@@ -1288,10 +1330,61 @@ export function ExplorePage() {
                         setProposing(item);
                       },
                       statusOf: (item: CatalogItem) => statusOfItem(myProposals.data?.mine, item),
+                      // "View proposal" while it waits (T694; design 04, pin 7).
+                      waitingProposalOf: (item: CatalogItem) =>
+                        waitingProposalOf(myProposals.data?.mine, item),
+                      onViewProposal: (proposalId: string) => {
+                        globalThis.location.assign(
+                          `/reviews?tab=mine&selected=${encodeURIComponent(proposalId)}`,
+                        );
+                      },
+                    },
+                  }
+                : {})}
+              // A shared dashboard's or chart's copy, where the listing says
+              // the user may make one (T694, AC-278; design 14, B1).
+              onCopy={editInWorkspace}
+              // Its History, to a folder's read-write members and Super-Admins
+              // (T694, AC-289), on its page with the panel open. Signed in:
+              // with sign-in off, its page alone offers it.
+              {...(!searching &&
+              !inMyWorkspace &&
+              signedIn &&
+              (role.access === 'super-admin' || role.access === 'read-write')
+                ? {
+                    onHistory: (item: CatalogItem) => {
+                      globalThis.location.assign(
+                        `/explore/${item.kind}s/${encodeURIComponent(item.id)}?panel=history`,
+                      );
                     },
                   }
                 : {})}
             />
+            {copyChart.isError ? (
+              <StateLine kind="err" role="alert">
+                {copyChart.error.message}
+              </StateLine>
+            ) : null}
+            {copyingDashboard === null ? null : (
+              // Design 04 state D's question, from the row (T694).
+              <EditInWorkspaceDialog
+                dashboardId={copyingDashboard.id}
+                title={copyingDashboard.title}
+                targetPath={
+                  (copyingDashboard.folderId == null
+                    ? undefined
+                    : targetPathOf(folders.data ?? [], copyingDashboard.folderId)) ?? 'its folder'
+                }
+                onClose={() => {
+                  setCopyingDashboard(null);
+                }}
+                onCopied={(copyId) => {
+                  globalThis.location.assign(
+                    `/explore/dashboards/${encodeURIComponent(copyId)}?editing=true`,
+                  );
+                }}
+              />
+            )}
             {proposing === null ||
             proposing.kind === 'folder' ||
             (proposing.kind === 'model' && proposing.fileId === undefined) ? null : (

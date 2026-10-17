@@ -150,7 +150,8 @@ test.describe('a dashboard proposed with the workspace model it resolves through
       await page.goto(`/explore?folder=${made.project}`);
       const row = page.getByTestId('explore-contents').getByTestId(`item-${made.board}`);
       await row.getByRole('button', { name: `Actions for ${BOARD}` }).click();
-      await page.getByRole('menuitem', { name: 'Propose…' }).click();
+      // Named for its target (T694; design 04, pin 7).
+      await page.getByRole('menuitem', { name: /^Propose to .+…$/ }).click();
       const dialog = page.getByRole('dialog', { name: `Propose to ${FOLDER}` });
       const goes = dialog.getByRole('list', { name: 'Goes with it' });
       await expect(goes.getByRole('listitem')).toHaveText([
@@ -244,7 +245,8 @@ test.describe('a dashboard proposed with the workspace model it resolves through
         .getByRole('button', { name: `Actions for ${CUBE}.yml` })
         .click();
       const menu = page.getByRole('menu');
-      await expect(menu.getByRole('menuitem')).toHaveText(['Open', 'Propose…', 'Delete…']);
+      // Waiting in the dashboard's proposal, it offers that, not another (T694; design 04, pin 7).
+      await expect(menu.getByRole('menuitem')).toHaveText(['View proposal', 'Open', 'Delete…']);
       await menu.getByRole('menuitem', { name: 'Delete…' }).click();
       const dialog = page.getByRole('alertdialog');
       await expect(

@@ -388,7 +388,8 @@ test.describe('a model of a folder one may only read, used in My workspace (T543
       await page.getByRole('button', { name: `Actions for ${CUBE}.yml` }).click();
       const menu = page.getByRole('menu', { name: `Actions for ${CUBE}.yml` });
       await expect(menu.getByRole('menuitem', { name: 'Open' })).toBeVisible();
-      await expect(menu.getByRole('menuitem', { name: 'Propose…' })).toHaveCount(0);
+      // None, named for a target or not (T694).
+      await expect(menu.getByRole('menuitem', { name: /^Propose/ })).toHaveCount(0);
     });
 
     test('previews with it, and its proposal is refused, saying why', async ({ page }) => {

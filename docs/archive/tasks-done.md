@@ -14562,3 +14562,20 @@ Search this file by task ID (`T123`) or AC ID.
     - **The review (one round), fixed:** the owner is the newest version's author even where that version names none (then none), not an older one's; a stale comment on the roots' order.
     - **Left for later:** a workspace row with its origin line is about 36 px until T694 makes it 44; with a pane docked, clearing a search's last character unmounts the focused search box, so focus falls to the page (T693-5 as recorded).
     - **Failing before T693, at 082e8b06 too:** `no-horizontal-scroll.spec.ts:53` (the chart editor at 1,280 px, 7 px wide) and `security/workspace-edit.spec.ts:164` (the chart page's Dashboard combobox).
+
+- [x] T694 (AC-343, AC-278, AC-284, AC-289, AC-281) Each row's ⋯ by its kind and place, and My workspace's rows on two lines *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/workspaces/explore/FolderContents.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/explore.spec.ts`, `e2e/security/workspace-edit.spec.ts`
+  - Findings: EXP-09, EXP-15.
+  - Failing test:
+    - a shared dashboard's ⋯ is Open, Open my copy or Edit in my workspace, History, Export…, then Rename and Move to…, then Delete…;
+    - a draft's ⋯ starts with "Propose to ‹folder›…";
+    - a waiting item offers "View proposal";
+    - workspace rows are 44 px, the name over its origin and target.
+  - Depends on: T693 (the list's names and spacing)
+  - **Built 2026-10-17** (lane C). The calls are T694-1 to T694-3 in `decisions-2026-10-08.md`, "Later decisions".
+    - The API's folder listing gives each shared dashboard and chart `copy: { id }` (the user's copy, or null) to one who may copy it (`server.ts`, `copiesFor`). The row's "Edit in my workspace" opens design 04 state D's dialog for a dashboard, or copies a chart into the editor, as their pages do; "Open my copy" opens the copy.
+    - History from a row opens the item's page with `?panel=history`; a library chart's page now reads that address too (`routes.tsx`, `LibraryChartPage.tsx`).
+    - A workspace row's next step comes first: "Propose to ‹target›…", or "View proposal" (Reviews › Mine) while it waits (`proposalStatus.ts`, `waitingProposalOf`). Workspace rows with their origin line take the 44 px `is-two-line` row; `styles.ts` needed no change.
+    - **Tests.** API: `access/workspaces.test.ts` (T694). Unit: `FolderContents.test`, `proposalStatus.test`. e2e: `security/workspace-edit.spec.ts` (a new T694 test); menus changed by it in `explore.spec.ts`, `preaggregations.spec.ts`, `security/{explore-roles,propose,proposal-models,credential-canary,use-only-copy}.spec.ts`.
+    - **The review (one round):** no bugs. Left: a chart row's "Edit in my workspace" and a dashboard row's dialog have no e2e of their own (the pages' tests cover the same copy calls); with two copies of one item, the row and the page could pick different ones (JS against Postgres ordering), which the copy endpoint's reuse makes unlikely; the copy lookup reads each workspace folder's contents once per shared listing.
+    - **Failing before T694, as before:** `security/workspace-edit.spec.ts` (now :257, the chart page's Dashboard combobox), which skips the two serial tests after it.

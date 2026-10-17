@@ -647,7 +647,8 @@ test.describe('a data source’s secrets, at rest and in flight (T368, T581; AC-
       // Proposed from its row, to the folder it is to go to.
       const row = contents.getByRole('row').filter({ hasText: NAME });
       await row.getByRole('button', { name: `Actions for ${NAME}` }).click();
-      await page.getByRole('menuitem', { name: 'Propose…' }).click();
+      // Named for its target (T694; design 04, pin 7).
+      await page.getByRole('menuitem', { name: /^Propose to .+…$/ }).click();
       const dialog = page.getByRole('dialog', { name: `Propose to ${FOLDER}` });
       await dialog.getByLabel('What changed').fill(`Canary ${RUN}, first.`);
       await dialog.getByRole('button', { name: 'Propose', exact: true }).click();

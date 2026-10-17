@@ -96,6 +96,8 @@ export function updatedText(
 
 export interface LibraryChartPageProps {
   readonly chartId: string;
+  /** The panel the address has open beside it: History, from its Explore row (T694). */
+  readonly panel?: 'history' | undefined;
 }
 
 /** One of the details pane's sections, named by its heading (AC-212). */
@@ -109,7 +111,7 @@ function Detail({ title, children }: { readonly title: string; readonly children
   );
 }
 
-export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
+export function LibraryChartPage({ chartId, panel }: LibraryChartPageProps) {
   const queryClient = useQueryClient();
 
   /** Which folder the chart lives in, for its breadcrumb (AC-195). */
@@ -149,7 +151,10 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   // Its History (T357, AC-289): offered only where the API shows it.
   const history = useQuery({ ...historyQuery('chart', chartId), enabled: viaWorkspace });
   const mayHistory = viaWorkspace && history.data != null;
-  const [historyOpen, setHistoryOpen] = useState(false);
+  // Open on arrival where the address asks, from its Explore row's History
+  // (T694), once the API shows it.
+  const [historyWanted, setHistoryOpen] = useState(panel === 'history');
+  const historyOpen = mayHistory && historyWanted;
   const restore = useRestore('chart', chartId);
   // Where it lives and how it's changed (T348, AC-278; T359).
   const folders = useQuery({ ...FOLDERS_QUERY, enabled: viaWorkspace });

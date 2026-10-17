@@ -443,6 +443,37 @@ describe('items made in the workspace name their target folder (T345, AC-282)', 
     ]);
   });
 
+  /**
+   * T694 (AC-278; design 14, B1): a shared folder lists each dashboard and
+   * chart with the user's copy of it, for its row's "Open my copy", or none
+   * yet, for "Edit in my workspace" — only to one who may copy it: a
+   * read-write member with a workspace, never a reader.
+   */
+  it('lists a shared dashboard or chart with the user’s copy of it, to those who may copy it', async () => {
+    const copiedOne = idOf(await create('super', 'dashboard', `has a copy ${MARK}`, sales));
+    const uncopied = idOf(await create('super', 'chart', `no copy ${MARK}`, sales));
+    const copy = await as('writer', {
+      method: 'POST',
+      url: '/api/workspace/copies',
+      payload: { kind: 'dashboard', id: copiedOne, timeZone: TEST_TIME_ZONE },
+    });
+    expect(copy.statusCode, copy.body).toBe(201);
+    const listed = async (who: string) =>
+      ((await (await contents(who, sales)).json()) as { id: string; copy?: unknown }[]).filter(
+        (each) => each.id === copiedOne || each.id === uncopied,
+      );
+    const writers = await listed('writer');
+    expect(writers.find((each) => each.id === copiedOne)?.copy).toEqual({ id: idOf(copy) });
+    expect(writers.find((each) => each.id === uncopied)?.copy).toEqual({ id: null });
+    // Another's copy is not theirs: super has none of the dashboard.
+    expect((await listed('super')).find((each) => each.id === copiedOne)?.copy).toEqual({
+      id: null,
+    });
+    // A reader sees the dashboard alone, with nothing to copy.
+    const readers = await listed('reader');
+    expect(readers.map((each) => [each.id, each.copy])).toEqual([[copiedOne, undefined]]);
+  });
+
   it('keeps the target as stored through every save, and gives a chart made on a workspace dashboard its dashboard’s (T345’s review)', async () => {
     const board = idOf(await create('writer', 'dashboard', `kept ${MARK}`, 'mine'));
     const read = async (kind: DocumentKind, id: string) => (await docs().get(kind, id))!;

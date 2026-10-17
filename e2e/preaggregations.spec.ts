@@ -225,7 +225,8 @@ async function proposeRefused(
     .getByTestId(`item-${copy.path}`)
     .getByRole('button', { name: `Actions for ${copy.path.slice(copy.path.lastIndexOf('/') + 1)}` })
     .click();
-  await page.getByRole('menuitem', { name: 'Propose…' }).click();
+  // Named for its target where it has one (T694; design 04, pin 7).
+  await page.getByRole('menuitem', { name: /^Propose( to .+)?…$/ }).click();
   const dialog = page.getByRole('dialog', { name: /^Propose to / });
   await expect(dialog.getByRole('alert')).toHaveText(
     'Can’t propose: 1 item would break, so it wasn’t proposed.',

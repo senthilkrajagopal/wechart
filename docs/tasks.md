@@ -1095,15 +1095,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [x] T691 (AC-344, AC-343, AC-187) The Model workspace's remaining differences and the shared pane chrome of Generate cubes and the data source wizard *(added 2026-10-08 by T406)*
 - [x] T692 (AC-343, AC-344, AC-192, AC-282, AC-356) Making things in My workspace: the New menu as design 13 state G draws it, and the target folder as design 04 states A and B draw it *(added 2026-10-08 by T406)*
 - [x] T693 (AC-187, AC-343, AC-369, AC-370) Explore's list, head, tree and menus as designs 14 and 04 draw them *(added 2026-10-08 by T406)*
-- [ ] T694 (AC-343, AC-278, AC-284, AC-289, AC-281) Each row's ⋯ by its kind and place, and My workspace's rows on two lines *(added 2026-10-08 by T406)*
-  - Files: `packages/web/src/workspaces/explore/FolderContents.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/explore.spec.ts`, `e2e/security/workspace-edit.spec.ts`
-  - Findings: EXP-09, EXP-15.
-  - Failing test:
-    - a shared dashboard's ⋯ is Open, Open my copy or Edit in my workspace, History, Export…, then Rename and Move to…, then Delete…;
-    - a draft's ⋯ starts with "Propose to ‹folder›…";
-    - a waiting item offers "View proposal";
-    - workspace rows are 44 px, the name over its origin and target.
-  - Depends on: T693 (the list's names and spacing)
+- [x] T694 (AC-343, AC-278, AC-284, AC-289, AC-281) Each row's ⋯ by its kind and place, and My workspace's rows on two lines *(added 2026-10-08 by T406)*
 - [ ] T695 (AC-289, AC-343) The History panel as design 06 draws it: docked full height, its rows, and the current version always listed *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/history/HistoryPanel.tsx` (+ test), `packages/api/src/…/history` if the current version isn't returned, `packages/web/src/shell/styles.ts`, `e2e/security/history.spec.ts`
   - Findings: EXP-21, EXP-22, EXP-24, SRC-22.

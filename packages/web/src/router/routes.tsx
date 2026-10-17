@@ -425,9 +425,10 @@ const dashboardRoute = createRoute({
 
 function ChartSurface() {
   const params = useParams({ strict: false }) as { objectId?: string };
+  const { panel } = chartRoute.useSearch();
   return (
     <AppShell workspace="explore">
-      <LibraryChartPage chartId={decodeURIComponent(params.objectId ?? '')} />
+      <LibraryChartPage chartId={decodeURIComponent(params.objectId ?? '')} panel={panel} />
     </AppShell>
   );
 }
@@ -673,6 +674,10 @@ const chartEditorRoute = createRoute({
 const chartRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/explore/charts/$objectId',
+  /** Its History open on arrival, from its Explore row (T694); anything else is none. */
+  validateSearch: (search: Record<string, unknown>): { panel?: 'history' | undefined } => ({
+    panel: search['panel'] === 'history' ? 'history' : undefined,
+  }),
   component: ChartSurface,
 });
 

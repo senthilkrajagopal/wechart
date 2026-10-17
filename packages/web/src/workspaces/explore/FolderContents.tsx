@@ -1,11 +1,14 @@
 import { DRIVERS } from '@wechart/core';
 import { useEffect, useRef, useState } from 'react';
 
+import { MenuIcon } from '../../dashboard/menuIcons';
 import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { dayOf, exactOf } from '../../shell/formatTime';
 import { CUBE_STORE_ID } from '../data-sources/cubeStore';
+import { HistoryIcon } from '../history/HistoryPanel';
 import { chartTypeText } from './chartTypeLabels';
+import { PersonIcon } from './WorkspaceBand';
 
 /**
  * The contents of the selected folder (AC-017), under the prototype's columns
@@ -61,6 +64,12 @@ export interface CatalogItem {
     /** A model's copy to use, proposed to no folder (T543, T717, AC-283). */
     readonly useOnly?: true;
   } | null;
+  /**
+   * A shared dashboard or chart the user may edit in a copy (T694, AC-278):
+   * their copy's id, or null before they have one. Absent where they may not
+   * copy it, as for a reader.
+   */
+  readonly copy?: { readonly id: string | null } | null;
 }
 
 /**
@@ -78,6 +87,12 @@ export interface InWorkspace {
    * proposal: waiting for review, rejected or approved. None is Draft.
    */
   readonly statusOf?: (item: CatalogItem) => { kind: StateKind; text: string } | undefined;
+  /**
+   * The proposal an item waits in, by its id (T694; design 04, pin 7): its
+   * row offers "View proposal" in place of proposing it again.
+   */
+  readonly waitingProposalOf?: (item: CatalogItem) => string | undefined;
+  readonly onViewProposal?: (proposalId: string) => void;
 }
 
 export interface FolderMove {
@@ -138,6 +153,14 @@ export interface FolderContentsProps {
    */
   readonly onDelete?: ((item: CatalogItem) => void) | undefined;
   readonly deletes?: ((item: CatalogItem) => boolean) | undefined;
+  /**
+   * A shared dashboard's or chart's "Edit in my workspace", or "Open my
+   * copy" once there is one (T694; design 14, B1; AC-278), where its `copy`
+   * says the user may.
+   */
+  readonly onCopy?: ((item: CatalogItem) => void) | undefined;
+  /** A shared dashboard's or chart's History (T694, AC-289), for those who may read it. */
+  readonly onHistory?: ((item: CatalogItem) => void) | undefined;
 }
 
 /**
@@ -175,6 +198,10 @@ function OriginLine({ item, workspace }: { item: CatalogItem; workspace: InWorks
     </span>
   );
 }
+
+/** Whether a workspace item has `OriginLine`'s second line: a folder always, else a target or use-only copy. */
+const hasOriginLine = (item: CatalogItem): boolean =>
+  item.kind === 'folder' || item.origin?.useOnly === true || item.targetFolderId != null;
 
 /**
  * A workspace item's status, icon and label (design 04, pin 4; rule 79).
@@ -341,6 +368,8 @@ export function FolderContents({
   generates = () => true,
   onDelete,
   deletes = () => false,
+  onCopy,
+  onHistory,
 }: FolderContentsProps) {
   const open = (item: CatalogItem) => {
     if (opens(item)) onOpen?.(item);
@@ -374,31 +403,26 @@ export function FolderContents({
   });
 
   /**
-   * What a row's ⋯ offers: Rename and Move only where Explore gives them,
-   * never where the user may change nothing (rule 68, T331); Propose… in the
-   * workspace; Export… for a dashboard.
+   * What a row's ⋯ offers, by its kind and place (T694, EXP-09; design 14,
+   * B1; design 04, pin 7), in three groups set apart by rules:
+   * - its next step and what reads it: in the workspace, "Propose to
+   *   ‹target›…" first, or "View proposal" while it waits; Open; for a shared
+   *   dashboard or chart, "Edit in my workspace" or "Open my copy", and
+   *   History; Export… for a dashboard; Generate cubes… for a data source;
+   * - Rename and Move to…, only where Explore gives them, never where the
+   *   user may change nothing (rule 68, T331);
+   * - Delete…, last, where it may be deleted.
    */
   const menuOf = (item: CatalogItem, targets: readonly FolderMove[]): MenuItem[] => {
     const deletable = onDelete !== undefined && deletes(item);
-    // A model's name is its file's, changed in the model editor (T334): its
-    // ⋯ holds Open and Delete…, where it may be deleted (design 14, pin 9),
-    // and in the workspace Propose… (T350).
-    const others =
-      item.kind === 'model'
-        ? [
-            ...(deletable ? [{ key: 'open', label: 'Open', onSelect: () => onOpen?.(item) }] : []),
-            // Never a use-only copy, which goes to no folder (T717, AC-283).
-            ...(workspace?.onPropose !== undefined && item.origin?.useOnly !== true
-              ? [
-                  {
-                    key: 'propose',
-                    label: 'Propose…',
-                    onSelect: () => workspace.onPropose?.(item),
-                  },
-                ]
-              : []),
-          ]
-        : otherActions(item, targets);
+    const reads = readActions(item);
+    // A model's name is its file's, changed in the model editor (T334): no
+    // Rename or Move here.
+    const changes = (item.kind === 'model' ? [] : changeActions(item, targets)).map(
+      (entry, index) =>
+        index === 0 && reads.length > 0 ? { ...entry, separatorBefore: true } : entry,
+    );
+    const others = [...reads, ...changes];
     return deletable
       ? [
           ...others,
@@ -412,7 +436,97 @@ export function FolderContents({
         ]
       : others;
   };
-  const otherActions = (item: CatalogItem, targets: readonly FolderMove[]): MenuItem[] => [
+  /**
+   * In the workspace, its next step (T358, AC-284; design 04, pin 7): to its
+   * target by a proposal, named, or the proposal it waits in. Never a
+   * folder's, nor a use-only copy's, which goes to no folder (T717, AC-283).
+   */
+  const nextStep = (item: CatalogItem): MenuItem[] => {
+    if (workspace?.onPropose === undefined || item.kind === 'folder') return [];
+    if (item.origin?.useOnly === true) return [];
+    const waiting = workspace.waitingProposalOf?.(item);
+    if (waiting !== undefined) {
+      const view = workspace.onViewProposal;
+      return view === undefined
+        ? []
+        : [{ key: 'view-proposal', label: 'View proposal', onSelect: () => view(waiting) }];
+    }
+    const target = item.targetFolderId == null ? undefined : workspace.pathOf(item.targetFolderId);
+    return [
+      {
+        key: 'propose',
+        label: target === undefined ? 'Propose…' : `Propose to ${target}…`,
+        onSelect: () => workspace.onPropose?.(item),
+      },
+    ];
+  };
+  const readActions = (item: CatalogItem): MenuItem[] => {
+    const sharedWork =
+      workspace === undefined && (item.kind === 'dashboard' || item.kind === 'chart');
+    const copy = item.copy;
+    return [
+      ...nextStep(item),
+      // A model's Open only where it may be deleted (design 14, pin 9 and D1).
+      ...(onOpen !== undefined &&
+      (item.kind === 'dashboard' ||
+        item.kind === 'chart' ||
+        (item.kind === 'model' && onDelete !== undefined && deletes(item)))
+        ? [{ key: 'open', label: 'Open', onSelect: () => onOpen(item) }]
+        : []),
+      // Edited only in a copy (AC-278; rule 71).
+      ...(sharedWork && onCopy !== undefined && copy != null
+        ? [
+            {
+              key: 'copy',
+              label:
+                copy.id === null ? (
+                  'Edit in my workspace'
+                ) : (
+                  <>
+                    <PersonIcon />
+                    Open my copy
+                  </>
+                ),
+              onSelect: () => onCopy(item),
+            },
+          ]
+        : []),
+      ...(sharedWork && onHistory !== undefined
+        ? [
+            {
+              key: 'history',
+              label: (
+                <>
+                  <HistoryIcon />
+                  History
+                </>
+              ),
+              onSelect: () => onHistory(item),
+            },
+          ]
+        : []),
+      // Into a file, in the Export pane (T511; design 13, state A).
+      ...(onExport !== undefined && item.kind === 'dashboard'
+        ? [
+            {
+              key: 'export',
+              label: (
+                <>
+                  <MenuIcon name="export" />
+                  Export…
+                </>
+              ),
+              onSelect: () => onExport(item),
+            },
+          ]
+        : []),
+      // Its tables as cubes, in the Generate cubes pane (T492).
+      ...(onGenerate !== undefined && item.kind === 'data-source' && generates(item)
+        ? [{ key: 'generate', label: 'Generate cubes…', onSelect: () => onGenerate(item) }]
+        : []),
+    ];
+  };
+  const changeActions = (item: CatalogItem, targets: readonly FolderMove[]): MenuItem[] => [
     // A data source's name changes only on its own page, and only a draft's (T497, T722).
     ...(onRename !== undefined && item.kind !== 'data-source'
       ? [
@@ -428,24 +542,6 @@ export function FolderContents({
       : []),
     ...(onMove && targets.length > 0 && item.kind !== 'data-source'
       ? [{ key: 'move', label: 'Move to…', onSelect: () => setMoving(item.id) }]
-      : []),
-    // To its target, by a proposal (T358, AC-284; design 05, state A).
-    ...(workspace?.onPropose !== undefined && item.kind !== 'folder'
-      ? [
-          {
-            key: 'propose',
-            label: 'Propose…',
-            onSelect: () => workspace.onPropose?.(item),
-          },
-        ]
-      : []),
-    // Into a file, in the Export pane (T511; design 13, state A).
-    ...(onExport !== undefined && item.kind === 'dashboard'
-      ? [{ key: 'export', label: 'Export…', onSelect: () => onExport(item) }]
-      : []),
-    // Its tables as cubes, in the Generate cubes pane (T492).
-    ...(onGenerate !== undefined && item.kind === 'data-source' && generates(item)
-      ? [{ key: 'generate', label: 'Generate cubes…', onSelect: () => onGenerate(item) }]
       : []),
   ];
 
@@ -526,10 +622,12 @@ export function FolderContents({
         ) : null}
         {items.map((item, index) => {
           const targets = onMove ? targetsFor(item, folders) : [];
-          // A second line under the name: design 14's 44 px td, not td.one.
+          // A second line under the name: design 14's 44 px td, not td.one;
+          // in the workspace, its origin and target (design 04, pin 3; T694, EXP-15).
           const twoLine =
             (item.kind === 'folder' && Boolean(item.description)) ||
-            (workspace === undefined && item.kind === 'dashboard' && Boolean(item.description));
+            (workspace === undefined && item.kind === 'dashboard' && Boolean(item.description)) ||
+            (workspace !== undefined && hasOriginLine(item));
           return (
             <tr
               key={`${item.kind}:${item.id}`}

@@ -7,18 +7,46 @@ import type { ReviewRow } from '../reviews/reviews';
  * item (T358's review). Waiting, rejected, or in its folder as the version
  * it landed as; none is Draft, and so is one withdrawn. `mine` is newest first.
  */
-export function statusOfItem(
-  mine: readonly ReviewRow[] | undefined,
+type ProposedItem = {
+  readonly kind: string;
+  readonly id: string;
   /** A model row by its path, with its file's id, which its proposal names it by (T350). */
-  item: { readonly kind: string; readonly id: string; readonly fileId?: string | undefined },
-): { kind: StateKind; text: string } | undefined {
+  readonly fileId?: string | undefined;
+};
+
+/** The latest of `mine` (newest first) holding the item, its own or another's. */
+function latestHolding(
+  mine: readonly ReviewRow[] | undefined,
+  item: ProposedItem,
+): { latest: ReviewRow; id: string } | undefined {
   const id = item.kind === 'model' ? item.fileId : item.id;
   if (id === undefined) return undefined;
   const holds = (row: ReviewRow) =>
     (row.itemId === id && row.kind === item.kind) ||
     (row.items ?? []).some((each) => each.id === id && each.kind === item.kind);
   const latest = mine?.find(holds);
-  if (latest === undefined) return undefined;
+  return latest === undefined ? undefined : { latest, id };
+}
+
+/**
+ * The proposal a workspace item waits in, by its id (T694; design 04, pin
+ * 7): the latest holding it, while it is open. Its row's "View proposal".
+ */
+export function waitingProposalOf(
+  mine: readonly ReviewRow[] | undefined,
+  item: ProposedItem,
+): string | undefined {
+  const held = latestHolding(mine, item);
+  return held?.latest.status === 'open' ? held.latest.id : undefined;
+}
+
+export function statusOfItem(
+  mine: readonly ReviewRow[] | undefined,
+  item: ProposedItem,
+): { kind: StateKind; text: string } | undefined {
+  const held = latestHolding(mine, item);
+  if (held === undefined) return undefined;
+  const { latest, id } = held;
   switch (latest.status) {
     case 'open':
       return { kind: 'run', text: 'Waiting for review' };

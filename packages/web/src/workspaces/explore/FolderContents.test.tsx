@@ -758,8 +758,8 @@ describe('My workspace, as design 04 draws it (T498)', () => {
       within(menu)
         .getAllByRole('menuitem')
         .map((item) => item.textContent),
-    ).toEqual(['Open', 'Propose…', 'Delete…']);
-    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Propose…' }));
+    ).toEqual(['Propose to Sales / EMEA…', 'Open', 'Delete…']);
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Propose to Sales / EMEA…' }));
     expect(onPropose).toHaveBeenCalledWith(model);
   });
 
@@ -891,6 +891,170 @@ describe('My workspace, as design 04 draws it (T498)', () => {
       'Actions',
     ]);
     expect(lineOf('d-copy')).toBeNull();
+  });
+
+  /**
+   * T694 (EXP-15; design 04, pin 3): a workspace row is design 04's 44 px
+   * `td`, its name over its origin and target; one with no such line keeps
+   * the one-line row.
+   */
+  it('puts a workspace row on two lines, the name over its origin and target (EXP-15)', () => {
+    const untargeted: CatalogItem = { ...mine[2]!, id: 'd-none', targetFolderId: null };
+    render(<FolderContents items={[...mine, useOnlyCopy, untargeted]} workspace={workspace} />);
+    for (const id of ['drafts', 'd-copy', 'd-new', 'ds-new', 'c-gone', 'cubes/regions.yml'])
+      expect(screen.getByTestId(`item-${id}`).classList).toContain('is-two-line');
+    expect(screen.getByTestId('item-d-none').classList).not.toContain('is-two-line');
+  });
+
+  /** T694 (EXP-09; design 04, pin 7): a draft's next step first, naming its target. */
+  it('starts a draft’s ⋯ with "Propose to ‹its target›…", then Open, Rename, Delete…', async () => {
+    const onPropose = vi.fn();
+    render(
+      <FolderContents
+        items={[mine[1]!]}
+        workspace={{ ...workspace, onPropose }}
+        onOpen={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        deletes={() => true}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Revenue overview' }));
+    const menu = screen.getByRole('menu');
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Propose to Sales / EMEA…', 'Open', 'Rename', 'Delete…']);
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Propose to Sales / EMEA…' }));
+    expect(onPropose).toHaveBeenCalledWith(mine[1]);
+  });
+
+  it('offers "View proposal" in place of proposing on an item waiting for review (EXP-09)', async () => {
+    const onViewProposal = vi.fn();
+    render(
+      <FolderContents
+        items={[mine[1]!]}
+        workspace={{
+          ...workspace,
+          onPropose: vi.fn(),
+          waitingProposalOf: (item) => (item.id === 'd-copy' ? 'p-7' : undefined),
+          onViewProposal,
+        }}
+        onOpen={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Revenue overview' }));
+    const menu = screen.getByRole('menu');
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['View proposal', 'Open']);
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'View proposal' }));
+    expect(onViewProposal).toHaveBeenCalledWith('p-7');
+  });
+});
+
+/**
+ * T694 (EXP-09; design 14, B1; design 04, state C; AC-278, AC-289): a shared
+ * dashboard's or chart's row offers what its page does — Open, then
+ * "Edit in my workspace" or "Open my copy", History, Export… — then Rename
+ * and Move to…, then Delete….
+ */
+describe('a shared item’s ⋯ by its kind (T694, EXP-09)', () => {
+  const at = '2026-09-19T12:00:00.000Z';
+  const dashboard: CatalogItem = {
+    kind: 'dashboard',
+    id: 'd1',
+    title: 'Revenue overview',
+    owner: 'Ada Admin',
+    updatedAt: at,
+    folderId: 'emea',
+    copy: { id: null },
+  };
+  const chart: CatalogItem = {
+    kind: 'chart',
+    id: 'c1',
+    title: 'Revenue by region',
+    owner: 'Ada Admin',
+    updatedAt: at,
+    folderId: 'emea',
+    chartType: 'bar',
+    hasFields: true,
+    copy: { id: 'c1-copy' },
+  };
+  /** Each menuitem's text, and a rule as `—`, in order. */
+  const entries = (menu: HTMLElement) =>
+    [...menu.querySelectorAll('[role="menuitem"], [role="separator"]')].map((each) =>
+      each.getAttribute('role') === 'separator' ? '—' : each.textContent,
+    );
+  const everything = {
+    onOpen: vi.fn(),
+    onRename: vi.fn(),
+    onMove: vi.fn(),
+    folders: [{ id: 'root', title: 'Shared', parentId: null }],
+    onExport: vi.fn(),
+    onDelete: vi.fn(),
+    deletes: () => true,
+  };
+
+  it('gives a dashboard design 14 B1’s menu: Open, Edit in my workspace, History, Export…, Rename, Move to…, Delete…', async () => {
+    const onCopy = vi.fn();
+    const onHistory = vi.fn();
+    render(
+      <FolderContents items={[dashboard]} {...everything} onCopy={onCopy} onHistory={onHistory} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Revenue overview' }));
+    const menu = screen.getByRole('menu');
+    expect(entries(menu)).toEqual([
+      'Open',
+      'Edit in my workspace',
+      'History',
+      'Export…',
+      '—',
+      'Rename',
+      'Move to…',
+      '—',
+      'Delete…',
+    ]);
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Edit in my workspace' }));
+    expect(onCopy).toHaveBeenCalledWith(dashboard);
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Revenue overview' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+    expect(onHistory).toHaveBeenCalledWith(dashboard);
+  });
+
+  it('says "Open my copy" where the user has one, and a chart has no Export…', async () => {
+    const onCopy = vi.fn();
+    render(<FolderContents items={[chart]} {...everything} onCopy={onCopy} onHistory={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Revenue by region' }));
+    const menu = screen.getByRole('menu');
+    expect(entries(menu)).toEqual([
+      'Open',
+      'Open my copy',
+      'History',
+      '—',
+      'Rename',
+      'Move to…',
+      '—',
+      'Delete…',
+    ]);
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Open my copy' }));
+    expect(onCopy).toHaveBeenCalledWith(chart);
+  });
+
+  it('offers a reader Open and Export… alone: no copy, History or change', async () => {
+    render(
+      <FolderContents
+        items={[{ ...dashboard, copy: null }]}
+        onOpen={vi.fn()}
+        onExport={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Revenue overview' }));
+    expect(entries(screen.getByRole('menu'))).toEqual(['Open', 'Export…']);
   });
 });
 

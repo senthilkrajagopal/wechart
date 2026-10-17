@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ReviewRow } from '../reviews/reviews';
-import { statusOfItem } from './proposalStatus';
+import { statusOfItem, waitingProposalOf } from './proposalStatus';
 
 /**
  * T358 (AC-284; design 04): a workspace row's status from the latest of its
@@ -83,5 +83,29 @@ describe('a workspace row’s status (T358)', () => {
       statusOfItem([row({ status: 'withdrawn' })], { kind: 'chart', id: 'c1' }),
     ).toBeUndefined();
     expect(statusOfItem(undefined, { kind: 'chart', id: 'c1' })).toBeUndefined();
+  });
+});
+
+/** T694 (design 04, pin 7): the proposal a row's "View proposal" opens. */
+describe('the proposal a workspace item waits in (T694)', () => {
+  it('is the latest holding it, while it is open', () => {
+    expect(waitingProposalOf([row({ id: 'p9' })], { kind: 'chart', id: 'c1' })).toBe('p9');
+    // A model by its file's id, as its proposal names it (T350).
+    const model = row({
+      id: 'p4',
+      kind: 'model',
+      itemId: 'f-1',
+      items: [{ kind: 'model', id: 'f-1' }],
+    });
+    expect(waitingProposalOf([model], { kind: 'model', id: 'sales.yml', fileId: 'f-1' })).toBe(
+      'p4',
+    );
+  });
+
+  it('is none once decided or withdrawn, or where none holds it', () => {
+    for (const status of ['approved', 'rejected', 'withdrawn'] as const)
+      expect(waitingProposalOf([row({ status })], { kind: 'dashboard', id: 'b1' })).toBeUndefined();
+    expect(waitingProposalOf([row({})], { kind: 'chart', id: 'other' })).toBeUndefined();
+    expect(waitingProposalOf(undefined, { kind: 'chart', id: 'c1' })).toBeUndefined();
   });
 });

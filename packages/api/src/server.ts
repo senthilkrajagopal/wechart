@@ -4097,10 +4097,48 @@ export function buildServer({
       seen,
       rows.filter((row) => row.kind === 'folder').map((row) => row.id),
     );
+    const copies = await copiesFor(request, seen, folderId, rows);
     return rows.map((row) =>
-      row.kind === 'folder' ? { ...row, itemCount: counts.get(row.id) ?? 0 } : row,
+      row.kind === 'folder'
+        ? { ...row, itemCount: counts.get(row.id) ?? 0 }
+        : copies === undefined || (row.kind !== 'dashboard' && row.kind !== 'chart')
+          ? row
+          : { ...row, copy: { id: copies.get(`${row.kind}:${row.id}`) ?? null } },
     );
   });
+
+  /**
+   * The user's copies of a shared folder's dashboards and charts, by
+   * `kind:id` of what each was copied from (T694, AC-278; design 14, B1):
+   * for each row's "Open my copy", or "Edit in my workspace" before there is
+   * one — as the item's own read decides `mayCopy`, for a read-write member
+   * of the folder with a workspace. Undefined where they may copy none of
+   * it: a reader's, or a folder in a workspace. The first copy by id, as the
+   * item's read takes it.
+   */
+  const copiesFor = async (
+    request: FastifyRequest,
+    seen: Visibility,
+    folderId: string,
+    rows: readonly { kind: string; id: string }[],
+  ): Promise<Map<string, string> | undefined> => {
+    if (!cat || !rows.some((row) => row.kind === 'dashboard' || row.kind === 'chart')) return;
+    const own = ownWorkspaceOf(userOf(request).key);
+    if (!seen.rights.has(own) || !mayWrite(seen, folderId)) return;
+    if ((await workspaceRootOf(folderId)) !== null) return;
+    const mine = [own, ...(await foldersBeneath(own)).map((folder) => folder.id)];
+    const held = (
+      await Promise.all(mine.map((id) => cat.contents(id, { counted: false })))
+    ).flat() as { kind: string; id: string; origin?: { id?: string } | null }[];
+    const copies = new Map<string, string>();
+    for (const row of [...held].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+      const from = row.origin?.id;
+      if (from === undefined || (row.kind !== 'dashboard' && row.kind !== 'chart')) continue;
+      const key = `${row.kind}:${from}`;
+      if (!copies.has(key)) copies.set(key, row.id);
+    }
+    return copies;
+  };
 
   /**
    * The dashboards in the user's workspace, wherever in it they are: those a
