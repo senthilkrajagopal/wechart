@@ -15,7 +15,8 @@ import { RunLine } from './RunLine';
 import { runState, type RunState } from './runState';
 import { dialectFor, statementAt } from './statementAt';
 import { routeOf, type SqlSource } from './sqlSource';
-import type { SqlTab, TabsAction } from './tabs';
+import { SaveDialog } from './SaveDialog';
+import type { SavedAs, SqlTab, TabsAction } from './tabs';
 
 /**
  * One tab's editor and result in the workspace (T802, AC-373, AC-385,
@@ -334,6 +335,53 @@ export function QueryTab({
   // Each `{{ name }}` in the tab's SQL, and what of them holds Run (T809, AC-453; T810, AC-482).
   const names = parameterNames(tab.sql, dialect);
   const wanting = parametersHold(names);
+
+  /**
+   * Saving (T812, AC-457, AC-483; design 17, pin 10): Save… on a new query,
+   * Save and Save as new… on a saved one. A save keeps the SQL, the data
+   * source and each parameter's name, type and last value; the API judges
+   * the name, and its refusal is said where the save was asked.
+   */
+  const saveOf = async (
+    to: SavedAs | null,
+    name: string,
+    description: string,
+  ): Promise<string | null> => {
+    const body = {
+      name,
+      description,
+      sourceId: source.id,
+      sql: tab.sql,
+      parameters: names.map((each) => ({
+        name: each,
+        type: tab.paramTypes?.[each] ?? 'text',
+        value: tab.params[each] ?? '',
+      })),
+    };
+    let response: Response;
+    try {
+      response = await fetch(to === null ? '/api/sql/saved' : `/api/sql/saved/${encodeURIComponent(to.id)}`, {
+        method: to === null ? 'POST' : 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      return 'No answer came back, so whether it was saved isn’t known. Try again.';
+    }
+    const said = (await response.json().catch(() => null)) as { id?: unknown; error?: unknown } | null;
+    if (!response.ok || typeof said?.id !== 'string')
+      return typeof said?.error === 'string' ? said.error : `It couldn’t be saved (${String(response.status)}).`;
+    dispatch({ kind: 'saved', id: tab.id, saved: { id: said.id, name, description }, sql: tab.sql });
+    return null;
+  };
+  /** Save…'s dialog, open with where it starts; null while closed. */
+  const [asking, setAsking] = useState<{ readonly name: string; readonly description: string } | null>(null);
+  const [saveFailed, setSaveFailed] = useState<string | null>(null);
+  const saveButton = useRef<HTMLButtonElement>(null);
+  const closeAsking = () => {
+    setAsking(null);
+    saveButton.current?.focus();
+  };
   return (
     <>
       <div className="sql-centre__editor sql-query" data-testid="sql-editor-area">
@@ -341,6 +389,69 @@ export function QueryTab({
         {hold !== null && held ? (
           <HeldNote hold={hold} onGoTo={onGoTo} onCancel={() => void cancel()} />
         ) : null}
+        <div className="sql-query__head">
+          {tab.saved === undefined ? (
+            <button
+              type="button"
+              className="btn btn-sm"
+              ref={saveButton}
+              onClick={() => {
+                setSaveFailed(null);
+                setAsking({ name: '', description: '' });
+              }}
+            >
+              Save…
+            </button>
+          ) : (
+            <>
+              <span className="sql-query__saved" data-testid="sql-saved-as">
+                Saved query · Only me
+              </span>
+              <button
+                type="button"
+                className="btn btn-sm"
+                ref={saveButton}
+                onClick={() => {
+                  const to = tab.saved;
+                  if (to === undefined) return;
+                  setSaveFailed(null);
+                  void saveOf(to, to.name, to.description).then(setSaveFailed);
+                }}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => {
+                  setSaveFailed(null);
+                  setAsking({ name: `${tab.saved?.name ?? ''} (copy)`, description: tab.saved?.description ?? '' });
+                }}
+              >
+                Save as new…
+              </button>
+            </>
+          )}
+          {saveFailed === null ? null : (
+            <span className="sql-runner__failed" role="alert">
+              {saveFailed}
+            </span>
+          )}
+        </div>
+        {asking === null ? null : (
+          <SaveDialog
+            name={asking.name}
+            description={asking.description}
+            sourceName={source.name}
+            parameters={names}
+            onSave={async (name, description) => {
+              const refused = await saveOf(null, name, description);
+              if (refused === null) closeAsking();
+              return refused;
+            }}
+            onCancel={closeAsking}
+          />
+        )}
         <SqlEditor
           value={tab.sql}
           onChange={(sql) => {

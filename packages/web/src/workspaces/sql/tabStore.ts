@@ -1,5 +1,5 @@
 import type { ParamType } from './parameterNames';
-import type { SqlTab, TabsState } from './tabs';
+import type { SavedAs, SqlTab, TabsState } from './tabs';
 
 /**
  * The SQL runner's open tabs, kept in this browser only, for the signed-in
@@ -20,6 +20,15 @@ function typesOf(value: unknown): { paramTypes?: Record<string, ParamType> } {
   if (typeof value !== 'object' || value === null) return {};
   const types = Object.entries(value).filter((entry): entry is [string, ParamType] => TYPES.has(entry[1]));
   return types.length === 0 ? {} : { paramTypes: Object.fromEntries(types) };
+}
+
+/** The saved query a kept tab is (T812), when it has that shape. */
+function savedOf(value: unknown): { saved?: SavedAs } {
+  if (typeof value !== 'object' || value === null) return {};
+  const { id, name, description } = value as Record<string, unknown>;
+  return isText(id) && id !== '' && isText(name) && isText(description)
+    ? { saved: { id, name, description } }
+    : {};
 }
 
 /** One kept tab, when it has a tab's shape; its result, none. */
@@ -47,6 +56,7 @@ function tabOf(value: unknown): SqlTab | null {
     sql: kept.sql,
     params: params as Record<string, string>,
     ...typesOf(kept.paramTypes),
+    ...savedOf(kept.saved),
     savedSql: kept.savedSql,
     lastRunSql: kept.lastRunSql,
     run: runOf(kept.run),
@@ -99,6 +109,7 @@ export function keepTabs(storage: Storage | undefined, user: string, state: Tabs
     sql: tab.sql,
     params: tab.params,
     ...(tab.paramTypes === undefined ? {} : { paramTypes: tab.paramTypes }),
+    ...(tab.saved === undefined ? {} : { saved: tab.saved }),
     savedSql: tab.savedSql,
     lastRunSql: tab.lastRunSql,
     ...(tab.run?.kind === 'running' ? { run: { kind: 'running', at: tab.run.at } } : {}),

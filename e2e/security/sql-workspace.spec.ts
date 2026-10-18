@@ -921,6 +921,86 @@ test.describe('autocomplete in the editor (T808, AC-456)', () => {
 });
 
 /**
+ * T812 (AC-457, AC-483): Save… keeps a query's SQL, data source and each
+ * parameter's name, type and last value; on a saved query Save updates it
+ * and Save as new… makes another, refused with its reason under a name its
+ * owner already has. No proposal and no audit event.
+ */
+test.describe('saving a query (T812, AC-457, AC-483)', () => {
+  const psql = (query: string) =>
+    execFileSync('docker', ['exec', 'wechart-meta', 'psql', '-U', 'wechart', '-d', 'wechart_security', '-Atc', query], {
+      encoding: 'utf8',
+    }).trim();
+
+  test('Save… keeps the SQL, the source and the parameters; Save updates it; Save as new… under a taken name is refused', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    const name = `Big orders ${RUN}`;
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.on) }).click();
+      const editor = page.locator('.sql-editor .cm-content');
+      await editor.click();
+      await page.keyboard.insertText('SELECT * FROM orders WHERE amount > {{n}}');
+      const strip = workspace(page).getByRole('group', { name: 'Parameters' });
+      await strip.getByRole('combobox', { name: 'n, type' }).selectOption('Number');
+      await strip.getByRole('spinbutton', { name: 'n, value' }).fill('7');
+
+      await workspace(page).getByRole('button', { name: 'Save…' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Save query' });
+      await expect(dialog).toContainText('Keeps the SQL, ' + SOURCES.on + ', and n with their types and values.');
+      await dialog.getByRole('textbox', { name: 'Name' }).fill(name);
+      await dialog.getByRole('textbox', { name: 'Description · optional' }).fill('Month end');
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(page.getByTestId('sql-saved-as')).toHaveText('Saved query · Only me');
+
+      // Reopened, it holds them all.
+      const id = psql(`SELECT id FROM saved_queries WHERE name = '${name}'`);
+      expect(id).toMatch(/^[0-9a-f-]{36}$/);
+      const reopened = await page.request.get(`/api/sql/saved/${id}`);
+      expect(await reopened.json()).toMatchObject({
+        name,
+        description: 'Month end',
+        sourceId: world.sources.on,
+        sql: 'SELECT * FROM orders WHERE amount > {{n}}',
+        parameters: [{ name: 'n', type: 'number', value: '7' }],
+      });
+
+      // Save updates it, and makes no second.
+      await editor.press('End');
+      await page.keyboard.insertText(' LIMIT 5');
+      await workspace(page).getByRole('button', { name: 'Save', exact: true }).click();
+      await expect
+        .poll(async () => ((await (await page.request.get(`/api/sql/saved/${id}`)).json()) as { sql: string }).sql)
+        .toBe('SELECT * FROM orders WHERE amount > {{n}} LIMIT 5');
+      expect(psql(`SELECT count(*) FROM saved_queries WHERE name LIKE 'Big orders ${RUN}%'`)).toBe('1');
+
+      // Save as new… under the name it has: refused, saying why, and nothing made.
+      await workspace(page).getByRole('button', { name: 'Save as new…' }).click();
+      await expect(dialog.getByRole('textbox', { name: 'Name' })).toHaveValue(`${name} (copy)`);
+      await dialog.getByRole('textbox', { name: 'Name' }).fill(name);
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(dialog.getByRole('alert')).toHaveText(`You already have a saved query named “${name}”.`);
+      await dialog.getByRole('textbox', { name: 'Name' }).fill(`${name} (copy)`);
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(dialog).toHaveCount(0);
+      expect(psql(`SELECT count(*) FROM saved_queries WHERE name LIKE 'Big orders ${RUN}%'`)).toBe('2');
+
+      // No proposal and no audit event.
+      expect(psql(`SELECT count(*) FROM audit_records a WHERE a::text LIKE '%Big orders ${RUN}%'`)).toBe('0');
+      expect(psql(`SELECT count(*) FROM proposals p WHERE p::text LIKE '%Big orders ${RUN}%'`)).toBe('0');
+    } finally {
+      psql(`DELETE FROM saved_queries WHERE name LIKE 'Big orders ${RUN}%'`);
+      await context.close();
+    }
+  });
+});
+
+/**
  * T809 (AC-453): each `{{ name }}` outside strings and comments, once, in
  * the strip under the editor, typed Text (the default), Number, Date or
  * Boolean, and Run held, naming those with no value, until each has one.

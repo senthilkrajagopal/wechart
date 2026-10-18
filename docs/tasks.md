@@ -1753,11 +1753,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 ### Lane SQL: saved queries
 
-- [ ] T812 (AC-457, AC-483) Save… a query, with its name and description rules, keeping its SQL, data source and parameters; Save updates it, Save as new… makes another; no proposal and no audit event
-  - Lane: SQL
-  - Files: `packages/api/src/db/migrations/1758680000000_saved-queries.cjs`, `packages/api/src/repos/saved-queries.ts` (+ test), `packages/api/src/routes/sql-saved.ts` (+ test), `packages/api/src/server.ts`, `packages/web/src/workspaces/sql/SaveDialog.tsx` (+ test).
-  - Failing test: `sql-saved.test.ts`: a save keeps the SQL, the data source and each parameter's name, type and last value, and reopening returns them all (AC-457); a save with no name, a name over 100 characters, another of the owner's saved queries' names, or a description over 1,000 characters is refused with the reason, on save and on rename (AC-483); Save on a saved query updates it and makes no second; nothing is proposed and no audit event is written (AC-457). `SaveDialog.test.tsx`: Save… asks for the name and the description and shows a refusal's reason.
-  - Depends on: T802
+- [x] T812 (AC-457, AC-483) Save… a query, with its name and description rules, keeping its SQL, data source and parameters; Save updates it, Save as new… makes another; no proposal and no audit event
 
 - [ ] T813 (AC-458) The Saved tab: the owner's saved queries by name with their source and "Only me", Open, Rename…, Duplicate and Delete with Undo; nobody else, a Super-Admin included, reaches one
   - Lane: SQL

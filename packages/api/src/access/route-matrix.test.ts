@@ -14,6 +14,7 @@ import { closeDb, databaseUrl, getDb } from '../db/client';
 import { auditStore } from '../repos/audit';
 import { buildHistory } from '../repos/build-history';
 import { bookmarkStore } from '../repos/bookmarks';
+import { savedQueryStore } from '../repos/saved-queries';
 import { catalog } from '../repos/catalog';
 import { connectionTestStore } from '../repos/connection-tests';
 import { dataSourceStore } from '../repos/data-sources';
@@ -630,6 +631,8 @@ beforeAll(async () => {
     // The SQL runner, its switch, each user's runs and xcube's (T531–T533).
     sqlRunnerSwitches: sqlRunnerSwitches(getDb()),
     sqlRuns: sqlRuns(getDb()),
+    // Each user's saved SQL runner queries (T812).
+    savedQueries: savedQueryStore(getDb()),
     // The builds wechart started, and Run history (T372, T374).
     buildHistory: buildHistory(getDb()),
     // xcube's partitions: each place's rollup, one partition (T375).
@@ -1020,6 +1023,8 @@ afterAll(async () => {
   // The schedules the matrix made (T378), and pg-boss's schema of them.
   await db.deleteFrom('schedules').where('name', 'like', `${MARK}%`).execute();
   await sql`DROP SCHEMA IF EXISTS ${sql.id(SCHEDULE_SCHEMA)} CASCADE`.execute(db);
+  // The saved queries the matrix made (T812).
+  await db.deleteFrom('saved_queries').where('name', 'like', `${MARK}%`).execute();
   // The SQL runs the matrix made (T533, T534).
   const sourced = PLACES.map((place) => at[place]?.source).filter((id) => id !== undefined);
   if (sourced.length > 0)
@@ -1087,6 +1092,17 @@ const refused = (response: LightMyRequestResponse, where: string) =>
   );
 const answered = (response: LightMyRequestResponse, where: string) =>
   expect(response.statusCode, `${where}: ${response.body}`).toBeLessThan(300);
+
+/** A saved query of `who`'s own (T812), its id. */
+async function savedBy(who: Who, what: string): Promise<string> {
+  const made = await ask(who, {
+    method: 'POST',
+    url: '/api/sql/saved',
+    payload: { name: `${MARK} ${what}`, sourceId: 'any', sql: 'SELECT 1', parameters: [] },
+  });
+  answered(made, `${who} saving a query`);
+  return made.json<{ id: string }>().id;
+}
 
 /** Opens `url` as everyone: those it is for get it, with its mark; everyone else a refusal. */
 async function openedOnlyBy(
@@ -2112,6 +2128,39 @@ const CASES: Record<string, Case> = {
           `${who}'s picker, ${place}'s data source`,
         ).toBe(writes(who, place));
     }
+  },
+  // Saved queries (T812, AC-457): each its owner's alone, a Super-Admin's included.
+  'POST /api/sql/saved': async () => {
+    for (const who of WHO)
+      answered(
+        await ask(who, {
+          method: 'POST',
+          url: '/api/sql/saved',
+          payload: { name: `${MARK} ${who}'s`, sourceId: 'any', sql: 'SELECT 1', parameters: [] },
+        }),
+        `${who} saving a query of their own`,
+      );
+  },
+  'GET /api/sql/saved/:id': async () => {
+    const mine = await savedBy('writer', 'reopened');
+    for (const who of WHO)
+      if (who === 'writer')
+        answered(await ask(who, { method: 'GET', url: `/api/sql/saved/${mine}` }), 'writer reopening theirs');
+      else
+        refused(
+          await ask(who, { method: 'GET', url: `/api/sql/saved/${mine}` }),
+          `${who} reopening writer's saved query`,
+        );
+  },
+  'PUT /api/sql/saved/:id': async () => {
+    const mine = await savedBy('writer', 'updated');
+    const payload = { name: `${MARK} updated`, sourceId: 'any', sql: 'SELECT 2', parameters: [] };
+    for (const who of WHO.filter((each) => each !== 'writer'))
+      refused(
+        await ask(who, { method: 'PUT', url: `/api/sql/saved/${mine}`, payload }),
+        `${who} updating writer's saved query`,
+      );
+    answered(await ask('writer', { method: 'PUT', url: `/api/sql/saved/${mine}`, payload }), 'writer updating theirs');
   },
   'POST /api/sql-runs/cancel': async () => {
     for (const who of WHO)

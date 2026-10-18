@@ -1,6 +1,6 @@
 import { EditorView, runScopeHandlers } from '@codemirror/view';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useReducer } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -395,6 +395,112 @@ describe('parameters where none can be bound (T810, AC-482)', () => {
     await vi.waitFor(() => {
       expect(posts).toHaveLength(1);
     });
+  });
+});
+
+/**
+ * T812 (AC-457, AC-483; design 17, pin 10 and I2): Save… on a new query
+ * saves its SQL, its data source and each parameter's name, type and last
+ * value; on a saved one, Save updates it and Save as new… makes another.
+ * Fails when: Save on a saved query makes a second one.
+ */
+describe('saving the tab’s query (T812, AC-457, AC-483)', () => {
+  let saves: { method: string; url: string; body: Record<string, unknown> }[] = [];
+  let answer: (method: string) => Response;
+  beforeEach(() => {
+    saves = [];
+    answer = (method) =>
+      new Response(JSON.stringify({ id: method === 'POST' ? `q${String(saves.length)}` : 'q1' }), {
+        status: method === 'POST' ? 201 : 200,
+      });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/sql/saved')) {
+          const method = init?.method ?? 'GET';
+          saves.push({ method, url, body: JSON.parse(String(init?.body)) as Record<string, unknown> });
+          return Promise.resolve(answer(method));
+        }
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+  });
+  const typed = () =>
+    tab({ sql: 'SELECT * FROM t WHERE n > {{n}}', params: { n: '7' }, paramTypes: { n: 'number' } });
+
+  it('Save… saves the SQL, the data source and each parameter’s name, type and value, then names it a saved query', async () => {
+    open(typed());
+    await userEvent.click(screen.getByRole('button', { name: 'Save…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Save query' });
+    expect(dialog.textContent).toContain('Keeps the SQL, emea_replica, and n with their types and values.');
+    await userEvent.type(screen.getByRole('textbox', { name: 'Name' }), 'Big orders');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(saves).toEqual([
+      {
+        method: 'POST',
+        url: '/api/sql/saved',
+        body: {
+          name: 'Big orders',
+          description: '',
+          sourceId: 'emea',
+          sql: 'SELECT * FROM t WHERE n > {{n}}',
+          parameters: [{ name: 'n', type: 'number', value: '7' }],
+        },
+      },
+    ]);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByTestId('sql-saved-as').textContent).toBe('Saved query · Only me');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save as new…' })).toBeTruthy();
+  });
+
+  it('on a saved query, Save updates it, making no second; Save as new… makes another from its copy', async () => {
+    open({ ...typed(), saved: { id: 'q1', name: 'Big orders', description: 'Month end' }, savedSql: 'SELECT 1' });
+    expect(screen.getByTestId('sql-saved-as').textContent).toBe('Saved query · Only me');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => {
+      expect(saves).toHaveLength(1);
+    });
+    expect(saves[0]).toEqual({
+      method: 'PUT',
+      url: '/api/sql/saved/q1',
+      body: {
+        name: 'Big orders',
+        description: 'Month end',
+        sourceId: 'emea',
+        sql: 'SELECT * FROM t WHERE n > {{n}}',
+        parameters: [{ name: 'n', type: 'number', value: '7' }],
+      },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save as new…' }));
+    expect((screen.getByRole('textbox', { name: 'Name' }) as HTMLInputElement).value).toBe('Big orders (copy)');
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: 'Save query' })).getByRole('button', { name: 'Save' }),
+    );
+    await vi.waitFor(() => {
+      expect(saves.map((save) => save.method)).toEqual(['PUT', 'POST']);
+    });
+    expect(saves[1]!.body.name).toBe('Big orders (copy)');
+  });
+
+  it('shows the API’s refusal in Save…, which stays open', async () => {
+    answer = () =>
+      new Response(JSON.stringify({ error: 'You already have a saved query named “Big orders”.' }), {
+        status: 409,
+      });
+    open(typed());
+    await userEvent.click(screen.getByRole('button', { name: 'Save…' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Name' }), 'Big orders');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'You already have a saved query named “Big orders”.',
+    );
+    expect(screen.getByRole('dialog', { name: 'Save query' })).toBeTruthy();
+    expect(screen.queryByTestId('sql-saved-as')).toBeNull();
   });
 });
 

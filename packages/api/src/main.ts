@@ -10,6 +10,7 @@ import { closeDb, databaseUrl, getDb } from './db/client';
 import { scheduleStore, wechartScheduler } from './scheduler/schedules';
 import { migrateToLatest } from './db/migrate';
 import { bookmarkStore } from './repos/bookmarks';
+import { savedQueryStore } from './repos/saved-queries';
 import { catalog } from './repos/catalog';
 import { connectionTestStore } from './repos/connection-tests';
 import { dataSourceStore } from './repos/data-sources';
@@ -302,6 +303,8 @@ async function main(): Promise<void> {
     signIns: signInStore(db),
     // Each token's requests to `/mcp`, counted for every replica (T779, AC-472).
     mcpRateLimits: rateLimits,
+    // Each user's saved SQL runner queries (T812, AC-457).
+    savedQueries: savedQueryStore(db),
     // Read-only SQL run by xcube, on a data source's connection (T532, AC-373).
     ...(config.xcube === undefined || service === undefined
       ? {}

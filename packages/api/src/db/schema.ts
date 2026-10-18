@@ -174,6 +174,28 @@ export interface Database {
   personal_access_tokens: PersonalAccessTokenTable;
   latest_sign_ins: LatestSignInTable;
   mcp_rate_limit: McpRateLimitTable;
+  saved_queries: SavedQueryTable;
+}
+
+/** A user's own saved SQL runner query (T812, AC-457): never shared. */
+export interface SavedQueryTable {
+  id: string;
+  owner_key: string;
+  name: string;
+  description: Generated<string>;
+  /** A data source's id, or Cube Store's. */
+  source_id: string;
+  sql: string;
+  /** Each parameter's name, type and last value, in order. */
+  parameters: JSONColumnType<SavedParameter[], string, string>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface SavedParameter {
+  readonly name: string;
+  readonly type: 'text' | 'number' | 'date' | 'boolean';
+  readonly value: string;
 }
 
 /** `/mcp`'s request count for one key, in its current window (T779, AC-472). */

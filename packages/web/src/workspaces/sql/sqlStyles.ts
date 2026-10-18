@@ -299,4 +299,19 @@ main:has(.sql-workspace) {
 .sql-params__input[aria-invalid='true'] { border-color: var(--wc-status-error); }
 .sql-params__input:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
 .sql-params__held { display: inline-flex; align-items: center; gap: 4px; }
+/* The editor's head: Save…, or a saved query's Save and Save as new… (T812; pin 10). */
+.sql-query__head { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; font-size: 12px; }
+.sql-query__saved { color: var(--wc-text-secondary); margin-right: auto; }
+/* Save… (T812; I2): a name, a description and what it keeps. */
+.sql-save form { display: flex; flex-direction: column; gap: 4px; }
+.sql-save__field { font-weight: 600; margin-top: 8px; }
+.sql-save__input {
+  box-sizing: border-box; width: 100%; padding: 4px 8px; margin: 0;
+  border: 1px solid var(--wc-border-strong, var(--wc-border-subtle)); border-radius: 6px;
+  background: var(--wc-bg-surface); color: var(--wc-text-primary); font: inherit;
+}
+.sql-save__input[aria-invalid='true'] { border-color: var(--wc-status-error); }
+.sql-save__refused { margin: 0; color: var(--wc-status-error); font-size: 12px; }
+.sql-save__count, .sql-save__keeps { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.sql-save__count { text-align: right; }
 `;

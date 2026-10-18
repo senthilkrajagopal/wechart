@@ -75,6 +75,24 @@ describe('open tabs kept in this browser, for this user (T801, AC-451)', () => {
     expect(keptTabs(browser, 'wren@example.com')?.tabs[0]?.paramTypes).toEqual({ n: 'number' });
   });
 
+  it('keeps the saved query a tab is (T812)', () => {
+    const browser = storage();
+    const saved: TabsState = {
+      tabs: [
+        tab({
+          id: 'qa1b2c3d',
+          name: 'saved',
+          sql: 'SELECT 1',
+          savedSql: 'SELECT 1',
+          saved: { id: 'q1', name: 'Big orders', description: '' },
+        }),
+      ],
+      active: 'qa1b2c3d',
+    };
+    keepTabs(browser, 'wren@example.com', saved);
+    expect(keptTabs(browser, 'wren@example.com')).toEqual(saved);
+  });
+
   it('keeps them under a key holding the user’s id', () => {
     const browser = storage();
 

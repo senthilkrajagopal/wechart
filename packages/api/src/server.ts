@@ -158,6 +158,8 @@ import {
   RateLimitStoreUnavailable,
 } from './mcp/rateLimitStore';
 import { registerAccessTokens } from './routes/access-tokens';
+import { registerSavedQueries } from './routes/sql-saved';
+import type { SavedQueryStore } from './repos/saved-queries';
 import type { AccessTokenStore } from './repos/access-tokens';
 import type { SignInStore } from './repos/sign-ins';
 import {
@@ -281,6 +283,8 @@ export interface BuildOptions {
   readonly signIns?: SignInStore;
   /** Each token's requests to `/mcp`, counted for every replica (T779, AC-472). Unset: 503. */
   readonly mcpRateLimits?: RateLimitCounter;
+  /** Each user's saved SQL runner queries (T812, AC-457). Unset: none can be saved. */
+  readonly savedQueries?: SavedQueryStore;
   /** The MCP tools served, wechart's own unless a test gives others (T781). */
   readonly mcpTools?: readonly McpTool[];
   /**
@@ -523,6 +527,7 @@ export function buildServer({
   accessTokens,
   signIns,
   mcpRateLimits,
+  savedQueries,
   mcpTools,
   dataSourceLanding,
   connectionTest,
@@ -4511,6 +4516,8 @@ export function buildServer({
     });
   }
 
+  // Saved SQL runner queries, each its owner's alone (T812, AC-457).
+  if (savedQueries !== undefined) registerSavedQueries(app, { store: savedQueries });
   // Personal access tokens for MCP (T767, AC-430).
   if (accessTokens !== undefined)
     registerAccessTokens(app, {

@@ -158,3 +158,32 @@
     - **One finder for both ends.** `parameterNames` moved to `@wechart/core`, under its own subpath, `@wechart/core/sql-parameters`, so lang-sql's parser stays out of the package's root. `@wechart/core` now depends on `@codemirror/lang-sql` 6.10.0, which `sql-parameter-binding.md` covers. The web's `parameterNames.ts` re-exports it. The API reads both sources' SQL as standard SQL.
     - No e2e: the security stack has no Dremio source, and Cube Store's run is unit-tested on the route. The browser's hold is the same code as T809's, which the e2e covers.
     - Decision T810-1 is in `docs/design/decisions-sql.md`.
+
+- [x] T812 (AC-457, AC-483) Save… a query, with its name and description rules, keeping its SQL, data source and parameters; Save updates it, Save as new… makes another; no proposal and no audit event
+  - Lane: SQL
+  - Files: `packages/api/src/db/migrations/1758680000000_saved-queries.cjs`, `packages/api/src/repos/saved-queries.ts` (+ test), `packages/api/src/routes/sql-saved.ts` (+ test), `packages/api/src/server.ts`, `packages/web/src/workspaces/sql/SaveDialog.tsx` (+ test).
+  - Failing test: `sql-saved.test.ts`: a save keeps the SQL, the data source and each parameter's name, type and last value, and reopening returns them all (AC-457); a save with no name, a name over 100 characters, another of the owner's saved queries' names, or a description over 1,000 characters is refused with the reason, on save and on rename (AC-483); Save on a saved query updates it and makes no second; nothing is proposed and no audit event is written (AC-457). `SaveDialog.test.tsx`: Save… asks for the name and the description and shows a refusal's reason.
+  - Depends on: T802
+  - **Built 2026-10-18** (lane SQL, batch 4).
+    - **AC-457 and AC-483 are ticked** on the e2e "saving a query (T812, AC-457, AC-483)", on the security stack. It saves a query with a Number parameter through Save…, then checks that:
+      - reopening it (`GET /api/sql/saved/:id`) gives back its name, description, source, SQL and parameter;
+      - Save updates it, leaving one row;
+      - Save as new… under its own name is refused with "You already have a saved query named “…”.", then under "(copy)" makes a second;
+      - `audit_records` and `proposals` hold nothing of it.
+    - `sql-saved.test.ts` covers the rest of AC-483:
+      - no name, or only spaces;
+      - 101 characters, while 100 is kept;
+      - a description of 1,001 characters, while 1,000 is kept;
+      - another user may use the same name;
+      - a rename (a `PUT` with a new name) to a taken name, or to none, is refused.
+      Rename… itself is T813's dialog, on the same `PUT`.
+    - **The API:**
+      - `POST /api/sql/saved`, `PUT /api/sql/saved/:id` and `GET /api/sql/saved/:id`, each by the owner's key alone. Another's id answers 404, a Super-Admin included.
+      - Names are trimmed. Parameters are checked: the name grammar, the four types, and a value as text.
+      - All three routes join the route matrix. `server.ts` gains one option, `savedQueries`, and its registration; `main.ts` wires the store.
+    - **The table:** `saved_queries`, migration 1758680000000, with `UNIQUE (owner_key, name)`. `source_id` is the tab's `sourceId`, Cube Store's included.
+    - **The web:**
+      - The editor's head has Save… on a new query, and "Saved query · Only me", Save and Save as new… on a saved one (pin 10).
+      - A tab keeps its `saved` (id, name, description) in this browser, and a duplicated tab drops it.
+      - A failed Save is said beside the buttons.
+    - Decision T812-1 is in `docs/design/decisions-sql.md`.

@@ -37,6 +37,13 @@ export type TabRun =
       readonly away?: true;
     };
 
+/** A saved query, as a tab holds it: its id, and the name and description Save keeps (T812). */
+export interface SavedAs {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+}
+
 export interface SqlTab {
   readonly id: string;
   readonly name: string;
@@ -49,6 +56,8 @@ export interface SqlTab {
   readonly paramTypes?: Readonly<Record<string, ParamType>>;
   /** The text of its saved query, when it is one (T806 on). */
   readonly savedSql: string | null;
+  /** The saved query it is, once saved or opened (T812, AC-457). */
+  readonly saved?: SavedAs;
   /** The SQL its last run sent. */
   readonly lastRunSql: string | null;
   readonly run: TabRun | null;
@@ -81,6 +90,8 @@ export type TabsAction =
   /** A parameter's value, or its type, set in the strip (T809). */
   | { readonly kind: 'param-value'; readonly id: string; readonly name: string; readonly value: string }
   | { readonly kind: 'param-type'; readonly id: string; readonly name: string; readonly type: ParamType }
+  /** Saved as this query, holding this SQL (T812). */
+  | { readonly kind: 'saved'; readonly id: string; readonly saved: SavedAs; readonly sql: string }
   | { readonly kind: 'run-start'; readonly id: string; readonly sql: string; readonly at: number }
   /** The page came back from the browser's cache: runs going lost their answer (T804). */
   | { readonly kind: 'runs-kept'; readonly at: number }
@@ -164,8 +175,10 @@ export function tabsReducer(
     }
     case 'duplicate': {
       if (target === undefined) return state;
+      // A copy is a new query: Save on it never updates the saved one (T812).
+      const { saved: _saved, ...unsaved } = target;
       const copy: SqlTab = {
-        ...target,
+        ...unsaved,
         id: makeId(),
         name: `${target.name} (copy)`,
         savedSql: null,
@@ -204,6 +217,8 @@ export function tabsReducer(
       return target === undefined
         ? state
         : change(state, target, { params: { ...target.params, [action.name]: action.value } });
+    case 'saved':
+      return change(state, target, { saved: action.saved, savedSql: action.sql });
     case 'param-type':
       return target === undefined
         ? state
