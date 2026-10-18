@@ -1385,6 +1385,117 @@ describe('Make a cube… from a run (T820, AC-462)', () => {
     expect(screen.getByRole('complementary', { name: 'Saved and History' })).toBeTruthy();
   });
 
+  it('Make a chart…: Add and make a chart saves the cube, makes a chart in My workspace for its folder, and opens its editor on it (T821, AC-463)', async () => {
+    const asked: { url: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        const json = (body: unknown, status = 200) =>
+          Promise.resolve(new Response(JSON.stringify(body), { status }));
+        if (url === '/api/model/publish' || url === '/api/documents') {
+          asked.push({ url, body: JSON.parse(String(init?.body)) });
+          return url === '/api/documents'
+            ? json({ kind: 'chart', id: 'chart-1', title: 'Untitled chart', folderId: 'mine' }, 201)
+            : json({ version: 'v2' });
+        }
+        if (init?.method === 'POST') return json(finished);
+        if (url === '/api/sql-runs/going') return json({ going: null });
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/data-sources/emea') return json(page);
+        if (url === '/api/folders/targets') return json([{ id: 'f-sales', path: ['Sales'] }]);
+        if (url === '/api/model/files?folder=mine') return json({ files: [] });
+        return json([], 404);
+      }),
+    );
+    windowOf(1440);
+    const go = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(ME_QUERY.queryKey, writer);
+    render(
+      <QueryClientProvider client={client}>
+        <SqlWorkspace go={go} />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: /emea_replica/ }));
+    await screen.findByTestId('sql-warning');
+    const view = EditorView.findFromDOM(document.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+    act(() => {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'SELECT customer, total FROM orders' } });
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Make a chart…' }));
+
+    const pane = screen.getByRole('dialog', { name: 'Make a cube from this query · in My workspace' });
+    await within(pane).findByRole('treeitem', { selected: true });
+    const addAndMake = within(pane).getByRole('button', { name: 'Add and make a chart' });
+    await vi.waitFor(() => {
+      expect(addAndMake.getAttribute('aria-disabled')).toBeNull();
+    });
+    await userEvent.click(addAndMake);
+
+    await vi.waitFor(() => {
+      expect(go).toHaveBeenCalledTimes(1);
+    });
+    expect(asked.map((each) => each.url)).toEqual(['/api/model/publish', '/api/documents']);
+    expect(asked[1]!.body).toEqual({
+      kind: 'chart',
+      title: 'Untitled chart',
+      folderId: 'mine',
+      targetFolderId: 'f-sales',
+    });
+    const tabId = /tab-(\w+)$/.exec(screen.getAllByRole('tab')[0]!.id)?.[1];
+    expect(go).toHaveBeenCalledWith(`/explore/charts/chart-1/edit?new=true&cube=query_1&sql=${tabId ?? ''}`);
+  });
+
+  it('opens afresh on the next run’s columns, when Make a cube… is chosen again with the pane open (T820’s review)', async () => {
+    let answer: unknown = finished;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        const json = (body: unknown, status = 200) =>
+          Promise.resolve(new Response(JSON.stringify(body), { status }));
+        if (init?.method === 'POST') return json(answer);
+        if (url === '/api/sql-runs/going') return json({ going: null });
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/data-sources/emea') return json(page);
+        if (url === '/api/folders/targets') return json([{ id: 'f-sales', path: ['Sales'] }]);
+        if (url === '/api/model/files?folder=mine') return json({ files: [] });
+        return json([], 404);
+      }),
+    );
+    windowOf(1440);
+    renderAs(writer);
+    await userEvent.click(await screen.findByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: /emea_replica/ }));
+    await screen.findByTestId('sql-warning');
+    const view = EditorView.findFromDOM(document.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+    const runIt = async (sql: string) => {
+      act(() => {
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: sql } });
+      });
+      await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    };
+    await runIt('SELECT customer, total FROM orders');
+    await userEvent.click(await screen.findByRole('button', { name: 'Make a cube…' }));
+    const pane = () => screen.getByRole('dialog', { name: 'Make a cube from this query · in My workspace' });
+    const members = () =>
+      within(pane())
+        .getAllByRole('textbox', { name: /^Member name for / })
+        .map((field) => (field as HTMLInputElement).value);
+    expect(members()).toEqual(['customer', 'total']);
+    await userEvent.type(within(pane()).getByRole('textbox', { name: 'Cube name' }), 'x');
+
+    answer = { ...finished, columns: [{ name: 'region', type: 'text' }], rows: [['EMEA']] };
+    await runIt('SELECT region FROM orders');
+    await screen.findByRole('table', { name: 'Result: 1 row, 1 column' });
+    await userEvent.click(screen.getByRole('button', { name: 'Make a cube…' }));
+
+    expect(within(pane()).getByTestId('make-cube-sql').textContent).toBe('SELECT region FROM orders');
+    expect(members()).toEqual(['region']);
+    expect((within(pane()).getByRole('textbox', { name: 'Cube name' }) as HTMLInputElement).value).toBe('query_1');
+  });
+
   it('closes the pane on Cancel, the right pane back as it was', async () => {
     vi.stubGlobal(
       'fetch',

@@ -27,6 +27,7 @@ import { holdTabs, releaseTabs, tabsStoreFor } from './liveTabs';
 import { QueryTab, type Insertion, type RunHold, type RunOnOpen } from './QueryTab';
 import type { SqlColumn } from '../data-sources/SqlResult';
 import { fileHref } from '../model/inFolder';
+import { makeChartOver } from './makeChart';
 import { MakeCubePane, type Added } from './MakeCubePane';
 import type { MakeKind } from './ResultHead';
 import { SchemaTree } from './SchemaTree';
@@ -67,7 +68,12 @@ export function SqlWorkspace({
   tab,
   saved,
   onOpenTab,
+  go = (href) => {
+    globalThis.location.assign(href);
+  },
 }: {
+  /** Leaves for another page: Make a chart's editor (T821). */
+  readonly go?: (href: string) => void;
   /** The tab the address names, `/sql?tab=…` (T801, AC-446). */
   readonly tab?: string | undefined;
   /** The saved query the address names, `/sql?saved=…`, as ⌘K opens one (T815, AC-460). */
@@ -91,6 +97,7 @@ export function SqlWorkspace({
       saved={saved}
       onOpenTab={onOpenTab}
       superAdmin={me.data.superAdmin || me.data.security === 'off'}
+      go={go}
     />
   );
 }
@@ -253,7 +260,9 @@ function Workbench({
   tab,
   saved,
   onOpenTab,
+  go,
 }: {
+  readonly go: (href: string) => void;
   readonly superAdmin: boolean;
   readonly user: string;
   readonly tab: string | undefined;
@@ -523,9 +532,13 @@ function Workbench({
     readonly sql: string;
     readonly columns: readonly SqlColumn[];
     readonly tabName: string;
+    /** The tab it was made from, for the chart editor's way back (T821). */
+    readonly tabId: string;
+    /** Each choice of Make a cube… opens a fresh pane, on that run (T820's review). */
+    readonly opened: number;
   } | null>(null);
-  /** What was last added, said until dismissed (design 17 §6). */
-  const [made, setMade] = useState<Added | null>(null);
+  /** What was last added, said until dismissed (design 17 §6); and why a chart wasn't made over it. */
+  const [made, setMade] = useState<(Added & { readonly failed?: string }) | null>(null);
   const rightShown = making !== null ? MAKE_PANE : rightFolded ? RIGHT_PANE.rail : right;
 
   // A pane opened over the centre, then unfolded by a wider window: closed,
@@ -682,7 +695,15 @@ function Workbench({
                 runOnOpen,
                 onMake: (kind, { sql, columns }) => {
                   setMade(null);
-                  setMaking({ kind, row: chosenRow, sql, columns, tabName: openTab.name });
+                  setMaking((was) => ({
+                    kind,
+                    row: chosenRow,
+                    sql,
+                    columns,
+                    tabName: openTab.name,
+                    tabId: openTab.id,
+                    opened: (was?.opened ?? 0) + 1,
+                  }));
                 },
               }}
             />
@@ -706,6 +727,7 @@ function Workbench({
       {making !== null ? (
         // Docked in the right pane's place, 480 px, as Generate cubes' pane is (T820; design 17 §6).
         <MakeCubePane
+          key={making.opened}
           kind={making.kind}
           source={making.row}
           sql={making.sql}
@@ -715,8 +737,19 @@ function Workbench({
             setMaking(null);
           }}
           onAdded={(added) => {
+            const from = making.tabId;
             setMaking(null);
-            setMade(added);
+            if (added.kind === 'cube') {
+              setMade(added);
+              return;
+            }
+            // Make a chart: a new chart over the cube, in My workspace, opened in the editor (T821, AC-463).
+            makeChartOver({ cube: added.name, targetFolderId: added.targetFolderId, tabId: from }).then(
+              go,
+              (error: unknown) => {
+                setMade({ ...added, failed: error instanceof Error ? error.message : String(error) });
+              },
+            );
           }}
         />
       ) : (
@@ -798,7 +831,8 @@ function Workbench({
         <div className="undo-toast sql-made" role="status" data-testid="sql-made">
           <span>
             {made.name} is in My workspace, unpublished ·{' '}
-            <a href={fileHref(made.path, 'mine')}>Open in Model</a>          </span>
+            <a href={fileHref(made.path, 'mine')}>Open in Model</a>
+            {made.failed === undefined ? null : ` · ${made.failed}`}          </span>
           <button
             type="button"
             onClick={() => {

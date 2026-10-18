@@ -16,7 +16,8 @@ import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtur
 const RUN = Math.random().toString(36).slice(2, 8);
 const SOURCE = `sqlmk_${RUN}`;
 const CUBE = `sqlcube_${RUN}`;
-const world = { folderId: '', sourceId: '' };
+const CHART_CUBE = `sqlchart_${RUN}`;
+const world = { folderId: '', sourceId: '', chartId: '' };
 const KEY = JSON.parse(
   readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
 ) as XcubeKey;
@@ -72,9 +73,12 @@ test.beforeAll(async ({ browser }) => {
 test.afterAll(async ({ browser }) => {
   const many = await signedIn(browser, 'many');
   try {
-    await many.page.request.delete(
-      `/api/model/files?folder=mine&path=${encodeURIComponent(`cubes/${CUBE}.yml`)}`,
-    );
+    if (world.chartId !== '')
+      await many.page.request.delete(`/api/documents/chart/${encodeURIComponent(world.chartId)}`);
+    for (const name of [CUBE, CHART_CUBE])
+      await many.page.request.delete(
+        `/api/model/files?folder=mine&path=${encodeURIComponent(`cubes/${name}.yml`)}`,
+      );
   } finally {
     await many.context.close();
   }
@@ -177,6 +181,57 @@ test('Make a cube… adds a draft cube, with count and the SQL that ran, to My w
     await head.getByRole('button', { name: 'Make a cube…' }).click();
     await pane.getByRole('textbox', { name: 'Cube name' }).fill(CUBE);
     await expect(pane.getByTestId('make-cube-name-error')).toHaveText(`The name “${CUBE}” is already in use.`);
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * T821 (AC-463): Make a chart… then Add and make a chart saves the cube as
+ * Make a cube does, then opens the chart editor on a new chart in My
+ * workspace whose target folder is the cube's, the new cube chosen, nothing
+ * placed, and "← Back to SQL runner" back to the same tab.
+ */
+test('Make a chart… saves the cube and opens the editor on a new chart over it, nothing placed, with a way back (T821, AC-463)', async ({
+  browser,
+}) => {
+  const { context, page } = await signedIn(browser, 'many');
+  try {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/sql');
+    await runOn(page, SQL);
+    await expect(page).toHaveURL(/\/sql\?tab=[0-9a-f]{8}$/);
+    const tab = new URL(page.url()).searchParams.get('tab') ?? '';
+    await page.getByTestId('sql-result-head').getByRole('button', { name: 'Make a chart…' }).click();
+
+    const pane = page.getByRole('dialog', { name: 'Make a cube from this query · in My workspace' });
+    await pane.getByRole('textbox', { name: 'Cube name' }).fill(CHART_CUBE);
+    await expect(pane.getByRole('treeitem', { selected: true })).toHaveText(`Make a cube ${RUN}`);
+    await pane.getByRole('button', { name: 'Add and make a chart' }).click();
+
+    await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?/);
+    const chartId = decodeURIComponent(/\/explore\/charts\/([^/]+)\/edit/.exec(page.url())![1]!);
+    world.chartId = chartId;
+    // The new cube chosen in the field tree, its fields listed, none placed.
+    await expect(page.getByRole('button', { name: /^Cube or view\b/ })).toHaveAttribute('data-value', CHART_CUBE);
+    await expect(page.locator('[data-testid^="in-measures-"], [data-testid^="in-dimensions-"]')).toHaveCount(0);
+
+    // A chart in My workspace, to go to the cube's folder.
+    const stored = (await (await page.request.get(`/api/documents/chart/${encodeURIComponent(chartId)}`)).json()) as {
+      body: { folderId?: string; targetFolderId?: string };
+    };
+    expect(stored.body.folderId).toBe('mine');
+    expect(stored.body.targetFolderId).toBe(world.folderId);
+    // The cube is in My workspace's model, as Make a cube saves it.
+    const files = (await (await page.request.get('/api/model/files?folder=mine')).json()) as {
+      files: { path: string }[];
+    };
+    expect(files.files.map((each) => each.path)).toContain(`cubes/${CHART_CUBE}.yml`);
+
+    // And back to the SQL runner, on the same tab, its SQL still there.
+    await page.getByTestId('editor-back').click();
+    await expect(page).toHaveURL(new RegExp(`/sql\\?tab=${tab}$`));
+    await expect(editor(page)).toHaveText(SQL);
   } finally {
     await context.close();
   }

@@ -364,3 +364,16 @@
     - **The pane** takes the right pane's place while open; the toast reads "‹cube› is in My workspace, unpublished · Open in Model", with Dismiss, the link opening the file in My workspace's model.
     - `SqlResult` is unchanged since T819; the T802 e2e's head text was updated in T819's follow-up.
     - Decision T820-1 is in `docs/design/decisions-sql.md`.
+    - **The e2e** passed on headless Chromium after the commit (with T821's in the tree): `sql-make-cube.spec.ts` 2/2 and `sql-workspace.spec.ts` 32/32.
+    - **Review:** one cold review failed on one high point, fixed with a test: Make a cube… chosen again with the pane open kept the first run's name, rows and folder over the new run's SQL; the pane is now made afresh on each choice (in T821's commit, whose lines in `SqlWorkspace.tsx` it shares). Its medium and low points are fixed in a follow-up, each with a test: braces in the SQL are written escaped (`\{`, `\}`), as Cube's YAML reads them, so no `{{`/`}}` makes Cube render the file as Jinja; SQL holding `{%`, or parameters (until T822), is refused in the pane with the reason; SQL ending on a line comment gets a new line; and Add held with no folder chosen, or with My workspace's model unread, says why.
+
+- [x] T821 (AC-463) Make a chart: save the cube as Make a cube does, then open the chart editor on a new chart in My workspace over it, nothing placed, with "← Back to SQL runner"
+  - Lane: SQL
+  - Files: `packages/web/src/workspaces/sql/MakeCubePane.tsx` (+ test), `packages/web/src/editor/ChartEditor.tsx` (the back link only), `e2e/security/sql-make-cube.spec.ts`.
+  - Failing test: the e2e: Make a chart… then Add and make a chart opens the chart editor on a new chart in My workspace whose target folder is the cube's, with the new cube chosen in the field tree, no field placed, and "← Back to SQL runner" returning to the same tab (AC-463).
+  - Depends on: T820
+  - **Built 2026-10-18** (lane SQL, batch 7).
+    - **AC-463 is ticked** on the e2e "Make a chart… saves the cube and opens the editor on a new chart over it, nothing placed, with a way back (T821, AC-463)" (`e2e/security/sql-make-cube.spec.ts`, headless Chromium): Add and make a chart saves the cube into My workspace's model, the editor opens on a new chart whose stored `folderId` is `mine` and `targetFolderId` the cube's folder, the picker holds the new cube, no field is in a well, and "← Back to SQL runner" returns to `/sql?tab=‹the same tab›` with its SQL.
+    - **The web:** `makeChart.ts` makes the chart as New › Chart does in My workspace (`POST /api/documents`) and names its editor `…/edit?new=true&cube=‹cube›&sql=‹tab›`; `editorWithCube` starts a chart with no cube on that cube, nothing placed. The editor route reads `cube` and `sql`; with `sql`, its back button is "← Back to SQL runner". The back link is in `routes.tsx`'s editor surface, beside the others, not in `ChartEditor.tsx`. `SqlWorkspace` takes `go` for leaving, so its test can follow it.
+    - **Also in this commit:** T820's review's high point (the pane made afresh on each Make a cube…, with its test), whose lines in `SqlWorkspace.tsx` are this task's too.
+    - Decision T821-1 is in `docs/design/decisions-sql.md`.

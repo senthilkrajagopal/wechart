@@ -16,6 +16,7 @@ import { viewFromLink } from '../dashboard/markings/shareLink';
 import { ChartEditor } from '../editor/ChartEditor';
 import { LibraryChartNote } from '../editor/LibraryChartNote';
 import { chartDocumentWith, editorViewOf, loadChart, type EditorState } from '../editor/openChart';
+import { editorWithCube } from '../workspaces/sql/makeChart';
 import { withDrawnAs } from '../editor/drawnAs';
 import { formatsFrom, tileChartOf } from '../dashboard/chartSpec';
 import { loadTile } from '../query/loadTile';
@@ -485,7 +486,12 @@ function ChartEditorSurface() {
     staleTime: Infinity,
     gcTime: 0,
   });
-  const view = editorViewOf({ data: chart.data?.state, error: chart.error });
+  // Made from the SQL runner, it opens on its new cube, nothing placed (T821, AC-463).
+  const { cube: startCube, sql: sqlTab } = chartEditorRoute.useSearch();
+  const view = editorViewOf({
+    data: chart.data === undefined ? undefined : editorWithCube(chart.data.state, startCube),
+    error: chart.error,
+  });
 
   /** The editor's state as the user leaves it, for Save. */
   const [edited, setEdited] = useState<EditorState | undefined>(undefined);
@@ -575,7 +581,9 @@ function ChartEditorSurface() {
     : undefined;
   const back = local
     ? { label: '← Back to dashboard', to: `/explore/dashboards/${encodeURIComponent(owner)}` }
-    : fresh
+    : sqlTab !== undefined
+      ? { label: '← Back to SQL runner', to: `/sql?tab=${sqlTab}` }
+      : fresh
       ? { label: '← Back to Explore', to: exploreHref(folderId ?? SHARED_ROOT.id) }
       : { label: '← Back to chart', to: page };
   const changed =
@@ -683,8 +691,13 @@ const chartEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/explore/charts/$objectId/edit',
   /** Opened by New › Chart (T256's review): anything else is no flag. */
-  validateSearch: (search: Record<string, unknown>): { new?: true | undefined } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { new?: true | undefined; cube?: string | undefined; sql?: string | undefined } => ({
     new: search['new'] === true || search['new'] === 'true' ? true : undefined,
+    // Make a chart (T821, AC-463): the cube to start on, and the SQL runner tab to go back to.
+    cube: typeof search['cube'] === 'string' && search['cube'] !== '' ? search['cube'] : undefined,
+    sql: typeof search['sql'] === 'string' && /^[\w-]+$/.test(search['sql']) ? search['sql'] : undefined,
   }),
   component: ChartEditorSurface,
 });

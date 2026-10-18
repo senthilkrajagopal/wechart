@@ -1714,11 +1714,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T820 (AC-462) The Make a cube pane: a checked name, the folder starting at the source's own writable one, the source fixed, the SQL that ran read-only, numeric columns as `sum` measures and the rest as typed dimensions, one key, and a draft with `count` in My workspace
 
-- [ ] T821 (AC-463) Make a chart: save the cube as Make a cube does, then open the chart editor on a new chart in My workspace over it, nothing placed, with "← Back to SQL runner"
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/MakeCubePane.tsx` (+ test), `packages/web/src/editor/ChartEditor.tsx` (the back link only), `e2e/security/sql-make-cube.spec.ts`.
-  - Failing test: the e2e: Make a chart… then Add and make a chart opens the chart editor on a new chart in My workspace whose target folder is the cube's, with the new cube chosen in the field tree, no field placed, and "← Back to SQL runner" returning to the same tab (AC-463).
-  - Depends on: T820
+- [x] T821 (AC-463) Make a chart: save the cube as Make a cube does, then open the chart editor on a new chart in My workspace over it, nothing placed, with "← Back to SQL runner"
 
 - [ ] T822 (AC-462) Write a run's parameter values into Make a cube's SQL as literals, in the driver's own escaping, and say so in the pane
   - Lane: SQL
