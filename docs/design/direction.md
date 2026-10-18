@@ -119,6 +119,7 @@ Phase 2 adds four (evidence in `references.md` › Phase 2):
 **Filter bar**
 
 - Horizontal, under the title (the Metabase and Looker pattern). Optionally it can be a left vertical panel 260 px wide (Superset).
+- *From R79 (2026-10-17, design 19):* the bar sits in the header's sheet, under the compact row, closed by default; the compact row summarises it with the Filters toggle's count and compact chips. See §7g.
 - Each filter shows its scope badge: dashboard, tab, or tile. Filters created by "Filter to / Filter out marked" appear here as ordinary removable filters.
 - The right-hand group holds the interaction chips: one **marking chip** per non-empty marking in Markings mode, or cross-filter chips in cross-filter mode. When the group is empty it shows a one-line hint, for example "Click, drag or Alt+drag to mark · Ctrl/⌘ adds or toggles · Esc unmarks".
 
@@ -530,6 +531,25 @@ Nothing in §2–§7e changes, except that the switcher gains SQL runner after S
 | Access tokens | Account menu (and the single-user chip's), above Sign out; `/account/tokens`; every signed-in user | AC-430, AC-479 |
 | Every user's tokens | Security › Access tokens, after Audit trail; Super-Admins only | AC-470 |
 
+## 7g. R79: the compact dashboard header (accepted 2026-10-17)
+
+**Direction** (`references-compact-header.md` §4; design 19). One sticky row by default; one control both summarises and opens the rest; the rest pushes the tiles down; Esc or the control closes it; nothing is remembered past the visit. It replaces design 04's crumbs row, title row, page-tab row and filter band (2026-09-24, and 2026-09-27 states E and F) for the dashboard view only. The description moves into the sheet: decision dashboard-Q2 is amended, not overturned.
+
+No new colour, type size or weight. Every value reuses a token:
+
+| Token use | Value | Traced to |
+| --- | --- | --- |
+| Compact row | 48 px, padded 0 24, `border-subtle` rule, `bg-page`, sticky under the app bar | `--wc-app-bar-height`; §4 control 32 + 8 + 8; §7d 24 px sides |
+| Way back | "← ‹folder›", a 24 px ghost link; the whole path in its name and tooltip | design 19 pin 1; AC-195 |
+| Title | `text-lg` 20/26/600, cut with "…", never below 160 px; `text-md` 16/22 below 1,024 px | §3 "page titles"; 19-Q4 |
+| Page tabs | 13/600, the row's full height, 2 px `accent` underline on the row's rule; "More ▾" for those that don't fit in view mode | §7d; 19-Q5 |
+| Toggle | 32 px `.btn`, radius 6; count pill 18 px, 12/600, `accent` on `text-on-accent`; pressed on `bg-subtle` | §4, §7d; design 18's `.count` |
+| Compact chips | 24 px, radius 999, 12 px; marking chips bordered 1.5 px in the marking's colour, values cut at 240 px; cross-filter in `crossfilter`; beyond two, "+n" | §4 chips; AC-200, AC-119 |
+| Sheet | description `text-sm` text-secondary, at most 860 px; ownership 12/16 text-secondary; the filter bar as built (53) | dashboard-Q2; `.dashboard__ownership`; `.filter-bar` |
+| Motion | height only: 200 ms `cubic-bezier(0,0,0,1)` opening, 150 ms `cubic-bezier(1,0,1,1)` closing; none under reduced motion | Fluent 2 `durationNormal`, `durationFast`, `curveDecelerateMid`, `curveAccelerateMid` |
+| Change highlight | `accent-soft` ground and an `accent` border on the toggle's count, 2 s | existing tokens; the 2 s is wechart's (19-Q6) |
+| Below 1,024 px | the page menu on a 40 px second row; the sheet padded 16 px, pills one under another | design 19 state D; §2 breakpoints |
+
 ## 8. Components (primitives and states)
 
 - **Shell:** TopBar, WorkspaceSwitcher, Pane (with collapsed rail), Splitter, Drawer, CommandPalette.
@@ -689,3 +709,12 @@ R78, the SQL runner workspace (§7f; design 17). From `references-sql-runner.md`
 106. A data source's page keeps the runner's switch, its record, the off panel and "Open in SQL runner", and holds no SQL editor. *(ref. 123; AC-464)*
 107. The SQL runner adds only the keys R78 approved under R75: ⌘/Ctrl+Enter runs the selection, or else the statement at the cursor; ⌘/Ctrl+S saves; ⌘/Ctrl+F finds inside the editor; autocomplete opens as you type (↑ ↓ choose, Enter accepts, Esc closes the list only, Tab still leaves the editor); Ctrl+Q opens a tab on the current data source, and Ctrl+Alt+[ and Ctrl+Alt+] select the previous and next tab, with Control on macOS too. No key closes a tab. *(ref. 124; AC-387, AC-455, AC-456, AC-480; amended from "no shortcut … unless the user approves it" to the set R78 approved)*
 108. Every SQL runner pane, dialog and popover follows rule 85. The picker is a custom listbox that meets the 12 px floor. The workspace adds no colour, type size or weight. *(ref. 125)*
+
+R79, the compact dashboard header (§7g; design 19, approved 2026-10-17). From `references-compact-header.md` §4, "Proposed checklist rules", numbered from 109 in its order. The copilot study's proposed rules (`references-copilot.md`) are still unnumbered; when the copilot is taken up they follow these, from 115.
+
+109. The dashboard header is one 48 px row by default. It holds the way back to the folder, the title, the page tabs, the interaction summary, the actions and the Filters toggle, and stays fixed above the scrolling tiles. *(AC-484, AC-196)*
+110. The toggle is a disclosure button with `aria-expanded`. Its visible label names "Filters" and the number set, or "Details" when the dashboard has no filters. *(AC-486)*
+111. The expanded sheet pushes the tiles down, never covers them, and holds the description, the ownership line and the full filter bar. It closes with its toggle, or with Esc while focus is in the header, and focus returns to the toggle. *(AC-487, AC-489)*
+112. Under `prefers-reduced-motion: reduce` the sheet opens and closes without animation. *(AC-488)*
+113. A filter changed while the sheet is closed changes the toggle's count, or a compact chip, and is announced politely. *(AC-493)*
+114. In edit mode the sheet is open and has no toggle. *(AC-491)*

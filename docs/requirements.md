@@ -245,7 +245,7 @@ Decisions taken in R7:
 
 ## 9. Interview log
 
-Phase 1's interview log (rounds R1–R10) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R78]`; search that file for the round.
+Phase 1's interview log (rounds R1–R10) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R79]`; search that file for the round.
 
 # Part 2 — Phase 2 requirements (2026-09-25)
 
@@ -753,6 +753,17 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 
 No criteria are written for these yet. Each gets its own questions where it is open.
 
+**N. The compact dashboard header** `[R79]` *(added 2026-10-17; input `docs/inputs/2026-10-17-compact-dashboard-header.md`; design study `docs/design/references-compact-header.md`; design 19, approved the same day)*
+- **The problem,** in the user's words: "nearly 30% of the page goes away for the dashboard header and the filters. Can we have a more compressed header that can be expanded with a slide down so that the complete header can be seen... default will be the compressed header" `[docs/inputs/2026-10-17-compact-dashboard-header.md]`. Measured from the CSS, the chrome above the tiles is 274 px, 30.4 % of 1,440 × 900 (the study's §1).
+- **Compact by default:** one 48 px row holding the way back to the folder, the title, the page tabs, a summary of what's marked or cross-filtered, the actions as today, and a Filters toggle with the count of filters set, last. With the app bar, 96 px of chrome at 1,440 × 900 (design 19) `[R79]`.
+- **Expanded by the toggle:** a sheet slides down under the row holding the description, the ownership line and today's filter bar, unchanged. It **pushes the tiles down** and never covers them ("Push down (Recommended)") `[R79]`.
+- **Closing:** the toggle, or Esc with focus in the header, innermost first, ahead of the dashboard's own Esc; a click on the tiles doesn't close it (19-Q10) `[R79]`.
+- **Motion:** the height only, 200 ms opening and 150 ms closing; none under reduced motion (design 19; the study's Fluent 2 tokens).
+- **Never remembered:** every opening starts compact; the choice lasts the visit, across page tabs, bookmarks, refreshes and edit mode, and is stored nowhere ("No, always start compact (Recommended)") `[R79]`.
+- **Feedback while compact:** a filter, marking or cross-filter change shows in the toggle's count or a compact chip, the count is highlighted for 2 s, and the change is announced once, politely; the sheet never opens by itself ("Highlight + announce (Recommended)") `[R79]`.
+- **Design 19's other questions take its drawn answers** ("Approve (Recommended)") `[R79]`: the sheet open and no toggle in edit mode (19-Q3); the title at `text-lg` (19-Q4); page tabs that don't fit behind "More ▾" in view mode (19-Q5); many filters wrap (19-Q7); the My workspace band unchanged (19-Q8); a one-step "← ‹folder›" way back (19-Q9).
+- **Narrow widths** as design 19 state D draws them: History and Bookmarks as icons from 1,024 to 1,279 px; below 1,024 px the row keeps the way back, the title, the toggle and ⋯, with the pages in a "Page: ‹name› ▾" menu.
+
 ## P2.7 Non-goals for phase 2
 
 - **Individual users on folders.** AD groups only `[P2 input, R16]`.
@@ -785,6 +796,10 @@ No criteria are written for these yet. Each gets its own questions where it is o
   - running SQL in the SQL runner through MCP, in the first release (R78-11);
   - changing schedules through MCP (R78-8);
   - signing in through OAuth, so clients that need it (ChatGPT, per the research) aren't served in the first release.
+- **Around the compact dashboard header** `[R79]`, the options not chosen:
+  - remembering the header open or closed, per person, per dashboard or as an author's default;
+  - a sheet that covers the tiles, or closes on a click outside;
+  - a sheet that opens by itself when a filter changes.
 
 Phase 1's non-goals still stand, except two that phase 2 brings into scope:
 - **Users, groups, roles and SSO** (§P2.6 A–B).
@@ -889,4 +904,4 @@ The questions as first asked:
 
 ## P2.9 Interview log
 
-Phase 2's interview log (rounds R11 onward, the user's later decisions included) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R78]`; search that file for the round.
+Phase 2's interview log (rounds R11 onward, the user's later decisions included) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R79]`; search that file for the round.

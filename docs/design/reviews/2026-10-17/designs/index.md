@@ -134,7 +134,9 @@ The user approved both designs: "Approve with defaults (Recommended)" (R78 in `d
 - The proposals, 17-P1 ("Changed since saved"), 17-P2 (the one-time note that tabs are kept in this browser), 17-P3 (Cube Store's insert of `information_schema.tables`), 18-P1 ("Show its calls") and 18-P2 (the Claude Code command with the new token in it). The answer didn't name them, as R33's "Approve all with proposals" did, and no criterion holds them, so they are not planned.
 - D-Q1 and D-Q2, which are direction.md's, not the designs'.
 
-## Design 19, the compact dashboard header (for approval)
+## Design 19, the compact dashboard header (approved 2026-10-17)
+
+**Approved 2026-10-17** by the user: "Approve (Recommended)", with three questions answered on their own (R79 in `docs/requirements-log.md`). See "Decided 2026-10-17, design 19" at the end.
 
 Added on 2026-10-17, after designs 17 and 18 were approved, for the user's request in `docs/inputs/2026-10-17-compact-dashboard-header.md`: "nearly 30% of the page goes away for the dashboard header and the filters. Can we have a more compressed header that can be expanded with a slide down so that the complete header can be seen... default will be the compressed header." It isn't covered by the approval of 17 and 18 above.
 
@@ -191,3 +193,19 @@ Each is drawn one way, the recommended one, listed first. The way drawn is only 
   - Drawn: (a) its toggle, or Esc with focus in the header.
   - (b) Also a click on the tiles, though that click marks or cross-filters too.
 - **19-D. Checklist rules.** `references-compact-header.md` §4 proposes six rules. Once design 19 is approved, they are numbered after whatever the copilot's rules take (D-Q2).
+
+### Decided 2026-10-17, design 19
+
+The user approved design 19: "Approve (Recommended)" (R79 in `docs/requirements-log.md`). Three questions were asked on their own; every other question takes the way the design draws it, option (a). The spec's F43 (AC-484 … AC-496) and the amended AC-196, AC-200, AC-119, AC-352 and AC-343 hold it.
+
+- **19-Q1:** asked. "Push down (Recommended)": the sheet pushes the tiles down and never covers them.
+- **19-Q2:** asked. "No, always start compact (Recommended)": the choice lasts the visit only, across page tabs, bookmarks, refreshes and edit mode; every opening starts compact; nothing is stored.
+- **19-Q3:** (a), drawn. In edit mode the sheet is open and the toggle gone; leaving edit mode restores the reader's state.
+- **19-Q4:** (a), drawn. The title is `text-lg` 20/26/600 in the compact row.
+- **19-Q5:** (a), drawn. In view mode, page tabs that don't fit go behind "More ▾", the open page always inline; in edit mode the strip scrolls, as built.
+- **19-Q6:** asked. "Highlight + announce (Recommended)": the count or a compact chip changes, the count is highlighted for 2 s, and the change is announced once, politely; the sheet never opens by itself.
+- **19-Q7:** (a), drawn. Many filters wrap in the open sheet, which grows with them.
+- **19-Q8:** (a), drawn. The My workspace band above the header is unchanged (rule 72).
+- **19-Q9:** (a), drawn. A one-step "← ‹folder›", the whole path in its name and tooltip and in the ownership line. AC-195 holds as written.
+- **19-Q10:** (a), drawn. The sheet closes with its toggle, or Esc with focus in the header; a click on the tiles doesn't close it.
+- **19-D:** the six rules are direction.md's rules 109–114, with §7g holding the tokens. The copilot's proposed rules are still unnumbered (D-Q2); they will follow, from 115.

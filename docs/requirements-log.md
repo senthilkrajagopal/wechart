@@ -223,6 +223,22 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R79 — a compact dashboard header** (2026-10-17, the user; input `docs/inputs/2026-10-17-compact-dashboard-header.md`; design study `docs/design/references-compact-header.md`; design 19 in `docs/design/reviews/2026-10-17/designs/index.md`)
+- **The request:** "in the on the dashboard page.. nearly 30% of the page goes away for the dashboard header and the filters. Can we have a more compressed header that can be expanded with a slide down so that the complete header can be seen... default will be the compressed header. use a UI expert who can specify what this behavior should look like."
+  - *Measured from today's CSS (the study's §1): 274 px of chrome above the tiles, 30.4 % of 1,440 × 900 and 38.1 % of 1,280 × 720. Design 19 draws 96 px compact (10.7 %) and 205 px expanded.*
+- **Design 19's questions** (2026-10-17, the user):
+  1. Q: Does the expanded sheet push the tiles down or cover them (19-Q1)? A: "Push down (Recommended)".
+  2. Q: Is the open or closed choice remembered (19-Q2)? A: "No, always start compact (Recommended)". *Kept for the visit only: across page tabs, bookmarks, refreshes and edit mode; every opening starts compact; stored nowhere.*
+  3. Q: What feedback when a filter changes while the header is compact (19-Q6)? A: "Highlight + announce (Recommended)". *The count or a compact chip changes, the count is highlighted for 2 s, and the change is announced once, politely; the sheet never opens by itself.*
+  4. Q: Approve design 19, with the drawn recommendations for the other questions? A: "Approve (Recommended)". *So each takes the way design 19 draws it, option (a):*
+     - 19-Q3: in edit mode the sheet is open and the toggle gone; leaving edit mode restores the reader's state;
+     - 19-Q4: the title is `text-lg` 20/26/600 in the compact row;
+     - 19-Q5: page tabs that don't fit go behind "More ▾" in view mode, the open page always inline;
+     - 19-Q7: many filters wrap in the open sheet, which grows with them;
+     - 19-Q8: the My workspace band above the header is unchanged (rule 72);
+     - 19-Q9: a one-step "← ‹folder›" way back, the whole path in its name and tooltip; AC-195 holds as written;
+     - 19-Q10: the sheet closes with its toggle, or Esc with focus in the header; a click on the tiles doesn't close it.
+
 **R78 — new work: the MCP server and the SQL runner workspace first; the copilot later** (2026-10-17, the user; inputs `docs/inputs/2026-10-17-{mcp-server,copilot-chat,sql-runner-and-ask-key}.md`; research `docs/research/mcp-typescript-sdk.md`; designs `docs/design/references-{sql-runner,copilot}.md`)
 - **Scope and order.**
   - "we need to build two more things.. one is a mcp server that lets claude code or other llms.. manage datasources, dashboards, cubes, approval and review flows and anything else that i missed out."
