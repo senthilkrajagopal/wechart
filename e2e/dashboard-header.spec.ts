@@ -516,7 +516,8 @@ test("Escape closes a filter's popover first, then the sheet, focus on the toggl
 
 /**
  * A dashboard of its own in My workspace, marking or cross-filtering, with a
- * description and one bar tile, orders by status ("tile-status"); opened.
+ * description, a Status filter, and two page tabs: Only, with one bar tile,
+ * orders by status ("tile-status"), and Detail, empty; opened.
  */
 async function barBoard(
   page: Page,
@@ -570,7 +571,9 @@ async function barBoard(
             title: 'Only',
             items: [{ id: 'tile-status', kind: 'chart', w: 6, h: 40, chartId: chart.id }],
           },
+          { id: 'detail', title: 'Detail', items: [] },
         ],
+        filters: [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }],
       },
     },
   });
@@ -640,6 +643,101 @@ test('Escape on a focused tile unmarks it and leaves the sheet open, as a click 
   await status.getByTestId('chart-canvas').click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(headerSheet(page)).toBeVisible();
+});
+
+/**
+ * T835 (AC-490; 19-Q2, "No, always start compact (Recommended)"): the sheet
+ * stays as the reader left it across a page tab, a bookmark applied, a
+ * refresh and edit mode; every opening — a reload, a way back from Explore —
+ * starts it closed; and opening or closing it touches no storage, the
+ * address or the API.
+ */
+test('the sheet is kept as left for the visit only, and stored nowhere', async ({
+  page,
+  request,
+}) => {
+  const status = await barBoard(page, request, 'markings');
+  const toggle = page.locator('.dashboard__header button.header-toggle');
+  const expanded = () => toggle.getAttribute('aria-expanded');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+  // Opening and closing it: no key in any storage, the same address, and no
+  // request at all.
+  const stored = () =>
+    page.evaluate(async () => ({
+      local: Object.keys(localStorage).sort(),
+      session: Object.keys(sessionStorage).sort(),
+      indexed: (await indexedDB.databases()).map((each) => each.name).sort(),
+    }));
+  const before = await stored();
+  const address = page.url();
+  const sent: string[] = [];
+  const record = (asked: { method: () => string; url: () => string }) => {
+    sent.push(`${asked.method()} ${asked.url()}`);
+  };
+  page.on('request', record);
+  await openHeaderSheet(page);
+  await toggle.click();
+  await expect(page.locator('.header-sheet')).toBeHidden();
+  await openHeaderSheet(page);
+  page.off('request', record);
+  expect(sent).toEqual([]);
+  expect(page.url()).toBe(address);
+  expect(await stored()).toEqual(before);
+
+  // A page tab and back.
+  await page.getByRole('tab', { name: 'Detail' }).click();
+  await expect(page.getByRole('tab', { name: 'Detail', selected: true })).toBeVisible();
+  expect(await expanded()).toBe('true');
+  await page.getByRole('tab', { name: 'Only' }).click();
+
+  // A bookmark saved, then applied.
+  await page.getByRole('button', { name: 'Bookmarks' }).click();
+  await page
+    .getByRole('dialog', { name: 'Bookmarks' })
+    .getByRole('button', { name: 'Bookmark this view…' })
+    .click();
+  const naming = page.getByRole('dialog', { name: 'Save a bookmark' });
+  await naming.getByRole('textbox', { name: 'Name' }).fill('Header visit');
+  await naming.getByRole('button', { name: 'Save' }).click();
+  await expect(naming).toHaveCount(0);
+  await page.getByRole('button', { name: 'Bookmarks' }).click();
+  await page
+    .getByRole('dialog', { name: 'Bookmarks' })
+    .getByRole('list', { name: 'Mine' })
+    .getByRole('button', { name: 'Header visit', exact: true })
+    .click();
+  await expect(page.getByRole('status').filter({ hasText: 'Applied the bookmark' })).toBeVisible();
+  expect(await expanded()).toBe('true');
+
+  // A refresh of the tile's data.
+  const refresh = status.getByRole('button', { name: 'Refresh By status' });
+  await expect(refresh).toBeEnabled();
+  await refresh.click();
+  await expect(refresh).toBeEnabled();
+  expect(await expanded()).toBe('true');
+
+  // Edit, then Discard: the reader's state back.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(toggle).toHaveCount(0);
+  await page.getByRole('button', { name: /^Discard/ }).click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+  // Closed there, it stays closed across the same page tab.
+  await toggle.click();
+  await page.getByRole('tab', { name: 'Detail' }).click();
+  await expect(page.getByRole('tab', { name: 'Detail', selected: true })).toBeVisible();
+  expect(await expanded()).toBe('false');
+
+  // Every opening starts it closed: a reload, and a way back from Explore.
+  await openHeaderSheet(page);
+  await page.reload();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await openHeaderSheet(page);
+  await page.locator('.dashboard__header .header-back').click();
+  await expect(page).toHaveURL(/\/explore/);
+  await page.goBack();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 });
 
 /**

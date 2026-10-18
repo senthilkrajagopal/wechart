@@ -36,3 +36,8 @@ Lane HEADER's ticked tasks from `docs/tasks.md` §P2.25 (F43), their sub-lines w
   - Files: `packages/web/src/dashboard/header/HeaderSheet.tsx` (+ test), `packages/web/src/dashboard/DashboardView.tsx` (the dashboard-wide Escape that clears cross-filters, held while focus is in the open header), `e2e/dashboard-header.spec.ts`.
   - Failing test: `HeaderSheet.test.tsx`, on a dashboard: with a filter's popover open, Escape closes it with focus back on its pill and the sheet still open, and a second Escape closes the sheet with focus on the toggle; with a cross-filter set and focus in the open sheet, Escape closes the sheet and the cross-filter stays, and Escape with focus outside the header then clears it (AC-489, AC-119); Escape on a focused tile unmarks that tile and the sheet stays open; a click on a tile leaves it open (AC-489). The e2e repeats the popover and cross-filter cases in Chrome.
   - Depends on: T828
+
+- [x] T835 (AC-490) Keep the sheet open or closed for the visit only, across page tabs, a bookmark applied and a refresh, storing it nowhere
+  - Files: `packages/web/src/dashboard/header/useHeaderSheet.ts` (+ test), `packages/web/src/dashboard/DashboardView.tsx`, `e2e/dashboard-header.spec.ts`.
+  - Failing test: `useHeaderSheet.test.tsx`: opened, the sheet stays open across a page tab change, a bookmark applied and Refresh; closed, it stays closed across the same. The e2e: open the sheet, then reload: it's closed; open it, go to Explore and back: it's closed; `localStorage`, `sessionStorage` and IndexedDB hold no key they didn't before, the address is unchanged, and no API request carries the state (AC-490).
+  - Depends on: T828

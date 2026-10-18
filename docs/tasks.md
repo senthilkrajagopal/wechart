@@ -1880,10 +1880,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T834 (AC-489, AC-119) Close the sheet with its toggle or with Escape in the header, innermost first and ahead of the dashboard's own Escape, focus to the toggle; a click on the tiles leaves it open
 
-- [ ] T835 (AC-490) Keep the sheet open or closed for the visit only, across page tabs, a bookmark applied and a refresh, storing it nowhere
-  - Files: `packages/web/src/dashboard/header/useHeaderSheet.ts` (+ test), `packages/web/src/dashboard/DashboardView.tsx`, `e2e/dashboard-header.spec.ts`.
-  - Failing test: `useHeaderSheet.test.tsx`: opened, the sheet stays open across a page tab change, a bookmark applied and Refresh; closed, it stays closed across the same. The e2e: open the sheet, then reload: it's closed; open it, go to Explore and back: it's closed; `localStorage`, `sessionStorage` and IndexedDB hold no key they didn't before, the address is unchanged, and no API request carries the state (AC-490).
-  - Depends on: T828
+- [x] T835 (AC-490) Keep the sheet open or closed for the visit only, across page tabs, a bookmark applied and a refresh, storing it nowhere
 
 - [ ] T836 (AC-491, AC-206, AC-056) In edit mode, show the sheet open with no toggle, "Editing ‹name›" and "+ Page tab" in the row, page tabs scrolling with no "More ▾", and the reader's state back when editing ends
   - Files: `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/dashboard/header/useHeaderSheet.ts`, `packages/web/src/dashboard/DashboardView.tsx` (`PageTabsRow` while editing), `packages/web/src/dashboard/edit/enterEdit.test.tsx`, `e2e/dashboard-edit.spec.ts`.

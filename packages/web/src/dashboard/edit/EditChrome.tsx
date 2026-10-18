@@ -6,6 +6,7 @@ import type { FiltersSet } from '../header/filtersSet';
 import { FiltersToggle } from '../header/FiltersToggle';
 import { HeaderSheet } from '../header/HeaderSheet';
 import { HeaderTitle } from '../header/HeaderTitle';
+import { useHeaderSheet } from '../header/useHeaderSheet';
 import { useSheetEscape } from '../header/useSheetEscape';
 import { EditBar } from './EditBar';
 import { EditSidebar, type SidebarContent } from './EditSidebar';
@@ -253,17 +254,13 @@ export function EditChrome<T>({
 }: EditChromeProps<T>) {
   const [editing, setEditing] = useState(false);
   /**
-   * The header sheet, as the reader left it: closed whenever the chrome
-   * mounts (AC-490), kept in this state alone — nothing stores it. Editing
-   * shows the sheet without changing it, so leaving edit mode puts back
-   * what the reader had (rule 114).
+   * The header sheet, as the reader left it, for the visit (AC-490): closed
+   * whenever the chrome mounts, and stored nowhere (`useHeaderSheet`).
    */
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const { open: sheetOpen, toggle: toggleSheet, close: closeSheet } = useHeaderSheet();
   const sheetId = useId();
   const root = useRef<HTMLDivElement>(null);
-  useSheetEscape(root, sheetId, sheetOpen && !editing, () => {
-    setSheetOpen(false);
-  });
+  useSheetEscape(root, sheetId, sheetOpen && !editing, closeSheet);
   /** The row has cut the title short: the sheet then starts with it whole (AC-485). */
   const [titleCut, setTitleCut] = useState(false);
   /** Edit, once a Discard has put it back: where focus goes (T223's review). */
@@ -507,9 +504,7 @@ export function EditChrome<T>({
               open={sheetOpen}
               controls={sheetId}
               summary={filtersSummary}
-              onToggle={() => {
-                setSheetOpen((was) => !was);
-              }}
+              onToggle={toggleSheet}
             />
           ) : null}
         </header>
