@@ -277,3 +277,16 @@
     - **The web:** a tab opened so carries `sourceLost` (kept in this browser) until a source is chosen; `ChooseASource lost` says the sentence.
     - Decision T814-1 is in `docs/design/decisions-sql.md`.
     - **Review:** one cold review passed. Its one real point is fixed in a follow-up, with a test: a tab already holding the query, kept in this browser on the source since switched off, was only selected, so it showed that source's name and off panel. Open now takes the source from it (`open-saved`'s `lose`). Its low notes are left: `DELETE` answers the source id for Undo (T814-1); the e2e checks the page with the picker closed, where an off source is still listed by AC-447's rule; the API test covers the runner turned off, not lost folder access or a deleted source, which take the same `runsSqlOn` path.
+
+- [x] T815 (AC-460) List the user's own saved queries in ⌘K, labelled "Saved query", and no one else's
+  - Lane: SQL
+  - Files: `packages/web/src/shell/globalSearch.ts` (+ test), `packages/web/src/shell/SearchPalette.tsx` (+ test), `packages/api/src/routes/sql-saved.ts`, `e2e/security/sql-saved.spec.ts`.
+  - Failing test: `globalSearch.test.ts`: a search matching the user's saved query lists it labelled "Saved query", opening it in the workspace; another user's matching saved query isn't listed (AC-460).
+  - Depends on: T812
+  - **Built 2026-10-18** (lane SQL, batch 6).
+    - **AC-460 is ticked** on the e2e "lists the owner’s match as “Saved query” and opens it in the workspace; nobody else’s palette lists it" (`e2e/security/sql-saved.spec.ts`): the writer's ⌘K lists their query as "Saved query" with its source's name, and choosing it opens it in its own tab on that source with its SQL; a Super-Admin's ⌘K, given the same text, says "Nothing matches".
+    - **The web:** the palette reads `SAVED_QUERIES` as it opens; `globalResults` lists the matching ones first, each going to `/sql?saved=‹id›`. `SqlSurface` reads `saved`, and the workspace opens it once its sources are read, through the Saved tab's own `openSaved` (so a lost source is never named, and a tab already holding it is selected).
+    - **The API:** a saved query's answer gains `sourceName` for a source the user may run SQL on. `sqlSourcesLister` takes `only`, so the saved routes check only their queries' sources.
+    - "Another user's isn't listed" is the API's (T813's test); `globalSearch.test.ts` checks what the palette makes of the owner's list, and the e2e checks the Super-Admin's palette.
+    - **Not this task's:** `e2e/search-palette.spec.ts:147` fails on Chromium in this stack whether or not the palette asks for saved queries (checked with the ask turned off): the catalog's answer lands after the first ↓, so the option ids, which are positions, shift. Left for the coordinator.
+    - Decision T815-1 is in `docs/design/decisions-sql.md`.

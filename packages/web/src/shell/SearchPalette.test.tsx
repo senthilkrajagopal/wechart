@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render as rtlRender, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SearchPalette } from './SearchPalette';
 
@@ -117,5 +117,51 @@ describe('search palette (AC-006)', () => {
       dialog.getAttribute('aria-label') ?? dialog.getAttribute('aria-labelledby'),
     ).toBeTruthy();
     expect(dialog.getAttribute('aria-modal')).toBe('true');
+  });
+});
+
+/**
+ * T815 (AC-460): the palette asks for the user's own saved queries, which
+ * the API answers to their owner alone, and lists the matching ones as
+ * "Saved query".
+ */
+describe('saved queries in the palette (T815, AC-460)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('lists the user’s matching saved query, labelled "Saved query", opening it in the workspace', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        asked.push(url);
+        const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+        if (url === '/api/sql/saved')
+          return json({
+            queries: [
+              {
+                id: 'q-top',
+                name: 'Top EMEA orders',
+                description: '',
+                sourceId: 'emea',
+                sourceName: 'emea_replica',
+                sql: 'SELECT 1',
+                parameters: [],
+              },
+            ],
+          });
+        if (url.startsWith('/api/search')) return json([]);
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+    render(<SearchPalette />);
+    await userEvent.keyboard('{Control>}k{/Control}');
+    await userEvent.type(screen.getByRole('combobox'), 'emea');
+
+    const option = await screen.findByRole('option', { name: /Top EMEA orders/ });
+    expect(option.textContent).toBe('Saved queryTop EMEA ordersemea_replica');
+    expect(option.getAttribute('data-href')).toBe('/sql?saved=q-top');
+    expect(asked).toContain('/api/sql/saved');
   });
 });

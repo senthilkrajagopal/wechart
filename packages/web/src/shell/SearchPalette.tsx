@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { META_QUERY } from '../query/meta';
 import { FOLDERS_QUERY } from '../workspaces/explore/folders';
 import { MODEL_FILES_QUERY } from '../workspaces/model/FileList';
+import { SAVED_QUERIES } from '../workspaces/sql/SavedList';
 import { globalResults } from './globalSearch';
 import { useFocusTrap } from './useFocusTrap';
 
@@ -86,6 +87,10 @@ export function SearchPalette() {
   const files = useQuery({ ...MODEL_FILES_QUERY, enabled: open });
   // Where a folder's cube is said to be (T450, AC-329).
   const folders = useQuery({ ...FOLDERS_QUERY, enabled: open });
+  // The user's own saved SQL queries, which the API answers to their owner
+  // alone (T815, AC-460), each with its source's name where they may still
+  // run SQL on it. Unreadable, they are left out.
+  const saved = useQuery({ ...SAVED_QUERIES, retry: false, enabled: open });
 
   const hits = catalog.data ?? [];
   const results = globalResults(text, {
@@ -93,8 +98,9 @@ export function SearchPalette() {
     meta: meta.data,
     files: files.data ?? [],
     folders: folders.data ?? [],
+    saved: saved.data ?? [],
   });
-  const settled = !catalog.isFetching && !meta.isPending && !files.isPending;
+  const settled = !catalog.isFetching && !meta.isPending && !files.isPending && !saved.isPending;
   const active = activeKey === null ? -1 : results.findIndex((result) => result.key === activeKey);
   const move = (by: 1 | -1) => {
     if (results.length === 0) return;

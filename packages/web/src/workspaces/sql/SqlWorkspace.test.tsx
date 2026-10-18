@@ -988,6 +988,57 @@ describe('opening a saved query whose source is no longer available (T814, AC-45
     expect(screen.queryByText(/the one it was saved with/)).toBeNull();
   });
 
+  it('opens the saved query the address names, `/sql?saved=…`, as ⌘K sends it (T815, AC-460)', async () => {
+    const top = { ...lost, id: 'q-top', name: 'Top EMEA orders', sourceId: 'emea', sql: 'SELECT 7' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/sql/saved') return json({ queries: [top, lost] });
+        if (url === '/api/sql/saved/q-top') return json(top);
+        if (url === '/api/sql/saved/q-lost') return json(lost);
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(ME_QUERY.queryKey, writer);
+    const view = render(
+      <QueryClientProvider client={client}>
+        <SqlWorkspace saved="q-top" />
+      </QueryClientProvider>,
+    );
+    const tab = await screen.findByRole('tab', { name: /^Top EMEA orders, .*on emea_replica$/ });
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getAllByRole('tab')).toHaveLength(2);
+    view.unmount();
+
+    // Again, with it open: its tab is selected, not a second one.
+    const again = render(
+      <QueryClientProvider client={client}>
+        <SqlWorkspace saved="q-top" />
+      </QueryClientProvider>,
+    );
+    await vi.waitFor(() => {
+      expect(screen.getByRole('tab', { name: /^Top EMEA orders/ }).getAttribute('aria-selected')).toBe('true');
+    });
+    expect(screen.getAllByRole('tab')).toHaveLength(2);
+    again.unmount();
+
+    // A lost one opens on none.
+    render(
+      <QueryClientProvider client={client}>
+        <SqlWorkspace saved="q-lost" />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText('Choose a data source: the one it was saved with isn’t available to you.')).toBeTruthy();
+    expect(screen.getAllByRole('tab').map((each) => each.getAttribute('aria-label')?.split(',')[0])).toEqual([
+      'Query 1',
+      'Top EMEA orders',
+      'Old month end',
+    ]);
+  });
+
   it('keeps the first visit’s sentence for a tab with no source that wasn’t opened so', async () => {
     vi.stubGlobal(
       'fetch',

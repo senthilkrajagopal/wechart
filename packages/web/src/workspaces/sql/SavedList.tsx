@@ -19,6 +19,8 @@ export interface SavedQuery {
    * the API never names it (T814, AC-459). A save sending none keeps it.
    */
   readonly sourceId: string | null;
+  /** Its source's name, where the user may run SQL on it (T815: ⌘K's second line). */
+  readonly sourceName?: string;
   readonly sql: string;
   readonly parameters: readonly { readonly name: string; readonly type: ParamType; readonly value: string }[];
 }
@@ -38,6 +40,23 @@ export const SAVED_QUERIES = {
     return said.queries;
   },
 };
+
+/** One of the user's saved queries, by its id (`GET /api/sql/saved/:id`): ⌘K's (T815). */
+export const savedQueryById = (id: string) => ({
+  queryKey: ['sql-saved', 'one', id] as const,
+  queryFn: async ({ signal }: { signal?: AbortSignal }): Promise<SavedQuery> => {
+    const response = await fetch(
+      `/api/sql/saved/${encodeURIComponent(id)}`,
+      signal === undefined ? {} : { signal },
+    );
+    const said = (await response.json().catch(() => ({}))) as SavedQuery & { error?: unknown };
+    if (!response.ok)
+      throw new Error(
+        typeof said.error === 'string' ? said.error : `That saved query could not be read (${String(response.status)}).`,
+      );
+    return said;
+  },
+});
 
 /** What a save sends: everything but its id. */
 const bodyOf = (query: SavedQuery) => ({

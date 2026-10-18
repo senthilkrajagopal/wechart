@@ -212,3 +212,36 @@ describe('a folder’s fields (T450, T710)', () => {
     ).toEqual(['Cube Orders']);
   });
 });
+
+/**
+ * T815 (AC-460): ⌘K lists the user's own saved queries that match, labelled
+ * "Saved query", each opening in the SQL runner workspace. The palette is
+ * given only the user's own (`GET /api/sql/saved` answers no one else's).
+ */
+describe('saved queries in the palette (T815, AC-460)', () => {
+  const saved = [
+    { id: 'q-top', name: 'Top EMEA orders', sourceName: 'emea_replica' },
+    { id: 'q-gl', name: 'GL postings' },
+  ];
+
+  it('lists a matching one first, labelled "Saved query" with its source, opening it in the workspace', () => {
+    const results = globalResults('orders', { catalog, meta, files, saved });
+    expect(results[0]).toEqual({
+      key: 'saved:q-top',
+      type: 'Saved query',
+      title: 'Top EMEA orders',
+      detail: 'emea_replica',
+      href: '/sql?saved=q-top',
+    });
+    expect(results.some((result) => result.title === 'GL postings')).toBe(false);
+  });
+
+  it('names no source for one whose source the user can no longer run SQL on (AC-459)', () => {
+    const [gl] = globalResults('gl post', { catalog: [], meta: null, files: [], saved });
+    expect(gl).toEqual({ key: 'saved:q-gl', type: 'Saved query', title: 'GL postings', href: '/sql?saved=q-gl' });
+  });
+
+  it('lists none without saved queries given', () => {
+    expect(globalResults('orders', { catalog: [], meta: null, files: [] })).toEqual([]);
+  });
+});

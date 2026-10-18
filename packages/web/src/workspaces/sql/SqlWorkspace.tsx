@@ -27,7 +27,7 @@ import { holdTabs, releaseTabs, tabsStoreFor } from './liveTabs';
 import { QueryTab, type Insertion, type RunHold, type RunOnOpen } from './QueryTab';
 import { SchemaTree } from './SchemaTree';
 import { runState, type RunState } from './runState';
-import { SavedList, type SavedQuery } from './SavedList';
+import { SavedList, savedQueryById, type SavedQuery } from './SavedList';
 import type { SqlSourceRow } from './sources';
 import type { SqlSource } from './sqlSource';
 import { firstTabs, newTabId, type SqlTab, type TabsAction, type TabsState } from './tabs';
@@ -56,10 +56,13 @@ import {
  */
 export function SqlWorkspace({
   tab,
+  saved,
   onOpenTab,
 }: {
   /** The tab the address names, `/sql?tab=…` (T801, AC-446). */
   readonly tab?: string | undefined;
+  /** The saved query the address names, `/sql?saved=…`, as ⌘K opens one (T815, AC-460). */
+  readonly saved?: string | undefined;
   /** Names the open tab in the address, as it opens. */
   readonly onOpenTab?: ((id: string) => void) | undefined;
 } = {}) {
@@ -76,6 +79,7 @@ export function SqlWorkspace({
       key={user}
       user={user}
       tab={tab}
+      saved={saved}
       onOpenTab={onOpenTab}
       superAdmin={me.data.superAdmin || me.data.security === 'off'}
     />
@@ -233,11 +237,13 @@ function Workbench({
   superAdmin,
   user,
   tab,
+  saved,
   onOpenTab,
 }: {
   readonly superAdmin: boolean;
   readonly user: string;
   readonly tab: string | undefined;
+  readonly saved: string | undefined;
   readonly onOpenTab: ((id: string) => void) | undefined;
 }) {
   const sources = useQuery({ ...SQL_SOURCES_QUERY, retry: false });
@@ -403,6 +409,20 @@ function Workbench({
     const lose = !has && holding !== undefined && holding.sourceId !== '' && !runs(holding.sourceId);
     dispatch({ kind: 'open-saved', query, sourceId: has ? own : '', ...(lose ? { lose: true as const } : {}) });
   };
+  /**
+   * The saved query the address names, as ⌘K opens one (T815, AC-460):
+   * opened once, when it and the sources are read, as the Saved tab's Open
+   * opens it. One the API doesn't answer, another's included, opens nothing.
+   */
+  const named = useQuery({ ...savedQueryById(saved ?? ''), retry: false, enabled: saved !== undefined });
+  const openedNamed = useRef(false);
+  useEffect(() => {
+    if (openedNamed.current || named.data === undefined || sources.data === undefined) return;
+    openedNamed.current = true;
+    openSaved(named.data);
+    // Once, as the address is read once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [named.data, sources.data]);
   const ids = useId();
   const picker = useRef<HTMLButtonElement>(null);
   const leftRail = useRef<HTMLButtonElement>(null);

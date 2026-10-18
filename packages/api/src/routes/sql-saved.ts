@@ -119,11 +119,21 @@ export function registerSavedQueries(
    * they may still run SQL on it; else none, neither its id nor its name,
    * so it opens with no source chosen (T814, AC-459).
    */
-  const answersFor = async (request: FastifyRequest) => {
-    const rows = await sourcesOf?.(request);
-    return (query: Kept) =>
-      answerOf(query, rows === undefined || runsSqlOn(rows, query.sourceId) ? query.sourceId : null);
+  const answersFor = async (request: FastifyRequest, queries: readonly Kept[]) => {
+    // Only their sources are checked (T815: ⌘K asks on every opening).
+    const rows =
+      queries.length === 0
+        ? undefined
+        : await sourcesOf?.(request, new Set(queries.map((query) => query.sourceId)));
+    return (query: Kept) => {
+      if (rows === undefined) return answerOf(query);
+      if (!runsSqlOn(rows, query.sourceId)) return answerOf(query, null);
+      // Its name too, for ⌘K's second line (T815; design 17, I5).
+      const name = rows.find((row) => row.id === query.sourceId)?.name;
+      return { ...answerOf(query), ...(name === undefined ? {} : { sourceName: name }) };
+    };
   };
+  const answerFor = async (request: FastifyRequest, query: Kept) => (await answersFor(request, [query]))(query);
   /**
    * A save's source: as sent; else, null, the one it was saved with, kept
    * (Rename), or that of `from`, another of the owner's (Duplicate). The
@@ -155,13 +165,14 @@ export function registerSavedQueries(
     const result = await store.create(ownerOf(request), input, id?.toLowerCase());
     if ('held' in result) return reply.status(409).send({ error: 'That saved query can’t be brought back.' });
     if ('taken' in result) return reply.status(409).send({ error: taken(input.name) });
-    return reply.status(201).send((await answersFor(request))(result.saved));
+    return reply.status(201).send(await answerFor(request, result.saved));
   });
 
   /** The owner's saved queries, by name, for the Saved tab (T813, AC-458): nobody else's. */
   app.get('/api/sql/saved', USER, async (request) => {
-    const answer = await answersFor(request);
-    return { queries: (await store.list(ownerOf(request))).map((query) => answer(query)) };
+    const queries = await store.list(ownerOf(request));
+    const answer = await answersFor(request, queries);
+    return { queries: queries.map((query) => answer(query)) };
   });
 
   /**
@@ -185,13 +196,13 @@ export function registerSavedQueries(
     const result = await store.update(ownerOf(request), id, input);
     if (result === undefined) return reply.status(404).send({ error: NOT_FOUND });
     if ('taken' in result) return reply.status(409).send({ error: taken(input.name) });
-    return reply.send((await answersFor(request))(result.saved));
+    return reply.send(await answerFor(request, result.saved));
   });
 
   app.get('/api/sql/saved/:id', USER, async (request, reply) => {
     const { id } = request.params as { id: string };
     const query = UUID.test(id) ? await store.get(ownerOf(request), id) : undefined;
     if (query === undefined) return reply.status(404).send({ error: NOT_FOUND });
-    return reply.send((await answersFor(request))(query));
+    return reply.send(await answerFor(request, query));
   });
 }

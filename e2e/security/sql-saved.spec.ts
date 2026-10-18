@@ -276,3 +276,57 @@ test.describe('a saved query whose source is no longer available (T814, AC-459)'
     }
   });
 });
+
+/**
+ * T815 (AC-460): ⌘K lists the user's own matching saved queries, labelled
+ * "Saved query", and opens one in the SQL runner; nobody else's, a
+ * Super-Admin's palette included.
+ */
+test.describe('saved queries in ⌘K (T815, AC-460)', () => {
+  const SHORTCUT = process.platform === 'darwin' ? 'Meta+k' : 'Control+k';
+  const name = `Palette pick ${RUN}`;
+  const paletteOf = async (page: Page, text: string) => {
+    await page.goto('/explore');
+    await expect(page.getByRole('button', { name: /theme/i })).toBeVisible();
+    await page.keyboard.press(SHORTCUT);
+    const palette = page.getByRole('dialog', { name: 'Search' });
+    await palette.getByRole('combobox').fill(text);
+    return palette;
+  };
+
+  test('lists the owner’s match as “Saved query” and opens it in the workspace; nobody else’s palette lists it', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    try {
+      const made = await page.request.post('/api/sql/saved', {
+        data: { name, description: '', sourceId: world.source, sql: 'SELECT 11 AS eleven', parameters: [] },
+      });
+      expect(made.status(), await made.text()).toBe(201);
+
+      const palette = await paletteOf(page, `palette pick ${RUN}`);
+      const option = palette.getByRole('option').filter({ hasText: name });
+      await expect(option).toHaveCount(1);
+      await expect(option.locator('.palette__kind')).toHaveText('Saved query');
+      await expect(option.locator('.palette__detail')).toHaveText(SOURCE);
+      await option.click();
+
+      await page.waitForURL(/\/sql\?tab=/);
+      const tab = page.getByRole('tablist', { name: 'SQL tabs' }).getByRole('tab', { name: new RegExp(`^${name}, `) });
+      await expect(tab).toHaveAttribute('aria-selected', 'true');
+      await expect(tab).toHaveAccessibleName(new RegExp(`on ${SOURCE}$`));
+      await expect(page.locator('.sql-editor .cm-content')).toHaveText('SELECT 11 AS eleven');
+    } finally {
+      await context.close();
+    }
+
+    const admin = await signedIn(browser, 'super');
+    try {
+      const palette = await paletteOf(admin.page, `palette pick ${RUN}`);
+      await expect(palette.getByText(/^Nothing matches/)).toBeVisible();
+      await expect(palette.getByRole('option').filter({ hasText: name })).toHaveCount(0);
+    } finally {
+      await admin.context.close();
+    }
+  });
+});

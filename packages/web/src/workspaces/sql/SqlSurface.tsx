@@ -14,9 +14,12 @@ export function SqlSurface() {
   const router = useRouter();
   const searched = useRouterState({ select: (state) => state.location.searchStr });
   const [asked] = useState(() => new URLSearchParams(searched).get('tab') ?? undefined);
+  // A saved query ⌘K opens (T815, AC-460): in its tab, which then names the address.
+  const [saved] = useState(() => new URLSearchParams(searched).get('saved') ?? undefined);
   return (
     <SqlWorkspace
       tab={asked}
+      saved={saved}
       onOpenTab={(id) => {
         if (router.state.location.pathname !== '/sql') return;
         router.history.replace(`/sql?tab=${encodeURIComponent(id)}`);

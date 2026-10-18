@@ -15,7 +15,7 @@ import { objectsOf } from '../workspaces/model/objects';
  */
 export interface SearchResult {
   readonly key: string;
-  readonly type: 'Dashboard' | 'Chart' | 'Measure' | 'Dimension' | 'Model file';
+  readonly type: 'Saved query' | 'Dashboard' | 'Chart' | 'Measure' | 'Dimension' | 'Model file';
   readonly title: string;
   /** A second line: a field's cube or view, by title, and a folder's path; or nothing. */
   readonly detail?: string;
@@ -56,6 +56,16 @@ export interface SearchSources {
   readonly files: readonly { readonly path: string; readonly content: string }[];
   /** The folders, each with its xcube id: where a folder's cube is said to be (T450). */
   readonly folders?: readonly FolderNode[];
+  /**
+   * The user's own saved SQL queries, as `GET /api/sql/saved` answers them
+   * to their owner alone (T815, AC-460): none of anyone else's.
+   */
+  readonly saved?: readonly {
+    readonly id: string;
+    readonly name: string;
+    /** Its source's name, only where the user may run SQL on it: its second line. */
+    readonly sourceName?: string;
+  }[];
 }
 
 /** An identifier in words, "sales_lines" as "Sales lines", for a name with no title. */
@@ -67,6 +77,19 @@ export function globalResults(text: string, sources: SearchSources): SearchResul
   if (needle === '') return [];
   const matches = (...values: (string | undefined)[]) =>
     values.some((value) => value?.toLowerCase().includes(needle) === true);
+
+  // The user's own saved queries by name, first, as design 17's I5 lists
+  // them; each opens in the SQL runner, in its tab if one holds it. A source
+  // the user can no longer run SQL on is never named (AC-459).
+  const saved: SearchResult[] = (sources.saved ?? [])
+    .filter((query) => matches(query.name))
+    .map((query) => ({
+      key: `saved:${query.id}`,
+      type: 'Saved query',
+      title: query.name,
+      ...(query.sourceName === undefined ? {} : { detail: query.sourceName }),
+      href: `/sql?saved=${encodeURIComponent(query.id)}`,
+    }));
 
   const catalog: SearchResult[] = sources.catalog.map((hit) => ({
     key: `${hit.kind}:${hit.id}`,
@@ -146,5 +169,5 @@ export function globalResults(text: string, sources: SearchSources): SearchResul
 
   // Every match: AC-191 fails on "a matching field is missing", so a short
   // search lists all it finds and the list scrolls, rather than cutting it.
-  return [...catalog, ...fields, ...models];
+  return [...saved, ...catalog, ...fields, ...models];
 }

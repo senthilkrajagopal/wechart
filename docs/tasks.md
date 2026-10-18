@@ -1716,11 +1716,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T814 (AC-459) Open a saved query whose data source the user can no longer run SQL on with no source chosen, never naming it
 
-- [ ] T815 (AC-460) List the user's own saved queries in ⌘K, labelled "Saved query", and no one else's
-  - Lane: SQL
-  - Files: `packages/web/src/shell/globalSearch.ts` (+ test), `packages/web/src/shell/SearchPalette.tsx` (+ test), `packages/api/src/routes/sql-saved.ts`, `e2e/security/sql-saved.spec.ts`.
-  - Failing test: `globalSearch.test.ts`: a search matching the user's saved query lists it labelled "Saved query", opening it in the workspace; another user's matching saved query isn't listed (AC-460).
-  - Depends on: T812
+- [x] T815 (AC-460) List the user's own saved queries in ⌘K, labelled "Saved query", and no one else's
 
 - [ ] T816 (AC-455) ⌘/Ctrl+S saves the open tab's query in the workspace, and ⌘/Ctrl+F opens the editor's own find
   - Lane: SQL

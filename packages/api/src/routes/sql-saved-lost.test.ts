@@ -187,6 +187,17 @@ describe('a saved query whose data source its owner can no longer run SQL on (T8
     expect((await reopen(id)).json<Saved>().sourceId).toBe(ids.on);
   });
 
+  it('names a source they may run SQL on, for ⌘K’s second line, and only that one (T815, AC-460)', async () => {
+    await save({ ...QUERY, name: `Named ${MARK}`, sourceId: ids.on });
+    await save({ ...QUERY, name: `Unnamed ${MARK}`, sourceId: ids.off });
+    const rows = await listed();
+    expect(rows.find((each) => each.name === `Named ${MARK}`)).toMatchObject({
+      sourceId: ids.on,
+      sourceName: `on_${MARK}`,
+    });
+    expect(rows.find((each) => each.name === `Unnamed ${MARK}`)).not.toHaveProperty('sourceName');
+  });
+
   it('comes back with none when saved on a source whose runner is off for them', async () => {
     const { id } = (await save({ ...QUERY, name: `Off ${MARK}`, sourceId: ids.off })).json<Saved>();
     const back = await reopen(id);

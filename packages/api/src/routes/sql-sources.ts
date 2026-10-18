@@ -71,9 +71,13 @@ export interface SqlSourcesDeps {
 
 /**
  * The request's user's picker rows, as `GET /api/sql/sources` answers them;
- * undefined where the SQL runner isn't set up here.
+ * undefined where the SQL runner isn't set up here. With `only`, those of
+ * these ids alone (Cube Store's id among them, every one).
  */
-export type SqlSourcesOf = (request: FastifyRequest) => Promise<SqlSourceRow[] | undefined>;
+export type SqlSourcesOf = (
+  request: FastifyRequest,
+  only?: ReadonlySet<string>,
+) => Promise<SqlSourceRow[] | undefined>;
 
 /**
  * Whether the request's user may run SQL on the data source `id` (Cube
@@ -93,9 +97,13 @@ export function sqlSourcesLister({
   paths,
   runs,
 }: SqlSourcesDeps): SqlSourcesOf {
-  return async (request) => {
+  return async (request, only) => {
     if (!runs || switches === undefined) return undefined;
-    const all = await store.all();
+    // Only the ones asked about, where none is Cube Store, whose row depends
+    // on every shared one: each source's checks cost a folder's access.
+    const all = (await store.all()).filter(
+      (source) => only === undefined || only.has(CUBE_STORE_TARGET) || only.has(source.id),
+    );
     const on = await switches.among([...all.map((source) => source.id), CUBE_STORE_TARGET]);
     const own = (await ownWorkspace?.(request)) ?? null;
     const pathOf = await paths();
