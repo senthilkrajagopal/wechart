@@ -22,6 +22,11 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Failing test: `text-tiles.test.ts`: saving a dashboard whose Text tile holds `{"type":"image","attrs":{"src":"x","onerror":"alert(1)"}}`, a `javascript:` link or 11 elements answers 400 naming the tile, and nothing is stored; a valid document saves; a tile still in markdown saves and is read back unchanged (AC-513, AC-518).
   - Depends on: T868
 
+- [x] T872 (AC-512) Bind at publish, and rename on copy, the members a Text tile's elements name
+  - Files: `packages/api/src/model/bind.ts`, `packages/core/src/text-document.ts` (`textDocumentMembers`, `textDocumentRenamed`), `packages/api/src/routes/text-tile-binding.test.ts`.
+  - Failing test: `text-tile-binding.test.ts`: publishing a dashboard whose only reference to `orders` is a Text tile's Value binds `orders`, and one naming a cube off its path is refused naming it, as for a token (AC-272); a copy into My workspace renames the element's member as it renamed tokens (AC-512).
+  - Depends on: T869
+
 - [x] T873 (AC-208, AC-513) Read mode: render a Text tile through Tiptap's JSON static renderer into React elements, with wechart's own link check
   - Files: `packages/web/package.json` (the `@tiptap/*` packages at 3.32.0), `packages/web/src/tiles/text/TextTile.tsx` (+ test), `packages/web/src/tiles/text/readMapping.tsx`, `packages/web/src/tiles/text/SafeLink.tsx` (+ test).
   - Failing test: `TextTile.test.tsx`: headings render as `h3`, `h4` and `h5` at `text-xl`, `text-lg` and `text-md` (levels 1, 2 and 3; a converted markdown tile's levels are by rank, so its lone `##` is level 1 and `h3`: decision T869-1), Large value at 32/40 tabular, lists as `ul` and `ol`, bold as `strong`; no element under the tile has `innerHTML` set from data (a document holding the text "<b>x</b>" renders that text); `SafeLink.test.tsx`: `javascript:alert(1)` renders as plain text with no `href`, `https://` and a dashboard link as links (AC-208, AC-513).

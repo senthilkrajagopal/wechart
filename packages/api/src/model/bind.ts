@@ -1,4 +1,11 @@
-import { textRenamed, tokenMembersOf, type ChartDefinition } from '@wechart/core';
+import {
+  textDocumentMembers,
+  textDocumentRenamed,
+  textRenamed,
+  tokenMembersOf,
+  type ChartDefinition,
+  type TextDocument,
+} from '@wechart/core';
 
 import type { XcubeAdmin } from '../xcube/client';
 
@@ -188,7 +195,11 @@ export function dashboardRenamed(
 ): Record<string, unknown> {
   if (renames.size === 0) return body;
   const member = memberRenamed(renames);
-  const withTexts = withTextTiles(body, (text) => textRenamed(text, member));
+  const withTexts = withTextTiles(
+    body,
+    (text) => textRenamed(text, member),
+    (document) => textDocumentRenamed(document, member),
+  );
   if (!Array.isArray(body['filters'])) return withTexts;
   return {
     ...withTexts,
@@ -208,30 +219,65 @@ const isTextTile = (value: unknown): value is Record<string, unknown> & { text: 
   typeof (value as { text?: unknown }).text === 'string';
 
 /**
- * A dashboard with each text tile's text changed, wherever the tile is — on
- * a page, in a section, in a tab — and everything else as it was.
+ * Whether a value is a Text tile (F45): a dashboard element of kind `text`
+ * with a document. Its document is checked by the repo on save (T871); here
+ * it is only read for the members its elements name (T872).
  */
-function withTextTiles(body: Record<string, unknown>, change: (text: string) => string) {
+const isTextDocumentTile = (
+  value: unknown,
+): value is Record<string, unknown> & { document: TextDocument } =>
+  value !== null &&
+  typeof value === 'object' &&
+  (value as { kind?: unknown }).kind === 'text' &&
+  typeof (value as { document?: unknown }).document === 'object' &&
+  (value as { document?: unknown }).document !== null;
+
+/**
+ * A dashboard with each markdown tile's text, and each Text tile's document,
+ * changed, wherever the tile is — on a page, in a section, in a tab — and
+ * everything else as it was.
+ */
+function withTextTiles(
+  body: Record<string, unknown>,
+  change: (text: string) => string,
+  changeDocument: (document: TextDocument) => TextDocument,
+) {
   const walk = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(walk);
     if (value === null || typeof value !== 'object') return value;
     if (isTextTile(value)) return { ...value, text: change(value.text) };
+    if (isTextDocumentTile(value)) {
+      const document = changeDocument(value.document);
+      return document === value.document ? value : { ...value, document };
+    }
     return Object.fromEntries(Object.entries(value).map(([key, each]) => [key, walk(each)]));
   };
   return body['pages'] === undefined ? body : { ...body, pages: walk(body['pages']) };
 }
 
-/** Every text tile's text in a dashboard, wherever the tile is. */
-export function textTilesOf(body: unknown): string[] {
+/** Every markdown tile's text, and every Text tile's document, in a dashboard, wherever the tile is. */
+function textsOf(body: unknown): { texts: string[]; documents: TextDocument[] } {
   const texts: string[] = [];
+  const documents: TextDocument[] = [];
   const walk = (value: unknown): void => {
     if (Array.isArray(value)) for (const each of value) walk(each);
     else if (isTextTile(value)) texts.push(value.text);
+    else if (isTextDocumentTile(value)) documents.push(value.document);
     else if (value !== null && typeof value === 'object')
       for (const each of Object.values(value)) walk(each);
   };
   walk((body as { pages?: unknown } | null)?.pages);
-  return texts;
+  return { texts, documents };
+}
+
+/**
+ * The members a dashboard's text names: a markdown tile's measure tokens
+ * (T389's review) and a Text tile's elements (T872, AC-512), wherever the
+ * tile is.
+ */
+export function textTileMembersOf(body: unknown): string[] {
+  const { texts, documents } = textsOf(body);
+  return [...texts.flatMap(tokenMembersOf), ...documents.flatMap(textDocumentMembers)];
 }
 
 /**
@@ -244,7 +290,7 @@ export function cubesOfDashboard(body: unknown): string[] {
     ...(Array.isArray(filters) ? (filters as { member?: unknown }[]) : []).map(
       (filter) => filter.member,
     ),
-    ...textTilesOf(body).flatMap(tokenMembersOf),
+    ...textTileMembersOf(body),
   ];
   return [
     ...new Set(

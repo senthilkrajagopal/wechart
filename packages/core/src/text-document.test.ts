@@ -4,7 +4,9 @@ import {
   elementsOf,
   TEXT_DOCUMENT_VERSION,
   TEXT_ELEMENT_LIMIT,
+  textDocumentMembers,
   textDocumentProblems,
+  textDocumentRenamed,
   textLinkProblem,
   type TextDocument,
   type TextNode,
@@ -459,5 +461,81 @@ describe('a Text document’s elements (T868, AC-518)', () => {
     });
     expect(elementsOf(doc)).toHaveLength(2);
     expect(elementsOf(docOf())).toEqual([]);
+  });
+});
+
+/**
+ * T872 / AC-512, AC-272: publishing binds the members a Text tile's elements
+ * name, as it bound a markdown tile's tokens; a copy renames them.
+ */
+describe('the members a Text document names (T872)', () => {
+  const named: TextDocument = {
+    version: TEXT_DOCUMENT_VERSION,
+    doc: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Revenue ' },
+            {
+              type: 'value',
+              attrs: {
+                measure: 'sales.revenue',
+                filters: [{ member: 'regions.name', operator: 'equals', values: ['EU'] }],
+              },
+            },
+            {
+              type: 'change',
+              attrs: { measure: 'sales.count', time: 'calendar.day' },
+            },
+            { type: 'icon', attrs: { measure: 'sales.count', of: 'targets.count' } },
+            {
+              type: 'bulletGraph',
+              attrs: {
+                measure: 'sales.count',
+                target: { kind: 'measure', measure: 'goals.count' },
+              },
+            },
+            { type: 'marking', attrs: { marking: 'sales.count' } },
+            { type: 'filterValue', attrs: { filter: 'f1' } },
+          ],
+        },
+      ],
+    },
+  };
+
+  it('names each member an element names, once, in text order, and no marking or filter id', () => {
+    expect(textDocumentMembers(named)).toEqual([
+      'sales.revenue',
+      'regions.name',
+      'sales.count',
+      'calendar.day',
+      'targets.count',
+      'goals.count',
+    ]);
+  });
+
+  it('renames every member it names, and leaves the words, markings and ids alone', () => {
+    const renamed = textDocumentRenamed(named, (member) =>
+      member.startsWith('sales.') ? `fab__${member}` : member,
+    );
+    expect(textDocumentMembers(renamed)).toEqual([
+      'fab__sales.revenue',
+      'regions.name',
+      'fab__sales.count',
+      'calendar.day',
+      'targets.count',
+      'goals.count',
+    ]);
+    const json = JSON.stringify(renamed);
+    expect(json).toContain('"text":"Revenue "');
+    expect(json).toContain('"marking":"sales.count"');
+    expect(json).toContain('"filter":"f1"');
+    expect(textDocumentProblems(renamed)).toEqual([]);
+  });
+
+  it('gives back the same document when nothing is renamed', () => {
+    expect(textDocumentRenamed(named, (member) => member)).toBe(named);
   });
 });

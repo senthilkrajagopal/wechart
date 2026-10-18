@@ -7,7 +7,6 @@ import {
   objectsOf,
   rebound,
   templateNeedsBinding,
-  tokenMembersOf,
   type ExportedChart,
   type ExportFile,
 } from '@wechart/core';
@@ -15,7 +14,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { cubesOfChartBody } from '../access/queries';
 import { USER } from '../auth/guard';
-import { textTilesOf } from '../model/bind';
+import { textTileMembersOf } from '../model/bind';
 import { namesDeclaredIn } from '../model/names';
 import { withChartsRenamed } from './workspace-copy';
 import { draftPathOf } from './workspace-models';
@@ -349,9 +348,10 @@ async function heldModelsIn(
             ...filtersOf(board).flatMap((member) =>
               offCube(member) ? [{ kind: 'filter' as const, member }] : [],
             ),
-            ...textTilesOf(board)
-              .flatMap(tokenMembersOf)
-              .flatMap((member) => (offCube(member) ? [{ kind: 'text' as const, member }] : [])),
+            // A markdown tile's tokens' and a Text tile's elements' (T872).
+            ...textTileMembersOf(board).flatMap((member) =>
+              offCube(member) ? [{ kind: 'text' as const, member }] : [],
+            ),
           ],
           holder,
           asked: names.find((name) => nameKey(name) === nameKey(holder.name)) ?? holder.name,

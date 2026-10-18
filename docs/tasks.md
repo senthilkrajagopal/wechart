@@ -1922,10 +1922,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T871 (AC-513, AC-518) Refuse with 400, naming the tile, a dashboard save holding a Text tile that fails the schema or holds more than 10 elements
 
-- [ ] T872 (AC-512) Bind at publish, and rename on copy, the members a Text tile's elements name
-  - Files: `packages/api/src/model/bind.ts`, `packages/core/src/text-document.ts` (`textDocumentMembers`, `textDocumentRenamed`), `packages/api/src/routes/text-tile-binding.test.ts`.
-  - Failing test: `text-tile-binding.test.ts`: publishing a dashboard whose only reference to `orders` is a Text tile's Value binds `orders`, and one naming a cube off its path is refused naming it, as for a token (AC-272); a copy into My workspace renames the element's member as it renamed tokens (AC-512).
-  - Depends on: T869
+- [x] T872 (AC-512) Bind at publish, and rename on copy, the members a Text tile's elements name
 
 ### Lane TEXT: reading and editing
 

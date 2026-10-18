@@ -502,6 +502,103 @@ export function textDocumentProblems(input: unknown): readonly string[] {
   return problems;
 }
 
+/* ---------------------------------------------------------------- members */
+
+/** An element's attributes that name one member each (the NODES table's `member`s). */
+const MEMBER_ATTRS = ['measure', 'time', 'of'] as const;
+
+/**
+ * The members one element names, in this order: its measure, its own
+ * filters', its time and "of" members, its target's.
+ */
+function membersOfElement(node: TextNode): string[] {
+  const attrs = node.attrs ?? {};
+  const found: string[] = [];
+  const measure = attrs['measure'];
+  if (typeof measure === 'string') found.push(measure);
+  const filters = attrs['filters'];
+  if (Array.isArray(filters))
+    for (const filter of filters as unknown[])
+      if (isRecord(filter) && typeof filter['member'] === 'string') found.push(filter['member']);
+  for (const key of ['time', 'of'] as const) {
+    const value = attrs[key];
+    if (typeof value === 'string') found.push(value);
+  }
+  const target = attrs['target'];
+  if (isRecord(target) && target['kind'] === 'measure' && typeof target['measure'] === 'string')
+    found.push(target['measure']);
+  return found;
+}
+
+/**
+ * The members a Text tile's elements name, each once, in text order (T872,
+ * AC-512, AC-272): what publishing binds and what uses a cube, as a markdown
+ * tile's measure tokens were. A marking, a dashboard filter or parameter,
+ * and a button's targets are named by id, not by member, so none is here.
+ */
+export function textDocumentMembers(document: TextDocument): string[] {
+  return [...new Set(elementsOf(document).flatMap(membersOfElement))];
+}
+
+/** One element with each member it names renamed; the same node when none changes. */
+function elementRenamed(node: TextNode, rename: (member: string) => string): TextNode {
+  const attrs = node.attrs ?? {};
+  const next: Record<string, unknown> = { ...attrs };
+  let changed = false;
+  const renamed = (member: string) => {
+    const to = rename(member);
+    if (to !== member) changed = true;
+    return to;
+  };
+  for (const key of MEMBER_ATTRS) {
+    const value = attrs[key];
+    if (typeof value === 'string') next[key] = renamed(value);
+  }
+  const filters = attrs['filters'];
+  if (Array.isArray(filters))
+    next['filters'] = (filters as unknown[]).map((filter) =>
+      isRecord(filter) && typeof filter['member'] === 'string'
+        ? { ...filter, member: renamed(filter['member']) }
+        : filter,
+    );
+  const target = attrs['target'];
+  if (isRecord(target) && target['kind'] === 'measure' && typeof target['measure'] === 'string')
+    next['target'] = { ...target, measure: renamed(target['measure']) };
+  return changed ? { ...node, attrs: next } : node;
+}
+
+/**
+ * The document with every member its elements name renamed — a cube bound
+ * under another name at publish, or copied (T872, AC-272) — and every word,
+ * mark, marking and id as it was. The same document when nothing changes.
+ * Copied with a stack of our own, as the check walks, so no depth of nesting
+ * overflows the call stack.
+ */
+export function textDocumentRenamed(
+  document: TextDocument,
+  rename: (member: string) => string,
+): TextDocument {
+  const any = elementsOf(document).some((node) =>
+    membersOfElement(node).some((member) => rename(member) !== member),
+  );
+  if (!any) return document;
+  const root: { -readonly [K in keyof TextNode]: TextNode[K] } = { ...document.doc };
+  const stack = [root];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (node === undefined || !Array.isArray(node.content)) continue;
+    node.content = node.content.map((child: unknown) => {
+      if (!isRecord(child)) return child as TextNode;
+      const typed = child as unknown as TextNode;
+      if (ELEMENT_KINDS.includes(typed.type as ElementKind)) return elementRenamed(typed, rename);
+      const copy: { -readonly [K in keyof TextNode]: TextNode[K] } = { ...typed };
+      stack.push(copy);
+      return copy;
+    });
+  }
+  return { ...document, doc: root };
+}
+
 /**
  * The document's elements — live elements, controls and buttons — in text
  * order, wherever they sit: what counts toward the 10 (AC-518).
