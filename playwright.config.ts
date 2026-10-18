@@ -48,8 +48,10 @@ const edgeProject = {
 export default defineConfig({
   testDir: './e2e',
   // The security-on suite has its own servers and config (T320):
-  // playwright.security.config.ts.
-  testIgnore: '**/security/**',
+  // playwright.security.config.ts. The MCP suite runs real Claude Code, whose
+  // `claude -p` calls a model on the user's own account: playwright.mcp.config.ts,
+  // never in the default run (T790).
+  testIgnore: ['**/security/**', '**/mcp/**'],
   /**
    * Generous on purpose, and raised twice now from Playwright's 30s.
    *

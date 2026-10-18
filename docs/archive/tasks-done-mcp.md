@@ -489,6 +489,11 @@
     - **Red first, honestly:** the server was built at T778–T782, so nothing failed for want of code. The first runs failed on the test itself: `mcp get`'s mark is ✔, not ✓; `claude -p` waited on stdin and exited non-zero at `--max-turns 3`, and its JSON was only read on success (now a spawn with stdin closed, its output read whatever the exit, 5 turns); the init's server entry carries `source: "dynamic"` too; and the proxy's open tunnels held `afterAll` past its timeout, leaving the API on 4580 and its database behind, which the next run's health check then reached. That API was stopped and the database dropped by hand. The proxy now ends its tunnels on close, the API stops first, and the start refuses a port in use.
     - **Runs:** headless Chromium project (`WECHART_E2E_CHROMIUM=1`, though no page is opened): 2/2, then 6/6 with `--repeat-each=3`. Ports 4100, 4300, 5273, 5373 and 4580 free after; no `wechart_mcp_*` database left.
     - **Unit suite:** all green: api 2,070, web 3,149, core 553, charts 556, recommender 133, ui 47.
+    - **Follow-up (the coordinator, 2026-10-18):** the spec's `claude -p` makes live model calls on the user's account, so it left the main suite.
+      - It has its own config, `playwright.mcp.config.ts`: one Chromium project, one worker, no web server.
+      - It has its own script, `pnpm --filter @wechart/e2e e2e:mcp`, which builds the API first.
+      - `playwright.config.ts` now leaves out `e2e/mcp/**`, as it does `security/**`. No skip was added.
+      - How to run it is in `e2e/README.md`, with the main and security suites beside it.
 
 ## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
 
