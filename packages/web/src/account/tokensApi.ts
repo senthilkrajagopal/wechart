@@ -32,7 +32,13 @@ export interface AccessToken {
 export interface StoppedToken extends AccessToken {
   readonly state: 'revoked' | 'expired';
   readonly stoppedAt: string;
-  readonly revokedBy: { readonly name: string } | null;
+  readonly revokedBy: Revoker | null;
+}
+
+/** Who revoked a token, and whether that was the viewer: "by you" (design 18, D3 and F2). */
+export interface Revoker {
+  readonly name: string;
+  readonly yours: boolean;
 }
 
 export interface TokenList {
@@ -47,7 +53,7 @@ export interface AnyonesToken extends AccessToken {
   readonly yours: boolean;
   readonly state: 'working' | 'revoked' | 'expired';
   readonly stoppedAt: string | null;
-  readonly revokedBy: { readonly name: string } | null;
+  readonly revokedBy: Revoker | null;
 }
 
 /** Every user's tokens, for a Super-Admin (T772, AC-470), newest first. */

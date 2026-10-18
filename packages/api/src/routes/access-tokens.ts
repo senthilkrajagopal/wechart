@@ -2,12 +2,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { actorOf, recordIn } from '../audit/record';
 import { USER } from '../auth/guard';
-import { userOf, type WechartUser } from '../auth/user';
+import { userOf, type SecurityMode, type WechartUser } from '../auth/user';
 import { mintToken } from '../mcp/tokenText';
 import {
   TOKEN_SCOPES,
   type AccessToken,
   type AccessTokenStore,
+  type Revoker,
   type TokenOwned,
   type TokenScope,
 } from '../repos/access-tokens';
@@ -69,12 +70,19 @@ export function registerAccessTokens(
     store,
     audit,
     now,
+    security = 'off',
   }: {
     readonly store: AccessTokenStore;
     readonly audit: Pick<AuditStore, 'record'> | undefined;
     readonly now: () => Date;
+    /** With sign-in off there is one user, and no list of everyone's (design 18, H). */
+    readonly security?: SecurityMode;
   },
 ): void {
+  /** Who revoked it, and whether that was the one asking: "by you" (design 18, D3 and F2). */
+  const revokerFor = (revoker: Revoker | null, viewer: WechartUser) =>
+    revoker === null ? null : { name: revoker.name, yours: revoker.key === viewer.key };
+
   app.get('/api/account/tokens', USER, async (request) => {
     const user = userOf(request);
     const at = now();
@@ -89,7 +97,7 @@ export function registerAccessTokens(
         ...shown(token),
         state: token.state,
         stoppedAt: token.stoppedAt.toISOString(),
-        revokedBy: token.revokedBy,
+        revokedBy: revokerFor(token.revokedBy, user),
       })),
     };
   });
@@ -140,10 +148,12 @@ export function registerAccessTokens(
 
   // Security › Access tokens (T772, AC-470): a Super-Admin's alone; to anyone
   // else the routes are as none, as the page is (design 18, A4).
+  // With sign-in off, none: the one user's own page is the list (design 18, H).
   const NOT_FOUND = { error: 'Not found.' };
+  const overseer = (user: WechartUser) => security === 'oidc' && user.superAdmin;
   app.get('/api/security/tokens', USER, async (request, reply) => {
     const user = userOf(request);
-    if (!user.superAdmin) return reply.status(404).send(NOT_FOUND);
+    if (!overseer(user)) return reply.status(404).send(NOT_FOUND);
     const tokens = await store.everyone(now());
     return reply.header('cache-control', 'no-store').send({
       tokens: tokens.map((token) => ({
@@ -152,14 +162,14 @@ export function registerAccessTokens(
         yours: token.owner.key === user.key,
         state: token.state,
         stoppedAt: token.stoppedAt?.toISOString() ?? null,
-        revokedBy: token.revokedBy,
+        revokedBy: revokerFor(token.revokedBy, user),
       })),
     });
   });
 
   app.delete('/api/security/tokens/:id', USER, async (request, reply) => {
     const user = userOf(request);
-    if (!user.superAdmin) return reply.status(404).send(NOT_FOUND);
+    if (!overseer(user)) return reply.status(404).send(NOT_FOUND);
     const { id } = request.params as { id: string };
     const token = await store.owned(id);
     if (token === undefined) return reply.status(404).send({ error: 'No token has that id.' });

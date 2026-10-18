@@ -4491,7 +4491,8 @@ export function buildServer({
   }
 
   // Personal access tokens for MCP (T767, AC-430).
-  if (accessTokens !== undefined) registerAccessTokens(app, { store: accessTokens, audit, now });
+  if (accessTokens !== undefined)
+    registerAccessTokens(app, { store: accessTokens, audit, now, security });
 
   /**
    * Calculation requests (T383, AC-050): asked of the read-write members of

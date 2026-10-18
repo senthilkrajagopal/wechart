@@ -77,7 +77,8 @@ describe('the token store (T767)', () => {
       ...made,
       state: 'revoked',
       stoppedAt: expect.any(Date),
-      revokedBy: { name: 'Ada Admin' },
+      // Its key too, so a list can say "by you" (T772's review; design 18, D3 and F2).
+      revokedBy: { key: 'admin-key', name: 'Ada Admin' },
     });
     const lapsed = stopped.find((each) => each.name === 'lapsed');
     expect(lapsed?.state).toBe('expired');

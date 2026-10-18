@@ -81,7 +81,7 @@
       - Remove is held while it's on its way, so a second press sends nothing.
       - A refused revoke reads the list again, so a token that stopped meanwhile moves to No longer working.
       - Revoked has its own icon, a filled circle struck through (design 18's `s-revoked`), drawn in `AccessTokensPage.tsx` rather than added to the shared `StatusIcon`.
-    - **Who revoked it (the lane's call, overturnable):** the name the API gives, also when it's the viewer. D3 draws "by you" for one's own; the API's `revokedBy` carries only a name, and names aren't unique.
+    - **Who revoked it:** at first, the name alone. Since T772's follow-up the API's `revokedBy` is `{ name, yours }`, from the stored revoker's key, and the page says "by you" for the viewer's own, as D3 draws it.
     - **The dialog** takes its title and its `revoke` call as props, so T772's Security tab reuses it with the owner in the title (screen 4).
     - **Tests:**
       - Unit: `RevokeTokenDialog.test.tsx` (4) and `AccessTokensPage.test.tsx` (5 new; the header check now includes the visually hidden "Actions" column).
@@ -107,6 +107,13 @@
     - **Revoke:** each button is named "Revoke ‹owner›'s ‹name›". It opens `RevokeTokenDialog`, titled "Revoke ‹owner›'s token "‹name›"?", with screen 4's body ("‹first name› can make a new one", or "you can" for one's own) and its facts: Scopes, Last used, and "‹first name› sees "Revoked · by ‹me›, ‹today›" in their list". The design writes "her list"; the lane wrote "their list".
       - On success: a toast, the list read again (with the viewer's own list too), and focus to the User filter. A refused revoke reads the list again.
     - **Shared with the owner's page:** `TokenScopeTags`, `stoppedText` and `RevokedIcon` are exported from `AccessTokensPage.tsx`. `RevokeTokenDialog` gained `body` and `children`.
+    - **After the cold review (follow-up commit):**
+      - After a revoke, focus moves to the next working row's Revoke (the one before, for the last), or to the table (focusable), or to the User filter when no table is left. This replaces "focus to the User filter".
+      - "By you": both lists' `revokedBy` is now `{ name, yours }`. The store returns the revoker's key, and the routes compare it with the viewer's. F2's "Revoked · by you" and D3's show on the tab and on the owner's page.
+      - With nothing at all, the tab says D1's "No access tokens", in place of "Nobody has a token yet." (the lane's own words, which the design doesn't have).
+      - With sign-in off, `GET` and `DELETE /api/security/tokens` answer 404, as the page has no tab (state H). `registerAccessTokens` takes `security`.
+      - New tests: Clear filters in F3 brings the rows back and focuses User; one's own token's dialog body and facts, and Esc returning focus; a refused revoke reads the list again; the API with sign-in off; "by you" on both lists.
+      - **Left as is:** at the start filters (State: Working), when every token has stopped, the tab says "No token matches these filters." with no Clear filters. The State filter beside it is the way on.
     - **Tests:**
       - API: `access-tokens-admin.test.ts` (5).
       - Unit: `AccessTokensTab.test.tsx` (6). `SecuritySurface.test.tsx` (2 new): the tab opens to a Super-Admin, is Not found to others, and is Not found with sign-in off. `SecurityPage.test.tsx`: the tab list now has four tabs signed in, and stays three with sign-in off.

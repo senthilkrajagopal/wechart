@@ -187,7 +187,7 @@ const REVOKED = {
   name: 'CI experiment',
   state: 'revoked',
   stoppedAt: inDays(-5),
-  revokedBy: { name: 'Ada Admin' },
+  revokedBy: { name: 'Ada Admin', yours: false },
 };
 const EXPIRED = {
   ...READING,
@@ -379,6 +379,16 @@ describe('revoking, and No longer working (T771, AC-431; design 18, states D and
     await userEvent.click(screen.getByRole('button', { name: 'Remove CI experiment' }));
     expect((await screen.findByRole('alert')).textContent).toBe('The token wasn’t removed.');
     expect(stoppedRows()).toHaveLength(1);
+  });
+
+  it('says “by you” for one the viewer revoked (design 18, D3)', async () => {
+    const MINE = { ...REVOKED, revokedBy: { name: 'Wren Writer', yours: true } };
+    serve([{ tokens: [], stopped: [MINE] }]);
+    open();
+    await screen.findByRole('table', { name: 'No longer working' });
+    expect(within(stoppedRows()[0]!).getAllByRole('cell')[3]!.textContent).toBe(
+      `Revoked · by you, ${dayOf(new Date(MINE.stoppedAt))}`,
+    );
   });
 
   it('shows no No longer working section when nothing has stopped', async () => {

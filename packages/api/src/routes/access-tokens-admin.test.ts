@@ -82,7 +82,7 @@ interface Everyone {
   lastUsedAt: string | null;
   state: 'working' | 'revoked' | 'expired';
   stoppedAt: string | null;
-  revokedBy: { name: string } | null;
+  revokedBy: { name: string; yours: boolean } | null;
 }
 const everyone = async (): Promise<Everyone[]> => {
   const answer = await as('super', { method: 'GET', url: '/api/security/tokens' });
@@ -124,9 +124,10 @@ describe('every user’s tokens, to a Super-Admin (T772, AC-470)', () => {
       owner: { name: 'Super Admin' },
       yours: true,
     });
-    expect(listed.find((each) => each.id === gone.token.id)).toMatchObject({
-      state: 'revoked',
-      revokedBy: { name: 'Wren Writer' },
+    expect(listed.find((each) => each.id === gone.token.id)?.state).toBe('revoked');
+    expect(listed.find((each) => each.id === gone.token.id)?.revokedBy).toEqual({
+      name: 'Wren Writer',
+      yours: false,
     });
   });
 
@@ -152,9 +153,15 @@ describe('a Super-Admin revoking another user’s token (T772, AC-470, AC-431)',
     }>();
     expect(lists.tokens.map((each) => each.id)).not.toContain(token.id);
     expect(lists.stopped.find((each) => each.id === token.id)).toEqual(
-      expect.objectContaining({ state: 'revoked', revokedBy: { name: 'Super Admin' } }),
+      expect.objectContaining({
+        state: 'revoked',
+        revokedBy: { name: 'Super Admin', yours: false },
+      }),
     );
-    expect((await everyone()).find((each) => each.id === token.id)?.state).toBe('revoked');
+    const theirs = (await everyone()).find((each) => each.id === token.id);
+    expect(theirs?.state).toBe('revoked');
+    // "Revoked · by you" on the Super-Admin's own list (design 18, F2).
+    expect(theirs?.revokedBy).toEqual({ name: 'Super Admin', yours: true });
 
     // "Token revoked" names the Super-Admin as who did it (AC-442).
     const { records } = await audit().list({
@@ -187,5 +194,36 @@ describe('a Super-Admin revoking another user’s token (T772, AC-470, AC-431)',
     });
     expect(answer.statusCode).toBe(404);
     expect((await everyone()).find((each) => each.id === token.id)?.state).toBe('working');
+  });
+});
+
+describe('with sign-in off (T772; design 18, state H)', () => {
+  it('serves no list of everyone’s tokens: there is one user, as the page has no tab', async () => {
+    const single = buildServer({
+      config: {
+        cubeApiUrl: 'http://cube.invalid/cubejs-api',
+        cubeApiSecret: 'secret',
+        securityContext: {},
+        port: 0,
+        modelDir: '',
+        security: 'off',
+      },
+      accessTokens: accessTokenStore(getDb()),
+    });
+    try {
+      expect((await single.inject({ method: 'GET', url: '/api/security/tokens' })).statusCode).toBe(
+        404,
+      );
+      expect(
+        (await single.inject({ method: 'DELETE', url: `/api/security/tokens/${randomUUID()}` }))
+          .statusCode,
+      ).toBe(404);
+      // The single user's own list is there.
+      expect((await single.inject({ method: 'GET', url: '/api/account/tokens' })).statusCode).toBe(
+        200,
+      );
+    } finally {
+      await single.close();
+    }
   });
 });

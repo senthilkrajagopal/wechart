@@ -65,7 +65,8 @@ const CI = {
   name: 'CI experiment',
   state: 'revoked',
   stoppedAt: inDays(-3),
-  revokedBy: { name: 'Ada Admin' },
+  // Revoked by the viewer, Ada: "by you" (F2).
+  revokedBy: { name: 'Ada Admin', yours: true },
 };
 const OLD = {
   ...CURSOR,
@@ -151,7 +152,7 @@ describe('Security › Access tokens (T772, AC-470; design 18, screen 4)', () =>
     );
     expect(names()).toEqual(['CI experiment']);
     const [ci] = bodyRows().map((row) => within(row).getAllByRole('cell'));
-    expect(ci![4]!.textContent).toBe(`Revoked · by Ada Admin, ${dayOf(new Date(CI.stoppedAt))}`);
+    expect(ci![4]!.textContent).toBe(`Revoked · by you, ${dayOf(new Date(CI.stoppedAt))}`);
     // A stopped token can't be revoked again.
     expect(within(bodyRows()[0]!).queryByRole('button')).toBeNull();
 
@@ -178,13 +179,85 @@ describe('Security › Access tokens (T772, AC-470; design 18, screen 4)', () =>
     expect(names()).toEqual(['Cursor']);
   });
 
-  it('says when no token matches, with Clear filters', async () => {
+  it('says when no token matches, with Clear filters, which brings them back (F3)', async () => {
     serve([[LAPTOP]]);
     open();
     await screen.findByRole('table', { name: 'Everyone’s tokens' });
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search token names' }), 'zzz');
-    expect(screen.getByText('No token matches these filters.')).toBeTruthy();
+    const none = screen.getByText(/^No token matches these filters\./);
     expect(screen.queryByRole('table', { name: 'Everyone’s tokens' })).toBeNull();
+    await userEvent.click(within(none).getByRole('button', { name: 'Clear filters' }));
+    expect(names()).toEqual(['Claude Code · laptop']);
+    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'User' }));
+  });
+
+  it('says so when nobody has a token (D1’s words)', async () => {
+    serve([[]]);
+    open();
+    expect(await screen.findByText('No access tokens')).toBeTruthy();
+  });
+
+  it('sends focus to the next row’s Revoke after a revoke', async () => {
+    serve([[LAPTOP, CURSOR], [CURSOR]]);
+    open();
+    await screen.findByRole('table', { name: 'Everyone’s tokens' });
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Revoke Wren Writer’s Claude Code · laptop' }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Revoke token' }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Revoke Finn Writer’s Cursor' }),
+      ),
+    );
+  });
+
+  it('asks about one’s own token as one’s own, with its facts', async () => {
+    serve([[ADMIN_BOX]]);
+    open();
+    await screen.findByRole('table', { name: 'Everyone’s tokens' });
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Revoke Ada Admin’s Claude Code · admin box' }),
+    );
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog.textContent).toContain('It can’t be turned back on; you can make a new one.');
+    expect(within(dialog).getByRole('definition', { name: 'Scopes' }).textContent).toBe(
+      'Read, Proposals and jobs',
+    );
+    expect(within(dialog).getByRole('definition', { name: 'Last used' }).textContent).toBe('Never');
+    // No "‹owner› sees" for one's own.
+    expect(within(dialog).queryByRole('definition', { name: /sees$/ })).toBeNull();
+    await userEvent.keyboard('{Escape}');
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Revoke Ada Admin’s Claude Code · admin box' }),
+    );
+  });
+
+  it('reads the list again when a revoke is refused', async () => {
+    const STOPPED = { ...LAPTOP, state: 'expired', stoppedAt: now.toISOString() };
+    let lists = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE')
+          return Response.json({ error: 'That token already no longer works.' }, { status: 409 });
+        if (url === '/api/security/tokens') {
+          lists += 1;
+          return Response.json({ tokens: [lists === 1 ? LAPTOP : STOPPED] });
+        }
+        return Response.json({}, { status: 404 });
+      }),
+    );
+    open();
+    await screen.findByRole('table', { name: 'Everyone’s tokens' });
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Revoke Wren Writer’s Claude Code · laptop' }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Revoke token' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'That token already no longer works.',
+    );
+    await waitFor(() => expect(lists).toBe(2));
   });
 
   it('Revoke names the owner and the token, and revokes it', async () => {

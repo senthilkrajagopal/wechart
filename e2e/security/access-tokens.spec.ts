@@ -115,7 +115,8 @@ test.describe('Revoking from the page, and No longer working (T771, AC-431; desi
       .getByRole('table', { name: 'No longer working' })
       .getByRole('row', { name });
     await expect(stopped.getByRole('cell').nth(3)).toHaveText(
-      /^Revoked · by Super Admin, \d{1,2} \w{3}/,
+      // Revoked by its viewer: "by you" (design 18, D3).
+      /^Revoked · by you, \d{1,2} \w{3}/,
     );
 
     await stopped.getByRole('button', { name: 'Remove' }).click();
@@ -168,10 +169,17 @@ test.describe('Security › Access tokens (T772, AC-470; design 18, screen 4)', 
 
       // Wren's own list names the Super-Admin as who revoked it (AC-431).
       const own = (await (await wrenPage.request.get('/api/account/tokens')).json()) as {
-        stopped: { name: string; state: string; revokedBy: { name: string } | null }[];
+        stopped: {
+          name: string;
+          state: string;
+          revokedBy: { name: string; yours: boolean } | null;
+        }[];
       };
       expect(own.stopped.find((each) => each.name === name)).toEqual(
-        expect.objectContaining({ state: 'revoked', revokedBy: { name: 'Super Admin' } }),
+        expect.objectContaining({
+          state: 'revoked',
+          revokedBy: { name: 'Super Admin', yours: false },
+        }),
       );
       await tidy(wrenPage.request);
     } finally {

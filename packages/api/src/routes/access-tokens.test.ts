@@ -232,7 +232,7 @@ describe('“Token made” in the audit trail (T767, AC-442)', () => {
 interface Stopped extends Listed {
   state: 'revoked' | 'expired';
   stoppedAt: string;
-  revokedBy: { name: string } | null;
+  revokedBy: { name: string; yours: boolean } | null;
 }
 const stoppedOf = async (who: string): Promise<Stopped[]> => {
   const answer = await as(who, { method: 'GET', url: '/api/account/tokens' });
@@ -268,7 +268,8 @@ describe('revoking your own token (T768, AC-431)', () => {
       lastUsedAt: null,
       state: 'revoked',
       stoppedAt: expect.any(String),
-      revokedBy: { name: 'Wren Writer' },
+      // Revoked by its viewer: "by you" (design 18, D3).
+      revokedBy: { name: 'Wren Writer', yours: true },
     });
     expect(Date.parse(stopped!.stoppedAt)).toBeGreaterThanOrEqual(before);
     // Its name is free again.

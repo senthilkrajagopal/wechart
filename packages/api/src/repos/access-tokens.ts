@@ -23,8 +23,14 @@ export interface StoppedAccessToken extends AccessToken {
   readonly state: 'revoked' | 'expired';
   /** When it was revoked, or when it expired. */
   readonly stoppedAt: Date;
-  /** Who revoked it, by name; none for one that expired. */
-  readonly revokedBy: { readonly name: string } | null;
+  /** Who revoked it; none for one that expired. Its key tells a list "by you". */
+  readonly revokedBy: Revoker | null;
+}
+
+/** Who revoked a token. */
+export interface Revoker {
+  readonly key: string;
+  readonly name: string;
 }
 
 /** A token on Security's list of everyone's (T772, AC-470): with its owner and its state. */
@@ -33,8 +39,18 @@ export interface AnyonesAccessToken extends AccessToken {
   readonly state: 'working' | 'revoked' | 'expired';
   /** When it was revoked, or when it expired; none while it works. */
   readonly stoppedAt: Date | null;
-  readonly revokedBy: { readonly name: string } | null;
+  readonly revokedBy: Revoker | null;
 }
+
+/** Who revoked it, from its row; a row from before keys were kept names no one. */
+const revokerOf = (row: {
+  revoked_at: Date | null;
+  revoked_by_key: string | null;
+  revoked_by_name: string | null;
+}): Revoker | null =>
+  row.revoked_at === null
+    ? null
+    : { key: row.revoked_by_key ?? '', name: row.revoked_by_name ?? 'Someone' };
 
 /** Whom a token belongs to, for a revoke's audit record. */
 export interface TokenOwned {
@@ -119,7 +135,7 @@ export function accessTokenStore(db: Kysely<Database>) {
     async stopped(ownerKey: string, now: Date): Promise<StoppedAccessToken[]> {
       const rows = await db
         .selectFrom('personal_access_tokens')
-        .select([...LISTED, 'revoked_at', 'revoked_by_name'])
+        .select([...LISTED, 'revoked_at', 'revoked_by_key', 'revoked_by_name'])
         .where('owner_key', '=', ownerKey)
         .where('removed_at', 'is', null)
         .where((where) =>
@@ -131,7 +147,7 @@ export function accessTokenStore(db: Kysely<Database>) {
           ...tokenOf(row),
           state: row.revoked_at === null ? 'expired' : 'revoked',
           stoppedAt: row.revoked_at ?? row.expires_at,
-          revokedBy: row.revoked_at === null ? null : { name: row.revoked_by_name ?? 'Someone' },
+          revokedBy: revokerOf(row),
         }))
         .sort((a, b) => b.stoppedAt.getTime() - a.stoppedAt.getTime() || (a.id < b.id ? 1 : -1));
     },
@@ -187,7 +203,14 @@ export function accessTokenStore(db: Kysely<Database>) {
     async everyone(now: Date): Promise<AnyonesAccessToken[]> {
       const rows = await db
         .selectFrom('personal_access_tokens')
-        .select([...LISTED, 'owner_key', 'owner_name', 'revoked_at', 'revoked_by_name'])
+        .select([
+          ...LISTED,
+          'owner_key',
+          'owner_name',
+          'revoked_at',
+          'revoked_by_key',
+          'revoked_by_name',
+        ])
         .where('removed_at', 'is', null)
         .orderBy('created_at', 'desc')
         .orderBy('id', 'desc')
@@ -200,7 +223,7 @@ export function accessTokenStore(db: Kysely<Database>) {
           owner: { key: row.owner_key, name: row.owner_name },
           state,
           stoppedAt: state === 'working' ? null : (row.revoked_at ?? row.expires_at),
-          revokedBy: row.revoked_at === null ? null : { name: row.revoked_by_name ?? 'Someone' },
+          revokedBy: revokerOf(row),
         };
       });
     },

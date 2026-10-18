@@ -403,16 +403,15 @@ function TokenRow({
   );
 }
 
-/** "Revoked · by Ada Admin, 12 Oct", or "Expired · 31 Aug" (design 18, D3), with its icon. */
+/** "Revoked · by Ada Admin, 12 Oct" ("by you" for the viewer's own), or "Expired · 31 Aug" (design 18, D3). */
 export function stoppedText(
   token: Pick<StoppedToken, 'state' | 'stoppedAt' | 'revokedBy'>,
   now: Date,
 ): string {
   const when = dayOf(new Date(token.stoppedAt), now);
   if (token.state === 'expired') return `Expired · ${when}`;
-  return token.revokedBy === null
-    ? `Revoked · ${when}`
-    : `Revoked · by ${token.revokedBy.name}, ${when}`;
+  if (token.revokedBy === null) return `Revoked · ${when}`;
+  return `Revoked · by ${token.revokedBy.yours ? 'you' : token.revokedBy.name}, ${when}`;
 }
 
 /** A token under "No longer working" (T771, AC-431): its state for its expiry, and Remove. */

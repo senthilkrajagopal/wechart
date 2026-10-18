@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import {
   expiresText,
@@ -58,6 +58,12 @@ export function AccessTokensTab() {
   const opener = useRef<HTMLElement | null>(null);
   const firstFilter = useRef<HTMLSelectElement>(null);
   const [toast, setToast] = useState('');
+  /**
+   * After a revoke, once the list is read again: the next row's Revoke, else
+   * the list (design 18's keyboard table), as the owner's page does.
+   */
+  const focusAfter = useRef<{ readonly next: string | null } | null>(null);
+  const table = useRef<HTMLTableElement>(null);
   const now = new Date();
   const tokens = list.data ?? [];
   const refresh = async () => {
@@ -65,6 +71,18 @@ export function AccessTokensTab() {
     // The Super-Admin's own list too, should it hold the token.
     await queries.invalidateQueries({ queryKey: TOKENS_QUERY.queryKey, exact: true });
   };
+  useEffect(() => {
+    const target = focusAfter.current;
+    if (target === null || list.isFetching) return;
+    focusAfter.current = null;
+    const button =
+      target.next === null
+        ? null
+        : document.querySelector<HTMLElement>(`[data-focus-key="${CSS.escape(target.next)}"]`);
+    if (button !== null) button.focus();
+    else if (table.current !== null) table.current.focus();
+    else firstFilter.current?.focus();
+  }, [list.data, list.isFetching]);
 
   const owners = [
     ...new Map(tokens.map((token) => [token.owner.key, token.owner.name] as const)),
@@ -183,12 +201,18 @@ export function AccessTokensTab() {
       ) : shown.length === 0 ? (
         // State F3.
         <p className="tokens-tab__none">
-          {tokens.length === 0 ? 'Nobody has a token yet.' : 'No token matches these filters.'}{' '}
+          {/* D1's words for none at all; F3's for none matching. */}
+          {tokens.length === 0 ? 'No access tokens' : 'No token matches these filters.'}{' '}
           {filtered ? clearButton : null}
         </p>
       ) : (
         <div className="table-scroll">
-          <table className="grid-table tokens-table" aria-label="Everyone’s tokens">
+          <table
+            ref={table}
+            className="grid-table tokens-table"
+            aria-label="Everyone’s tokens"
+            tabIndex={-1}
+          >
             <thead>
               <tr>
                 <th scope="col">Owner</th>
@@ -242,9 +266,12 @@ export function AccessTokensTab() {
             setToast(
               `Revoked ${revoking.owner.name}’s “${revoking.name}”. Clients using it now get 401.`,
             );
+            const revokable = shown.filter((token) => token.state === 'working');
+            const at = revokable.findIndex((token) => token.id === revoking.id);
+            const next = (revokable[at + 1] ?? revokable[at - 1])?.id;
+            focusAfter.current = { next: next === undefined ? null : `revoke:${next}` };
             setRevoking(null);
             void refresh();
-            firstFilter.current?.focus();
           }}
           onClose={() => {
             setRevoking(null);
@@ -350,6 +377,7 @@ function AnyonesRow({
             type="button"
             className="btn btn-sm btn-danger"
             aria-label={`Revoke ${token.owner.name}’s ${token.name}`}
+            data-focus-key={`revoke:${token.id}`}
             onClick={(event) => {
               onRevoke(event.currentTarget);
             }}
