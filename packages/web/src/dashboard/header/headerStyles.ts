@@ -19,10 +19,16 @@ export const HEADER_CSS = `
   background: var(--wc-bg-page);
   border-bottom: 1px solid var(--wc-border-subtle);
 }
-/* Each part keeps to one line; not the row as a whole, which would pass
-   nowrap on to the popovers and dialogs that open from it. */
-.dashboard__header > * { flex: none; white-space: nowrap; }
-.dashboard__header > * [role='dialog'] { white-space: normal; }
+/* Each part keeps to its own width; the title, the way back, the tabs and
+   the buttons keep to one line by their own rules, not by the row's, which
+   would pass nowrap on to the popovers and dialogs that open from it. */
+.dashboard__header > * { flex: none; }
+.dashboard__header h1,
+.header-back,
+.dashboard__header .page-tabs [role='tab'] { white-space: nowrap; }
+/* While editing, why Save is held back is a sentence: it wraps on a line of
+   its own, as it did (T829's review). */
+.dashboard__header > .edit-bar__blocked { flex: 0 1 auto; min-width: 0; white-space: normal; }
 /* The title at text-lg 20/26/600 (AC-485; 19-Q4), cut with "…", never
    narrower than 160 px. */
 .dashboard__header h1 {

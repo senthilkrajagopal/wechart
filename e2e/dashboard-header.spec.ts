@@ -54,13 +54,35 @@ for (const size of [
   }) => {
     const { id, title } = await sharedDashboard(request);
     await page.setViewportSize(size);
-    await page.goto(`/explore/dashboards/${id}`);
+    // With a filter set (AC-496's dashboard).
+    const filters = [
+      { id: 'f-status', member: 'orders.status', value: { kind: 'values', values: ['shipped'] } },
+    ];
+    await page.goto(
+      `/explore/dashboards/${id}?filters=${encodeURIComponent(JSON.stringify(filters))}`,
+    );
     await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
     await expect(page.getByText('Notes 1')).toBeVisible();
 
     // One row, 48 px tall, its tabs in it.
     const header = await row(page).boundingBox();
     expect(header?.height).toBe(48);
+    // Nothing wrapped out of it: each of its parts wholly inside its box, and
+    // in the window (T829's review).
+    const parts = row(page).locator(':scope > :visible');
+    const count = await parts.count();
+    expect(count).toBeGreaterThan(5);
+    for (let at = 0; at < count; at += 1) {
+      const box = (await parts.nth(at).boundingBox())!;
+      expect(box.y, String(at)).toBeGreaterThanOrEqual(header?.y ?? 0);
+      expect(box.y + box.height, String(at)).toBeLessThanOrEqual(
+        (header?.y ?? 0) + (header?.height ?? 0),
+      );
+      expect(box.x + box.width, String(at)).toBeLessThanOrEqual(size.width);
+    }
+    await expect(row(page).getByRole('button', { name: /^Filters\b/ })).toBeInViewport({
+      ratio: 1,
+    });
     const tabs = row(page).getByRole('tablist', { name: 'Pages' });
     await expect(tabs.getByRole('tab')).toHaveText(['Overview', 'Detail']);
     const tabsBox = await tabs.boundingBox();
