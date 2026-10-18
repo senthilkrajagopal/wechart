@@ -420,6 +420,11 @@
     - **Tests changed:** `mcp/transport.test.ts` lists the five new tools last. `workspace.test.ts`'s every-tool 403 test now covers them too.
     - **Not seen red before the code:** the test was written first but first run after the tools. It then failed on one case, the AC-422 refusal read as "no such item", which T786-3 fixed.
     - **Unit suite:** web 3,117, core 550, charts 556, recommender 133, ui 47 green; api 2,033 passed, 6 failed, all in `route-matrix.test.ts`: one 5 s timeout at load average 14, the five after it left state behind. It passes alone (134/134).
+    - **The cold review:** PASS, with test gaps, closed in the follow-up commit:
+      - **A dashboard's own chart** (low): new test. A chart of /Sales' shared dashboard can't be changed, and their own chart can't be put onto the shared dashboard (the check of where it would be). Both are refused as outside the workspace, and both charts stay as they were.
+      - **The refusals' reasons:** the shared dashboard's change and delete now check they were refused as outside the workspace. The route alone would let `writer` rename or delete it. Another's workspace's dashboard reads as not there, as in the web app.
+      - **A real bug the new test found:** `create_item` at `folderId: "mine"` was refused. The web app's hook names `mine` as `ws:‹key›` in every request's `folderId` and `targetFolderId`, the `/mcp` POST's arguments included, so the tool never saw `mine`. `inMyWorkspace` now takes the caller's own `ws:‹key›` as their workspace's root too.
+      - **Left as is:** the process gap (T786's test wasn't run before its code) is recorded above. The time between the check and the route is only the owner's own writes or a proposal landing, which never moves a workspace's document out.
 
 ## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
 

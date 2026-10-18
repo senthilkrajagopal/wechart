@@ -340,7 +340,7 @@ describe('dashboards and charts in My workspace through MCP (T786, AC-438)', () 
         ['theirs', ids.theirBoard],
       ] as const) {
         const stored = before[where]!;
-        refused(
+        const saidToChange = refused(
           await client.callTool({
             name: 'change_item',
             arguments: {
@@ -352,10 +352,16 @@ describe('dashboards and charts in My workspace through MCP (T786, AC-438)', () 
           }),
           `change ${where}`,
         );
-        refused(
+        const saidToDelete = refused(
           await client.callTool({ name: 'delete_item', arguments: { kind: 'dashboard', id } }),
           `delete ${where}`,
         );
+        // A shared one is refused as outside the workspace, which the route
+        // alone would let its writer rename or delete; another's workspace's
+        // reads as not there, as the web app reads it (T786's review).
+        const expected = where === 'shared' ? NOT_IN_MY_WORKSPACE : 'isn’t yours to see';
+        expect(saidToChange, `change ${where}`).toContain(expected);
+        expect(saidToDelete, `delete ${where}`).toContain(expected);
       }
       // Moving one of the owner's own out of their workspace, too.
       const mine = answered(
@@ -388,6 +394,71 @@ describe('dashboards and charts in My workspace through MCP (T786, AC-438)', () 
     });
     expect(await docs().get('dashboard', ids.sharedBoard)).toEqual(before.shared);
     expect(await docs().get('dashboard', ids.theirBoard)).toEqual(before.theirs);
+  });
+
+  it('follows a dashboard’s own chart to its dashboard: one of a shared dashboard, or one put on it, is refused (T786’s review)', async () => {
+    const local = randomUUID();
+    made.push({ kind: 'chart', id: local });
+    await docs().create({
+      kind: 'chart',
+      id: local,
+      body: {
+        owner: 'admin',
+        title: `${MARK} local`,
+        folderId: ids.sales,
+        localToDashboardId: ids.sharedBoard,
+      },
+    });
+    const before = await docs().get('chart', local);
+    await withClient(async (client) => {
+      const said = refused(
+        await client.callTool({
+          name: 'change_item',
+          arguments: {
+            kind: 'chart',
+            id: local,
+            body: { ...before!.body, title: `${MARK} taken over` },
+            version: before!.version,
+          },
+        }),
+        'shared dashboard’s own chart',
+      );
+      expect(said).toContain(NOT_IN_MY_WORKSPACE);
+
+      // One of theirs, at the workspace's root, put on the shared dashboard.
+      const theirs = answered(
+        await client.callTool({
+          name: 'create_item',
+          arguments: {
+            kind: 'chart',
+            title: `${MARK} at the root`,
+            folderId: 'mine',
+            targetFolderId: ids.sales,
+          },
+        }),
+        'create at the root',
+      )['item'] as { id: string };
+      const stored = (await docs().get('chart', theirs.id))!;
+      const moved = refused(
+        await client.callTool({
+          name: 'change_item',
+          arguments: {
+            kind: 'chart',
+            id: theirs.id,
+            body: { ...stored.body, localToDashboardId: ids.sharedBoard },
+            version: stored.version,
+          },
+        }),
+        'onto a shared dashboard',
+      );
+      expect(moved).toContain(NOT_IN_MY_WORKSPACE);
+      expect(await docs().get('chart', theirs.id)).toEqual(stored);
+      answered(
+        await client.callTool({ name: 'delete_item', arguments: { kind: 'chart', id: theirs.id } }),
+        'delete at the root',
+      );
+    });
+    expect(await docs().get('chart', local)).toEqual(before);
   });
 
   it('never creates outside the owner’s workspace: in a shared folder, or in another’s workspace', async () => {

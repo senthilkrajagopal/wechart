@@ -4,6 +4,7 @@ import {
   type ToolAnnotations,
 } from '@modelcontextprotocol/server';
 
+import { workspaceIdOf } from '../../repos/catalog';
 import { dataResult, refusal } from '../result';
 import type { McpCall, McpTool, WebAnswer } from '../server';
 import { ID, refusedBy } from './read';
@@ -37,7 +38,10 @@ const MINE = 'mine';
  */
 async function inMyWorkspace(call: McpCall, folderId: unknown): Promise<boolean> {
   if (typeof folderId !== 'string' || folderId === '') return false;
-  if (folderId === MINE) return true;
+  // `mine` in a call's arguments reaches the tool as their own `ws:‹key›`: the
+  // web app's hook names it so in every request's body, `/mcp`'s too (T786's review).
+  const own = workspaceIdOf(call.caller.key);
+  if (folderId === MINE || folderId === own) return true;
   const answer = await call.ask('/api/folders');
   if (answer.status !== 200 || !Array.isArray(answer.body)) return false;
   const parents = new Map(
@@ -48,7 +52,7 @@ async function inMyWorkspace(call: McpCall, folderId: unknown): Promise<boolean>
   );
   const seen = new Set<string>();
   for (let at: string | null | undefined = folderId; typeof at === 'string'; at = parents.get(at)) {
-    if (at === MINE) return true;
+    if (at === MINE || at === own) return true;
     if (seen.has(at)) return false;
     seen.add(at);
   }
