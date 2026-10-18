@@ -49,12 +49,14 @@ const clean = (value: number) => Number(value.toPrecision(12));
 function niceAtLeast(value: number, wholeNumbers = false): number {
   if (!(value > 0) || !Number.isFinite(value)) return 1;
   const exponent = Math.floor(Math.log10(value));
-  for (let power = exponent; ; power += 1) {
+  // Every finite value is reached by 10 × 10ⁿ within a decade or two.
+  for (let power = exponent; power <= exponent + 2; power += 1) {
     for (const mantissa of NICE) {
       const nice = clean(mantissa * 10 ** power);
       if (nice >= value * (1 - 1e-12) && (!wholeNumbers || Number.isInteger(nice))) return nice;
     }
   }
+  return wholeNumbers ? Math.ceil(value) : value;
 }
 
 /** The range the axis must cover: its data, with zero where asked, never empty. */
@@ -128,7 +130,13 @@ function gridAligned(
     ranges[0].wholeNumbers,
   );
   const leftMin = Math.floor(clean(leftCover.min / leftInterval)) * leftInterval;
-  const n = Math.max(1, Math.ceil(clean((leftCover.max - leftMin) / leftInterval)));
+  /**
+   * At least two intervals (T847's review): with one, a right range across
+   * zero has no interval that covers it — its foot is −I and its top 0 for
+   * every I past its own foot — and the search below would never end. With
+   * two, I at least the larger of its two sides always does.
+   */
+  const n = Math.max(2, Math.ceil(clean((leftCover.max - leftMin) / leftInterval)));
 
   let interval = niceAtLeast((rightCover.max - rightCover.min) / n, ranges[1].wholeNumbers);
   for (;;) {

@@ -117,6 +117,64 @@ describe('over 500 random pairs whose ranges include zero', () => {
   });
 });
 
+/**
+ * T847's review: where the zeros can't meet, the right axis still takes the
+ * left's tick count and covers its data, for any pair, counts included. A
+ * left axis of one whole-number interval once left no right interval that
+ * could cover a range across zero, and the search never ended.
+ */
+describe('over 500 random pairs, any range, counts too', () => {
+  const random = (() => {
+    let seed = 8471;
+    return () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = seed;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  })();
+  const range = () => {
+    const wholeNumbers = random() < 0.4;
+    const scale = wholeNumbers
+      ? 10 ** Math.floor(random() * 4)
+      : 10 ** Math.floor(random() * 10 - 3);
+    const at = (random() - 0.4) * scale * 4;
+    const span = random() < 0.2 ? (wholeNumbers ? 1 : scale / 7) : random() * scale * 3;
+    const [min, max] = wholeNumbers
+      ? [Math.round(at), Math.round(at) + Math.max(0, Math.round(span))]
+      : [at, at + span];
+    return { min, max, includeZero: random() < 0.3, wholeNumbers };
+  };
+
+  it('ends, covers the data, and gives both axes as many ticks', () => {
+    for (let pair = 0; pair < 500; pair += 1) {
+      const [a, b] = [range(), range()];
+      const { left, right } = alignedAxes(a, b);
+
+      expect(ticks(left)).toBe(ticks(right));
+      expect(ticks(left)).toBeGreaterThanOrEqual(3);
+      expect(left.min).toBeLessThanOrEqual(a.min);
+      expect(left.max).toBeGreaterThanOrEqual(a.max);
+      expect(right.min).toBeLessThanOrEqual(b.min);
+      expect(right.max).toBeGreaterThanOrEqual(b.max);
+      if (a.wholeNumbers) expect(Number.isInteger(left.interval)).toBe(true);
+      if (b.wholeNumbers) expect(Number.isInteger(right.interval)).toBe(true);
+    }
+  });
+
+  it('ends for a left axis of counts one apart beside a right range across zero', () => {
+    const { left, right } = alignedAxes(
+      { min: 5, max: 6, includeZero: false, wholeNumbers: true },
+      { min: -3, max: 12, includeZero: true, wholeNumbers: true },
+    );
+
+    expect(ticks(right)).toBe(ticks(left));
+    expect(right.min).toBeLessThanOrEqual(-3);
+    expect(right.max).toBeGreaterThanOrEqual(12);
+  });
+});
+
 describe('a combo drawn on two axes (AC-499)', () => {
   const MONTH = 'orders.month';
   const REVENUE = 'orders.revenue';

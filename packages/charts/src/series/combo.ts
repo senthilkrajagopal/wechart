@@ -79,9 +79,10 @@ function valueAxes(
       .filter((one) => one.axis === side)
       .flatMap((one) => one.values.filter((value): value is number => value !== null));
     const settings = side === 'left' ? axes.y : axes.right;
+    // Reduced, not spread: a long result is more arguments than a call takes.
     return {
-      min: values.length === 0 ? 0 : Math.min(...values),
-      max: values.length === 0 ? 0 : Math.max(...values),
+      min: values.length === 0 ? 0 : values.reduce((a, b) => Math.min(a, b)),
+      max: values.length === 0 ? 0 : values.reduce((a, b) => Math.max(a, b)),
       includeZero: bars || settings?.includeZero !== false,
       wholeNumbers: allCounts(spec, measuresOn(side)),
     };
