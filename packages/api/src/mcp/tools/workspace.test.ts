@@ -20,7 +20,7 @@ import { challengesFor, mcpClient, mcpClientSeeing } from '../client.fixture';
 import { forgetTestCounts, testCounter } from '../counter.fixture';
 import { USER_DATA, USER_DATA_NOTICE } from '../result';
 import { mintToken } from '../tokenText';
-import { MCP_TOOLS } from '.';
+import { mcpTools } from '.';
 
 /**
  * T785 (AC-438, AC-433, AC-469, AC-432): "Edit in my workspace" through
@@ -265,7 +265,7 @@ describe('every tool’s scope, in both eras (T785’s review, AC-433)', () => {
       'proposals-and-jobs': tokens.noProposals!,
     } as const;
     for (const era of ['modern', '2025'] as const) {
-      for (const tool of MCP_TOOLS) {
+      for (const tool of mcpTools('UTC')) {
         const scope = tool.scope as keyof typeof without;
         const { client, answers } = await mcpClientSeeing(app, HOST, without[scope], era);
         try {

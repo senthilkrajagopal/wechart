@@ -30,7 +30,7 @@ import {
 } from './paging';
 import { dataResult, USER_DATA, USER_DATA_NOTICE } from './result';
 import type { McpTool } from './server';
-import { MCP_TOOLS } from './tools';
+import { mcpTools } from './tools';
 import { mintToken } from './tokenText';
 
 /**
@@ -180,7 +180,7 @@ beforeAll(async () => {
     audit: auditStore(getDb()),
     mcpRateLimits: testCounter(),
     mcpPages: mcpPageStore(getDb()),
-    mcpTools: [...MCP_TOOLS, ...TEST_TOOLS.filter((tool) => tool !== NEXT_PAGE)],
+    mcpTools: [...mcpTools('UTC'),...TEST_TOOLS.filter((tool) => tool !== NEXT_PAGE)],
   });
   await signIn(app, USERS['writer']!);
   const writerKey = (

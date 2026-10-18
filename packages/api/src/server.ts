@@ -69,7 +69,7 @@ import {
   dashboardRenamed,
 } from './model/bind';
 import { catalogOf, registerIntrospection } from './model/introspection';
-import type { Config } from './config';
+import { type Config, DEFAULT_TIME_ZONE } from './config';
 import type { Changeset } from './xcube/changesets';
 import { XcubeError, type XcubeAdmin } from './xcube/client';
 import { ROOT_ONLY, type PublishedFolders } from './xcube/folders';
@@ -151,7 +151,7 @@ import { bearerAuth } from './mcp/auth';
 import { mcpCaller } from './mcp/caller';
 import { mcpUrlOf, registerMcp } from './mcp/plugin';
 import type { McpTool } from './mcp/server';
-import { MCP_TOOLS } from './mcp/tools';
+import { mcpTools as allMcpTools } from './mcp/tools';
 import {
   type RateLimitCounter,
   RateLimited,
@@ -4550,7 +4550,8 @@ export function buildServer({
       ...(config.mcpBadTokenLimit === undefined ? {} : { badTokenLimit: config.mcpBadTokenLimit }),
       // Its tools, each call recorded in the audit trail (T781, AC-478).
       // wechart's own, reading and exploring from T782.
-      tools: mcpTools ?? MCP_TOOLS,
+      // A copy's project folder is named in the deployment's zone unless the client names one (T1015).
+      tools: mcpTools ?? allMcpTools(config.timeZone ?? DEFAULT_TIME_ZONE),
       ...(audit === undefined ? {} : { audit }),
       ...(mcpPages === undefined ? {} : { pages: mcpPages }),
       // A token acts as its owner, with their latest sign-in's groups (T777,

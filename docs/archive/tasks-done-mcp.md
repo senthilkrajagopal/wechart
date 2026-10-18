@@ -557,6 +557,20 @@
       - **Main** (`--project=chrome`): 850 passed, 1 failed, `model-design.spec.ts:855`, the known flake.
       - **Security** (`--project=chrome`): 409 passed, 1 failed, 2 did not run. The failure is `propose.spec.ts:83`, the known flake (the item stayed "Draft"); the two that didn't run are its serial followers. `calc-request-resolve.spec.ts:200`, `reviews.spec.ts:168` and `export-import.spec.ts:393`, which failed in batch 6's run and alone, all passed.
 
+- [x] T1015 [P] (AC-630) The deployment's time zone, a Helm value, UTC by default, naming an MCP project folder when the client sends no time zone
+  - Lane: MCP
+  - Files: `packages/api/src/config.ts` (`WECHART_TIME_ZONE`, checked as an IANA zone at start), `packages/api/src/config.test.ts`, `deploy/helm/wechart/values.yaml` (`timeZone: UTC`), `deploy/helm/wechart/templates/api.yaml` (the env var), `packages/api/src/mcp/tools/workspace.ts`, `packages/api/src/mcp/tools/workspace-time-zone.test.ts`.
+  - Failing test: `config.test.ts`: no value reads UTC, `Europe/Berlin` is kept, and `Mars/Olympus` stops the start with a message naming it; `workspace-time-zone.test.ts`: with the deployment at `Europe/Berlin` and no `timeZone` sent, a copy made at 22:30 UTC on 2026-10-18 lands in `project-2026-10-19-0030`; with `America/New_York` sent, in `project-2026-10-18-1830`; with no zone set, in `project-2026-10-18-2230` (AC-630).
+  - Depends on: none (T785 is done)
+  - R80-2 answered 2026-10-18; decision T785-2's UTC default is overturned. Lane TEXT's T912 reads the same setting.
+  - **Built 2026-10-18** (lane MCP, batch 8). **Ticks AC-630.**
+    - **Config:** `Config.timeZone` from `WECHART_TIME_ZONE`, UTC when unset or empty; a name `Intl` doesn't take stops the start with a `ConfigError` naming it (T1015-1). `DEFAULT_TIME_ZONE` is exported for code-built configs.
+    - **MCP:** the tools are made per deployment, `mcpTools(timeZone)` (T1015-3); `edit_in_my_workspace` sends the client's `timeZone`, or the deployment's, to `/api/workspace/copies`. `MCP_TOOLS` is gone; `paging.test.ts` and `workspace.test.ts` call `mcpTools('UTC')`.
+    - **Chart:** a top-level `timeZone: UTC` (T1015-2), set on the API container as `WECHART_TIME_ZONE`.
+    - **Tests:** `config.test.ts` (3 more), `workspace-time-zone.test.ts` (3, sign-in off, through the SDK's client on `/mcp`, the server's `now` at 22:30 UTC), `deploy/time-zone.test.ts` (2, `helm template`). Red first, for want of the setting, except the no-zone-set case, which UTC already gave.
+    - **No e2e:** the main stack names no MCP host.
+    - **Unit suite:** web 3,290, core 664, charts 622, recommender 136, ui 47 green; api 2,106 passed, 4 failed, all `access/route-matrix.test.ts` timing out at 5 s at load average 24, which passes alone (136/136).
+
 ## Security specs failing alone: xcube's folder tree stuck (lane MCP, batch 7, at the coordinator's request)
 
 - **Asked:** why `calc-request-resolve.spec.ts:200`, `reviews.spec.ts:168` and `export-import.spec.ts:393` (422, "No folder on the path holds ‹run›_margin") fail when run alone on feat/xcube.

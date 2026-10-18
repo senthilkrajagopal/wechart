@@ -1638,12 +1638,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T791 (AC-479) With sign-in off, make tokens and serve `/mcp` as the single user, with every F41 check still applying
 
-- [ ] T1015 [P] (AC-630) The deployment's time zone, a Helm value, UTC by default, naming an MCP project folder when the client sends no time zone
-  - Lane: MCP
-  - Files: `packages/api/src/config.ts` (`WECHART_TIME_ZONE`, checked as an IANA zone at start), `packages/api/src/config.test.ts`, `deploy/helm/wechart/values.yaml` (`timeZone: UTC`), `deploy/helm/wechart/templates/api.yaml` (the env var), `packages/api/src/mcp/tools/workspace.ts`, `packages/api/src/mcp/tools/workspace-time-zone.test.ts`.
-  - Failing test: `config.test.ts`: no value reads UTC, `Europe/Berlin` is kept, and `Mars/Olympus` stops the start with a message naming it; `workspace-time-zone.test.ts`: with the deployment at `Europe/Berlin` and no `timeZone` sent, a copy made at 22:30 UTC on 2026-10-18 lands in `project-2026-10-19-0030`; with `America/New_York` sent, in `project-2026-10-18-1830`; with no zone set, in `project-2026-10-18-2230` (AC-630).
-  - Depends on: none (T785 is done)
-  - R80-2 answered 2026-10-18; decision T785-2's UTC default is overturned. Lane TEXT's T912 reads the same setting.
+- [x] T1015 [P] (AC-630) The deployment's time zone, a Helm value, UTC by default, naming an MCP project folder when the client sends no time zone
 
 ### Lane MCP: the Helm chart (Gateway API, Envoy Gateway)
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { AUDIT_RETENTION_DAYS } from './audit/retention';
 import type { SecurityMode } from './auth/user';
 import { MCP_BAD_TOKEN_LIMIT, MCP_RATE_LIMIT } from './mcp/rateLimitStore';
+import { timeZoneOf } from './routes/project-folder';
 import type { XcubePublicKey } from './secrets/xcube-key';
 
 /**
@@ -131,6 +132,30 @@ export interface Config {
    * whole days; a year unless set (T370, AC-296).
    */
   readonly auditRetentionDays?: number;
+  /**
+   * `WECHART_TIME_ZONE`: the deployment's time zone, an IANA name, from the
+   * Helm values' `timeZone` (T1015, AC-630; R80-2). An MCP client's copy
+   * without a zone of its own names its project folder in it, and the AI
+   * limits count days and months in it (AC-543). UTC unset; a name that is
+   * no zone stops the start. Unset in a configuration built in code: UTC.
+   */
+  readonly timeZone?: string;
+}
+
+/** The deployment's time zone when none is set (AC-630). */
+export const DEFAULT_TIME_ZONE = 'UTC';
+
+/** `WECHART_TIME_ZONE`: an IANA zone, or UTC unset (T1015, AC-630). */
+function timeZoneSetIn(env: NodeJS.ProcessEnv): string {
+  const said = (env['WECHART_TIME_ZONE'] ?? '').trim();
+  if (said === '') return DEFAULT_TIME_ZONE;
+  const zone = timeZoneOf(said);
+  if (zone === undefined)
+    throw new ConfigError(
+      `WECHART_TIME_ZONE is “${said}”, which isn’t a time zone. It is the deployment’s ` +
+        'IANA time zone, such as Europe/Berlin or UTC (the Helm value timeZone).',
+    );
+  return zone;
 }
 
 /** `WECHART_AUDIT_RETENTION_DAYS`: a whole number of days from 1, or a year unset. */
@@ -252,6 +277,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ...xcubeOf(env),
     ...seedTokenOf(env),
     auditRetentionDays: auditRetentionOf(env),
+    timeZone: timeZoneSetIn(env),
   };
 }
 

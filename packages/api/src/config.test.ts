@@ -67,6 +67,37 @@ describe('WECHART_TRUST_PROXY in every security mode (T773, AC-474, AC-479)', ()
 });
 
 /**
+ * T1015 (AC-630): `WECHART_TIME_ZONE`, the deployment's time zone, from the
+ * Helm values: an IANA zone, UTC when none is set, and a name that is no
+ * zone stops the start, naming it (R80-2).
+ */
+describe('WECHART_TIME_ZONE (T1015, AC-630)', () => {
+  it('reads UTC when unset or empty', () => {
+    expect(loadConfig({ CUBE_API_SECRET: 's' }).timeZone).toBe('UTC');
+    expect(loadConfig({ CUBE_API_SECRET: 's', WECHART_TIME_ZONE: '' }).timeZone).toBe('UTC');
+  });
+
+  it('keeps an IANA zone, in either security mode', () => {
+    expect(loadConfig({ CUBE_API_SECRET: 's', WECHART_TIME_ZONE: 'Europe/Berlin' }).timeZone).toBe(
+      'Europe/Berlin',
+    );
+    expect(
+      loadConfig({ CUBE_API_SECRET: 's', ...SIGN_IN_ENV, WECHART_TIME_ZONE: 'Asia/Tokyo' })
+        .timeZone,
+    ).toBe('Asia/Tokyo');
+  });
+
+  it('stops the start with a name that is no zone, naming it', () => {
+    expect(() => loadConfig({ CUBE_API_SECRET: 's', WECHART_TIME_ZONE: 'Mars/Olympus' })).toThrow(
+      ConfigError,
+    );
+    expect(() => loadConfig({ CUBE_API_SECRET: 's', WECHART_TIME_ZONE: 'Mars/Olympus' })).toThrow(
+      /WECHART_TIME_ZONE.*“Mars\/Olympus”/,
+    );
+  });
+});
+
+/**
  * T774 (AC-476): `WECHART_MCP_HOST`, the host the Helm values name for MCP.
  * Unset, MCP is off: nothing is served at `/mcp` (design 18's Q6, "MCP off").
  */

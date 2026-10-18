@@ -91,6 +91,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "wechart.secretName" . }}
                   key: cube-api-secret
+            # The deployment's time zone, an IANA name (T1015, AC-630).
+            - name: WECHART_TIME_ZONE
+              value: {{ .Values.timeZone | default "UTC" | quote }}
             # How long the audit trail keeps its records, in days (T370, AC-296).
             - name: WECHART_AUDIT_RETENTION_DAYS
               value: {{ .Values.api.auditRetentionDays | quote }}

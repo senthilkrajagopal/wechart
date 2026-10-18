@@ -10,6 +10,12 @@
 nameOverride: ''
 fullnameOverride: ''
 
+# The deployment's time zone, an IANA name such as Europe/Berlin (T1015,
+# AC-630). An MCP client's copy that names no zone of its own gets its project
+# folder named in it, and the AI limits count days and months in it. The API
+# refuses to start with a name that isn't a zone.
+timeZone: UTC
+
 # wechart's own images, built from this repository (docs/deploy.md, "Build the
 # images"). Both are built from the same commit, so they share one tag.
 images:

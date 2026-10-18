@@ -291,9 +291,6 @@ export const ITEM_TOOLS: readonly McpTool[] = [
   },
 ];
 
-/** The time zone a copy's project folder is named in, unless the client gives one. */
-const DEFAULT_TIME_ZONE = 'UTC';
-
 interface CopyArgs {
   readonly kind: 'dashboard' | 'chart' | 'model';
   readonly id?: string;
@@ -326,7 +323,7 @@ const COPY_ARGS = fromJsonSchema<CopyArgs>({
       type: 'string',
       minLength: 1,
       description:
-        'The IANA time zone the copy’s project folder is named in, by the minute it is made; UTC unless given.',
+        'The IANA time zone the copy’s project folder is named in, by the minute it is made; wechart’s own unless given.',
     },
     into: {
       type: 'string',
@@ -339,31 +336,42 @@ const COPY_ARGS = fromJsonSchema<CopyArgs>({
   additionalProperties: false,
 });
 
-/** "Edit in my workspace", as the web app's route makes it (`[R48-5]`, AC-278, AC-368). */
-async function copyIn(args: unknown, call: McpCall): Promise<CallToolResult> {
-  const { kind, id, folderId, path, into, timeZone = DEFAULT_TIME_ZONE } = args as CopyArgs;
-  // A model's `into` is the route's to check: a folder of the caller's own workspace (T763).
-  const body =
-    kind === 'model'
-      ? { kind, folderId, path, timeZone, ...(into === undefined ? {} : { into }) }
-      : { kind, id, timeZone };
-  return changed(await call.ask('/api/workspace/copies', { method: 'POST', body }), 'copy');
+/**
+ * "Edit in my workspace", as the web app's route makes it (`[R48-5]`,
+ * AC-278, AC-368): its project folder named in the client's time zone, or
+ * the deployment's, `deploymentZone`, where it sends none (T1015, AC-630).
+ */
+const copyIn =
+  (deploymentZone: string) =>
+  async (args: unknown, call: McpCall): Promise<CallToolResult> => {
+    const { kind, id, folderId, path, into, timeZone = deploymentZone } = args as CopyArgs;
+    // A model's `into` is the route's to check: a folder of the caller's own workspace (T763).
+    const body =
+      kind === 'model'
+        ? { kind, folderId, path, timeZone, ...(into === undefined ? {} : { into }) }
+        : { kind, id, timeZone };
+    return changed(await call.ask('/api/workspace/copies', { method: 'POST', body }), 'copy');
+  };
+
+/** `edit_in_my_workspace`, naming project folders in `deploymentZone` unless the client names one. */
+export function editInMyWorkspace(deploymentZone: string): McpTool {
+  return {
+    name: 'edit_in_my_workspace',
+    description:
+      'Copies a shared dashboard, library chart or model file into your My workspace, in a project folder of its own, as wechart’s Edit in my workspace does, so you can change it there and propose it back. Where you have a copy already, it is opened instead. The shared one is never changed.',
+    scope: 'workspace-edit',
+    inputSchema: COPY_ARGS,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    run: copyIn(deploymentZone),
+  };
 }
 
-export const EDIT_IN_MY_WORKSPACE: McpTool = {
-  name: 'edit_in_my_workspace',
-  description:
-    'Copies a shared dashboard, library chart or model file into your My workspace, in a project folder of its own, as wechart’s Edit in my workspace does, so you can change it there and propose it back. Where you have a copy already, it is opened instead. The shared one is never changed.',
-  scope: 'workspace-edit',
-  inputSchema: COPY_ARGS,
-  annotations: {
-    readOnlyHint: false,
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: false,
-  },
-  run: copyIn,
-};
-
-/** The workspace tools, in the order `tools/list` gives them. */
-export const WORKSPACE_TOOLS: readonly McpTool[] = [EDIT_IN_MY_WORKSPACE, ...ITEM_TOOLS];
+/** The workspace tools, in the order `tools/list` gives them, for a deployment in `timeZone`. */
+export function workspaceTools(timeZone: string): readonly McpTool[] {
+  return [editInMyWorkspace(timeZone), ...ITEM_TOOLS];
+}
