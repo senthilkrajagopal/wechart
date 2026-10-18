@@ -59,7 +59,13 @@ export function SearchPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const openerRef = useRef<Element | null>(null);
   const listId = useId();
-  const optionId = (index: number) => `${listId}-option-${String(index)}`;
+  /**
+   * A result's id, by its key as the active result is: by position, the id
+   * the input named moved to another row when an answer arrived above it,
+   * and the input then named a new id for the same choice (AC-191). Encoded,
+   * so a path's spaces never split the IDREF.
+   */
+  const optionId = (key: string) => `${listId}-option-${encodeURIComponent(key)}`;
   const typed = text.trim() !== '';
 
   /**
@@ -112,11 +118,11 @@ export function SearchPalette() {
   // The active result kept in sight as the arrows move through a list that
   // scrolls (T211's review).
   useEffect(() => {
-    if (active < 0) return;
-    globalThis.document.getElementById(optionId(active))?.scrollIntoView({ block: 'nearest' });
+    if (active < 0 || activeKey === null) return;
+    globalThis.document.getElementById(optionId(activeKey))?.scrollIntoView({ block: 'nearest' });
     // `optionId` is derived from the stable `listId`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [active, activeKey]);
 
   const show = useCallback((event?: Event) => {
     const from = event instanceof CustomEvent ? (event.detail as Element | undefined) : undefined;
@@ -200,7 +206,7 @@ export function SearchPalette() {
           aria-expanded={results.length > 0}
           aria-controls={listId}
           aria-activedescendant={
-            active >= 0 && active < results.length ? optionId(active) : undefined
+            active >= 0 && activeKey !== null ? optionId(activeKey) : undefined
           }
           value={text}
           onChange={(event) => {
@@ -230,7 +236,7 @@ export function SearchPalette() {
             {results.map((result, index) => (
               <li
                 key={result.key}
-                id={optionId(index)}
+                id={optionId(result.key)}
                 role="option"
                 aria-selected={index === active}
                 data-href={result.href}

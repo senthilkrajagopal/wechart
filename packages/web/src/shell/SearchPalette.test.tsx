@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render as rtlRender, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SearchPalette } from './SearchPalette';
 
@@ -125,6 +125,71 @@ describe('search palette (AC-006)', () => {
  * the API answers to their owner alone, and lists the matching ones as
  * "Saved query".
  */
+/**
+ * AC-191: the arrows move the active result, which the input names. The
+ * answers arrive at different moments, and the catalog's rows come first, so
+ * the rows move under a choice already made: the input must go on naming the
+ * same result, by the same id, rather than whatever row now sits where it was.
+ */
+describe('the active result as answers arrive (AC-191)', () => {
+  // jsdom lays nothing out, so it has no scrollIntoView to keep the active row in sight.
+  const had = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (had === undefined) delete (Element.prototype as Partial<Element>).scrollIntoView;
+    else Object.defineProperty(Element.prototype, 'scrollIntoView', had);
+  });
+
+  it('keeps naming the chosen result, by the same id, when the catalog answers after the first ↓', async () => {
+    let answer: (hits: unknown) => void = () => undefined;
+    const searched = new Promise<unknown>((resolve) => {
+      answer = resolve;
+    });
+    const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/model/files')
+          return Promise.resolve(
+            json({
+              files: [
+                { path: 'cubes/orders.yml', kind: 'yaml' },
+                { path: 'cubes/monthly_orders.yml', kind: 'yaml' },
+              ],
+            }),
+          );
+        if (url.startsWith('/api/search')) return searched.then(json);
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+    render(<SearchPalette />);
+    await userEvent.keyboard('{Control>}k{/Control}');
+    const input = screen.getByRole('combobox');
+    await userEvent.type(input, 'orders');
+    await screen.findByRole('option', { name: /cubes\/orders\.yml/ });
+
+    await userEvent.keyboard('{ArrowDown}');
+    const first = input.getAttribute('aria-activedescendant') ?? '';
+    expect(document.getElementById(first)?.textContent).toBe('Model filecubes/orders.yml');
+
+    // The catalog answers: its row comes first, above the files.
+    answer([{ kind: 'dashboard', id: 'd1', title: 'Orders overview' }]);
+    await screen.findByRole('option', { name: /Orders overview/ });
+    expect(input.getAttribute('aria-activedescendant')).toBe(first);
+    expect(document.getElementById(first)?.textContent).toBe('Model filecubes/orders.yml');
+    expect(document.getElementById(first)?.getAttribute('aria-selected')).toBe('true');
+
+    await userEvent.keyboard('{ArrowDown}');
+    const next = input.getAttribute('aria-activedescendant') ?? '';
+    expect(document.getElementById(next)?.textContent).toBe('Model filecubes/monthly_orders.yml');
+    await userEvent.keyboard('{ArrowUp}');
+    expect(input.getAttribute('aria-activedescendant')).toBe(first);
+  });
+});
+
 describe('saved queries in the palette (T815, AC-460)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
