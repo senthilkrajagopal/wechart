@@ -1716,12 +1716,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T821 (AC-463) Make a chart: save the cube as Make a cube does, then open the chart editor on a new chart in My workspace over it, nothing placed, with "← Back to SQL runner"
 
-- [ ] T822 (AC-462) Write a run's parameter values into Make a cube's SQL as literals, in the driver's own escaping, and say so in the pane
-  - Lane: SQL
-  - Waits on: xcube's image that takes bound values (as T811), since only then does a run with parameters finish.
-  - Files: `packages/web/src/workspaces/sql/literalSql.ts` (+ test), `packages/web/src/workspaces/sql/MakeCubePane.tsx` (+ test).
-  - Failing test: `literalSql.test.ts`: Text `O'Brien` becomes `'O''Brien'` on PostgreSQL and `'O\'Brien'` on MySQL, a Number its decimal, a Date its dialect's date literal, a Boolean `TRUE`/`FALSE` or `1`/`0` by driver. `MakeCubePane.test.tsx`: after a run with `{{c}}`, the pane's SQL holds the literal in its place and says the run's values are written in; it otherwise equals what ran (AC-462).
-  - Depends on: T820, T811
+- [x] T822 (AC-462) Write a run's parameter values into Make a cube's SQL as literals, in the driver's own escaping, and say so in the pane
 
 ### Lane SQL: the data source page, lost access and the "Cube" group
 

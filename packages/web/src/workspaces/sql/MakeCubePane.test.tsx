@@ -342,6 +342,17 @@ describe('the Make a cube pane (T820, AC-462)', () => {
     expect(content).not.toMatch(/\{%|%\}|\{\{|\}\}/);
   });
 
+  it('writes each backslash the SQL holds doubled, as Cube reads its YAML sql as a template whose escapes it evaluates (T822)', async () => {
+    const sql = "SELECT id FROM orders WHERE code ~ '^\\d+$' AND note <> E'a\\nb'";
+    open({ sql });
+    await within(pane()).findByRole('tree');
+    await userEvent.click(add());
+    const content = (posts[0]!.body as { files: { content: string }[] }).files[0]!.content;
+    expect((parse(content) as { cubes: { sql: string }[] }).cubes[0]!.sql).toBe(
+      "SELECT id FROM orders WHERE code ~ '^\\\\d+$' AND note <> E'a\\\\nb'",
+    );
+  });
+
   it('refuses SQL holding “{%”, which Cube would read as a template, and adds nothing', async () => {
     open({ sql: "SELECT id FROM orders WHERE note LIKE '{%'" });
     await within(pane()).findByRole('tree');
@@ -352,11 +363,61 @@ describe('the Make a cube pane (T820, AC-462)', () => {
     expect(posts).toEqual([]);
   });
 
-  it('refuses SQL with parameters, whose values can’t be written in yet, and adds nothing', async () => {
-    open({ sql: 'SELECT id, total FROM orders WHERE region = {{region}}' });
+  /**
+   * T822 (AC-462): after a run with `{{c}}`, the pane's SQL holds the
+   * literal in its place and says the run's values are written in; it
+   * otherwise equals what ran. (T820's follow-up refused such SQL until
+   * T822 wrote the values in; this replaces that refusal.)
+   */
+  it('writes the run’s values in as literals, shows that SQL and says so, and adds it (T822)', async () => {
+    const sql = 'SELECT id, total FROM orders WHERE region = {{region}} AND total > {{least}}';
+    open({
+      sql,
+      parameters: [
+        { name: 'region', type: 'text', value: "O'Brien" },
+        { name: 'least', type: 'number', value: '10' },
+      ],
+    });
+    await within(pane()).findByRole('tree');
+    // Each literal spaced either side; the space at its end trimmed, as any SQL's is.
+    const written = "SELECT id, total FROM orders WHERE region =  E'O''Brien'  AND total >  ( 10 )::numeric";
+    expect(within(pane()).getByTestId('make-cube-sql').textContent).toBe(written);
+    expect(within(pane()).getByTestId('make-cube-sql-note').textContent).toBe(
+      'The run’s parameter values are written in as literals.',
+    );
+    await userEvent.click(add());
+    const content = (posts[0]!.body as { files: { content: string }[] }).files[0]!.content;
+    expect((parse(content) as { cubes: { sql: string }[] }).cubes[0]!.sql).toBe(written);
+  });
+
+  it('says nothing of values for SQL that ran with none', async () => {
+    open();
+    await within(pane()).findByRole('tree');
+    expect(within(pane()).queryByTestId('make-cube-sql-note')).toBeNull();
+  });
+
+  it('refuses parameter values on a driver whose rule isn’t verified, naming it, and adds nothing (T822)', async () => {
+    open({
+      source: { ...SOURCE, driver: 'redshift' },
+      sql: 'SELECT id FROM orders WHERE region = {{region}}',
+      parameters: [{ name: 'region', type: 'text', value: 'EMEA' }],
+    });
     await within(pane()).findByRole('tree');
     expect(within(pane()).getByTestId('make-cube-sql-error').textContent).toBe(
-      'Its parameters can’t be written into a cube yet. Write their values into the SQL, and run it again.',
+      'Parameter values can’t be written into SQL for Amazon Redshift yet: replace them with literals, then Make a cube.',
+    );
+    await userEvent.click(add());
+    expect(posts).toEqual([]);
+  });
+
+  it('refuses a NUL in a Text value, and adds nothing (T822)', async () => {
+    open({
+      sql: 'SELECT id FROM orders WHERE region = {{region}}',
+      parameters: [{ name: 'region', type: 'text', value: 'EM\u0000EA' }],
+    });
+    await within(pane()).findByRole('tree');
+    expect(within(pane()).getByTestId('make-cube-sql-error').textContent).toBe(
+      'The value of region holds a NUL character, which no SQL literal can hold: remove it, run it again, then Make a cube.',
     );
     await userEvent.click(add());
     expect(posts).toEqual([]);

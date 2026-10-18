@@ -24,7 +24,8 @@ import { CUBE_STORE_ID, CUBE_STORE_QUERY } from '../data-sources/cubeStore';
 import { endedAway } from './awayRun';
 import { GOING_QUERY } from './going';
 import { holdTabs, releaseTabs, tabsStoreFor } from './liveTabs';
-import { QueryTab, type Insertion, type RunHold, type RunOnOpen } from './QueryTab';
+import { QueryTab, type Insertion, type MadeFrom, type RunHold, type RunOnOpen } from './QueryTab';
+import type { RunParameter } from './tabs';
 import type { SqlColumn } from '../data-sources/SqlResult';
 import { fileHref } from '../model/inFolder';
 import { makeChartOver } from './makeChart';
@@ -189,7 +190,7 @@ function ChosenOn({
     readonly insertion: Insertion | undefined;
     readonly runOnOpen: RunOnOpen | undefined;
     /** Make a cube… or Make a chart… on its result (T820). */
-    readonly onMake: (kind: MakeKind, made: { readonly sql: string; readonly columns: readonly SqlColumn[] }) => void;
+    readonly onMake: (kind: MakeKind, made: MadeFrom) => void;
   };
 }) {
   const page = useQuery({ ...sourceQuery(row.id), retry: false, enabled: !row.cubeStore });
@@ -531,6 +532,7 @@ function Workbench({
     readonly row: SqlSourceRow;
     readonly sql: string;
     readonly columns: readonly SqlColumn[];
+    readonly parameters: readonly RunParameter[];
     readonly tabName: string;
     /** The tab it was made from, for the chart editor's way back (T821). */
     readonly tabId: string;
@@ -693,13 +695,14 @@ function Workbench({
                 },
                 insertion,
                 runOnOpen,
-                onMake: (kind, { sql, columns }) => {
+                onMake: (kind, { sql, columns, parameters }) => {
                   setMade(null);
                   setMaking((was) => ({
                     kind,
                     row: chosenRow,
                     sql,
                     columns,
+                    parameters,
                     tabName: openTab.name,
                     tabId: openTab.id,
                     opened: (was?.opened ?? 0) + 1,
@@ -731,6 +734,7 @@ function Workbench({
           kind={making.kind}
           source={making.row}
           sql={making.sql}
+          parameters={making.parameters}
           columns={making.columns}
           suggested={making.tabName}
           onClose={() => {

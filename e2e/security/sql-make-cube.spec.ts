@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { Browser, Page } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
+import { wellPicker } from '../wells';
 import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
 /**
@@ -17,7 +18,8 @@ const RUN = Math.random().toString(36).slice(2, 8);
 const SOURCE = `sqlmk_${RUN}`;
 const CUBE = `sqlcube_${RUN}`;
 const CHART_CUBE = `sqlchart_${RUN}`;
-const world = { folderId: '', sourceId: '', chartId: '' };
+const VALUE_CUBE = `sqlvalue_${RUN}`;
+const world = { folderId: '', sourceId: '', chartId: '', valueChartId: '' };
 const KEY = JSON.parse(
   readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
 ) as XcubeKey;
@@ -73,9 +75,9 @@ test.beforeAll(async ({ browser }) => {
 test.afterAll(async ({ browser }) => {
   const many = await signedIn(browser, 'many');
   try {
-    if (world.chartId !== '')
-      await many.page.request.delete(`/api/documents/chart/${encodeURIComponent(world.chartId)}`);
-    for (const name of [CUBE, CHART_CUBE])
+    for (const id of [world.chartId, world.valueChartId])
+      if (id !== '') await many.page.request.delete(`/api/documents/chart/${encodeURIComponent(id)}`);
+    for (const name of [CUBE, CHART_CUBE, VALUE_CUBE])
       await many.page.request.delete(
         `/api/model/files?folder=mine&path=${encodeURIComponent(`cubes/${name}.yml`)}`,
       );
@@ -97,9 +99,10 @@ async function typeSql(page: Page, sql: string) {
   await editor(page).click();
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.press('Delete');
-  await page.keyboard.type(sql);
+  // Inserted, not typed: the editor's own key handling would add to `{{` and quotes.
+  await page.keyboard.insertText(sql);
 }
-async function runOn(page: Page, sql: string) {
+async function runOn(page: Page, sql: string, beforeRun?: () => Promise<void>) {
   await page.getByRole('complementary', { name: 'Data source and schema' })
     .getByRole('button', { name: /^Data source (?!and)/ })
     .click();
@@ -108,6 +111,7 @@ async function runOn(page: Page, sql: string) {
     .getByRole('option', { name: new RegExp(SOURCE) })
     .click();
   await typeSql(page, sql);
+  await beforeRun?.();
   await page.getByRole('button', { name: 'Run', exact: true }).click();
   await expect(page.getByTestId('sql-result-head')).toHaveText(/^Finished/);
 }
@@ -181,6 +185,49 @@ test('Make a cube… adds a draft cube, with count and the SQL that ran, to My w
     await head.getByRole('button', { name: 'Make a cube…' }).click();
     await pane.getByRole('textbox', { name: 'Cube name' }).fill(CUBE);
     await expect(pane.getByTestId('make-cube-name-error')).toHaveText(`The name “${CUBE}” is already in use.`);
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * T822 (AC-462): after a run with a parameter, Make a cube's SQL holds the
+ * run's value written in as a literal, and the pane says so; the cube, made
+ * into a chart, reads back through Cube exactly the value that ran, quote,
+ * backslash, braces and `$1$` included, and the SQL's own backslash as
+ * written (T822's check of research `sql-literals.md`, "Cube's YAML sql").
+ */
+test('Make a chart… writes a run’s value in as a literal that reads back through Cube as it ran (T822, AC-462)', async ({
+  browser,
+}) => {
+  const { context, page } = await signedIn(browser, 'many');
+  const value = String.raw`O'Brien \ {x} $1$`;
+  try {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/sql');
+    await runOn(page, String.raw`SELECT 1 AS id, {{who}} AS who, E'x\\y' AS raw`, async () => {
+      await page.getByRole('group', { name: 'Parameters' }).getByRole('textbox', { name: 'who, value' }).fill(value);
+    });
+    await page.getByTestId('sql-result-head').getByRole('button', { name: 'Make a chart…' }).click();
+
+    const pane = page.getByRole('dialog', { name: 'Make a cube from this query · in My workspace' });
+    await expect(pane.getByTestId('make-cube-sql')).toHaveText(
+      String.raw`SELECT 1 AS id,  E'O''Brien \\ {x} \x241\x24'  AS who, E'x\\y' AS raw`,
+    );
+    await expect(pane.getByTestId('make-cube-sql-note')).toHaveText(
+      'The run’s parameter values are written in as literals.',
+    );
+    await pane.getByRole('textbox', { name: 'Cube name' }).fill(VALUE_CUBE);
+    await pane.getByRole('button', { name: 'Add and make a chart' }).click();
+
+    await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?/);
+    world.valueChartId = decodeURIComponent(/\/explore\/charts\/([^/]+)\/edit/.exec(page.url())![1]!);
+    await wellPicker(page, 'dimensions').selectOption(`${VALUE_CUBE}.who`);
+    await wellPicker(page, 'dimensions').selectOption(`${VALUE_CUBE}.raw`);
+    await page.getByRole('tab', { name: 'Results', exact: true }).click();
+    const rows = page.getByTestId('results-drawer').getByTestId('drawer-result-rows');
+    await expect(rows.getByRole('cell', { name: value, exact: true })).toBeVisible();
+    await expect(rows.getByRole('cell', { name: String.raw`x\y`, exact: true })).toBeVisible();
   } finally {
     await context.close();
   }

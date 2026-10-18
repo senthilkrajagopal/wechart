@@ -35,7 +35,16 @@ export type TabRun =
       readonly answeredAt?: number;
       /** Ended while the user was away: how, from History, its rows not kept (T804). */
       readonly away?: true;
+      /** The parameter values it sent, for Make a cube to write in (T822); none where it sent none. */
+      readonly parameters?: readonly RunParameter[];
     };
+
+/** A parameter's value as a run sent it (T811, AC-454). */
+export interface RunParameter {
+  readonly name: string;
+  readonly type: ParamType;
+  readonly value: string;
+}
 
 /** A saved query, as a tab holds it: its id, and the name and description Save keeps (T812). */
 export interface SavedAs {
@@ -149,6 +158,7 @@ export type TabsAction =
       readonly outcome: SqlOutcome;
       readonly answeredAt?: number;
       readonly away?: true;
+      readonly parameters?: readonly RunParameter[];
     };
 
 /** A tab's id: short, for the address (`/sql?tab=7f3a9c01`, T801). */
@@ -362,6 +372,9 @@ export function tabsReducer(
               at: action.at,
               ...(action.answeredAt === undefined ? {} : { answeredAt: action.answeredAt }),
               ...(action.away === true ? { away: true as const } : {}),
+              ...(action.parameters === undefined || action.parameters.length === 0
+                ? {}
+                : { parameters: action.parameters }),
             },
           });
   }

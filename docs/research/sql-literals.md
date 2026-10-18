@@ -131,6 +131,17 @@ BigQuery's own lexical page could not be read; the GoogleSQL reference repo was 
 | Date | `DATE '2024-01-31'` | | [ora-lit] |
 | Boolean | 23ai: `TRUE` / `FALSE`; 19c: none in SQL | xcube binds booleans only on 23ai | [ora-dt23]; [ora-dt19]; [x-runner] L556 |
 
+## Cube's YAML sql (read in the fork's source by lane SQL, 2026-10-18)
+
+How a YAML model's `sql` string becomes the SQL Cube sends, read in `~/Work/bi/cube` (the fork xcube builds on):
+
+- `YamlCompiler.ts` wraps the value as `f"…"` after `escapeDoubleQuotes`, which escapes `"` and `` ` `` and keeps `\{` and `\}` as they are ([yc] L234, L307–356).
+- A value with no quote, backslash, backtick or brace takes the fast path, `transpileSimpleFString` ([pp] L72–107); any other goes through the ANTLR Python parser, which makes each piece of the f-string's text a Babel `templateElement` with `raw` and `cooked` both the source text ([pp] L203–210).
+- So the text becomes a JavaScript template literal's, and its escapes are evaluated as JavaScript evaluates them: `\{` gives `{`, `\\` gives `\`, and an unknown escape such as `\d` gives `d`. **Every backslash the SQL holds must be written `\\`, and every brace `\{` or `\}`,** for the database to get the SQL as written. This is read from the source, not run against Cube: UNVERIFIED end to end.
+
+[yc]: ~/Work/bi/cube/packages/cubejs-schema-compiler/src/compiler/YamlCompiler.ts
+[pp]: ~/Work/bi/cube/packages/cubejs-schema-compiler/src/parser/PythonParser.ts
+
 ## Gotchas
 
 1. The preview's session settings and the cube's differ (Summary 2).

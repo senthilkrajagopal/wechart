@@ -27,7 +27,14 @@ import { routeOf, type SqlSource } from './sqlSource';
 import { SaveDialog } from './SaveDialog';
 import { SAVED_QUERIES } from './SavedList';
 import { SaveKeyContext } from './saveKey';
-import type { SavedAs, SqlTab, TabsAction } from './tabs';
+import type { RunParameter, SavedAs, SqlTab, TabsAction } from './tabs';
+
+/** What Make a cube… is made from: the SQL that ran, its columns and its values (T820, T822). */
+export interface MadeFrom {
+  readonly sql: string;
+  readonly columns: readonly SqlColumn[];
+  readonly parameters: readonly RunParameter[];
+}
 
 /**
  * One tab's editor and result in the workspace (T802, AC-373, AC-385,
@@ -226,7 +233,7 @@ export function QueryTab({
   /** Run its text as it opens, if this is that tab and it hasn't (Preview 100 rows, T807). */
   readonly runOnOpen?: RunOnOpen | undefined;
   /** Make a cube… or Make a chart… chosen on its result: the SQL that ran and its columns (T819, T820). */
-  readonly onMake?: (kind: MakeKind, run: { readonly sql: string; readonly columns: readonly SqlColumn[] }) => void;
+  readonly onMake?: (kind: MakeKind, run: MadeFrom) => void;
 }) {
   const toInsert =
     insertion !== undefined && insertion.tabId === tab.id && !inserted.has(insertion) ? insertion : undefined;
@@ -319,7 +326,8 @@ export function QueryTab({
     sending.current = false;
     const answeredAt = Date.now();
     // Into the workspace's tabs, which outlive this view: it may have closed meanwhile (AC-452).
-    dispatch({ kind: 'run-done', id: tab.id, sourceId: source.id, sql, at, outcome, answeredAt });
+    // With the values it sent, for Make a cube to write in (T822, AC-462).
+    dispatch({ kind: 'run-done', id: tab.id, sourceId: source.id, sql, at, outcome, answeredAt, parameters });
     const ended = runState({ kind: 'done', outcome, sql, at }, answeredAt, true);
     setSaid(ended.rows === null ? ended.label : `${ended.label}, ${ended.rows}`);
     // Back to the editor, unless the user has moved on meanwhile (design 15, keyboard).
@@ -617,7 +625,11 @@ export function QueryTab({
                   onMake={(kind) => {
                     // Enabled only on a finished run, whose columns are known.
                     if (shown.outcome.outcome === 'finished')
-                      onMake(kind, { sql: shown.sql, columns: shown.outcome.columns });
+                      onMake(kind, {
+                        sql: shown.sql,
+                        columns: shown.outcome.columns,
+                        parameters: shown.parameters ?? [],
+                      });
                   }}
                 />
               )

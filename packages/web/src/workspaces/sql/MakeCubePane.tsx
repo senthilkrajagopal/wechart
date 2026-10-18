@@ -20,9 +20,9 @@ import {
   memberNameOf,
   type ColumnRow,
 } from './columnKinds';
-import { parameterNames } from './parameterNames';
+import { writeValuesIn } from './literalSql';
 import type { MakeKind } from './ResultHead';
-import { dialectFor } from './statementAt';
+import type { RunParameter } from './tabs';
 import { placeOf, type SqlSourceRow } from './sources';
 
 /** My workspace's root, as the API names it to the client (T343). */
@@ -52,15 +52,15 @@ export function cubeSqlOf(sql: string): string {
  * The SQL as a YAML model's `sql` holds it (research `cube/data-modeling.md`,
  * "Literal braces in YAML are escaped as `\{` and `\}`"): Cube reads the value
  * as a Python f-string, so each brace the SQL holds is written escaped; and
- * no `{{` or `}}` is left for Cube to render the file as Jinja first.
+ * no `{{` or `}}` is left for Cube to render the file as Jinja first. Each
+ * backslash is doubled too: Cube makes the f-string's text a JavaScript
+ * template's, whose escapes are evaluated (research `sql-literals.md`,
+ * "Cube's YAML sql"), so `\d` would reach the database as `d`.
  */
-const escapedForCube = (sql: string) => sql.replace(/[{}]/g, (brace) => `\\${brace}`);
+const escapedForCube = (sql: string) => sql.replace(/[\\{}]/g, (character) => `\\${character}`);
 
-/** Why the SQL that ran can't be a cube's as it is; none where it can (T820's review). */
-function sqlProblem(sql: string, driver: string | null): string | undefined {
-  // Until T822 writes their values in, a `{{name}}` would reach Cube's file as text.
-  if (parameterNames(sql, dialectFor(driver)).length > 0)
-    return 'Its parameters can’t be written into a cube yet. Write their values into the SQL, and run it again.';
+/** Why the SQL, its values written in, can't be a cube's as it is; none where it can (T820's review). */
+function sqlProblem(sql: string): string | undefined {
   // `{%` escaped is still `{%`, which makes Cube render the whole file as a template.
   if (sql.includes('{%'))
     return 'Its SQL holds “{%”, which Cube reads as the start of a template. Write it another way, and run it again.';
@@ -148,7 +148,8 @@ export interface Added {
 export function MakeCubePane({
   kind,
   source,
-  sql,
+  sql: ran,
+  parameters = [],
   columns,
   suggested,
   onClose,
@@ -158,6 +159,8 @@ export function MakeCubePane({
   readonly source: SqlSourceRow;
   /** The SQL that ran: only the selection, when a selection ran. */
   readonly sql: string;
+  /** The parameter values the run sent, written in as literals (T822). */
+  readonly parameters?: readonly RunParameter[];
   readonly columns: readonly SqlColumn[];
   /** What the name is suggested from: the tab's name. */
   readonly suggested: string;
@@ -195,7 +198,10 @@ export function MakeCubePane({
     ) === true;
   const nameError = nameProblem(name, 'cube') ?? (heldHere ? nameInUse(name) : undefined);
   const columnsError = columnsProblem(rows);
-  const sqlError = sqlProblem(sql, source.driver);
+  // The run's values written in as literals, in its driver's escaping, or why they can't be (T822).
+  const withValues = writeValuesIn(ran, source.driver, parameters);
+  const sql = 'refused' in withValues ? ran : withValues.sql;
+  const sqlError = 'refused' in withValues ? withValues.refused : sqlProblem(sql);
   /** Why Add is held where nothing else on the pane says so. */
   const held = own.isError
     ? 'My workspace’s model couldn’t be read, so whether the name is free isn’t known. Try again.'
@@ -319,6 +325,11 @@ export function MakeCubePane({
           <pre className="sql-make__sql" aria-labelledby={`${ids}-sql`} data-testid="make-cube-sql">
             {cubeSqlOf(sql)}
           </pre>
+          {'written' in withValues && withValues.written ? (
+            <p className="connection-form__note" data-testid="make-cube-sql-note">
+              The run’s parameter values are written in as literals.
+            </p>
+          ) : null}
           {sqlError === undefined ? null : (
             <p className="field__error" data-testid="make-cube-sql-error">
               {sqlError}

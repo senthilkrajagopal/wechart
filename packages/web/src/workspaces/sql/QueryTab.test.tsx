@@ -925,7 +925,34 @@ describe('Make a cube… and Make a chart… on a result (T819, AC-461)', () => 
     await userEvent.click(screen.getByRole('button', { name: 'Run selection' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Make a cube…' }));
 
-    expect(onMake).toHaveBeenCalledWith('cube', { sql: 'SELECT 1 AS one', columns: FINISHED.columns });
+    expect(onMake).toHaveBeenCalledWith('cube', {
+      sql: 'SELECT 1 AS one',
+      columns: FINISHED.columns,
+      parameters: [],
+    });
+  });
+
+  it('hands Make a cube… the parameter values the run sent, as it sent them (T822, AC-462)', async () => {
+    answering(READ_WRITE, FINISHED);
+    const onMake = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <Harness
+          start={tab({ sql: 'SELECT {{n}} AS one', params: { n: '3' }, paramTypes: { n: 'number' } })}
+          source={EMEA}
+          onMake={onMake}
+        />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Make a cube…' }));
+
+    expect(onMake).toHaveBeenCalledWith('cube', {
+      sql: 'SELECT {{n}} AS one',
+      columns: FINISHED.columns,
+      parameters: [{ name: 'n', type: 'number', value: '3' }],
+    });
   });
 
   it('shows neither to someone read-only everywhere, who may not make a model', async () => {

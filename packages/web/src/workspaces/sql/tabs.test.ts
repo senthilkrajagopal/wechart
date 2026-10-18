@@ -212,6 +212,17 @@ describe('a tab’s text and its runs (T802)', () => {
     expect(done.tabs[0]?.run).toEqual({ kind: 'done', sql: 'SELECT 2', at: 5, outcome: finished.outcome });
   });
 
+  it('keeps with its result the parameter values the run sent, for Make a cube (T822, AC-462)', () => {
+    const going = tabsReducer(one, { kind: 'run-start', id: 'a', sql: 'SELECT {{n}}', at: 5 }, ids);
+    const parameters = [{ name: 'n', type: 'number' as const, value: '3' }];
+    const done = tabsReducer(
+      going,
+      { kind: 'run-done', id: 'a', sourceId: 'emea', sql: 'SELECT {{n}}', at: 5, outcome: finished.outcome, parameters },
+      ids,
+    );
+    expect(done.tabs[0]?.run).toEqual({ kind: 'done', sql: 'SELECT {{n}}', at: 5, outcome: finished.outcome, parameters });
+  });
+
   it('drops a result that comes back after its tab moved to another source (design 17’s Q5)', () => {
     const going = tabsReducer(one, { kind: 'run-start', id: 'a', sql: 'SELECT 2', at: 5 }, ids);
     const moved = tabsReducer(going, { kind: 'source', id: 'a', sourceId: 'fx' }, ids);
