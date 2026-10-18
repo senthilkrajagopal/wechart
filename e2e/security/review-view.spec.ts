@@ -147,7 +147,7 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
               title: 'Page 1',
               items: [
                 { id: 't-chart', kind: 'chart', chartId: made.library },
-                { id: 't-text', kind: 'text', text: `Hello ${RUN}` },
+                { id: 't-text', kind: 'markdown', text: `Hello ${RUN}` },
               ],
             },
           ],
@@ -203,7 +203,7 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
                 ...stored.body.pages[0],
                 items: [
                   ...stored.body.pages[0]!.items,
-                  { id: 't-new', kind: 'text', text: `Added ${RUN}` },
+                  { id: 't-new', kind: 'markdown', text: `Added ${RUN}` },
                 ],
               },
               { id: 'p-notes', title: `Notes ${RUN}`, items: [] },
