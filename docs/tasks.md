@@ -1647,11 +1647,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 ### Lane MCP: the Helm chart (Gateway API, Envoy Gateway)
 
-- [ ] T792 [P] (AC-476) Render the MCP host's HTTPRoute, routing only `/mcp` to the API Service, on the chart's own Gateway (mode A) or on a named one (mode B)
-  - Lane: MCP
-  - Files: `deploy/helm/wechart/templates/mcp-gateway.yaml`, `deploy/helm/wechart/values.yaml` (`mcp.host`, `mcp.tlsSecretName`, `mcp.gateway.create`, `mcp.gateway.className`, `mcp.gateway.parentRefs`), `packages/api/src/deploy/mcp-gateway.test.ts` (`helm template`, per `gateway-api.md`).
-  - Failing test: `mcp-gateway.test.ts`: with `mcp.host` set and `mcp.gateway.create: true`, the render has a Gateway with one HTTPS listener for that host, terminating TLS with the named Secret, and an HTTPRoute on it with one rule, `Exact` `/mcp`, to the API Service; with `create: false` and `parentRefs`, it has no Gateway and the HTTPRoute's `parentRefs` are exactly those; in both, no other path or host is routed (AC-476).
-  - Depends on: none
+- [x] T792 [P] (AC-476) Render the MCP host's HTTPRoute, routing only `/mcp` to the API Service, on the chart's own Gateway (mode A) or on a named one (mode B)
 
 - [ ] T793 (AC-476, AC-474) Let in only the listed source addresses with an Envoy Gateway SecurityPolicy, Anthropic's range a value off by default, and pass the client's address to the API
   - Lane: MCP

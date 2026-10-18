@@ -1,0 +1,62 @@
+{{- /*
+MCP's own host (F41, AC-476; docs/research/gateway-api.md): an HTTPRoute that
+routes `Exact` `/mcp` alone, on that host alone, to the API Service. Any other
+path on the host matches no rule, which the Gateway answers 404 without the
+API (Gotcha 1). Nothing here without `mcp.host`.
+*/ -}}
+{{- with .Values.mcp }}
+{{- if .host }}
+{{- $name := include "wechart.component" (list $ "mcp") }}
+{{- if .gateway.create }}
+# Mode A: the chart's own Gateway, one HTTPS listener for the MCP host,
+# terminating TLS with a Secret in this namespace (no ReferenceGrant needed).
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list $ "mcp") | nindent 4 }}
+spec:
+  gatewayClassName: {{ required "mcp.gateway.className is required with mcp.gateway.create: the cluster's Envoy Gateway GatewayClass" .gateway.className | quote }}
+  listeners:
+    - name: mcp-https
+      hostname: {{ .host | quote }}
+      protocol: HTTPS
+      port: {{ int .gateway.port }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: {{ required "mcp.tlsSecretName is required with mcp.gateway.create: the host's kubernetes.io/tls Secret" .tlsSecretName | quote }}
+---
+{{- end }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list $ "mcp") | nindent 4 }}
+spec:
+  parentRefs:
+    {{- if .gateway.create }}
+    - name: {{ $name }}
+      sectionName: mcp-https
+    {{- else }}
+    {{- if not .gateway.parentRefs }}
+    {{- fail "mcp.gateway.parentRefs is required without mcp.gateway.create: the Gateway the MCP route attaches to" }}
+    {{- end }}
+    {{- toYaml .gateway.parentRefs | nindent 4 }}
+    {{- end }}
+  hostnames:
+    - {{ .host | quote }}
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /mcp
+      backendRefs:
+        - name: {{ include "wechart.component" (list $ "api") }}
+          port: {{ int $.Values.api.port }}
+{{- end }}
+{{- end }}

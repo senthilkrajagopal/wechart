@@ -195,3 +195,32 @@ security:
     # Docker Desktop), which is also the issuer's. Compose's Dex has 5556.
     port: 5557
     resources: {}
+
+# MCP (F41, AC-476): personal access tokens' clients, such as Claude Code,
+# reach `/mcp` on a host of its own, through a Gateway API HTTPRoute that
+# routes `/mcp` alone to the API Service (docs/research/gateway-api.md). The
+# Gateway API CRDs, Envoy Gateway and its GatewayClass are the cluster's,
+# installed by its admin, never by this chart (docs/deploy.md).
+mcp:
+  # The MCP host, a name with a dot such as mcp.wechart.example.com: MCP is
+  # served at https://<host>/mcp and nowhere else. Empty: MCP is off, nothing
+  # for it is rendered, and the token pages say it isn't set up.
+  host: ''
+  # Mode A's TLS certificate: a kubernetes.io/tls Secret in the release's
+  # namespace, for the host. Required with gateway.create.
+  tlsSecretName: ''
+  gateway:
+    # Mode A, true: the chart makes a Gateway of its own, one HTTPS listener
+    # for the host. Making a Gateway is a privileged permission
+    # (gateway-api.md, "Init / auth pattern").
+    # Mode B, false: the route attaches to a Gateway someone else runs,
+    # named in parentRefs, whose listener holds the host's certificate and
+    # must let routes in from this namespace.
+    create: false
+    # Mode A: the cluster's Envoy Gateway GatewayClass, e.g. eg. Required.
+    className: ''
+    # Mode A: the listener's port.
+    port: 443
+    # Mode B: the Gateway (and listener) the route attaches to. Required.
+    # e.g. [{name: shared, namespace: infra, sectionName: https-mcp}]
+    parentRefs: []

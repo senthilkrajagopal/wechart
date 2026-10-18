@@ -516,6 +516,17 @@
     - **The e2e** `access-tokens-single-user.spec.ts` is unchanged (T791-1): the main stack names no MCP host, so it can't reach `/mcp`; its token test with sign-in off (T769) and its no-host test (T774) stand.
     - **Unit suite:** api 2,081, core 594, charts 556, recommender 133, ui 47 green; web 3,178 passed, 1 failed under the full run's load, `DeleteDialog.test.tsx`, which passes alone (7/7).
 
+- [x] T792 [P] (AC-476) Render the MCP host's HTTPRoute, routing only `/mcp` to the API Service, on the chart's own Gateway (mode A) or on a named one (mode B)
+  - Lane: MCP
+  - Files: `deploy/helm/wechart/templates/mcp-gateway.yaml`, `deploy/helm/wechart/values.yaml` (`mcp.host`, `mcp.tlsSecretName`, `mcp.gateway.create`, `mcp.gateway.className`, `mcp.gateway.parentRefs`), `packages/api/src/deploy/mcp-gateway.test.ts` (`helm template`, per `gateway-api.md`).
+  - Failing test: `mcp-gateway.test.ts`: with `mcp.host` set and `mcp.gateway.create: true`, the render has a Gateway with one HTTPS listener for that host, terminating TLS with the named Secret, and an HTTPRoute on it with one rule, `Exact` `/mcp`, to the API Service; with `create: false` and `parentRefs`, it has no Gateway and the HTTPRoute's `parentRefs` are exactly those; in both, no other path or host is routed (AC-476).
+  - Depends on: none
+  - **Built 2026-10-18** (lane MCP, batch 7). No AC ticked: AC-476 waits on T795's deploy.
+    - **Chart:** `mcp.*` in `values.yaml`, documented there; `templates/mcp-gateway.yaml` renders, with `mcp.host` set, the HTTPRoute `‹release›-wechart-mcp` (`hostnames: [host]`, one rule, `Exact` `/mcp`, to the API Service on `api.port`), and in mode A the Gateway of the same name (`gatewayClassName`, one listener `mcp-https`: the host, HTTPS on `mcp.gateway.port`, 443, `Terminate` with the Secret). The route's parent is that listener in mode A, `mcp.gateway.parentRefs` as given in mode B. Mode B is the default (T792-1).
+    - **Refusals:** mode A without `mcp.tlsSecretName` or `mcp.gateway.className`, and mode B without `parentRefs`, fail the render, each naming the value (T792-2).
+    - **Tests** (3), `helm template` with docker-desktop's values, parsed with `yaml`: mode A's Gateway and route, field for field; mode B's route with exactly the given parent and no Gateway; the three refusals by their words. Red first: no Gateway or route rendered, and no refusal.
+    - `helm lint` with mode A's values: 0 failed.
+
 ## Security specs failing alone: xcube's folder tree stuck (lane MCP, batch 7, at the coordinator's request)
 
 - **Asked:** why `calc-request-resolve.spec.ts:200`, `reviews.spec.ts:168` and `export-import.spec.ts:393` (422, "No folder on the path holds ‹run›_margin") fail when run alone on feat/xcube.
