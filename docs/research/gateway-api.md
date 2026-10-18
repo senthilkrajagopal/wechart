@@ -63,7 +63,7 @@ The Fastify `trustProxy` semantics, Anthropic's `160.79.104.0/21`, Claude Code c
   - The `global.images.envoyProxy.image` override is the v1.9.2 security instruction ([EG v1.9.2 notes][eg-192]).
   - The page recommends `helm template … | kubectl apply --server-side` because of "a known Helm limitation related to large CRDs" ([EG Helm][eg-helm]).
 - **Images (docker-desktop on Apple silicon).** `envoyproxy/gateway:v1.9.2` is published for linux/amd64 and linux/arm64 ([Docker Hub gateway tag][dh-eg]). So is `envoyproxy/envoy:distroless-v1.39.3`, top-level digest `sha256:7369b033550a14997e5d698677b7b51f0210a80754f5d084c5caa1a78268267b` ([Docker Hub envoy tag][dh-envoy]).
-- **GatewayClass.** The Helm chart doesn't create one; the quickstart creates class `eg` from a manifest ([EG Helm][eg-helm]). wechart's install docs must create a cluster-scoped `GatewayClass` with `controllerName: gateway.envoyproxy.io/gatewayclass-controller`. That controllerName is UNVERIFIED: the quickstart manifest wasn't fetched.
+- **GatewayClass.** The Helm chart doesn't create one; the quickstart creates class `eg` from a manifest ([EG Helm][eg-helm]). wechart's install docs must create a cluster-scoped `GatewayClass` with `controllerName: gateway.envoyproxy.io/gatewayclass-controller`. ~~That controllerName is UNVERIFIED: the quickstart manifest wasn't fetched.~~ **Verified 2026-10-18** (lane MCP): v1.9.2's quickstart manifest makes `GatewayClass` `eg` with `spec.controllerName: gateway.envoyproxy.io/gatewayclass-controller` ([EG v1.9.2 quickstart.yaml][eg-qs-yaml]).
 
 **3. No npm packages.** Nothing in `packages/*` imports anything for this.
 
@@ -300,7 +300,7 @@ Field shapes come from:
 2. **Mode A vs mode B as the default** in `values.yaml`, and whether the chart may create a `Gateway` (needs a privileged role ([security][gw-sec])).
 3. **Who owns the GatewayClass and the Gateway API CRDs** on the target clusters. On docker-desktop, wechart's dev docs install them.
 4. **TLS certificate source** (cert-manager, enterprise PKI, or a pre-made Secret). cert-manager's Gateway API integration was not researched.
-5. UNVERIFIED: Envoy Gateway's `GatewayClass.controllerName` string; the quickstart manifest wasn't fetched.
+5. ~~UNVERIFIED: Envoy Gateway's `GatewayClass.controllerName` string; the quickstart manifest wasn't fetched.~~ Verified 2026-10-18: `gateway.envoyproxy.io/gatewayclass-controller` ([EG v1.9.2 quickstart.yaml][eg-qs-yaml]; see Install).
 6. UNVERIFIED: Envoy Gateway's 404 body for an unmatched path or host, and whether Gateway-level authorization runs before route matching.
 7. UNVERIFIED: Envoy streams SSE responses without buffering, by direct quote. Test with `curl -N`.
 8. UNVERIFIED: the source IP Envoy sees on docker-desktop for requests from the Mac, and docker-desktop's pod CIDR, which `WECHART_TRUST_PROXY` needs.
@@ -334,6 +334,7 @@ Field shapes come from:
 [eg-192]: https://gateway.envoyproxy.io/news/releases/notes/v1.9.2
 [eg-110]: https://gateway.envoyproxy.io/news/releases/notes/v1.1.0/
 [eg-qs]: https://gateway.envoyproxy.io/docs/tasks/quickstart/
+[eg-qs-yaml]: https://github.com/envoyproxy/gateway/releases/download/v1.9.2/quickstart.yaml
 [eg-ip]: https://gateway.envoyproxy.io/docs/tasks/security/restrict-ip-access/
 [eg-ctp-task]: https://gateway.envoyproxy.io/docs/tasks/traffic/client-traffic-policy/
 [eg-timeouts]: https://gateway.envoyproxy.io/docs/tasks/traffic/http-timeouts/
