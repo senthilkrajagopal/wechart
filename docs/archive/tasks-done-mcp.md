@@ -478,6 +478,18 @@
       - **The refusals' reasons** (low): each probe of a tool there is is now checked by its words: the workspace check's ("only what is in your My workspace is made, changed or deleted") for `delete_item`, both `change_item`s, `create_item`, `save_model_file` and `delete_model_file`, which those routes alone wouldn't give a Super-Admin; "The arguments don’t fit propose" for a data source. Before, `delete_model_file` of a file that isn't there would have been refused anyway.
       - **Wording:** the fingerprints are taken once around each test's calls, not around each call.
 
+- [x] T790 (AC-444) Connect Claude Code to `/mcp` with a token, list the token's tools and answer a read as its owner
+  - Lane: MCP
+  - Files: `e2e/mcp/claude-code.spec.ts`, `e2e/mcp/fixtures.ts`.
+  - Failing test: `claude-code.spec.ts`, against the e2e stack with an MCP host: `claude mcp add --transport http wechart <url>/mcp --header "Authorization: Bearer <token>"` in a scratch config, then `claude mcp get wechart` reports it connected with the read tools, and a non-interactive `claude -p` limited to the folder-listing tool returns the owner's folders and none of another user's (AC-444).
+  - Depends on: T780, T782
+  - **Built 2026-10-18** (lane MCP, batch 6). **Ticks AC-444.** Tests and fixtures alone: no app code changed.
+    - **How it runs** (T790-1 … T790-3): an API of the spec's own on port 4580 and up, sign-in on, `WECHART_MCP_HOST=mcp.wechart.test`, on a database it makes, seeds by SQL and drops; a forward proxy, given to Claude Code as `HTTP_PROXY`, brings `mcp.wechart.test` to that API with its `Host` kept and tunnels Claude Code's own traffic. Claude Code 2.1.283.
+    - **Tests** (2): `claude mcp add --transport http wechart http://mcp.wechart.test:‹port›/mcp --header "Authorization: Bearer ‹token›"` in a scratch `CLAUDE_CONFIG_DIR`, then `claude mcp get wechart` says "Status: ✔ Connected" at that URL. `claude -p` (haiku, `--strict-mcp-config --mcp-config`, only `mcp__wechart__list_folders` allowed, `stream-json`): its init event shows `wechart` connected with the read tools listed (`list_folders`, `list_folder_items`, `read_dashboard`, `read_chart`, `read_cube`, `read_view`, `query`); it calls `list_folders`, whose result holds the owner's `sales-rw` folder and not the folder only `g01` sees; and the audit trail holds `list_folders ok` under the token.
+    - **Red first, honestly:** the server was built at T778–T782, so nothing failed for want of code. The first runs failed on the test itself: `mcp get`'s mark is ✔, not ✓; `claude -p` waited on stdin and exited non-zero at `--max-turns 3`, and its JSON was only read on success (now a spawn with stdin closed, its output read whatever the exit, 5 turns); the init's server entry carries `source: "dynamic"` too; and the proxy's open tunnels held `afterAll` past its timeout, leaving the API on 4580 and its database behind, which the next run's health check then reached. That API was stopped and the database dropped by hand. The proxy now ends its tunnels on close, the API stops first, and the start refuses a port in use.
+    - **Runs:** headless Chromium project (`WECHART_E2E_CHROMIUM=1`, though no page is opened): 2/2, then 6/6 with `--repeat-each=3`. Ports 4100, 4300, 5273, 5373 and 4580 free after; no `wechart_mcp_*` database left.
+    - **Unit suite:** all green: api 2,070, web 3,149, core 553, charts 556, recommender 133, ui 47.
+
 ## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
 
 - **Asked:** why `GET /api/images/:id` in `access/route-matrix.test.ts` times out at 5 s in most full unit runs.

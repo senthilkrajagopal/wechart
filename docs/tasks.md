@@ -1634,11 +1634,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T789 (AC-440, AC-441) Offer no tool that approves or rejects, or that touches data sources, a shared folder directly, the SQL runner, the audit trail or tokens
 
-- [ ] T790 (AC-444) Connect Claude Code to `/mcp` with a token, list the token's tools and answer a read as its owner
-  - Lane: MCP
-  - Files: `e2e/mcp/claude-code.spec.ts`, `e2e/mcp/fixtures.ts`.
-  - Failing test: `claude-code.spec.ts`, against the e2e stack with an MCP host: `claude mcp add --transport http wechart <url>/mcp --header "Authorization: Bearer <token>"` in a scratch config, then `claude mcp get wechart` reports it connected with the read tools, and a non-interactive `claude -p` limited to the folder-listing tool returns the owner's folders and none of another user's (AC-444).
-  - Depends on: T780, T782
+- [x] T790 (AC-444) Connect Claude Code to `/mcp` with a token, list the token's tools and answer a read as its owner
 
 - [ ] T791 (AC-479) With sign-in off, make tokens and serve `/mcp` as the single user, with every F41 check still applying
   - Lane: MCP
