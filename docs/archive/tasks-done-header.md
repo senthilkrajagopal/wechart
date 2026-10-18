@@ -56,3 +56,8 @@ Lane HEADER's ticked tasks from `docs/tasks.md` §P2.25 (F43), their sub-lines w
   - Files: `packages/web/src/dashboard/header/CompactChips.tsx` (+ test; from `dashboard/markings/MarkChip.tsx` and `dashboard/crossfilter/CrossFilterChip.tsx`), `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/shell/styles.ts`, `e2e/markings.spec.ts`, `e2e/crossfilter.spec.ts`.
   - Failing test: `CompactChips.test.tsx`: with the sheet closed and three non-empty markings, two compact chips then "+1"; each names its marking and its values by the members' titles, cut at 240 px, has "from ‹tile›" in its tooltip, accessible name and menu heading, and its × unmarks (AC-200, AC-098); with two cross-filters, the first's chip then "+1", naming member and value, the source tile in its tooltip, accessible name and menu heading, its × clearing it (AC-119); with the sheet open, no compact chip in the row and the full chips in the bar. The e2e specs mark and cross-filter with the sheet closed and check the compact chips.
   - Depends on: T829
+
+- [x] T839 (AC-493) Highlight the toggle's count for 2 s when its number changes while the sheet is closed, under reduced motion too
+  - Files: `packages/web/src/dashboard/header/FiltersToggle.tsx` (+ test), `packages/web/src/shell/styles.ts`.
+  - Failing test: `FiltersToggle.test.tsx`, with fake timers: when the number goes from 3 to 4 with the sheet closed, the count takes its changed state (the `accent-soft` ground and `accent` border), still has it at 1,800 ms and has lost it by 2,200 ms; it does so with reduced motion too; a render with the same number, or a change with the sheet open, doesn't highlight it (AC-493).
+  - Depends on: T831

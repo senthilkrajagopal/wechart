@@ -193,6 +193,15 @@ export const HEADER_CSS = `
   font-weight: 600;
 }
 .header-toggle--open .header-toggle__chevron { transform: rotate(180deg); }
+/* Its number just changed with the sheet closed (AC-493; design 19 .tog.hl;
+   decision T8xx-1): the accent-soft ground and a 1 px accent border for 2 s,
+   distinct from the 3 px focus ring. Nothing moves, so it holds under
+   reduced motion too. */
+.header-toggle.header-toggle--changed,
+.header-toggle.header-toggle--changed:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--wc-bg-accent-soft);
+  border-color: var(--wc-accent);
+}
 
 /* The header sheet (AC-487; design 19 screen 2): directly under the row, the
    full width of the dashboard. Hidden while closed, whatever else styles it. */

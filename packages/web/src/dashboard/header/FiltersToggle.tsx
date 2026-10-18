@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 import type { FiltersSet } from './filtersSet';
 
@@ -30,6 +30,7 @@ export function FiltersToggle({
   readonly onToggle: () => void;
 }) {
   const describedBy = useId();
+  const changed = useChanged(summary.set, open);
   const details = summary.of === 0;
   const name = details
     ? 'Details'
@@ -43,7 +44,13 @@ export function FiltersToggle({
     <>
       <button
         type="button"
-        className={open ? 'btn header-toggle header-toggle--open' : 'btn header-toggle'}
+        className={[
+          'btn header-toggle',
+          open ? 'header-toggle--open' : '',
+          changed ? 'header-toggle--changed' : '',
+        ]
+          .filter((part) => part !== '')
+          .join(' ')}
         aria-expanded={open}
         aria-controls={controls}
         aria-label={name}
@@ -67,6 +74,44 @@ export function FiltersToggle({
       )}
     </>
   );
+}
+
+/** How long the toggle stays highlighted after its number changes (19-Q6). */
+export const CHANGED_FOR_MS = 2000;
+
+/**
+ * Whether the number set has just changed while the sheet was closed (AC-493;
+ * design 19 states B2 and I; decision T8xx-1): true for 2 s from the change,
+ * and again for 2 s from a further one. Not for a render with the same
+ * number, nor for a change while the sheet is open, and it ends once the
+ * sheet opens. Nothing moves, so reduced motion keeps it.
+ *
+ * The number last seen is held in state and compared while rendering, as
+ * React's "storing information from previous renders" does, so the change
+ * shows in the very render that brings it.
+ */
+function useChanged(set: number, open: boolean): boolean {
+  const [seen, setSeen] = useState(set);
+  const [lit, setLit] = useState(false);
+  const [round, setRound] = useState(0);
+  if (set !== seen) {
+    setSeen(set);
+    if (!open) {
+      setLit(true);
+      setRound((was) => was + 1);
+    }
+  }
+  if (open && lit) setLit(false);
+  useEffect(() => {
+    if (!lit) return;
+    const timer = window.setTimeout(() => {
+      setLit(false);
+    }, CHANGED_FOR_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [lit, round]);
+  return lit && !open;
 }
 
 /** Design 19's funnel (`i-filter`). */

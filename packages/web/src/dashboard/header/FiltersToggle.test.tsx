@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { FiltersToggle } from './FiltersToggle';
 
@@ -95,5 +95,100 @@ describe('the Filters toggle', () => {
     expect(button.getAttribute('aria-expanded')).toBe('false');
     expect(button.getAttribute('aria-controls')).toBe('sheet-1');
     expect(screen.queryByRole('button', { name: /^Filters/ })).toBeNull();
+  });
+});
+
+/**
+ * T839 (AC-493; design 19 states B2 and I; 19-Q6 "Highlight + announce
+ * (Recommended)"; decision T8xx-1): when the number of filters set changes
+ * while the sheet is closed, the toggle takes its changed state — the
+ * `accent-soft` ground and a 1 px `accent` border — for 2 s, with reduced
+ * motion too, since nothing moves.
+ */
+describe('the Filters toggle when its number changes', () => {
+  const THREE = { set: 3, of: 5, names: ['Ordered at', 'Country', 'Category'] } as const;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const toggleWith = (open: boolean, summary: typeof THREE | typeof FOUR_SET) => (
+    <FiltersToggle open={open} controls="sheet-1" summary={summary} onToggle={vi.fn()} />
+  );
+  const changed = () =>
+    screen.getByRole('button', { name: /^Filters\b/ }).classList.contains('header-toggle--changed');
+
+  // The toggle reads no motion preference: these hold that nothing gates the
+  // highlight on one. Its look under reduced motion is the CSS's, with no
+  // transition to drop.
+  for (const reduce of [false, true]) {
+    it(`is highlighted for 2 s when the number goes from 3 to 4 with the sheet closed${reduce ? ', with reduced motion' : ''}`, () => {
+      vi.useFakeTimers();
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query.includes('reduce') ? reduce : !reduce,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }));
+      const view = render(toggleWith(false, THREE));
+      expect(changed()).toBe(false);
+
+      view.rerender(toggleWith(false, FOUR_SET));
+      expect(changed()).toBe(true);
+      expect(screen.getByRole('button', { name: 'Filters, 4 set' })).toBeTruthy();
+
+      act(() => {
+        vi.advanceTimersByTime(1800);
+      });
+      expect(changed()).toBe(true);
+      act(() => {
+        vi.advanceTimersByTime(400);
+      });
+      expect(changed()).toBe(false);
+    });
+  }
+
+  it('starts its 2 s again on a second change', () => {
+    vi.useFakeTimers();
+    const view = render(toggleWith(false, THREE));
+    view.rerender(toggleWith(false, FOUR_SET));
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    view.rerender(toggleWith(false, THREE));
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(changed()).toBe(true);
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+    expect(changed()).toBe(false);
+  });
+
+  it('ends when the sheet opens, where the bar shows the change itself (T839-1)', () => {
+    vi.useFakeTimers();
+    const view = render(toggleWith(false, THREE));
+    view.rerender(toggleWith(false, FOUR_SET));
+    expect(changed()).toBe(true);
+    view.rerender(toggleWith(true, FOUR_SET));
+    expect(changed()).toBe(false);
+    view.rerender(toggleWith(false, FOUR_SET));
+    expect(changed()).toBe(false);
+  });
+
+  it('is not highlighted by a render with the same number, nor by a change with the sheet open', () => {
+    vi.useFakeTimers();
+    const view = render(toggleWith(false, THREE));
+    view.rerender(toggleWith(false, { ...THREE, names: [...THREE.names] }));
+    expect(changed()).toBe(false);
+
+    view.rerender(toggleWith(true, THREE));
+    view.rerender(toggleWith(true, FOUR_SET));
+    expect(changed()).toBe(false);
+    // Closed again with the same number: nothing changed while it was closed.
+    view.rerender(toggleWith(false, FOUR_SET));
+    expect(changed()).toBe(false);
   });
 });

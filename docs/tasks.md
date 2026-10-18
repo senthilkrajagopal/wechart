@@ -1861,10 +1861,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T838 (AC-200, AC-119, AC-098) While the sheet is closed, show compact marking chips, at most two then "+n", or the first cross-filter's compact chip then "+n", each with its menu and ×, the source tile in its tooltip, accessible name and menu heading
 
-- [ ] T839 (AC-493) Highlight the toggle's count for 2 s when its number changes while the sheet is closed, under reduced motion too
-  - Files: `packages/web/src/dashboard/header/FiltersToggle.tsx` (+ test), `packages/web/src/shell/styles.ts`.
-  - Failing test: `FiltersToggle.test.tsx`, with fake timers: when the number goes from 3 to 4 with the sheet closed, the count takes its changed state (the `accent-soft` ground and `accent` border), still has it at 1,800 ms and has lost it by 2,200 ms; it does so with reduced motion too; a render with the same number, or a change with the sheet open, doesn't highlight it (AC-493).
-  - Depends on: T831
+- [x] T839 (AC-493) Highlight the toggle's count for 2 s when its number changes while the sheet is closed, under reduced motion too
 
 - [ ] T840 (AC-493) Announce each change made while the sheet is closed exactly once, politely, with the new number, and leave the sheet closed
   - Files: `packages/web/src/dashboard/header/filterChangeSaid.ts` (+ test), `packages/web/src/dashboard/DashboardView.tsx` (the existing `MarkingAnnouncer` region), `packages/web/src/dashboard/bookmarks/Bookmarks.tsx`, `e2e/dashboard-header.spec.ts`.
