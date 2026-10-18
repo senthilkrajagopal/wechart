@@ -1636,11 +1636,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T790 (AC-444) Connect Claude Code to `/mcp` with a token, list the token's tools and answer a read as its owner
 
-- [ ] T791 (AC-479) With sign-in off, make tokens and serve `/mcp` as the single user, with every F41 check still applying
-  - Lane: MCP
-  - Files: `packages/api/src/mcp/single-user.test.ts`, `e2e/access-tokens-single-user.spec.ts`.
-  - Failing test: `single-user.test.ts`, sign-in off: a token the single user made lists and reads as that user; a request with no token, a bad one, a foreign `Host` or `Origin`, or past the token's or the address's limit is refused as with sign-in on (401, 403, 429) (AC-479).
-  - Depends on: T769, T780, T782
+- [x] T791 (AC-479) With sign-in off, make tokens and serve `/mcp` as the single user, with every F41 check still applying
 
 - [ ] T1015 [P] (AC-630) The deployment's time zone, a Helm value, UTC by default, naming an MCP project folder when the client sends no time zone
   - Lane: MCP

@@ -505,6 +505,17 @@
           - `reviews.spec.ts:168`: the writer's proposal isn't in `super`'s "To review".
         - **Not this branch's:** its only runtime change is the MCP tool list, which is registered only where a host is named for MCP, and the security stack names none. Reported to the coordinator, not chased.
 
+- [x] T791 (AC-479) With sign-in off, make tokens and serve `/mcp` as the single user, with every F41 check still applying
+  - Lane: MCP
+  - Files: `packages/api/src/mcp/single-user.test.ts`, `e2e/access-tokens-single-user.spec.ts`.
+  - Failing test: `single-user.test.ts`, sign-in off: a token the single user made lists and reads as that user; a request with no token, a bad one, a foreign `Host` or `Origin`, or past the token's or the address's limit is refused as with sign-in on (401, 403, 429) (AC-479).
+  - Depends on: T769, T780, T782
+  - **Built 2026-10-18** (lane MCP, batch 7). **Ticks AC-479.** A test alone: the behaviour was already built by T769 (the page with sign-in off), T776 and T777 (the caller is `SINGLE_USER` with sign-in off), and T780.
+    - **Tests** (5), on a server wired as `main.ts` wires it with sign-in off and an MCP host: the single user makes a token on `POST /api/account/tokens` with no sign-in, which `GET /api/account/tokens` lists and the store holds as `admin`'s; through the SDK's client on `/mcp` it lists the tools, and `list_folders`, `list_folder_items` on My workspace and `read_dashboard` answer exactly what the web app's routes answer the single user, their own dashboard in My workspace among them; the trail records each call as `admin`, and Last used moves. No token, a malformed and an unknown one answer 401 with a Bearer challenge; a foreign `Host` and a foreign `Origin` answer 403 with a working token; past the token's limit (2 set) and past the address's bad-token limit (2 set), 429 with `Retry-After`.
+    - **Red first, honestly:** nothing failed for want of code. The first run failed on the test itself (the dashboard was made with no folder, not in My workspace's `mine`; the clean-up compared a text column with a uuid). To see the test can fail, the token check was made to need a sign-in store with sign-in off too (`server.ts`, reverted at once): 3 of the 5 tests failed with 401.
+    - **The e2e** `access-tokens-single-user.spec.ts` is unchanged (T791-1): the main stack names no MCP host, so it can't reach `/mcp`; its token test with sign-in off (T769) and its no-host test (T774) stand.
+    - **Unit suite:** api 2,081, core 594, charts 556, recommender 133, ui 47 green; web 3,178 passed, 1 failed under the full run's load, `DeleteDialog.test.tsx`, which passes alone (7/7).
+
 ## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
 
 - **Asked:** why `GET /api/images/:id` in `access/route-matrix.test.ts` times out at 5 s in most full unit runs.
