@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -9,6 +10,30 @@ import {
 import { createPortal } from 'react-dom';
 
 import { useFocusTrap } from './useFocusTrap';
+
+/**
+ * Moves `held` into `target`, keeping what was in view in view. A node taken
+ * out of the document loses its scroll offsets, so each is read first and
+ * put back after (T600's review). One scrolled to its end — an editor typed
+ * in at the file's end — goes to its end in the new place, whose height
+ * differs: its offset alone would leave its last lines out of view there
+ * (model-popout.spec:21).
+ */
+function moveTo(held: HTMLElement, target: HTMLElement): void {
+  const scrolled = [held, ...held.querySelectorAll<HTMLElement>('*')]
+    .filter((each) => each.scrollTop !== 0 || each.scrollLeft !== 0)
+    .map((each) => ({
+      each,
+      top: each.scrollTop,
+      left: each.scrollLeft,
+      atEnd: each.scrollTop > 0 && each.scrollTop + each.clientHeight >= each.scrollHeight - 1,
+    }));
+  target.appendChild(held);
+  for (const { each, top, left, atEnd } of scrolled) {
+    each.scrollTop = atEnd ? each.scrollHeight - each.clientHeight : top;
+    each.scrollLeft = left;
+  }
+}
 
 /**
  * A pane that pops out into a larger modal dialog and back into its place
@@ -43,7 +68,25 @@ export function PopOut({
   // Created once for the pane's life, with its classes: moved, never drawn again.
   const [held] = useState(() => Object.assign(document.createElement('div'), { className }));
   const place = useRef<HTMLDivElement>(null);
-  const body = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement | null>(null);
+  /**
+   * The dialog's body. As the dialog goes, what it holds goes back to its
+   * place first, while both are still in the document: React calls a
+   * detached ref's cleanup before it takes the dialog out, and only then
+   * runs the effect below — by which time `held`, still inside the removed
+   * dialog, had lost its scroll offsets (model-popout.spec:21, in Chrome).
+   */
+  const bodyRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      body.current = node;
+      if (node === null) return undefined;
+      return () => {
+        body.current = null;
+        if (held.parentElement === node && place.current !== null) moveTo(held, place.current);
+      };
+    },
+    [held],
+  );
   const box = useRef<HTMLDivElement>(null);
   const close = useRef<HTMLButtonElement>(null);
   useFocusTrap(box);
@@ -52,19 +95,7 @@ export function PopOut({
   const wasOut = useRef(false);
   useLayoutEffect(() => {
     const target = out ? body.current : place.current;
-    if (target !== null && held.parentElement !== target) {
-      // A node taken out of the document loses its scroll offsets: what was
-      // in view — the editor's lines, the diagram, the problems — is put
-      // back in view after the move (T600's review).
-      const scrolled = [held, ...held.querySelectorAll<HTMLElement>('*')]
-        .filter((each) => each.scrollTop !== 0 || each.scrollLeft !== 0)
-        .map((each) => ({ each, top: each.scrollTop, left: each.scrollLeft }));
-      target.appendChild(held);
-      for (const { each, top, left } of scrolled) {
-        each.scrollTop = top;
-        each.scrollLeft = left;
-      }
-    }
+    if (target !== null && held.parentElement !== target) moveTo(held, target);
     if (out && !wasOut.current) close.current?.focus();
     else if (!out && wasOut.current) returnFocus?.current?.focus();
     wasOut.current = out;
@@ -113,7 +144,7 @@ export function PopOut({
                     <span aria-hidden="true">×</span>
                   </button>
                 </div>
-                <div ref={body} className="pop-out__body" />
+                <div ref={bodyRef} className="pop-out__body" />
               </div>
             </div>,
             document.body,

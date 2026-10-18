@@ -96,3 +96,58 @@ describe('popping a pane out and back (T600, AC-420)', () => {
     }
   });
 });
+
+/**
+ * model-popout.spec:21, failing in Chrome: what was in view stays in view
+ * through the move. Its offsets are read while it is still in the document —
+ * not after the dialog around it has gone, when a browser reports 0. A pane
+ * scrolled to its end — the editor after typing at the file's end — is put
+ * at its end in its new place, whose height differs; one scrolled part way
+ * keeps its offset, as before (T600's review).
+ */
+describe('the scroll position through the move', () => {
+  function Scrolled({ out }: { readonly out: boolean }) {
+    return (
+      <PopOut out={out} onClose={() => undefined} label="YAML" className="held">
+        <div
+          data-testid="scroller"
+          ref={(node) => {
+            if (node === null || Object.hasOwn(node, 'clientHeight')) return;
+            // 1,000 px of lines; 600 px of them in view in the dialog, 300 in place.
+            Object.defineProperty(node, 'scrollHeight', { get: () => 1000 });
+            Object.defineProperty(node, 'clientHeight', {
+              get: () => (node.closest('.pop-out') === null ? 300 : 600),
+            });
+            // As a browser has it: out of the document, no scroll offset.
+            let top = 0;
+            Object.defineProperty(node, 'scrollTop', {
+              get: () => (node.isConnected ? top : 0),
+              set: (value: number) => {
+                top = value;
+              },
+            });
+          }}
+        />
+      </PopOut>
+    );
+  }
+  const scroller = () => screen.getByTestId('scroller');
+
+  it('puts a pane scrolled to its end at its end in its new place, both ways', () => {
+    const { rerender } = render(<Scrolled out={false} />);
+    scroller().scrollTop = 700;
+    rerender(<Scrolled out />);
+    expect(scroller().scrollTop).toBe(400);
+    rerender(<Scrolled out={false} />);
+    expect(scroller().scrollTop).toBe(700);
+  });
+
+  it('keeps the offset of a pane scrolled part way', () => {
+    const { rerender } = render(<Scrolled out={false} />);
+    scroller().scrollTop = 120;
+    rerender(<Scrolled out />);
+    expect(scroller().scrollTop).toBe(120);
+    rerender(<Scrolled out={false} />);
+    expect(scroller().scrollTop).toBe(120);
+  });
+});

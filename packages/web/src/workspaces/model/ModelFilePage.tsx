@@ -1851,6 +1851,16 @@ export function ModelFilePage({
     }),
     inWorkspace,
   });
+  /**
+   * Who may change it here is still being read: who is asking, the folders
+   * (whether this one is in My workspace), and with sign-in on, the
+   * folder's access. The file's editor waits for it, since it is keyed by
+   * whether it is read-only: drawn before, it was drawn read-only and then
+   * drawn again editable a moment later, losing what was typed or measured
+   * in between (model-popout.spec:21, in Chrome).
+   */
+  const placeReading =
+    me.isPending || folders.isPending || (me.data?.security === 'oidc' && access.isPending);
   const hrefOf = useCallback((each: string) => fileHref(each, folderId), [folderId]);
   /**
    * A save moved the open file to its cube's name (T737, AC-423): the page
@@ -2293,7 +2303,7 @@ export function ModelFilePage({
                 </>
               )}
             </div>
-          ) : files.isPending || (file === undefined && movedTo?.from === path) ? (
+          ) : files.isPending || placeReading || (file === undefined && movedTo?.from === path) ? (
             // Read again, or on its way to where a save moved it (T737's review).
             // Untitled while it reads: the title comes once, with what it heads.
             <StateLine kind="run">Reading the model…</StateLine>
