@@ -71,7 +71,10 @@ export function HistoryList({
   sourceId,
   going,
   stillFinishing = null,
+  onChoose,
 }: {
+  /** A row chosen: its SQL and values to put back (T818, AC-465). Unset, rows are only read. */
+  readonly onChoose?: (run: HistoryRun) => void;
   /** The open tab's data source, Cube Store's by its id; '' for none. */
   readonly sourceId: string;
   /**
@@ -183,8 +186,8 @@ export function HistoryList({
             finishing !== null,
           );
           const count = countOf(run, rows);
-          return (
-            <li key={run.id} className="sql-history__row">
+          const body = (
+            <>
               <span className="sql-history__top">
                 <span className={`status status--${kind}`}>
                   <StatusIcon kind={kind} />
@@ -202,6 +205,24 @@ export function HistoryList({
                 </span>
               )}
               <span className="sql-history__source">{placeOfRun(run)}</span>
+            </>
+          );
+          return (
+            <li key={run.id} className="sql-history__row">
+              {onChoose === undefined ? (
+                body
+              ) : (
+                // Chosen, its SQL and values are put back, never run (T818, AC-465).
+                <button
+                  type="button"
+                  className="sql-history__pick"
+                  onClick={() => {
+                    onChoose(run);
+                  }}
+                >
+                  {body}
+                </button>
+              )}
             </li>
           );
         })}

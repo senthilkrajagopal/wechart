@@ -84,6 +84,20 @@ export type TabsAction =
       readonly name: string;
       /** Its id, where the opener must know it: to run it as it opens. */
       readonly id?: string;
+      /** Its parameters' values and types, a History row's (T818, AC-465). */
+      readonly params?: Readonly<Record<string, string>>;
+      readonly paramTypes?: Readonly<Record<string, ParamType>>;
+    }
+  /**
+   * A History row's SQL and values put into a tab, and Undo's putting its
+   * own back (T818, AC-465): its source and its run left as they are.
+   */
+  | {
+      readonly kind: 'put-back';
+      readonly id: string;
+      readonly sql: string;
+      readonly params: Readonly<Record<string, string>>;
+      readonly paramTypes?: Readonly<Record<string, ParamType>>;
     }
   | { readonly kind: 'select'; readonly id: string }
   | { readonly kind: 'rename'; readonly id: string; readonly name: string }
@@ -191,10 +205,31 @@ export function tabsReducer(
     }
     case 'open': {
       const id = action.id ?? makeId();
+      const typed = action.paramTypes !== undefined && Object.keys(action.paramTypes).length > 0;
       return {
-        tabs: [...state.tabs, { ...blank(id, action.name, action.sourceId), sql: action.sql }],
+        tabs: [
+          ...state.tabs,
+          {
+            ...blank(id, action.name, action.sourceId),
+            sql: action.sql,
+            ...(action.params === undefined ? {} : { params: action.params }),
+            ...(typed ? { paramTypes: action.paramTypes } : {}),
+          },
+        ],
         active: id,
       };
+    }
+    case 'put-back': {
+      if (target === undefined) return state;
+      const { paramTypes: _types, ...untyped } = target;
+      const typed = action.paramTypes !== undefined && Object.keys(action.paramTypes).length > 0;
+      const put: SqlTab = {
+        ...untyped,
+        sql: action.sql,
+        params: action.params,
+        ...(typed ? { paramTypes: action.paramTypes } : {}),
+      };
+      return { ...state, tabs: state.tabs.map((tab) => (tab === target ? put : tab)) };
     }
     case 'select':
       return target === undefined ? state : { ...state, active: target.id };

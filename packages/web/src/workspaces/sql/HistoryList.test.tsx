@@ -203,6 +203,28 @@ describe('History in the workspace (T817, AC-381, AC-452)', () => {
     expect(within(older!).getByText('Cancelled')).toBeTruthy();
   });
 
+  it('hands a chosen row, by click or Enter, to the workspace, and sends nothing (T818, AC-465)', async () => {
+    const chosen: string[] = [];
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <HistoryList
+          sourceId="emea"
+          onChoose={(each) => {
+            chosen.push(each.id);
+          }}
+        />
+      </QueryClientProvider>,
+    );
+    const first = await screen.findByRole('button', { name: /SELECT \* FROM orders WHERE region/ });
+    await userEvent.click(first);
+    const lost = screen.getByRole('button', { name: /SELECT secret/ });
+    lost.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(chosen).toEqual(['r1', 'r4']);
+    expect(asked.every((url) => url.startsWith('/api/sql-runs'))).toBe(true);
+  });
+
   it('says so when there are none', async () => {
     answers['/api/sql-runs'] = { runs: [] };
     open();

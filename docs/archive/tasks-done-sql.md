@@ -323,3 +323,18 @@
     - **The web:** `HistoryList.tsx`, shown by the right pane's new Saved / History buttons (Saved first). The run going comes first from the running tab, in its tab's state, since the API keeps a run only once it ends. The data source page's My runs says the same sentence for such a row, and opens nothing from it.
     - Decision T817-1 is in `docs/design/decisions-sql.md`.
     - **Review:** one cold review, which failed on one point, fixed in a follow-up with a test: the user's last Cube Store run, stopped and still finishing there, read "Stopped at 30 seconds" or "Cancelled" in History while its tab read "Cube Store still finishing" (an AC-452 state). History now takes xcube's word as the tab does, for that run alone. Also fixed: ↑ and ↓ on the data source page's My runs stopped at a row no longer available; they now pass over it. Left as they are (low): with no SQL runner set up, rows are said as before (no lister); the route matrix's "not another's" half now leans on `sql-runner-history.test.ts`'s SQL-text check; no test yet of a Cube Store row read as no longer available.
+
+- [x] T818 (AC-465) Choosing a History row puts its SQL into the current tab with Undo when the sources match, or into a new tab on the row's source, and never runs it
+  - Lane: SQL
+  - Files: `packages/web/src/workspaces/sql/HistoryList.tsx` (+ test), `packages/web/src/workspaces/sql/tabs.ts` (+ test).
+  - Failing test: `HistoryList.test.tsx`: a row of the open tab's source replaces the tab's text, and Undo brings the old text back; a row of another source opens a new tab on it and leaves the current tab's text; a row of an unavailable source opens a tab with no source; no choice sends a run (AC-465). Also, moved from T811 (decision T811-1): choosing a row with parameters puts its values back into the tab with its SQL, from the `parameters` each run in `GET /api/sql-runs` carries since T811 (AC-465's values).
+  - Depends on: T817, T800
+  - **Built 2026-10-18** (lane SQL, batch 6).
+    - **AC-465 is ticked, and AC-381 with it**, on the e2e "puts a chosen row back: into the open tab with its values and Undo, into a new tab on another source, on none for a lost one; never runs (T818, AC-465, AC-381)" (`e2e/security/sql-workspace.spec.ts`):
+      - a row of the open tab's source puts its SQL and its Number value back into that tab, and the toast's Undo brings back "SELECT 0";
+      - a row of another source opens a new tab, "From History · hh:mm", on that source, selected, with its SQL, and the first tab still holds "SELECT 0";
+      - once a Super-Admin turns that source's runner off, its row opens a new tab with no source ("Data source Choose…", no Run) — AC-381's last half, which T817 left open;
+      - no choice sent a run.
+    - **Where the tests are:** the row choosing is in `HistoryList.test.tsx` (click and Enter, nothing sent); what the tabs do is in `SqlWorkspace.test.tsx` and `tabs.test.ts` (`put-back`, and `open` with values and types), since the workspace, not the list, holds the tabs.
+    - **The web:** `tabs.ts` gains `put-back` (SQL, values and types together; Undo is another `put-back`) and `open` takes values and types. The workspace's `putBack` decides where a row goes; its toast is the dashboard's `UndoToast`.
+    - Decision T818-1 is in `docs/design/decisions-sql.md`.

@@ -1140,6 +1140,90 @@ test.describe('History in the right pane (T817, AC-381, AC-452)', () => {
     }
   });
 
+  test('puts a chosen row back: into the open tab with its values and Undo, into a new tab on another source, on none for a lost one; never runs (T818, AC-465, AC-381)', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    const posts: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/sql')) posts.push(request.url());
+    });
+    const pick = (text: string) =>
+      rightPane(page).getByRole('list', { name: 'History' }).getByRole('button', { name: new RegExp(text) }).first();
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.on) }).click();
+      await editor(page).click();
+      await page.keyboard.type(`SELECT 'back_${RUN}' AS m WHERE 1 = {{n}}`);
+      const strip = workspace(page).getByRole('group', { name: 'Parameters' });
+      await strip.getByRole('combobox', { name: 'n, type' }).selectOption('Number');
+      await strip.getByRole('spinbutton', { name: 'n, value' }).fill('1');
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+      await expect(page.getByTestId('sql-result-head')).toHaveText(/^Finished 1 row/);
+      await page.getByRole('button', { name: `New tab on ${SOURCES.on}` }).click();
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.two) }).click();
+      await editor(page).click();
+      await page.keyboard.type(`SELECT 'there_${RUN}' AS m`);
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+      await expect(page.getByTestId('sql-result-head')).toHaveText(/^Finished 1 row/);
+      await tabs(page).first().click();
+      await editor(page).click();
+      await page.keyboard.press('ControlOrMeta+A');
+      await page.keyboard.press('Delete');
+      await page.keyboard.type('SELECT 0');
+      const ran = posts.length;
+
+      // The open tab's source: into it, with its value, and Undo brings the old text back.
+      await rightPane(page).getByRole('button', { name: 'History' }).click();
+      await pick(`back_${RUN}`).click();
+      await expect(editor(page)).toHaveText(`SELECT 'back_${RUN}' AS m WHERE 1 = {{n}}`);
+      await expect(strip.getByRole('spinbutton', { name: 'n, value' })).toHaveValue('1');
+      await expect(tabs(page)).toHaveCount(2);
+      const toast = page.getByTestId('undo-toast');
+      await toast.getByRole('button', { name: 'Undo' }).click();
+      await expect(editor(page)).toHaveText('SELECT 0');
+
+      // Another source's: a new tab on it, the open tab's text left as it is.
+      await pick(`there_${RUN}`).click();
+      await expect(tabs(page)).toHaveCount(3);
+      await expect(tabs(page).nth(2)).toHaveAttribute('aria-label', new RegExp(`^From History · \\d\\d:\\d\\d, Not run yet, on ${SOURCES.two}$`));
+      await expect(tabs(page).nth(2)).toHaveAttribute('aria-selected', 'true');
+      await expect(editor(page)).toHaveText(`SELECT 'there_${RUN}' AS m`);
+      await tabs(page).first().click();
+      await expect(editor(page)).toHaveText('SELECT 0');
+
+      // A source no longer available: a new tab on none, naming it nowhere.
+      const admin = await signedIn(browser, 'super');
+      try {
+        const off = await admin.page.request.put(`/api/data-sources/${world.sources.two}/sql-runner`, {
+          data: { on: false },
+        });
+        expect(off.status(), await off.text()).toBe(200);
+        await page.reload();
+        await rightPane(page).getByRole('button', { name: 'History' }).click();
+        await pick(`there_${RUN}`).click();
+        const opened = tabs(page).last();
+        await expect(opened).toHaveAttribute('aria-selected', 'true');
+        await expect(opened).toHaveAttribute('aria-label', /^From History · \d\d:\d\d, Not run yet$/);
+        await expect(pickerButton(page)).toHaveAccessibleName(/^Data source Choose…/);
+        await expect(page.getByRole('button', { name: 'Run', exact: true })).toHaveCount(0);
+      } finally {
+        const on = await admin.page.request.put(`/api/data-sources/${world.sources.two}/sql-runner`, {
+          data: { on: true, readOnlyConfirmed: true },
+        });
+        expect(on.status(), await on.text()).toBe(200);
+        await admin.context.close();
+      }
+      // Nothing chosen ran.
+      expect(posts.length).toBe(ran);
+    } finally {
+      await context.close();
+    }
+  });
+
   test('says a run going the same way, icon and label, on its tab, in its result head and in its History row (AC-452)', async ({
     browser,
   }) => {

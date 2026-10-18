@@ -1123,6 +1123,107 @@ describe('opening a saved query whose source is no longer available (T814, AC-45
     expect(within(right).queryByRole('list', { name: 'Saved queries' })).toBeNull();
   });
 
+  it('puts a History row back: on the open tab’s source with Undo, else in a new tab on its own, a lost one on none; never runs (T818, AC-465, AC-381)', async () => {
+    const both = [
+      ...listed,
+      { ...listed[0]!, id: 'fx', name: 'fx_warehouse' },
+    ];
+    const row = (id: string, sql: string, over: Record<string, unknown> = {}) => ({
+      id,
+      sql,
+      dataSource: { id: 'emea', name: 'emea_replica', folderPath: [{ id: 'f-sales', title: 'Sales' }], inWorkspace: false },
+      cubeStore: false,
+      startedAt: '2026-10-18T14:10:00Z',
+      outcome: 'finished',
+      rowCount: 1,
+      durationMs: 5,
+      truncated: null,
+      statement: 'select',
+      parameters: [],
+      ...over,
+    });
+    const posts: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') posts.push(url);
+        const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+        if (url === '/api/sql/sources') return json(both);
+        if (url === '/api/sql/saved') return json({ queries: [] });
+        if (url === '/api/data-sources/emea' || url === '/api/data-sources/fx')
+          return json({
+            id: url.split('/').at(-1),
+            folderId: 'f-sales',
+            name: url.endsWith('emea') ? 'emea_replica' : 'fx_warehouse',
+            driver: 'postgres',
+            authMethod: 'password',
+            fields: { host: 'h', port: 5432, database: 'sales', user: 'cube_reader', ssl: false },
+            secrets: {},
+            targetFolderId: null,
+            origin: null,
+            version: 1,
+            updatedAt: '2026-10-17T10:00:00Z',
+            folderPath: [{ id: 'f-sales', title: 'Sales' }],
+            canWrite: true,
+            inWorkspace: false,
+            description: null,
+            sqlRunner: { on: true },
+            sqlAccess: { tab: true, runs: true },
+          });
+        if (url.startsWith('/api/sql-runs?') || url === '/api/sql-runs')
+          return json({
+            runs: [
+              row('r1', 'SELECT * FROM t WHERE n > {{n}}', { parameters: [{ name: 'n', type: 'number', value: '7' }] }),
+              row('r2', 'SELECT 2 AS fx', {
+                dataSource: { id: 'fx', name: 'fx_warehouse', folderPath: [], inWorkspace: false },
+              }),
+              row('r3', 'SELECT 3 AS lost', { dataSource: null, unavailable: true }),
+            ],
+          });
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+    renderAs(writer);
+    await userEvent.click(await screen.findByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: /emea_replica/ }));
+    const right = screen.getByRole('complementary', { name: 'Saved and History' });
+    await userEvent.click(within(right).getByRole('button', { name: 'History' }));
+
+    // The open tab's source: into it, values and all, with Undo.
+    await userEvent.click(await within(right).findByRole('button', { name: /SELECT \* FROM t WHERE n/ }));
+    const editorText = () => {
+      const view = EditorView.findFromDOM(document.querySelector<HTMLElement>('.sql-editor .cm-editor')!);
+      return view?.state.doc.toString();
+    };
+    await vi.waitFor(() => {
+      expect(editorText()).toBe('SELECT * FROM t WHERE n > {{n}}');
+    });
+    expect(screen.getAllByRole('tab')).toHaveLength(1);
+    expect((screen.getByRole('spinbutton', { name: 'n, value' }) as HTMLInputElement).value).toBe('7');
+    const toast = await screen.findByTestId('undo-toast');
+    await userEvent.click(within(toast).getByRole('button', { name: 'Undo' }));
+    await vi.waitFor(() => {
+      expect(editorText()).toBe('');
+    });
+
+    // Another source's: a new tab on it; the first's text kept.
+    await userEvent.click(within(right).getByRole('button', { name: /SELECT 2 AS fx/ }));
+    const tabNames = () => screen.getAllByRole('tab').map((each) => each.getAttribute('aria-label'));
+    await vi.waitFor(() => {
+      expect(tabNames()).toHaveLength(2);
+    });
+    expect(tabNames()[1]).toMatch(/^From History · \d\d:\d\d, Not run yet, on fx_warehouse$/);
+
+    // A lost one: a new tab on none.
+    await userEvent.click(within(right).getByRole('button', { name: /SELECT 3 AS lost/ }));
+    await vi.waitFor(() => {
+      expect(tabNames()).toHaveLength(3);
+    });
+    expect(tabNames()[2]).toMatch(/^From History · \d\d:\d\d, Not run yet$/);
+    expect(screen.getByRole('button', { name: 'Data source Choose…' })).toBeTruthy();
+    expect(posts).toEqual([]);
+  });
+
   it('keeps the first visit’s sentence for a tab with no source that wasn’t opened so', async () => {
     vi.stubGlobal(
       'fetch',

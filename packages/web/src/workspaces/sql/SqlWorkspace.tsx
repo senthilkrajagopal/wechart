@@ -27,7 +27,10 @@ import { holdTabs, releaseTabs, tabsStoreFor } from './liveTabs';
 import { QueryTab, type Insertion, type RunHold, type RunOnOpen } from './QueryTab';
 import { SchemaTree } from './SchemaTree';
 import { runState, type RunState } from './runState';
-import { HistoryList } from './HistoryList';
+import { UndoToast } from '../../dashboard/edit/UndoToast';
+import { clockOf } from '../../shell/formatTime';
+import { HistoryList, type HistoryRun } from './HistoryList';
+import type { ParamType } from './parameterNames';
 import { SavedList, savedQueryById, type SavedQuery } from './SavedList';
 import { SaveKeyContext, useSaveKeyScope } from './saveKey';
 import type { SqlSourceRow } from './sources';
@@ -411,6 +414,46 @@ function Workbench({
     const lose = !has && holding !== undefined && holding.sourceId !== '' && !runs(holding.sourceId);
     dispatch({ kind: 'open-saved', query, sourceId: has ? own : '', ...(lose ? { lose: true as const } : {}) });
   };
+  /** What a History row replaced in a tab, for the toast's Undo (T818, AC-465). */
+  const [replaced, setReplaced] = useState<{
+    readonly tabId: string;
+    readonly sql: string;
+    readonly params: Readonly<Record<string, string>>;
+    readonly paramTypes?: Readonly<Record<string, ParamType>>;
+  } | null>(null);
+  /**
+   * A History row chosen (T818, AC-465; design 17, J): its SQL and values
+   * into the open tab, with Undo, where the row's source is that tab's;
+   * else into a new tab on the row's source, or on none where the user can
+   * no longer run SQL on it (AC-381). Nothing runs.
+   */
+  const putBack = (run: HistoryRun) => {
+    const params = Object.fromEntries(run.parameters.map((each) => [each.name, each.value]));
+    const typed = run.parameters.filter((each) => each.type !== 'text');
+    const paramTypes =
+      typed.length === 0 ? undefined : Object.fromEntries(typed.map((each) => [each.name, each.type]));
+    const own = run.unavailable === true ? '' : run.cubeStore ? CUBE_STORE_ID : (run.dataSource?.id ?? '');
+    const rowSource = own !== '' && sources.data?.some((row) => row.id === own) === true ? own : '';
+    if (openTab !== undefined && rowSource !== '' && openTab.sourceId === rowSource) {
+      setReplaced({
+        tabId: openTab.id,
+        sql: openTab.sql,
+        params: openTab.params,
+        ...(openTab.paramTypes === undefined ? {} : { paramTypes: openTab.paramTypes }),
+      });
+      dispatch({ kind: 'put-back', id: openTab.id, sql: run.sql, params, ...(paramTypes === undefined ? {} : { paramTypes }) });
+    } else {
+      dispatch({
+        kind: 'open',
+        sourceId: rowSource,
+        sql: run.sql,
+        name: `From History · ${clockOf(new Date(run.startedAt))}`,
+        params,
+        ...(paramTypes === undefined ? {} : { paramTypes }),
+      });
+    }
+    setOpen(null);
+  };
   /**
    * The saved query the address names, as ⌘K opens one (T815, AC-460):
    * opened once, when it and the sources are read, as the Saved tab's Open
@@ -685,6 +728,7 @@ function Workbench({
           <HistoryList
             sourceId={chosen}
             stillFinishing={stillFinishing}
+            onChoose={putBack}
             // The run going, in the state its tab shows (AC-452).
             going={
               runningTab?.run?.kind === 'running'
@@ -706,6 +750,24 @@ function Workbench({
         )}
       </SidePane>
       </SaveKeyContext.Provider>
+      {/* A History row put into a tab, with Undo (T818, AC-465; design 17, J). */}
+      <UndoToast
+        message={replaced === null ? '' : 'Put back from History into this tab.'}
+        onUndo={() => {
+          if (replaced === null) return;
+          dispatch({
+            kind: 'put-back',
+            id: replaced.tabId,
+            sql: replaced.sql,
+            params: replaced.params,
+            ...(replaced.paramTypes === undefined ? {} : { paramTypes: replaced.paramTypes }),
+          });
+          setReplaced(null);
+        }}
+        onDismiss={() => {
+          setReplaced(null);
+        }}
+      />
     </section>
   );
 }

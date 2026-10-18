@@ -355,6 +355,13 @@ main:has(.sql-workspace) {
 .sql-history__note { margin: 0; font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); color: var(--wc-text-secondary); }
 .sql-history__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .sql-history__row { display: grid; gap: 3px; padding: 7px 0; border-bottom: 1px solid var(--wc-border-subtle); min-width: 0; }
+/* A row chosen puts its SQL back (T818): the whole row is its button. */
+.sql-history__pick {
+  display: grid; gap: 3px; width: 100%; min-width: 0; margin: 0; padding: 0; border: 0; background: none;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.sql-history__row:has(.sql-history__pick:hover) { background: var(--wc-bg-hover); }
+.sql-history__pick:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
 .sql-history__top { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; min-width: 0; }
 .sql-history__rows, .sql-history__when { color: var(--wc-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sql-history__when { margin-left: auto; }

@@ -396,3 +396,65 @@ describe('a saved query opened and renamed (T813, AC-458)', () => {
     ]);
   });
 });
+
+/**
+ * T818 (AC-465): a History row's SQL and values go into the current tab
+ * (`put-back`, and Undo is another `put-back` of what it held) or into a new
+ * tab on the row's source (`open` with its values); nothing runs.
+ */
+describe('a History row put back (T818, AC-465)', () => {
+  it('puts SQL and values into a tab, its types too, leaving its source and its run', () => {
+    const start: TabsState = {
+      tabs: [tab({ id: 'a', name: 'Query 1', sourceId: 'emea', sql: 'SELECT 1', params: { x: '1' } })],
+      active: 'a',
+    };
+    const put = tabsReducer(start, {
+      kind: 'put-back',
+      id: 'a',
+      sql: 'SELECT * FROM t WHERE n > {{n}}',
+      params: { n: '7' },
+      paramTypes: { n: 'number' },
+    });
+    expect(put.tabs[0]).toEqual(
+      tab({
+        id: 'a',
+        name: 'Query 1',
+        sourceId: 'emea',
+        sql: 'SELECT * FROM t WHERE n > {{n}}',
+        params: { n: '7' },
+        paramTypes: { n: 'number' },
+      }),
+    );
+    // Undo: what it held, types and all.
+    const back = tabsReducer(put, { kind: 'put-back', id: 'a', sql: 'SELECT 1', params: { x: '1' } });
+    expect(back).toEqual(start);
+  });
+
+  it('opens a new tab with the values, on the row’s source', () => {
+    const start: TabsState = { tabs: [tab({ id: 'a', name: 'Query 1', sourceId: 'emea' })], active: 'a' };
+    const opened = tabsReducer(
+      start,
+      {
+        kind: 'open',
+        sourceId: 'fx',
+        sql: 'SELECT {{d}}',
+        name: 'From History · 14:10',
+        params: { d: '2026-07-01' },
+        paramTypes: { d: 'date' },
+      },
+      () => 'b',
+    );
+    expect(opened.active).toBe('b');
+    expect(opened.tabs[1]).toEqual(
+      tab({
+        id: 'b',
+        name: 'From History · 14:10',
+        sourceId: 'fx',
+        sql: 'SELECT {{d}}',
+        params: { d: '2026-07-01' },
+        paramTypes: { d: 'date' },
+      }),
+    );
+    expect(opened.tabs[0]).toEqual(start.tabs[0]);
+  });
+});

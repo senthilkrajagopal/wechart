@@ -1723,11 +1723,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T817 (AC-381, AC-452) History in the right pane: all of the user's runs by default, "This data source" to narrow, and a row whose source is no longer available reading so
 
-- [ ] T818 (AC-465) Choosing a History row puts its SQL into the current tab with Undo when the sources match, or into a new tab on the row's source, and never runs it
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/HistoryList.tsx` (+ test), `packages/web/src/workspaces/sql/tabs.ts` (+ test).
-  - Failing test: `HistoryList.test.tsx`: a row of the open tab's source replaces the tab's text, and Undo brings the old text back; a row of another source opens a new tab on it and leaves the current tab's text; a row of an unavailable source opens a tab with no source; no choice sends a run (AC-465). Also, moved from T811 (decision T811-1): choosing a row with parameters puts its values back into the tab with its SQL, from the `parameters` each run in `GET /api/sql-runs` carries since T811 (AC-465's values).
-  - Depends on: T817, T800
+- [x] T818 (AC-465) Choosing a History row puts its SQL into the current tab with Undo when the sources match, or into a new tab on the row's source, and never runs it
 
 ### Lane SQL: Make a cube and Make a chart
 
