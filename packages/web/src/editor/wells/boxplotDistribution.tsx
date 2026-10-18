@@ -1,5 +1,6 @@
 import {
   BOXPLOT_POINTS,
+  boxplotDistributionOf,
   distributionPatch,
   drawnDistribution,
   needsEachPointIs,
@@ -37,6 +38,9 @@ export function BoxplotDistribution({ options, onOptions, eachPointIs }: Boxplot
   const ids = useId();
   const reasonId = `${ids}-reason`;
   const shown = drawnDistribution(options, eachPointIs);
+  // A change merges into what is stored, not what is drawn, so a choice
+  // hidden while Each point is is empty isn't lost (T990-3, T990's review).
+  const chosen = boxplotDistributionOf(options);
   const unavailable = (choice: BoxplotPoints | 'violin') =>
     !eachPointIs && needsEachPointIs(choice);
   const why = (choice: BoxplotPoints | 'violin') =>
@@ -57,7 +61,7 @@ export function BoxplotDistribution({ options, onOptions, eachPointIs }: Boxplot
               checked={shown.points === points}
               disabled={unavailable(points)}
               {...why(points)}
-              onChange={() => onOptions(distributionPatch({ ...shown, points }))}
+              onChange={() => onOptions(distributionPatch({ ...chosen, points }))}
             />
             {LABELS[points]}
           </label>
@@ -70,7 +74,7 @@ export function BoxplotDistribution({ options, onOptions, eachPointIs }: Boxplot
           disabled={unavailable('violin')}
           {...why('violin')}
           onChange={(event) =>
-            onOptions(distributionPatch({ ...shown, violin: event.target.checked }))
+            onOptions(distributionPatch({ ...chosen, violin: event.target.checked }))
           }
         />
         Violin <span className="panel-section__note">where values gather</span>

@@ -87,6 +87,15 @@ describe('a box plot’s Customize › Distribution (AC-591)', () => {
     expect(violin.checked).toBe(false);
   });
 
+  it('keeps a saved Violin while Points change without Each point is (T990’s review)', async () => {
+    const { onOptions, radio } = distribution(
+      { distribution: { points: 'beeswarm', violin: true } },
+      false,
+    );
+    await userEvent.click(radio('None'));
+    expect(onOptions).toHaveBeenLastCalledWith({ distribution: { points: 'none', violin: true } });
+  });
+
   it('with Each point is, offers every choice with no reason shown', () => {
     const { radio, violin } = distribution({}, true);
     for (const control of [
