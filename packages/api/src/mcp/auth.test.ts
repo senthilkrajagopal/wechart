@@ -52,7 +52,19 @@ const lastUsed = async (owner: string, id: string) =>
   [...(await store().working(owner, new Date())), ...(await store().stopped(owner, new Date()))]
     .find((token) => token.id === id)!.lastUsedAt;
 
-const tools = { jsonrpc: '2.0', id: 1, method: 'tools/list' };
+/** A 2025-era client's first request, which `/mcp` answers 200 once past the token check (T778). */
+const tools = {
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'initialize',
+  params: {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'wechart-tests', version: '1.0.0' },
+  },
+};
+/** What a Streamable HTTP client accepts. */
+const ACCEPT = { accept: 'application/json, text/event-stream' };
 
 afterAll(async () => {
   await getDb().deleteFrom('personal_access_tokens').where('name', 'like', 't776 %').execute();
@@ -76,7 +88,12 @@ describe('the token on /mcp, sign-in off (T776, AC-435, AC-431, AC-430, AC-479)'
   });
 
   const post = (app: ReturnType<typeof buildServer>, headers: Record<string, string>, url = '/mcp') =>
-    app.inject({ method: 'POST', url, headers: { host: HOST, ...headers }, payload: tools });
+    app.inject({
+      method: 'POST',
+      url,
+      headers: { host: HOST, ...ACCEPT, ...headers },
+      payload: tools,
+    });
 
   it('answers 401 with a Bearer challenge to a missing, bad, revoked or expired token, running nothing', async () => {
     const app = buildServer({ config: base, accessTokens: store() });
@@ -136,8 +153,8 @@ describe('the token on /mcp, sign-in off (T776, AC-435, AC-431, AC-430, AC-479)'
     const app = buildServer({ config: base, accessTokens: store(), now: () => at });
     try {
       const answer = await post(app, { authorization: `Bearer ${working.text}` });
-      // Past the token check: until T778 serves MCP, the handler answers 501.
-      expect(answer.statusCode).toBe(501);
+      // Past the token check, MCP answers (T778).
+      expect(answer.statusCode).toBe(200);
       expect(answer.headers['www-authenticate']).toBeUndefined();
       expect(await lastUsed(owner, working.id)).toEqual(at);
     } finally {
@@ -230,12 +247,13 @@ describe('the token on /mcp, sign-in on (T776, AC-435)', () => {
           url: '/mcp',
           headers: {
             host: HOST,
+            ...ACCEPT,
             authorization: `Bearer ${working.text}`,
             ...(origin === undefined ? {} : { origin }),
           },
           payload: tools,
         });
-        expect(answer.statusCode, String(origin)).toBe(501);
+        expect(answer.statusCode, String(origin)).toBe(200);
       }
     } finally {
       await app.close();
@@ -251,10 +269,10 @@ describe('the token on /mcp, sign-in on (T776, AC-435)', () => {
         app.inject({
           method: 'POST',
           url: '/mcp',
-          headers: { host: HOST, authorization: `Bearer ${token.text}` },
+          headers: { host: HOST, ...ACCEPT, authorization: `Bearer ${token.text}` },
           payload: tools,
         });
-      expect((await bearing()).statusCode).toBe(501);
+      expect((await bearing()).statusCode).toBe(200);
       const cookie = await signIn(app, USERS.super!);
       const revoke = await app.inject({
         method: 'DELETE',

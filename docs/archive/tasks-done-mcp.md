@@ -243,3 +243,23 @@
       - With sign-in on and no `signIns` store, a working token gets 401 (`mcp/auth.test.ts`, new).
       - The upsert guard's comment and test now say what it guards against. The time is taken when the callback finishes, so it covers two replicas whose clocks differ, not a sign-in begun earlier.
       - **Left for T782:** the `/mcp` POST's `preParsing` hook that sets `request.wechartUser` to the caller has no test of its own until a tool reads it.
+
+- [x] T778 (AC-434) Serve MCP at `/mcp` over Streamable HTTP at 2026-07-28, 2025-era clients through the stateless fallback, and GET and DELETE with 405
+  - Lane: MCP
+  - Files: `packages/api/package.json` (`@modelcontextprotocol/server` 2.3.1, `@modelcontextprotocol/fastify` 2.0.1, `@modelcontextprotocol/node` 2.1.1; dev `@modelcontextprotocol/client` 2.3.1), `packages/api/src/mcp/server.ts` (a per-request `McpServer` factory through `createMcpHandler` and `toNodeHandler`), `packages/api/src/mcp/plugin.ts`, `packages/api/src/mcp/transport.test.ts`.
+  - Failing test: `transport.test.ts`: with a valid token, a 2026-07-28 client (`@modelcontextprotocol/client`, `versionNegotiation: auto`) lists the tools; a 2025-era client starting with `initialize` lists them too; GET and DELETE on `/mcp` answer 405; the server instructions are fixed text (AC-434). The tool list is empty until T782.
+  - Depends on: T776
+  - **Built 2026-10-17** (lane MCP, batch 3). **AC-434 is ticked.**
+    - The SDK's own client, given a working token, connects to the wechart API (`buildServer`, through `inject` on the MCP host) and lists the tools, an empty list:
+      - with `versionNegotiation: { mode: 'auto' }`, at 2026-07-28;
+      - with none, by a 2025 `initialize`, through the stateless fallback.
+    - GET and DELETE answer 405 `Allow: POST` with or without a token. A client with no token can't connect.
+    - **Packages:** `@modelcontextprotocol/node` 2.1.1, and `@modelcontextprotocol/client` 2.3.1 as a dev dependency, pinned exactly. The server and Fastify adapter came in at T775.
+    - **`mcp/server.ts`:** `mcpHandler(onerror)` is `createMcpHandler` with a factory that builds a fresh `McpServer` per request, with the fixed `MCP_INSTRUCTIONS` and the tools capability declared.
+    - **The plugin:** the POST handler hijacks the reply and hands `request.raw`, with `auth` set to the caller's `McpAuth`, plus Fastify's parsed body, to `toNodeHandler(mcpHandler(...))`. The handler is closed on the app's `onClose`.
+      - The research's open question, whether `reply.hijack()` is needed, is settled by the passing test. It is recorded in `docs/research/mcp-sdk-installed-notes.md`, items 8–11.
+      - The 501 stand-in is gone.
+    - **Decisions** (instructions wording, the empty list, server info, the fallback) are in the new `docs/design/decisions-mcp.md`, the lane's own file, at the coordinator's request.
+    - **Not shown here:** the factory gets the caller in `authInfo.extra.caller`. No tool reads it until T782, which should test it, along with the `preParsing` hook.
+    - **Tests changed:** `mcp/auth.test.ts`'s requests past the token check are now a 2025 `initialize` with the Streamable HTTP `Accept` header, and expect 200 where they expected the stand-in's 501.
+    - **Tests:** `mcp/transport.test.ts` (5, new).

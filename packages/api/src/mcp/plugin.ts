@@ -1,9 +1,11 @@
+import { toNodeHandler } from '@modelcontextprotocol/node';
 import { bearerAuthChallengeResponse } from '@modelcontextprotocol/server';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { PUBLIC } from '../auth/guard';
 import { type McpAuth, noTokens } from './auth';
 import { mcpGuard } from './guard';
+import { mcpHandler } from './server';
 
 /** Where MCP is served, on its host (AC-476). */
 export const MCP_PATH = '/mcp';
@@ -69,10 +71,25 @@ export function registerMcp(app: FastifyInstance, options: McpOptions): void {
     request.wechartUser = request.mcpAuth?.extra.caller ?? null;
     return payload;
   };
+  // MCP itself (T778, AC-434): the SDK's handler, through its Node adapter,
+  // given the body Fastify parsed and the caller's `authInfo`. The reply is
+  // hijacked, as the handler writes the raw response itself.
+  const handler = mcpHandler((error) => app.log.error({ err: error }, 'MCP'));
+  const node = toNodeHandler(handler, { onerror: (error) => app.log.error({ err: error }, 'MCP') });
+  app.addHook('onClose', async () => {
+    await handler.close();
+  });
   app.post(
     MCP_PATH,
     { ...PUBLIC, onRequest: [...guard, tokenCheck], preParsing: actAsCaller },
-    async (_request, reply) => reply.status(501).send({ error: 'MCP isn’t served here yet.' }),
+    async (request, reply) => {
+      reply.hijack();
+      // `auth` on the raw request is where the adapter reads it from (the SDK's Fastify recipe).
+      const raw = Object.assign(request.raw, { auth: request.mcpAuth }) as Parameters<
+        typeof node
+      >[0];
+      await node(raw, reply.raw, request.body);
+    },
   );
   // "GET and DELETE should be answered with 405" (same source).
   const notAllowed = async (_request: unknown, reply: FastifyReply) =>

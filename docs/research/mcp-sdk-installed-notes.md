@@ -1,7 +1,7 @@
 ---
 library: MCP TypeScript SDK (v2 line), as installed
-packages: ["@modelcontextprotocol/server", "@modelcontextprotocol/fastify"]
-version: 2.3.1 (server), 2.0.1 (fastify)
+packages: ["@modelcontextprotocol/server", "@modelcontextprotocol/fastify", "@modelcontextprotocol/node", "@modelcontextprotocol/client"]
+version: 2.3.1 (server, client), 2.0.1 (fastify), 2.1.1 (node)
 researched: 2026-10-17
 sources: [packages/api/node_modules/@modelcontextprotocol/fastify/dist/index.d.mts, packages/api/node_modules/@modelcontextprotocol/fastify/dist/index.mjs, packages/api/node_modules/@modelcontextprotocol/server/dist/index.mjs, packages/api/node_modules/@modelcontextprotocol/server/dist/mcp-DIH4cS6P.mjs]
 ---
@@ -29,3 +29,11 @@ Read from `dist/mcp-DIH4cS6P.mjs` (`verifyBearerToken`, `bearerAuthChallengeResp
 5. **`bearerAuthChallengeResponse(error)`** returns a web `Response`: 401 with `WWW-Authenticate: Bearer error="invalid_token", error_description="‹message›"` for `invalid_token`; 403 with the same shape for `insufficient_scope`; 500 for `server_error` or any value that isn't an `OAuthError`; 400 otherwise. `, scope="…"` and `, resource_metadata="…"` are added when given. The body is the OAuth error JSON (`{ error, error_description }`).
 6. **`AuthInfo`** is `{ token, clientId, scopes, expiresAt?, resource?, resourceMetadataUrl?, extra? }`, with `extra: Record<string, unknown>`.
 7. **Exports:** `OAuthError`, `OAuthErrorCode`, `OAuthTokenVerifier` (a type), `AuthInfo` (a type), `verifyBearerToken` and `bearerAuthChallengeResponse` all come from the package's root (`dist/index.d.mts`).
+
+## Serving and the client, `@modelcontextprotocol/server` 2.3.1, `/node` 2.1.1 and `/client` 2.3.1 (T778)
+
+8. **`createMcpHandler(factory, { legacy?, onerror?, … })`.** The factory gets `{ era: 'legacy' | 'modern', authInfo?, requestInfo? }`. `legacy` defaults to `'stateless'`, which serves 2025-era requests from a fresh instance and answers their GET and DELETE with 405. `'reject'` serves 2026-07-28 alone (`dist/createMcpHandler-D4NN8WsG.d.mts`, `McpRequestContext` and `CreateMcpHandlerOptions`).
+9. **`toNodeHandler(handler, { onerror })(req, res, parsedBody)`** passes `req.auth` to the handler as `authInfo` when it isn't `undefined`, and passes `parsedBody` when given (`@modelcontextprotocol/node`, `dist/index.mjs`, `toNodeHandler`).
+   - **`reply.hijack()` works in front of it.** This was the research's open question. Fastify's own reply is hijacked, and the adapter writes to `reply.raw`. The SDK's client then completes a 2026-07-28 exchange and a 2025 `initialize` exchange through Fastify's `inject` (`packages/api/src/mcp/transport.test.ts`, observed 2026-10-17).
+10. **`McpServer` options** take `instructions` and `capabilities`. A server with no tool registered, but `capabilities: { tools: {} }` declared, answers `tools/list` with an empty list for both eras (observed in the same test).
+11. **The client (`@modelcontextprotocol/client`).** `new Client(info, { versionNegotiation: { mode: 'auto' } })` probes with `server/discover` and falls back to `initialize`. With no `versionNegotiation`, it runs the plain 2025 sequence. `getNegotiatedProtocolVersion()` and `getInstructions()` say what was agreed. `StreamableHTTPClientTransport(url, { fetch, requestInit })` takes a custom `fetch` and default request headers (`dist/index.d.mts`, the `ClientOptions` and transport options).

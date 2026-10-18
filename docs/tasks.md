@@ -1608,11 +1608,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T777 (AC-471, AC-432) Act on `/mcp` as the token's owner, with the groups of the owner's latest web sign-in
 
-- [ ] T778 (AC-434) Serve MCP at `/mcp` over Streamable HTTP at 2026-07-28, 2025-era clients through the stateless fallback, and GET and DELETE with 405
-  - Lane: MCP
-  - Files: `packages/api/package.json` (`@modelcontextprotocol/server` 2.3.1, `@modelcontextprotocol/fastify` 2.0.1, `@modelcontextprotocol/node` 2.1.1; dev `@modelcontextprotocol/client` 2.3.1), `packages/api/src/mcp/server.ts` (a per-request `McpServer` factory through `createMcpHandler` and `toNodeHandler`), `packages/api/src/mcp/plugin.ts`, `packages/api/src/mcp/transport.test.ts`.
-  - Failing test: `transport.test.ts`: with a valid token, a 2026-07-28 client (`@modelcontextprotocol/client`, `versionNegotiation: auto`) lists the tools; a 2025-era client starting with `initialize` lists them too; GET and DELETE on `/mcp` answer 405; the server instructions are fixed text (AC-434). The tool list is empty until T782.
-  - Depends on: T776
+- [x] T778 (AC-434) Serve MCP at `/mcp` over Streamable HTTP at 2026-07-28, 2025-era clients through the stateless fallback, and GET and DELETE with 405
 
 - [ ] T779 (AC-472, AC-473) Limit each token's requests to `/mcp` in the metadata database, 60 a minute where unset, with 429 and `Retry-After` over it and 503 while the store fails; the error handler answers both
   - Lane: MCP
