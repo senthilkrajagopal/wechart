@@ -47,6 +47,11 @@ describe('the chart’s WECHART_TRUST_PROXY (T773, AC-474, AC-479)', () => {
     expect(env.get('WECHART_TRUST_PROXY')).toBe('10.1.0.0/16');
   });
 
+  it('takes a list too, joined with commas', () => {
+    const env = apiEnv(render(['api.trustProxy={10.1.0.0/16,10.2.0.5}']));
+    expect(env.get('WECHART_TRUST_PROXY')).toBe('10.1.0.0/16,10.2.0.5');
+  });
+
   it('renders none when api.trustProxy is unset', () => {
     const env = apiEnv(render());
     expect(env.has('WECHART_PORT') || env.has('PORT')).toBe(true);

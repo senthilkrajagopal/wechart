@@ -98,7 +98,7 @@ spec:
             # The proxies whose X-Forwarded-* the API believes, in every
             # security mode (T773, AC-474, AC-479).
             - name: WECHART_TRUST_PROXY
-              value: {{ . | quote }}
+              value: {{ if kindIs "slice" . }}{{ join "," . | quote }}{{ else }}{{ . | quote }}{{ end }}
             {{- end }}
             # The refresh worker's own /readyz and /livez (T162, AC-156).
             - name: CUBE_WORKER_URL

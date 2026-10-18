@@ -135,4 +135,5 @@
       - Names such as `loopback`, which Fastify's `proxy-addr` also takes, are refused too, since the research cites only addresses and CIDRs.
     - **The chart:** `api.trustProxy` defaults to `''`. When set, `api.yaml` renders it as `WECHART_TRUST_PROXY` on the API container, after `WECHART_AUDIT_RETENTION_DAYS`. Neither docker-desktop values file sets it yet; the Gateway tasks (T792 on) know the Envoy pods' CIDR (`gateway-api.md`, open question 8).
     - **`docs/deploy.md`'s "Limits today"** now says the chart sets it from `api.trustProxy`.
+    - **After the cold review (follow-up commit):** `api.trustProxy` also takes a YAML list, which the template joins with commas. The values comment now says to name the proxy pods' own range, never the cluster's whole pod range. The helm test needs `helm` on the PATH; it fails rather than skips without it.
     - **Tests:** `config.test.ts` (5, new), `server.test.ts` (2 new, through `loadConfig` and a test route answering `request.ip`), and `deploy/trust-proxy.test.ts` (2, new; runs `helm template` with the docker-desktop values). There is no e2e: nothing on a page changes.
