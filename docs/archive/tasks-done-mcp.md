@@ -442,6 +442,11 @@
     - **Tests changed:** `transport.test.ts` lists the three new tools last; `workspace.test.ts`'s every-tool 403 test gives proposals-and-jobs' tools its read-only token, which lacks that scope.
     - **Red first:** all 6 failed with "Tool propose not found" (the scope test on the missing challenge). After the code, the list test failed once: its answer was paged (1,270 proposals), so it now follows the cursors.
     - **Unit suite:** web 3,149, core 553, charts 556, recommender 133, ui 47 green; api 2,058 passed, 4 failed: `route-matrix.test.ts` (two 5 s timeouts at load average 16) and `phase1-content.test.ts` (the known flake). Both files pass alone (139/139).
+    - **The cold review:** PASS, no security defect. Its test points, closed in the follow-up commit:
+      - **"Nothing landed"** (low): an approval lands a new dashboard under an id of its own, so the shared one's being unchanged didn't show it. The test now also checks /Sales holds no dashboard but its own.
+      - **The withdraw test's premise** (low): it now shows, in the web app, that `writer` may reject `super`'s proposal and that it isn't theirs, before MCP refuses to withdraw it.
+      - **T787-5's wording** (docs): the token page's disabled scopes were shown at T769, so AC-469 waited on T788 alone. Corrected in T788's commit.
+      - **Left as is:** withdrawing one's own decided proposal is refused with `NOT_YOURS_TO_WITHDRAW`, which names "your own open proposal"; it is accurate, fixed text.
 
 - [x] T788 (AC-477, AC-469) List jobs, builds and schedules through MCP, with Run now and Cancel where the owner may, and no schedule edits
   - Lane: MCP

@@ -339,8 +339,17 @@ describe('proposing through MCP (T787, AC-439, AC-442)', () => {
 
     // The same proposal the web app made from the like item.
     expect(shapeOf(await proposals().get(mcpId))).toEqual(shapeOf(await proposals().get(webId)));
-    // Nothing landed: /Sales as it was, the item still in the workspace.
+    // Nothing landed: /Sales as it was, holding no dashboard of that title (an
+    // approval would land one there, under an id of its own), the item still in
+    // the workspace (T787's review).
     expect(await docs().get('dashboard', ids.sharedBoard)).toEqual(salesBefore);
+    const inSales = await getDb()
+      .selectFrom('documents')
+      .select('id')
+      .where('kind', '=', 'dashboard')
+      .where('folder_id', '=', ids.sales)
+      .execute();
+    expect(inSales.map((each) => each.id)).toEqual([ids.sharedBoard]);
     expect((await docs().get('dashboard', viaMcp))?.body['folderId']).toBe(ids.mineB);
 
     // Its audit record says it came through MCP and names the token; the web one doesn't.
@@ -419,6 +428,11 @@ describe('withdrawing through MCP (T787, AC-439, AC-442)', () => {
     });
     expect(theirs.statusCode, theirs.body).toBe(201);
     const theirId = theirs.json<{ id: string }>().id;
+    // In the web app, `writer` may reject it, as a member of /Sales (T787's review).
+    const seen = (
+      await as('writer', { method: 'GET', url: `/api/proposals/${theirId}` })
+    ).json<{ mayReject: boolean; yours: boolean }>();
+    expect([seen.mayReject, seen.yours]).toEqual([true, false]);
 
     await withClient(async (client) => {
       const proposalId = (
