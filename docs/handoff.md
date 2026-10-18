@@ -16,6 +16,8 @@ Read this first when resuming. It holds only the current state and the rules in 
   - T743 is not built, by R75.
   - T687, T691 and T693 are done (2026-10-17). The lanes' handoffs are in the old coordinator's scratchpad, `handoffs/laneA.md` and `laneB.md`; their content is summarized here.
 - **Known failures to fix:**
+  - **Performance follow-up (found 2026-10-18 by lane MCP):** `GET`/`POST /api/cube-store` run about one query per data source's SQL-runner switch (N+1), about 370 queries with 364 switches. Test setup now prunes orphaned switches, but the route should read all switches in one query.
+  - **Migration order:** lane SQL's 1758680000000 is applied in the shared test databases, so new migrations must be numbered above it (lane MCP: 1758690000000 and up).
   - `e2e/no-horizontal-scroll.spec.ts:53`: the chart editor at 1,280 px is 7 px too wide.
   - `security/workspace-edit.spec.ts:164`: the chart page's Dashboard combobox.
   - `security/deleting.spec.ts:138`: an `.or()` locator matches two elements.
