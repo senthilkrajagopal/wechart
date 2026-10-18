@@ -176,6 +176,7 @@ interface QueueOffer {
   readonly key?: unknown;
   readonly cancellable?: unknown;
   readonly stoppable?: unknown;
+  readonly state?: unknown;
 }
 
 const CANCEL_BUILD: McpTool = {
@@ -202,9 +203,13 @@ const CANCEL_BUILD: McpTool = {
     const found = await queuedFor(call, key);
     if (found === null) return refusal(NOT_IN_QUEUE);
     if ('refused' in found) return refusedBy(found.refused);
-    // As the queue's own row offers it: Cancel while it waits, Stop while it builds.
-    const stop = found.row.stoppable === true;
-    if (found.row.cancellable !== true && !stop) return refusal(NOT_OFFERED);
+    // As Jobs' queue offers it (`BuildQueue.tsx`): Cancel while it waits,
+    // Stop while it builds, and neither on a stalled one, whose flags the
+    // route can still set (T788's review).
+    const { cancellable, stoppable, state } = found.row;
+    const cancel = cancellable === true && state === 'queued';
+    const stop = stoppable === true && state === 'building';
+    if (!cancel && !stop) return refusal(NOT_OFFERED);
     const answer = await call.ask('/api/jobs/queue/cancel', {
       method: 'POST',
       body: stop ? { key, stop: true } : { key },

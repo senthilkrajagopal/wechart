@@ -429,9 +429,10 @@ describe('withdrawing through MCP (T787, AC-439, AC-442)', () => {
     expect(theirs.statusCode, theirs.body).toBe(201);
     const theirId = theirs.json<{ id: string }>().id;
     // In the web app, `writer` may reject it, as a member of /Sales (T787's review).
-    const seen = (
-      await as('writer', { method: 'GET', url: `/api/proposals/${theirId}` })
-    ).json<{ mayReject: boolean; yours: boolean }>();
+    const seen = (await as('writer', { method: 'GET', url: `/api/proposals/${theirId}` })).json<{
+      mayReject: boolean;
+      yours: boolean;
+    }>();
     expect([seen.mayReject, seen.yours]).toEqual([true, false]);
 
     await withClient(async (client) => {

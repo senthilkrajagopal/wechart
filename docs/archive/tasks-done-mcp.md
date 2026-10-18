@@ -459,6 +459,10 @@
     - **Tests changed:** `transport.test.ts` lists the four new tools last. `workspace.test.ts`'s every-tool 403 test now gives proposals-and-jobs' tools a token of its own (`read` and `workspace-edit`): sharing `noEdit` with the workspace tools put 13 tools × 2 eras on one token, past its 60 requests a minute (AC-472), and the later ones were answered 429.
     - **Red first:** all 5 failed with "Tool list_jobs not found" (and the like); after the code, all passed.
     - **Unit suite:** all green: api 2,067, web 3,149, core 553, charts 556, recommender 133, ui 47.
+    - **The cold review:** FAIL, one real bug, fixed in the follow-up commit:
+      - **A stalled waiting build was cancelled** (medium): the queue route flags a waiting entry `cancellable` even when xcube marks it stalled or orphaned, and Jobs shows no Cancel on it (`BuildQueue.tsx` also asks the row's `state`). `cancel_build` now goes on only for `cancellable` with `state: "queued"`, or `stoppable` with `state: "building"`. The test's only stalled entry had been a building one; it now has a stalled waiting one too, refused with xcube not asked, and the queue's rows are checked with their states. Seen red first: with the state check taken out, the new case was cancelled.
+      - **Refusals' reasons** (low): Run now's two refusals and the six cancel refusals are now checked by their words (the route's, or `NOT_OFFERED` and `NOT_IN_QUEUE`), not only as errors.
+      - **Left as is** (low): `before`, `offset` and the `cubeSchedulesListed: false` fallback aren't exercised; the no-edit check is by name, with `transport.test.ts` pinning the exact tool list. The same commit fixes `proposals.test.ts`'s formatting from T787's follow-up.
 
 ## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
 

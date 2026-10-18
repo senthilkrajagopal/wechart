@@ -27,6 +27,7 @@ import { challengesFor, mcpClient, mcpClientSeeing } from '../client.fixture';
 import { forgetTestCounts, testCounter } from '../counter.fixture';
 import { USER_DATA } from '../result';
 import { mintToken } from '../tokenText';
+import { NOT_IN_QUEUE, NOT_OFFERED } from './jobs';
 
 /**
  * T788 (AC-477, AC-469): jobs through MCP. A read-write member's token
@@ -443,17 +444,22 @@ describe('Run now and Cancel through MCP (T788, AC-477)', () => {
       expect(await scheduleStore(getDb(), { named: MARK }).get(own)).toEqual(before);
 
       posted.length = 0;
-      refused(
-        await client.callTool({ name: 'run_schedule_now', arguments: { scheduleId: other } }),
-        'another folder’s',
-      );
-      refused(
-        await client.callTool({
-          name: 'run_schedule_now',
-          arguments: { scheduleId: randomUUID() },
-        }),
-        'none',
-      );
+      // Each refused for its own reason, in the route's words (T788's review).
+      expect(
+        refused(
+          await client.callTool({ name: 'run_schedule_now', arguments: { scheduleId: other } }),
+          'another folder’s',
+        ),
+      ).toContain('You can schedule only the pre-aggregations of folders you have read-write');
+      expect(
+        refused(
+          await client.callTool({
+            name: 'run_schedule_now',
+            arguments: { scheduleId: randomUUID() },
+          }),
+          'none',
+        ),
+      ).toContain('There is no such schedule.');
       expect(posted).toEqual([]);
     });
   });
@@ -481,34 +487,46 @@ describe('Run now and Cancel through MCP (T788, AC-477)', () => {
       requestId: other.requestId,
       startedBy: 'jobs',
     });
-    queued = [queuedOwn, buildingOwn, byWorker, buildingByWorker, stalledOwn, otherFolder];
+    // Waiting, but stalled or orphaned (T788's review): the route still flags it
+    // cancellable, and Jobs offers no Cancel on it.
+    const stalledWaiting = entry({ requestId: own.requestId, startedBy: 'jobs', stalled: true });
+    queued = [
+      queuedOwn,
+      buildingOwn,
+      byWorker,
+      buildingByWorker,
+      stalledOwn,
+      stalledWaiting,
+      otherFolder,
+    ];
     cancels.length = 0;
 
     await withClient(async (client) => {
       const cancel = (key: string) => client.callTool({ name: 'cancel_build', arguments: { key } });
-      // What the web app's queue offers the owner, row by row.
+      // What the web app's queue offers the owner, row by row: its flags and
+      // state, Cancel shown only on a queued one and Stop on a building one
+      // (`BuildQueue.tsx`).
       const offered = (await as('writer', { method: 'GET', url: '/api/jobs/queue' }))
         .json<{
-          entries: { key: string; cancellable: boolean; stoppable: boolean }[];
+          entries: { key: string; cancellable: boolean; stoppable: boolean; state: string }[];
         }>()
-        .entries.map((row) => [row.key, row.cancellable, row.stoppable]);
+        .entries.map((row) => [row.key, row.cancellable, row.stoppable, row.state]);
       expect(offered).toEqual([
-        [queuedOwn.key, true, false],
-        [buildingOwn.key, false, true],
-        [byWorker.key, false, false],
-        [buildingByWorker.key, false, false],
-        [stalledOwn.key, false, false],
+        [queuedOwn.key, true, false, 'queued'],
+        [buildingOwn.key, false, true, 'building'],
+        [byWorker.key, false, false, 'queued'],
+        [buildingByWorker.key, false, false, 'building'],
+        [stalledOwn.key, false, false, 'stalled'],
+        [stalledWaiting.key, true, false, 'stalled'],
       ]);
 
-      // Not offered: refused, xcube never asked.
-      for (const key of [
-        byWorker.key,
-        buildingByWorker.key,
-        stalledOwn.key,
-        otherFolder.key,
-        'gone',
-      ])
-        refused(await cancel(key), key);
+      // Not offered: refused, each for its reason, xcube never asked.
+      for (const key of [byWorker.key, buildingByWorker.key, stalledOwn.key, stalledWaiting.key])
+        expect(refused(await cancel(key), key)).toContain(JSON.stringify(NOT_OFFERED).slice(1, -1));
+      for (const key of [otherFolder.key, 'gone'])
+        expect(refused(await cancel(key), key)).toContain(
+          JSON.stringify(NOT_IN_QUEUE).slice(1, -1),
+        );
       expect(cancels).toEqual([]);
 
       // Cancel, on the queued one; Stop, on the building one.
