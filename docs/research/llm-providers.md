@@ -557,3 +557,17 @@ Bedrock and Gemini were also weighed as **day-one providers**. Their gaps are Go
   - `/Users/srajagopal/Work/wechart/docs/requirements-log.md` (L226–251);
   - `/Users/srajagopal/Work/wechart/packages/api/src/config.ts` (L323–332);
   - `/Users/srajagopal/Work/wechart/packages/api/src/xcube/fake.ts`.
+## Addendum (2026-10-18): Bedrock client and IAM
+
+The user wants Amazon Bedrock on day one (R80-6), using `@anthropic-ai/bedrock-sdk@0.35.0`. The full research is in `docs/research/bedrock-client.md`. This addendum corrects § 4 and Gotcha 3 of this doc.
+
+**Correction to § 4 and Gotcha 3.** They say current Claude models run on Mantle. That is only half the picture: AWS serves them on both endpoints.
+- AWS lists Claude Haiku 5.5, Sonnet 5.5, Opus 5.5 and Fable 5.1 as supported on `bedrock-runtime` and on `bedrock-mantle` ([endpoint availability](https://docs.aws.amazon.com/bedrock/latest/userguide/models-endpoint-availability.html)).
+- AWS: "For new applications, we recommend the `bedrock-runtime` endpoint" ([same](https://docs.aws.amazon.com/bedrock/latest/userguide/models-endpoint-availability.html)).
+- On `bedrock-runtime` the 5.5 models need a geo or global inference-profile ID, such as `global.anthropic.claude-sonnet-5-5` ([Sonnet 5.5 card](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5-5.html)).
+
+**What still holds.** The 5.5 models have no structured outputs on either endpoint: each card lists "Structured outputs" under *Not supported* for both ([Sonnet 5.5](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5-5.html), [Opus 5.5](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5-5.html), [Haiku 5.5](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-5-5.html)). On Bedrock, wechart's validator (§ 1) is the only enforcement of "every number is a token".
+
+**Recommendation.** Use `AnthropicBedrock` against `bedrock-runtime`, not `AnthropicBedrockMantle`. The reasons, IAM policy, Kubernetes wiring, fake-server testing and errors are in `bedrock-client.md`.
+
+**Correction to the § 4 line "Whether `@aws-sdk/client-bedrock-runtime` accepts a bearer API key…".** For `@anthropic-ai/bedrock-sdk`, `apiKey` defaults to `process.env['AWS_BEARER_TOKEN_BEDROCK']`. When set, it replaces SigV4 ([client.d.ts 0.35.0](https://unpkg.com/@anthropic-ai/bedrock-sdk@0.35.0/client.d.ts); [client.ts 0.35.0](https://unpkg.com/@anthropic-ai/bedrock-sdk@0.35.0/src/client.ts)). See `bedrock-client.md` Gotcha 2.
