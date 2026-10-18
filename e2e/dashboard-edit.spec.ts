@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { cubePicker, fieldPicker } from './cubePicker';
-import { myCopyOf } from './workspace';
+import { IN_MY_WORKSPACE, madeIn, myCopyOf } from './workspace';
 
 /**
  * The dashboard's edit mode, against the prototype (F22): on the seeded
@@ -362,4 +362,102 @@ test('in edit mode every tile shows its grip and a dashed outline at rest; the t
   await page.getByRole('button', { name: '+ Page tab' }).click();
   await expect(pages.getByRole('tab')).toHaveText(['Overview', 'Appendix', 'Page 3']);
   await expect(pages.getByRole('tab', { name: 'Page 3' })).toHaveAttribute('aria-selected', 'true');
+});
+
+/**
+ * T836 / AC-491 (with AC-206 and AC-056; 19-Q3 (a), 19-Q5; design 19 state
+ * C): WHILE a dashboard is in edit mode, THE SYSTEM SHALL show the header
+ * sheet open and no Filters toggle; title the compact row "Editing ‹name›",
+ * with the edit bar where the actions were and "+ Page tab" after the inline
+ * page tabs; and let page tabs that don't fit scroll within the strip, with no
+ * "More ▾", each still a drop target.
+ * `Fails when: in edit mode the sheet is closed or a Filters toggle shows;
+ * "+ Page tab" is missing from the row; a page tab is behind "More ▾" or can't
+ * take a dropped tile; …`
+ *
+ * At 1,152 px with 12 page tabs. The row stays the one 48 px row design 19
+ * draws for edit mode ("row 48", state C).
+ */
+test('in edit mode at 1,152 px, 12 page tabs scroll in the one-row strip with no More, and a tile dropped on the last moves there', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1152, height: 800 });
+  const title = `Twelve pages ${String(Date.now())}`;
+  const id = await madeIn(page.request, 'dashboard', IN_MY_WORKSPACE.folderId, {
+    title,
+    settings: { width: 'full' },
+    pages: Array.from({ length: 12 }, (_, index) => ({
+      id: `p${String(index + 1)}`,
+      title: `Quarterly page ${String(index + 1)}`,
+      items:
+        index === 0
+          ? [{ id: 'tile-note', kind: 'markdown', w: 6, h: 8, text: 'A note to move' }]
+          : [],
+    })),
+    filters: [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }],
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
+
+  const row = page.locator('.dashboard__header');
+  // The sheet open, its bar in view, and no toggle (rule 114).
+  await expect(row.getByRole('button', { name: /^(Filters\b|Details$)/ })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Filters', exact: true })).toBeVisible();
+  // "Editing ‹name›" in the one 48 px row (AC-206; state C).
+  await expect(row.getByRole('heading', { level: 1 })).toHaveText(`Editing ${title}`);
+  expect((await row.boundingBox())?.height).toBe(48);
+
+  // Every tab in the strip, none behind "More ▾", and the strip scrolls.
+  const strip = row.getByRole('tablist', { name: 'Pages' });
+  await expect(strip.getByRole('tab')).toHaveCount(12);
+  await expect(row.getByRole('button', { name: /^More\b/ })).toHaveCount(0);
+  const overflow = await strip.evaluate((node) => node.scrollWidth - node.clientWidth);
+  expect(overflow).toBeGreaterThan(0);
+  // "+ Page tab" after the strip, in the row and in view.
+  const add = row.getByRole('button', { name: '+ Page tab' });
+  await expect(add).toBeInViewport({ ratio: 1 });
+  const [stripBox, addBox, rowBox] = await Promise.all([
+    strip.boundingBox(),
+    add.boundingBox(),
+    row.boundingBox(),
+  ]);
+  expect(addBox!.x).toBeGreaterThanOrEqual(stripBox!.x + stripBox!.width);
+  expect(addBox!.y).toBeGreaterThanOrEqual(rowBox!.y);
+  expect(addBox!.y + addBox!.height).toBeLessThanOrEqual(rowBox!.y + rowBox!.height);
+
+  // The last tab, scrolled into view within the strip, takes a dropped tile
+  // (AC-056), and the page itself never scrolls sideways.
+  const last = strip.getByRole('tab', { name: 'Quarterly page 12' });
+  await last.scrollIntoViewIfNeeded();
+  await expect(last).toBeInViewport({ ratio: 1 });
+  expect(await strip.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+  ).toBeLessThanOrEqual(0);
+
+  const grip = page.getByTestId('grip-tile-note');
+  const from = await grip.boundingBox();
+  const onto = await last.boundingBox();
+  await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(onto!.x + onto!.width / 2, onto!.y + onto!.height / 2, { steps: 10 });
+  await expect(page.getByTestId('drop-marker')).toBeVisible();
+  await page.mouse.up();
+
+  await expect(page.locator('[data-tile="tile-note"]')).toHaveCount(0);
+  await last.click();
+  await expect(last).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[data-tile="tile-note"]')).toHaveCount(1);
+  await expect(page.locator('[data-tile="tile-note"]').getByText('A note to move')).toBeVisible();
+
+  // Discard: the sheet closed again, as it was before Edit, its toggle back.
+  await page.getByRole('button', { name: /^Discard/ }).click();
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeHidden();
+  await expect(row.getByRole('button', { name: /^Filters\b/ })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await expect(page.getByRole('region', { name: 'Filters', exact: true })).toBeHidden();
 });

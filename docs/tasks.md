@@ -1878,10 +1878,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T835 (AC-490) Keep the sheet open or closed for the visit only, across page tabs, a bookmark applied and a refresh, storing it nowhere
 
-- [ ] T836 (AC-491, AC-206, AC-056) In edit mode, show the sheet open with no toggle, "Editing ‹name›" and "+ Page tab" in the row, page tabs scrolling with no "More ▾", and the reader's state back when editing ends
-  - Files: `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/dashboard/header/useHeaderSheet.ts`, `packages/web/src/dashboard/DashboardView.tsx` (`PageTabsRow` while editing), `packages/web/src/dashboard/edit/enterEdit.test.tsx`, `e2e/dashboard-edit.spec.ts`.
-  - Failing test: `enterEdit.test.tsx`: with the sheet closed, Edit shows it open and no toggle, the row reading "Editing ‹name›" with "+ Page tab" after the tabs; Discard puts it back closed; with it open before Edit, Save leaves it open (AC-491, AC-206). The e2e at 1,152 px with 12 page tabs: the strip scrolls, no "More ▾" shows, and a tile dropped on the last tab moves into it (AC-491, AC-056).
-  - Depends on: T829, T835
+- [x] T836 (AC-491, AC-206, AC-056) In edit mode, show the sheet open with no toggle, "Editing ‹name›" and "+ Page tab" in the row, page tabs scrolling with no "More ▾", and the reader's state back when editing ends
 
 - [ ] T837 (AC-492) In view mode, put the page tabs that don't fit behind "More ▾", the open page always inline, the strip never scrolling
   - Files: `packages/web/src/dashboard/header/tabsThatFit.ts` (+ test), `packages/web/src/dashboard/header/PageTabsMore.tsx` (+ test; through `shell/MenuButton.tsx`), `packages/web/src/dashboard/DashboardView.tsx` (`PageTabsRow`), `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.

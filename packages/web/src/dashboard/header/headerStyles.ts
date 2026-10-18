@@ -76,16 +76,20 @@ export const HEADER_CSS = `
    itself would be cut (R77). */
 /* The title gives way first, down to its 160 px, the tabs only after it
    (design 19 G): a far larger shrink factor. Tabs that still don't fit
-   scroll within the strip, never the page, until T837 puts them behind
-   "More" in view mode (19-Q5). */
+   scroll within the strip, never the page: in edit mode always, each still a
+   drop target (AC-491, AC-056); in view mode until T837 puts them behind
+   "More" (19-Q5). */
 .dashboard__header > .page-tabs__row { flex: 0 1 auto; min-width: 0; align-self: stretch; }
 .dashboard__header > h1 { flex-shrink: 1000; }
 .dashboard__header .page-tabs { padding: 0; border-bottom: 0; align-items: stretch; gap: 2px; }
 .dashboard__header .page-tabs [role='tab'] { height: auto; }
 .dashboard__header .page-tabs__rest { flex: none; padding: 0 0 0 4px; border-bottom: 0; }
-/* While editing, and below 1,024 px, the row may still wrap: edit mode's row
-   is T836's, and the narrow row T842's (T829-1). */
-.dashboard[data-editing='true'] .dashboard__header { flex-wrap: wrap; height: auto; }
+/* While editing it is the same one row, "Editing ‹name›", the tabs, "+ Page
+   tab" and the edit bar where the actions were (AC-491; design 19 state C,
+   "row 48"). Its height is the row's own only so that why Save is held back,
+   a sentence, can take a second line rather than run out of it (T836-1).
+   Below 1,024 px the row may still wrap: the narrow row is T842's (T829-1). */
+.dashboard[data-editing='true'] .dashboard__header { height: auto; }
 @media (max-width: 1023px) {
   .dashboard__header { flex-wrap: wrap; height: auto; }
 }

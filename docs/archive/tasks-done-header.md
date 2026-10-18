@@ -41,3 +41,8 @@ Lane HEADER's ticked tasks from `docs/tasks.md` §P2.25 (F43), their sub-lines w
   - Files: `packages/web/src/dashboard/header/useHeaderSheet.ts` (+ test), `packages/web/src/dashboard/DashboardView.tsx`, `e2e/dashboard-header.spec.ts`.
   - Failing test: `useHeaderSheet.test.tsx`: opened, the sheet stays open across a page tab change, a bookmark applied and Refresh; closed, it stays closed across the same. The e2e: open the sheet, then reload: it's closed; open it, go to Explore and back: it's closed; `localStorage`, `sessionStorage` and IndexedDB hold no key they didn't before, the address is unchanged, and no API request carries the state (AC-490).
   - Depends on: T828
+
+- [x] T836 (AC-491, AC-206, AC-056) In edit mode, show the sheet open with no toggle, "Editing ‹name›" and "+ Page tab" in the row, page tabs scrolling with no "More ▾", and the reader's state back when editing ends
+  - Files: `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/dashboard/header/useHeaderSheet.ts`, `packages/web/src/dashboard/DashboardView.tsx` (`PageTabsRow` while editing), `packages/web/src/dashboard/edit/enterEdit.test.tsx`, `e2e/dashboard-edit.spec.ts`.
+  - Failing test: `enterEdit.test.tsx`: with the sheet closed, Edit shows it open and no toggle, the row reading "Editing ‹name›" with "+ Page tab" after the tabs; Discard puts it back closed; with it open before Edit, Save leaves it open (AC-491, AC-206). The e2e at 1,152 px with 12 page tabs: the strip scrolls, no "More ▾" shows, and a tile dropped on the last tab moves into it (AC-491, AC-056).
+  - Depends on: T829, T835
