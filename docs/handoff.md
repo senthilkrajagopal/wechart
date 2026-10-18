@@ -17,7 +17,7 @@ Read this first when resuming. It holds only the current state and the rules in 
   - T687, T691 and T693 are done (2026-10-17). The lanes' handoffs are in the old coordinator's scratchpad, `handoffs/laneA.md` and `laneB.md`; their content is summarized here.
 - **Known failures to fix:**
   - **Performance follow-up (found 2026-10-18 by lane MCP):** `GET`/`POST /api/cube-store` run about one query per data source's SQL-runner switch (N+1), about 370 queries with 364 switches. Test setup now prunes orphaned switches, but the route should read all switches in one query.
-  - **Migration order:** lane SQL's 1758680000000 is applied in the shared test databases, so new migrations must be numbered above it (lane MCP: 1758690000000 and up).
+  - **Migration order:** migrations up to 1758690001000 are applied in the shared test databases, so new ones go above them, in each lane's range: SQL and TEXT 1758700000000, MCP 1758710000000, CHARTS-B 1758720000000, CHARTS-A 1758730000000.
   - `e2e/no-horizontal-scroll.spec.ts:53`: the chart editor at 1,280 px is 7 px too wide.
   - `security/workspace-edit.spec.ts:164`: the chart page's Dashboard combobox.
   - `security/deleting.spec.ts:138`: an `.or()` locator matches two elements.
@@ -96,7 +96,9 @@ Read this first when resuming. It holds only the current state and the rules in 
 - **Shared code between lanes:**
   - `ChartEditor.tsx` and `fields.ts` are touched by both lanes, so cherry-picks can conflict there.
   - Check `git cherry-pick`'s exit status itself, not a pipe's.
-- **Under load (load average above 10)** API files time out at 5 s and leave state behind for the next file. Rerun the failing files alone before debugging. Known flakes: `phase1-content.test.ts`, filters:201, model-design:846, perf/dashboard-open.
+- **Under load (load average above 10)** API files time out at 5 s and leave state behind for the next file. Rerun the failing files alone before debugging. Known flakes: `phase1-content.test.ts`, `catalog-access.test.ts:220` (another file's workspace items), route-matrix `GET /api/images/:id`, filters:201, model-design:846 and :855, propose:83, perf/dashboard-open.
+- **Lanes branch fresh from feat/xcube** for each batch (`git checkout -B laneX2 feat/xcube`) and never merge feat/xcube into a lane branch: merging conflicts with the coordinator's cherry-picks of the lane's own commits.
+- **xcube folder-tree catch-up** (fixed 2026-10-18, lane MCP): a kept deleted folder whose groups exceeded its parent's made xcube refuse the tree, then 409 every later push, so folders made in a run never reached xcube ("Folder … is not in the folder tree", "No folder on the path holds …"). If those errors return, check xcube's log for a 400 on the tree push at stack start.
 - `security/deleting.spec.ts:138` fails on its own: its `.or()` locator matches two elements. It is pre-existing and not yet fixed.
 - After a Docker Desktop restart, compose comes back on the repo's pinned images. Run `docker compose up -d --wait` under both locks.
 - **The drawer:** its height is capped at half the editor, which is 312 px in the default 1280×720 viewport.
