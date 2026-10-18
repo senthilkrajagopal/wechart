@@ -341,6 +341,10 @@
       - **The pass's tests** (low): a new test shows a pass taken once, a second request bearing it no one, and a pass no one at all once its ask has ended.
       - **AC-432's change half** (consistency): now on T785's line too (decision T782-5, amended).
       - **Left as is:** the scope test checks the refusal and that no data came back, not that `run` wasn't called; `called` refuses before `run`, as the review read. Sign-in off's pass path has no test of its own: with it off the caller is the single user either way.
+    - **Batch run, real Chrome, at 39b4192e** (the lane's last commit with code):
+      - **Main:** 829 passed, 2 failed: `model-design.spec.ts:855` (a known flake, last batch's too) and `sheets.spec.ts:183`. Both pass when rerun alone (2/2).
+      - **Security** (`--project=chrome`; `xcube-unreachable` not run, as it stops compose's Cube): 390 passed, 1 failed, 7 did not run behind it: `picker.spec.ts:105`'s setup, whose approval was refused for cubes another spec had left broken in the shared model (`t342_customers_…`: "dimensions.country does not match any of the allowed types"). The spec passes when rerun alone (8/8).
+      - No fix was needed, so there is no follow-up commit of code.
 
 ## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
 
@@ -351,6 +355,7 @@
 - **Cause:** `allowedOnASwitchedFolder` (`routes/sql-runner.ts`) asks after every SQL runner switch in turn, for anyone who isn't a Super-Admin. The test database held **364 switches whose data sources were gone**. The route removes a switch with its data source (T531's review), but tests remove their data sources' rows directly, so every run left more behind (181 by the test `super`, 181 by Dex's super, since 2026-10-08).
 - **Fix** (follow-up commit): `src/db/orphan-switches.ts`'s `removeOrphanSwitches`, run by `vitest.globalSetup.ts` before every run, removes the switches with no data source, keeping Cube Store's. **After:** the two Cube Store cases take 108 ms and 135 ms. New test: `db/orphan-switches.test.ts`.
   - **Not done:** a migration with a trigger removing a switch with its row in every database. Lane SQL's `1758680000000` is already run in the shared test database, and node-pg-migrate's order check compares run and on-disk migrations by position, so a new lane-MCP migration would stop every lane's runs until the picks align. Worth a migration once they do.
-  - The test runs that only test is red is missing: the function was written before its test ran.
+  - Its test was never seen red: the function was written before the test first ran.
+  - **New lane-MCP migrations go from `1758690000000` up** (the coordinator, 2026-10-18), above lane SQL's `1758680000000`.
 - **Also seen:** `GET /api/reviews` makes 550 queries a request for `writer` (110 ms), over the 986 proposals the test database keeps. It is far from the timeout and was left alone.
 - **Unit suite with the fix:** web 3,023, core 550, charts 556, recommender 133, ui 47 green; api 1,985 passed, 2 failed, both `phase1-content.test.ts`, the handoff's known flake, which passes alone (3/3) and passed in the T782 run.
