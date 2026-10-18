@@ -39,6 +39,9 @@ export function MapWells({
   const [key] = spec?.dimensions ?? [];
   const [measure] = spec?.measures ?? [];
   const { points, density } = settings;
+  const unoffered =
+    settings.boundarySet.startsWith('custom:') &&
+    !customSets.some((custom) => `custom:${custom.id}` === settings.boundarySet);
 
   return (
     <>
@@ -56,13 +59,17 @@ export function MapWells({
         >
           <option value="countries">Countries</option>
           <option value="admin1">Admin-1, by country</option>
-          {customSets.length === 0 ? null : (
+          {customSets.length === 0 && !unoffered ? null : (
             <optgroup label="Custom">
               {customSets.map((custom) => (
                 <option key={custom.id} value={`custom:${custom.id}`}>
                   {custom.name}
                 </option>
               ))}
+              {/* A stored set not offered here, shown as chosen so another can be (T973's review). */}
+              {unoffered ? (
+                <option value={settings.boundarySet}>A custom set no longer offered here</option>
+              ) : null}
             </optgroup>
           )}
         </select>

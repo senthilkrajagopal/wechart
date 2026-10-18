@@ -86,6 +86,25 @@ describe('the Map’s wells (AC-622)', () => {
     expect(back).toHaveBeenLastCalledWith({ map: undefined });
   });
 
+  it('shows a stored custom set it doesn’t offer as chosen, so Countries can be chosen back (T973’s review)', async () => {
+    const onOptions = vi.fn();
+    render(
+      <MapWells
+        chartType="map"
+        options={{ map: { boundarySet: 'custom:gone' } }}
+        onOptions={onOptions}
+        available={AVAILABLE}
+        titleOf={titleOf}
+        spec={{ measures: ['orders.revenue'], dimensions: ['customers.country'] }}
+      />,
+    );
+    const set = screen.getByRole('combobox', { name: 'Boundary set' }) as HTMLSelectElement;
+    expect(set.value).toBe('custom:gone');
+    expect(set.selectedOptions[0]?.textContent).toBe('A custom set no longer offered here');
+    await userEvent.selectOptions(set, 'countries');
+    expect(onOptions).toHaveBeenLastCalledWith({ map: undefined });
+  });
+
   it('offers the three layers: Regions, Points and Density', () => {
     wells();
     for (const layer of ['Regions layer', 'Points layer', 'Density layer'])
