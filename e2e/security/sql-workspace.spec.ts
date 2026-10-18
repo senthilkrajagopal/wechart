@@ -31,7 +31,7 @@ const switcher = (page: Page) =>
 const workspace = (page: Page) => page.getByRole('region', { name: 'SQL runner' });
 
 /** A page of a role's, signed in afresh in a context of its own. */
-async function signedIn(browser: Browser, role: 'super' | 'writer' | 'reader') {
+async function signedIn(browser: Browser, role: 'super' | 'writer' | 'reader' | 'manager') {
   const context = await browser.newContext({
     baseURL: BASE_URL,
     storageState: { cookies: [], origins: [] },
@@ -55,7 +55,9 @@ test.beforeAll(async ({ browser }) => {
     expect(made.status()).toBe(201);
     world.folderId = ((await made.json()) as { id: string }).id;
     const access = await admin.page.request.put(`/api/folders/${world.folderId}/access`, {
-      data: { readOnly: ['sales-ro'], readWrite: ['sales-rw'] },
+      // `managers` too: T804's long runs go as manager, as no other spec runs SQL as
+      // them, so its one-run-per-person hold never meets another spec's run.
+      data: { readOnly: ['sales-ro'], readWrite: ['sales-rw', 'managers'] },
     });
     expect(access.status()).toBe(200);
     // Two data sources on the sample database there: one switched on, one off (T798).
@@ -815,12 +817,17 @@ test.describe('the schema browser in the left pane (T805, AC-386)', () => {
       await schema.getByTestId('sql-schema-caret').first().click();
       const group = schema.getByRole('group', { name: 'Tables in public' });
       const tables = group.locator('[role="treeitem"][aria-level="2"] > .sql-schema__row .sql-schema__name');
-      await expect(tables).toHaveText(['customers', 'orders', 'products']);
+      // The sample database is shared: other specs add tables of their own to
+      // `public` as they run, so the tables read are taken as listed, not fixed.
+      await expect(tables.filter({ hasText: /^orders$/ })).toHaveCount(1);
+      const read = await tables.allTextContents();
+      expect(read).toEqual(expect.arrayContaining(['customers', 'orders', 'products']));
 
+      // Exactly the read tables whose names hold "ord", in their order.
       await leftPane(page).getByRole('searchbox', { name: 'Find a table' }).fill('ord');
-      await expect(tables).toHaveText(['orders']);
+      await expect(tables).toHaveText(read.filter((name) => name.toLowerCase().includes('ord')));
       await leftPane(page).getByRole('searchbox', { name: 'Find a table' }).fill('');
-      await expect(tables).toHaveCount(3);
+      await expect(tables).toHaveText(read);
 
       const orders = schema.getByRole('treeitem', { name: 'orders', exact: true });
       await orders.getByTestId('sql-schema-caret').first().click();
@@ -973,7 +980,8 @@ test.describe('a run going, across tabs and away (T804, AC-452, AC-379)', () => 
   test('holds Run on every other tab, Go to it selects the running one, and Cancel that run stops it on the database', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    // As manager: no other spec runs SQL as them, so one run per person meets none of theirs.
+    const { context, page } = await signedIn(browser, 'manager');
     const marker = `held_${RUN}`;
     const posts: string[] = [];
     page.on('request', (request) => {
@@ -1029,7 +1037,7 @@ test.describe('a run going, across tabs and away (T804, AC-452, AC-379)', () => 
   test('a run keeps going while the user is in Explore, and shows on their return, then Finished', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     const marker = `away_${RUN}`;
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
