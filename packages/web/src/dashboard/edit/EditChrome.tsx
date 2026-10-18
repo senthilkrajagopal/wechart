@@ -1,9 +1,10 @@
 import { isValidElement, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import { canRedo, canUndo, discard, historyOf, push, redo, undo } from '../../editor/history';
-import { FolderCrumbs } from '../../workspaces/explore/FolderCrumbs';
+import { BackToFolder } from '../header/BackToFolder';
 import { FiltersToggle } from '../header/FiltersToggle';
 import { HeaderSheet } from '../header/HeaderSheet';
+import { HeaderTitle } from '../header/HeaderTitle';
 import { EditBar } from './EditBar';
 import { EditSidebar, type SidebarContent } from './EditSidebar';
 
@@ -248,6 +249,8 @@ export function EditChrome<T>({
    */
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetId = useId();
+  /** The row has cut the title short: the sheet then starts with it whole (AC-485). */
+  const [titleCut, setTitleCut] = useState(false);
   /** Edit, once a Discard has put it back: where focus goes (T223's review). */
   const editButton = useRef<HTMLButtonElement>(null);
   const focusEditNext = useRef(false);
@@ -422,20 +425,18 @@ export function EditChrome<T>({
         aria-hidden={overlaid ? true : undefined}
       >
         <header className="dashboard__header">
-          {/* The way back to its folder (AC-195). */}
-          {folderOf === undefined ? null : <FolderCrumbs folderId={folderOf(current)} />}
-          {/* "Editing ‹name›" while editing (AC-206), as the prototype's header.
-              The word is for the eye: the heading still names the dashboard,
-              and the edit bar — a toolbar named "Dashboard editing" — says the
-              mode to a screen reader. */}
-          <h1>
-            {editing ? (
-              <span className="dashboard__editing" aria-hidden="true">
-                Editing{' '}
+          {/* The way back to its folder, one step (AC-195, AC-485; design 19
+              pin 1), then a muted rule before the title. */}
+          {folderOf === undefined ? null : (
+            <>
+              <BackToFolder folderId={folderOf(current)} />
+              <span className="header-back__rule" aria-hidden="true">
+                /
               </span>
-            ) : null}
-            {title(current)}
-          </h1>
+            </>
+          )}
+          {/* "Editing ‹name›" while editing (AC-206), as the prototype's header. */}
+          <HeaderTitle title={title(current)} editing={editing} onCut={setTitleCut} />
           {/* The page tabs, inline after the title (AC-484; design 19 pin 3),
               then the room that puts the actions at the row's end. */}
           {tabs?.(session)}
@@ -503,9 +504,17 @@ export function EditChrome<T>({
             {hasSheet ? (
               // Directly after the row (design 19's keyboard table).
               <HeaderSheet id={sheetId} open={editing || sheetOpen}>
-                {about.description === '' && about.ownership === undefined ? null : (
+                {!titleCut && about.description === '' && about.ownership === undefined ? null : (
                   <div className="header-sheet__about">
-                    {/* Its description first (T684; R76 dashboard-Q2). */}
+                    {/* The whole title, only where the row cut it short
+                        (AC-485; design 19 state G): for the eye, since the
+                        h1 already carries it whole. */}
+                    {titleCut ? (
+                      <p className="header-sheet__title" aria-hidden="true">
+                        {title(current)}
+                      </p>
+                    ) : null}
+                    {/* Its description (T684; R76 dashboard-Q2). */}
                     {about.description === '' ? null : (
                       <p className="dashboard__description">{about.description}</p>
                     )}

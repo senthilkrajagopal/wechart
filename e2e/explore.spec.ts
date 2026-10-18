@@ -613,9 +613,20 @@ for (const [kind, id, title] of [
     await page.getByTestId(`item-${id}`).getByRole('button', { name: title, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/${id}$`));
 
-    const trail = page.getByRole('main').getByRole('navigation', { name: 'Breadcrumb' });
-    await expect(trail.getByRole('link')).toHaveText(['← Explore', 'Shared', 'Finance']);
-    await trail.getByRole('link', { name: 'Finance' }).click();
+    if (kind === 'dashboard') {
+      // A dashboard's way back is one step, its whole path in its name
+      // (T830, AC-485; design 19, 19-Q9).
+      const back = page.locator('.dashboard__header').getByRole('link', {
+        name: 'Back to Shared / Finance',
+      });
+      await expect(back).toHaveText('← Finance');
+      await expect(back).toHaveAttribute('title', 'Back to Shared / Finance');
+      await back.click();
+    } else {
+      const trail = page.getByRole('main').getByRole('navigation', { name: 'Breadcrumb' });
+      await expect(trail.getByRole('link')).toHaveText(['← Explore', 'Shared', 'Finance']);
+      await trail.getByRole('link', { name: 'Finance' }).click();
+    }
 
     await expect(heading(page)).toHaveText('Finance');
     await expect(page).toHaveURL(/\/explore\?folder=seed-folder-0$/);

@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { headerSheet, openHeaderSheet } from './dashboardHeader';
 import { sharedIn } from './workspace';
 
 /**
@@ -10,8 +11,12 @@ import { sharedIn } from './workspace';
  * A shared dashboard of the spec's own, outside My workspace: a description,
  * two page tabs, a filter, and notes tall enough that its canvas scrolls.
  */
-async function sharedDashboard(request: APIRequestContext): Promise<{ id: string; title: string }> {
-  const title = `Header ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+async function sharedDashboard(
+  request: APIRequestContext,
+  named?: (unique: string) => string,
+): Promise<{ id: string; title: string }> {
+  const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const title = named?.(unique) ?? `Header ${unique}`;
   const notes = Array.from({ length: 6 }, (_, index) => ({
     id: `notes-${String(index)}`,
     kind: 'markdown',
@@ -82,3 +87,83 @@ for (const size of [
     expect((await canvas(page).boundingBox())?.y).toBe(top);
   });
 }
+
+/**
+ * T830 (AC-485; design 19 pins 1 and 2, state G): the title at text-lg
+ * 20/26/600, cut short with "…" when the row has no room, never under
+ * 160 px, whole in its tooltip and name, and whole at the top of the open
+ * sheet only when cut.
+ */
+test('a long title is cut on its one line, whole in its tooltip, its name and the open sheet; a short one is not repeated', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { id, title } = await sharedDashboard(request, (unique) =>
+    `Quarterly revenue, margin and fulfilment review for the EMEA regional leads ${unique} `.padEnd(
+      120,
+      'x',
+    ),
+  );
+  expect(title).toHaveLength(120);
+  await page.goto(`/explore/dashboards/${id}`);
+  const heading = page.getByRole('heading', { level: 1, name: title, exact: true });
+  await expect(heading).toBeVisible();
+
+  // 20 px at 600, on one line, at least 160 px wide, cut with an ellipsis.
+  const drawn = await heading.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      size: style.fontSize,
+      weight: style.fontWeight,
+      overflow: style.textOverflow,
+      lineHeight: Number.parseFloat(style.lineHeight),
+      height: node.getBoundingClientRect().height,
+      width: node.getBoundingClientRect().width,
+      cut: node.scrollWidth > node.clientWidth,
+    };
+  });
+  expect(drawn.size).toBe('20px');
+  expect(drawn.weight).toBe('600');
+  expect(drawn.overflow).toBe('ellipsis');
+  expect(drawn.height).toBe(drawn.lineHeight);
+  expect(drawn.width).toBeGreaterThanOrEqual(160);
+  expect(drawn.cut).toBe(true);
+  await expect(heading).toHaveAttribute('title', title);
+
+  // Every tab and action still in the row, and in the window.
+  const header = (await row(page).boundingBox())!;
+  const parts = row(page).locator('a:visible, button:visible');
+  const count = await parts.count();
+  expect(count).toBeGreaterThan(5);
+  for (let at = 0; at < count; at += 1) {
+    const box = (await parts.nth(at).boundingBox())!;
+    expect(box.y, String(at)).toBeGreaterThanOrEqual(header.y);
+    expect(box.y + box.height, String(at)).toBeLessThanOrEqual(header.y + header.height);
+    expect(box.x + box.width, String(at)).toBeLessThanOrEqual(1440);
+  }
+  expect(header.height).toBe(48);
+
+  // The open sheet starts with the whole title.
+  await openHeaderSheet(page);
+  const sheet = headerSheet(page);
+  await expect(sheet.locator('.header-sheet__title')).toHaveText(title);
+  const [whole, description] = [
+    await sheet.locator('.header-sheet__title').boundingBox(),
+    await sheet.locator('.dashboard__description').boundingBox(),
+  ];
+  expect((whole?.y ?? 0) + (whole?.height ?? 0)).toBeLessThanOrEqual(description?.y ?? 0);
+
+  // A short title, whole in the row, is not repeated there.
+  const short = await sharedDashboard(request);
+  await page.goto(`/explore/dashboards/${short.id}`);
+  await expect(page.getByRole('heading', { level: 1, name: short.title })).toBeVisible();
+  expect(
+    await page
+      .getByRole('heading', { level: 1 })
+      .evaluate((node) => node.scrollWidth > node.clientWidth),
+  ).toBe(false);
+  await openHeaderSheet(page);
+  await expect(headerSheet(page).locator('.dashboard__description')).toBeVisible();
+  await expect(headerSheet(page).locator('.header-sheet__title')).toHaveCount(0);
+});

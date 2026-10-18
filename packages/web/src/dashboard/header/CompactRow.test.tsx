@@ -110,7 +110,8 @@ describe('the compact row', () => {
     const row = within(header);
 
     expectInOrder(header, [
-      row.getByRole('navigation', { name: 'Breadcrumb' }),
+      // The way back, one step since T830 (AC-485).
+      row.getByRole('link', { name: /^Back to / }),
       row.getByRole('heading', { level: 1, name: 'Sales' }),
       row.getByRole('tablist', { name: 'Pages' }),
       row.getByRole('button', { name: 'History' }),
@@ -138,7 +139,7 @@ describe('the compact row', () => {
     const row = within(header);
 
     expectInOrder(header, [
-      row.getByRole('navigation', { name: 'Breadcrumb' }),
+      row.getByRole('link', { name: /^Back to / }),
       row.getByRole('heading', { level: 1, name: 'Sales' }),
       row.getByRole('tablist', { name: 'Pages' }),
       row.getByRole('button', { name: 'History' }),

@@ -212,6 +212,32 @@ describe('the header sheet', () => {
     expect(screen.queryByRole('region', { name: 'Filters' })).toBeNull();
   });
 
+  it('starts with the whole title only where the row cut it short (AC-485)', async () => {
+    // Laid out as a browser would, the title wider than its room.
+    const scroll = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(900);
+    const client = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300);
+    const cut = render(view());
+    await userEvent.click(toggle());
+
+    const whole = sheet().querySelector('.header-sheet__title');
+    expect(whole?.textContent).toBe('Sales');
+    expect(whole?.getAttribute('aria-hidden')).toBe('true');
+    expect(
+      (whole as HTMLElement).compareDocumentPosition(description()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    cut.unmount();
+
+    // Whole in the row: none in the sheet.
+    scroll.mockReturnValue(120);
+    client.mockReturnValue(120);
+    render(view());
+    await userEvent.click(toggle());
+    expect(sheet().querySelector('.header-sheet__title')).toBeNull();
+    scroll.mockRestore();
+    client.mockRestore();
+  });
+
   it('comes back open after editing when the reader had left it open', async () => {
     render(view());
     await userEvent.click(toggle());

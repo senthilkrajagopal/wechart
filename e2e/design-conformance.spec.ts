@@ -254,14 +254,15 @@ test.describe('T203: the dashboard header, page tabs and tiles', () => {
     ).toBeVisible();
   });
 
-  test('the header: a 24 px title, a primary Edit with its pencil, and the gear as an icon button', async ({
+  test('the header: a 20 px title, a primary Edit with its pencil, and the gear as an icon button', async ({
     page,
   }) => {
-    // .dash-head h1 { font-size: 24px; line-height: 32px; font-weight: 600 }
+    // Design 19's .dtitle in the compact row, text-lg 20/26/600 (T830,
+    // AC-485, 19-Q4), in place of design 04's 24/32.
     const title = page.getByRole('heading', { name: 'Company dashboard 01', level: 1 });
     expect(await style(title, 'font-size', 'line-height', 'font-weight')).toEqual({
-      'font-size': '24px',
-      'line-height': '32px',
+      'font-size': '20px',
+      'line-height': '26px',
       'font-weight': '600',
     });
 
@@ -1492,7 +1493,7 @@ test.describe('T246: the dashboard header and the filter band', () => {
     await expect(title(page)).toBeVisible();
   });
 
-  test('the header: one 48 px row, its way back a 24 px ghost button, its folder muted', async ({
+  test('the header: one 48 px row, its way back a 24 px ghost button, a muted rule before the title', async ({
     page,
   }) => {
     // Design 19's compact row in place of design 04's 80 px crumbs and title
@@ -1513,11 +1514,13 @@ test.describe('T246: the dashboard header and the filter band', () => {
         .getByRole('region', { name: 'Filters and details' })
         .getByText(/^In Shared · version \d+$/),
     ).toBeVisible();
-    const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
-    // <button class="btn ghost sm" data-back>← Explore</button> (mismatches 1–2)
+    // Design 19's .back, "← ‹folder›", in place of the crumbs' "← Explore"
+    // (T830, AC-485; 19-Q9): the same 24 px ghost button.
+    const back = page.locator('.dashboard__header').getByRole('link', { name: 'Back to Shared' });
+    await expect(back).toHaveText('← Shared');
     expect(
       await style(
-        crumbs.getByRole('link', { name: '← Explore' }),
+        back,
         'height',
         'padding-left',
         'padding-right',
@@ -1533,8 +1536,8 @@ test.describe('T246: the dashboard header and the filter band', () => {
       'font-size': '12px',
       color: await token(page, 'text-primary'),
     });
-    // <span class="muted"> / Shared /</span>
-    expect(await style(crumbs.getByRole('link', { name: 'Shared' }), 'color')).toEqual({
+    // <span class="sl">/</span>: the muted rule between it and the title.
+    expect(await style(page.locator('.dashboard__header .header-back__rule'), 'color')).toEqual({
       color: await token(page, 'text-muted'),
     });
   });

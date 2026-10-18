@@ -23,27 +23,57 @@ export const HEADER_CSS = `
    nowrap on to the popovers and dialogs that open from it. */
 .dashboard__header > * { flex: none; white-space: nowrap; }
 .dashboard__header > * [role='dialog'] { white-space: normal; }
+/* The title at text-lg 20/26/600 (AC-485; 19-Q4), cut with "…", never
+   narrower than 160 px. */
 .dashboard__header h1 {
   margin: 0;
   flex: 0 1 auto;
-  min-width: 0;
+  min-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: var(--wc-text-lg-size);
+  line-height: var(--wc-text-lg-line);
+  font-weight: var(--wc-text-lg-weight);
+}
+/* The way back (AC-485; design 19 .back): a 24 px ghost link, 12/16 in the
+   primary ink, "← ‹folder›"; a long folder's name cut at 240 px. Then a
+   muted rule (design 19 .sl). */
+.header-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  max-width: 240px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-primary);
+  text-decoration: none;
+}
+.header-back:hover { background: var(--wc-bg-hover); }
+.header-back__folder { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.header-back__rule { color: var(--wc-text-muted); font-size: 12px; }
+/* The whole title, first in the open sheet where the row cut it (state G). */
+.header-sheet__title {
+  margin: 0 0 2px;
+  font-size: var(--wc-text-lg-size);
+  line-height: var(--wc-text-lg-line);
+  font-weight: var(--wc-text-lg-weight);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
 }
 .dashboard__header-spacer { flex: 1 1 0; min-width: 0; }
-/* The way back, on the row's line (T830 makes it one step). */
-.dashboard__header > .item-crumbs { flex: 0 1 auto; flex-basis: auto; min-width: 0; overflow: hidden; }
 /* The page tabs inline: 13/600, each the row's full height, the 2 px accent
    underline on the row's rule (design 19 .itabs). Not over it by the
    design's 1 px: the strip clips, and the ring a focused tab draws inside
    itself would be cut (R77). */
-/* The title and the way back give way first, the tabs only once they are
-   gone (design 19 G): a far larger shrink factor. Tabs that still don't fit
+/* The title gives way first, down to its 160 px, the tabs only after it
+   (design 19 G): a far larger shrink factor. Tabs that still don't fit
    scroll within the strip, never the page, until T837 puts them behind
    "More" in view mode (19-Q5). */
 .dashboard__header > .page-tabs__row { flex: 0 1 auto; min-width: 0; align-self: stretch; }
-.dashboard__header > h1,
-.dashboard__header > .item-crumbs { flex-shrink: 1000; }
+.dashboard__header > h1 { flex-shrink: 1000; }
 .dashboard__header .page-tabs { padding: 0; border-bottom: 0; align-items: stretch; gap: 2px; }
 .dashboard__header .page-tabs [role='tab'] { height: auto; }
 .dashboard__header .page-tabs__rest { flex: none; padding: 0 0 0 4px; border-bottom: 0; }

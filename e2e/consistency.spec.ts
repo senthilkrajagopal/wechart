@@ -34,7 +34,10 @@ async function frameOf(page: Page, frame: Locator, lead?: Locator) {
   return { gutter: Math.round((box?.x ?? 0) - (edge?.x ?? 0)), ...style };
 }
 
-/** Each page, its frame, and its title's size: text-lg, but a dashboard's text-xl (direction.md §3). */
+/**
+ * Each page, its frame, and its title's size: text-lg (direction.md §3) — a
+ * dashboard's too since design 19 put it in the compact row (19-Q4, T830).
+ */
 const PAGES: readonly [string, string, (page: Page) => Locator, string][] = [
   ['Data sources', '/data-sources', (page) => page.locator('main'), '20px'],
   ['Jobs', '/jobs', (page) => page.locator('main'), '20px'],
@@ -45,7 +48,7 @@ const PAGES: readonly [string, string, (page: Page) => Locator, string][] = [
     'a dashboard',
     '/explore/dashboards/seed-root-dashboard-1',
     (page) => page.locator('main'),
-    '24px',
+    '20px',
   ],
   ['Explore', '/explore', (page) => page.getByTestId('explore-contents'), '20px'],
   ['Model', '/model', (page) => page.locator('.model-page__main'), '20px'],

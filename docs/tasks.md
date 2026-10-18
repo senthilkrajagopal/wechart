@@ -1897,10 +1897,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T829 (AC-484, AC-196, AC-496) The compact row: one 48 px row fixed above the tiles holding the way back, the title, the page tabs, the actions as today and the Filters toggle last
 
-- [ ] T830 (AC-485, AC-195) The way back "← ‹folder›" naming the whole path, and the title at `text-lg`, cut short with its tooltip and shown whole at the top of the open sheet only when cut
-  - Files: `packages/web/src/dashboard/header/BackToFolder.tsx` (+ test; the path as `workspaces/explore/FolderCrumbs.tsx` builds it), `packages/web/src/dashboard/header/HeaderTitle.tsx` (+ test), `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/dashboard/header/HeaderSheet.tsx`, `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
-  - Failing test: `BackToFolder.test.tsx`: for a dashboard in Shared / Sales / EMEA it reads "← EMEA", its accessible name and tooltip are "Back to Shared / Sales / EMEA", and activating it opens Explore on that folder (AC-485, AC-195). The e2e at 1,440 × 900: the `h1` is 20 px at weight 600; with a 120-character title it stays one line at least 160 px wide, is cut with an ellipsis (`scrollWidth > clientWidth`), keeps the whole title in its `title` and accessible name, every tab and action stays in the row, and the open sheet starts with the whole title; with a short title the sheet shows none (AC-485).
-  - Depends on: T829
+- [x] T830 (AC-485, AC-195) The way back "← ‹folder›" naming the whole path, and the title at `text-lg`, cut short with its tooltip and shown whole at the top of the open sheet only when cut
 
 - [ ] T831 (AC-486) The toggle's count of filters set, its name and description, "Filters, none set", and "Details" on a dashboard with no filters
   - Files: `packages/web/src/dashboard/header/filtersSet.ts` (+ test), `packages/web/src/dashboard/header/FiltersToggle.tsx` (+ test), `packages/web/src/dashboard/DashboardView.tsx`.
