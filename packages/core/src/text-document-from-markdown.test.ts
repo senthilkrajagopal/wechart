@@ -147,15 +147,37 @@ describe('a markdown tile’s text as a Text document (T869, AC-512)', () => {
     expect(converted('## A\r\nb')).toEqual(doc(h(2, text('A')), p(text('b'))));
   });
 
-  // What T870 writes for typed markdown characters (decision T869-1).
-  it('reads a backslash before punctuation as that character, never as a mark', () => {
-    expect(converted('\\*\\*not bold\\*\\* and \\{{measure:orders.revenue}}')).toEqual(
+  // T869's review: a markdown tile had no escapes, so its backslashes are
+  // text, as it drew them (AC-512).
+  it('keeps a markdown tile’s backslashes as the text they were', () => {
+    for (const typed of [
+      'C:\\Users stays',
+      '\\\\server\\share',
+      'C:\\Program Files\\(x86)',
+      'match \\d+\\. here',
+      '`a\\*b` in code',
+    ])
+      expect(converted(typed)).toEqual(doc(p(text(typed))));
+  });
+
+  // What T870 writes for typed markdown characters (decision T869-1): read
+  // so only where asked, for markdown written through MCP (AC-527).
+  it('with escapes, reads a backslash before punctuation as that character, never as a mark', () => {
+    const escaped = (markdown: string) => {
+      const result = textDocumentFromMarkdown(markdown, { escapes: true });
+      expect(textDocumentProblems(result)).toEqual([]);
+      return result;
+    };
+    expect(escaped('\\*\\*not bold\\*\\* and \\{{measure:orders.revenue}}')).toEqual(
       doc(p(text('**not bold** and {{measure:orders.revenue}}'))),
     );
-    expect(converted('\\# not a heading\n\\- nor a list')).toEqual(
+    expect(escaped('\\# not a heading\n\\- nor a list')).toEqual(
       doc(p(text('# not a heading'), br, text('- nor a list'))),
     );
-    expect(converted('C:\\Users stays')).toEqual(doc(p(text('C:\\Users stays'))));
+    expect(escaped('C:\\Users stays')).toEqual(doc(p(text('C:\\Users stays'))));
+    // A private-use character typed is kept as typed, in either reading.
+    expect(escaped('icon \ue02a here')).toEqual(doc(p(text('icon \ue02a here'))));
+    expect(converted('icon \ue02a here')).toEqual(doc(p(text('icon \ue02a here'))));
   });
 
   it('reads an empty text as an empty document', () => {
@@ -173,6 +195,22 @@ describe('a markdown tile’s text as a Text document (T869, AC-512)', () => {
     );
     expect(converted('[a](javascript:alert(1))')).toEqual(doc(p(text('[a](javascript:alert(1))'))));
     expect(converted('[a](data:text/html,x)')).toEqual(doc(p(text('[a](data:text/html,x)'))));
+    expect(converted('[a](javascript:alert)')).toEqual(doc(p(text('[a](javascript:alert)'))));
+  });
+
+  // T869's review: a refused link's words still read as the tile drew them.
+  it('reads the emphasis and tokens in a refused link’s words, its brackets as text', () => {
+    expect(converted('[**Write** {{measure:orders.count}}](mailto:ops@x.example)')).toEqual(
+      doc(
+        p(
+          text('['),
+          text('Write', bold),
+          text(' '),
+          { type: 'value', attrs: { measure: 'orders.count' } },
+          text('](mailto:ops@x.example)'),
+        ),
+      ),
+    );
   });
 });
 
@@ -245,6 +283,33 @@ describe('a markdown tile’s tokens as elements (T869, AC-512, AC-116)', () => 
   it('leaves braces that name no element as text', () => {
     expect(converted('{{name}} and {{measure:revenue}}')).toEqual(
       doc(p(text('{{name}} and {{measure:revenue}}'))),
+    );
+  });
+
+  // T869's review: a token in place, the link's words either side linked.
+  it('keeps a token in a link’s words in its place, out of the link', () => {
+    expect(converted('[see {{measure:orders.count}} now](https://x.example)')).toEqual(
+      doc(
+        p(
+          text('see ', link('https://x.example')),
+          { type: 'value', attrs: { measure: 'orders.count' } },
+          text(' now', link('https://x.example')),
+        ),
+      ),
+    );
+  });
+
+  // T869's review: a token in an address is a live value, as the tile drew
+  // it, never text inside an href.
+  it('reads a token in a link’s address as a value, and the rest as text', () => {
+    expect(converted('[a](https://x.example/{{measure:orders.count}})')).toEqual(
+      doc(
+        p(
+          text('[a](https://x.example/'),
+          { type: 'value', attrs: { measure: 'orders.count' } },
+          text(')'),
+        ),
+      ),
     );
   });
 

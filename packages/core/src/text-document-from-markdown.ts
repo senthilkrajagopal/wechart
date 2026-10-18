@@ -54,7 +54,9 @@ const MARKS: readonly { readonly pattern: RegExp; readonly kind: Kind }[] = [
   { pattern: /(?<!\*)\*(?=[^\s*])([\s\S]+?)(?<=[^\s*])\*(?!\*)/, kind: 'em' },
   { pattern: /(?<![\w_])_(?=\S)([\s\S]+?)(?<=\S)_(?![\w_])/, kind: 'em' },
   { pattern: /`([^`]+)`/, kind: 'code' },
-  { pattern: /\[([^[\]]+)\]\(([^()\s]+)\)/, kind: 'link' },
+  // No brace in the address, so a token there is a live value, as the tile
+  // drew it, never text inside an href (T869's review).
+  { pattern: /\[([^[\]]+)\]\(([^(){}\s]+)\)/, kind: 'link' },
 ];
 
 /** Marks in one order, so equal runs compare equal: bold, italic, link. */
@@ -65,18 +67,28 @@ function withMark(marks: readonly TextMark[], mark: TextMark): TextMark[] {
 }
 
 /**
- * A backslash before ASCII punctuation is that character as text (T870: so
- * markdown T870 writes, with a typed `**` or `{{` escaped, reads back as
- * typed). While the marks are read, each escaped character stands in for
- * itself as a private-use character no pattern here matches, and is shown
- * again in the text it ends up in.
+ * With escapes (markdown T870 wrote, given through MCP: AC-527), a backslash
+ * before ASCII punctuation is that character as text, so a typed `**` or
+ * `{{` reads back as typed. A markdown tile had no escapes, so its
+ * backslashes are read as the text they were (AC-512, T869's review).
+ *
+ * While the marks are read, each escaped character stands in for itself as
+ * one of Unicode's 32 noncharacters U+FDD0…U+FDEF, one per ASCII punctuation
+ * character, which no pattern here matches; it's shown again in the text it
+ * ends up in. Noncharacters aren't for interchange, so any already in the
+ * text are read as U+FFFD first and never mistaken for a stand-in.
  */
+const PUNCTUATION = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~';
+const STAND_IN = 0xfdd0;
 const ESCAPED = /\\([!-/:-@[-`{-~])/g;
-const STAND_IN = 0xe000;
+const NONCHARACTER = /[﷐-﷯]/g;
+const cleaned = (text: string) => text.replace(NONCHARACTER, '�');
 const hidden = (text: string) =>
-  text.replace(ESCAPED, (_, one: string) => String.fromCharCode(STAND_IN + one.charCodeAt(0)));
+  text.replace(ESCAPED, (_, one: string) =>
+    String.fromCharCode(STAND_IN + PUNCTUATION.indexOf(one)),
+  );
 const shown = (text: string) =>
-  text.replace(/[-]/g, (one) => String.fromCharCode(one.charCodeAt(0) - STAND_IN));
+  text.replace(NONCHARACTER, (one) => PUNCTUATION[one.charCodeAt(0) - STAND_IN] ?? one);
 
 const textNode = (text: string, marks: readonly TextMark[]): TextNode => ({
   type: 'text',
@@ -149,10 +161,16 @@ function inlineOf(text: string, marks: readonly TextMark[]): TextNode[] {
   if (kind === 'code') marked = literalRun(match[0], marks);
   else if (kind === 'link') {
     const href = shown(match[2] ?? '');
+    // A refused address leaves its brackets as text, and its words read as
+    // the tile drew them, emphasis and tokens too (T869's review).
     marked =
       textLinkProblem(href) === undefined
         ? inlineOf(inner, withMark(marks, { type: 'link', attrs: { href } }))
-        : literalRun(match[0], marks);
+        : [
+            textNode('[', marks),
+            ...inlineOf(inner, marks),
+            textNode(`](${match[2] ?? ''})`, marks),
+          ];
   } else {
     const added: TextMark[] =
       kind === 'both'
@@ -186,10 +204,16 @@ function joined(nodes: readonly TextNode[]): TextNode[] {
 const withContent = (node: TextNode, content: readonly TextNode[]): TextNode =>
   content.length === 0 ? node : { ...node, content: [...content] };
 
-const inline = (text: string) => joined(inlineOf(hidden(text), []));
-
-/** A markdown tile's text as a Text tile's document, read as that tile drew it (AC-512). */
-export function textDocumentFromMarkdown(markdown: string): TextDocument {
+/**
+ * A markdown tile's text as a Text tile's document, read as that tile drew it
+ * (AC-512); with `escapes`, markdown as T870 writes it (AC-527).
+ */
+export function textDocumentFromMarkdown(
+  markdown: string,
+  { escapes = false }: { readonly escapes?: boolean } = {},
+): TextDocument {
+  const inline = (text: string) =>
+    joined(inlineOf(escapes ? hidden(cleaned(text)) : cleaned(text), []));
   const blocks: TextNode[] = [];
   let paragraph: string[] = [];
   let list: { ordered: boolean; start: number; items: string[] } | null = null;
