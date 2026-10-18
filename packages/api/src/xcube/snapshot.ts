@@ -86,6 +86,14 @@ export interface FolderMove {
  * (T765, AC-330; research `xcube-c2602ac72a.md`, step 2): kept under its
  * parent there, and that parent too where wechart has it no more, up to a
  * folder of wechart's. Where a folder is in both, wechart's parent stands.
+ *
+ * A kept folder admits only the groups its parent admits too: xcube refuses
+ * a tree where a folder's allowed groups aren't within its parent's (`400
+ * invalid_permissions` with sign-in on; `@wechart/core`'s `allowedGroups`).
+ * Its own groups are as wechart last put them, and a group granted only on
+ * folders deleted since is in no live parent's, so keeping them refused the
+ * whole catch-up, and with it every tree push after. A kept folder is only
+ * waiting to be emptied, so narrowing it takes nothing anyone may use.
  */
 export function keptTree(
   ours: readonly TreeFolder[],
@@ -93,15 +101,35 @@ export function keptTree(
 ): readonly TreeFolder[] {
   const tree = new Map(ours.map((folder) => [folder.id, folder]));
   const byId = new Map(held.map((folder) => [folder.id, folder]));
+  const kept = new Map<string, HeldFolder>();
   for (const folder of held) {
     if (folder.items === 0 && folder.dataSources === 0) continue;
     for (
       let at: HeldFolder | undefined = folder;
       at !== undefined && !tree.has(at.id);
       at = at.parentId === null ? undefined : byId.get(at.parentId)
-    )
+    ) {
       tree.set(at.id, { id: at.id, parentId: at.parentId, allowedGroups: at.allowedGroups });
+      kept.set(at.id, at);
+    }
   }
+  // Each kept folder's groups within its parent's, a kept parent narrowed first.
+  const narrowed = new Set<string>();
+  const narrow = (folder: HeldFolder): void => {
+    if (narrowed.has(folder.id)) return;
+    narrowed.add(folder.id);
+    if (folder.parentId === null) return;
+    const keptParent = kept.get(folder.parentId);
+    if (keptParent !== undefined) narrow(keptParent);
+    const within = tree.get(folder.parentId)?.allowedGroups;
+    if (within === undefined) return;
+    tree.set(folder.id, {
+      id: folder.id,
+      parentId: folder.parentId,
+      allowedGroups: folder.allowedGroups.filter((group) => within.includes(group)),
+    });
+  };
+  for (const folder of kept.values()) narrow(folder);
   return [...tree.values()];
 }
 

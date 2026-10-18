@@ -6,7 +6,7 @@ import { fakeXcube, FAKE_ADMIN_TOKEN } from './fake';
 import { treeHashOf, type TreeFolder } from './folders';
 import { itemsHashOf, itemsOf } from './items';
 import { memoryPublications } from './publications';
-import { contentHashOf, modelSync } from './snapshot';
+import { contentHashOf, keptTree, modelSync } from './snapshot';
 
 /**
  * T449, AC-333 as amended (R30): WHEN wechart's API starts, a publish is
@@ -722,6 +722,57 @@ describe('catching up a folder deleted while xcube missed it (T765, AC-330)', ()
     expect(stub.tree('dev')).toEqual(tree);
     expect(stub.head('dev')?.items.map(({ folderId, name }) => ({ folderId, name }))).toEqual([
       { folderId: 'fnew', name: 'new_sales' },
+    ]);
+  });
+
+  /**
+   * With sign-in on, xcube refuses a tree where a folder's allowed groups
+   * aren't within its parent's (`400 invalid_permissions`, "Each folder's
+   * allowed groups must include all of its children's"). A kept folder's
+   * groups are the ones it had when wechart last put it, and its parent's
+   * are wechart's now: a group granted only on folders since deleted, such
+   * as `managers` on a test's /Hidden, is in the kept folder's and in no
+   * live one's. The whole catch-up was then refused at step 2, and every
+   * tree push after it with `409 folder_in_use`, so no folder made since
+   * reached xcube. A kept folder only waits to be emptied, so it admits no
+   * group its parent doesn't, and gives no one more than they have.
+   */
+  it('keeps each kept folder’s groups within its parent’s, so the tree is one xcube takes', () => {
+    const ours: TreeFolder[] = [
+      { id: 'froot', parentId: null, allowedGroups: ['sales-rw', 'super'] },
+      { id: 'fsales', parentId: 'froot', allowedGroups: ['sales-rw', 'super'] },
+    ];
+    const heldAt = (id: string, parentId: string | null, groups: string[], items: number) => ({
+      id,
+      parentId,
+      allowedGroups: groups,
+      items,
+      dataSources: items,
+    });
+    const held = [
+      heldAt('froot', null, ['managers', 'super'], 0),
+      // Deleted in wechart: /Hidden, with its cube and its data source.
+      heldAt('fhid', 'froot', ['managers', 'super'], 1),
+      // And a chain: /Gone/Below, Below holding things, under /Sales.
+      heldAt('fgone', 'fsales', ['ops', 'sales-rw', 'super'], 0),
+      heldAt('fbelow', 'fgone', ['ops', 'super'], 1),
+    ];
+    expect(keptTree(ours, held)).toEqual([
+      ...ours,
+      { id: 'fhid', parentId: 'froot', allowedGroups: ['super'] },
+      { id: 'fbelow', parentId: 'fgone', allowedGroups: ['super'] },
+      { id: 'fgone', parentId: 'fsales', allowedGroups: ['sales-rw', 'super'] },
+    ]);
+  });
+
+  it('keeps a kept folder’s own groups where its parent’s carry none (sign-in off)', () => {
+    const ours: TreeFolder[] = [{ id: 'froot', parentId: null }];
+    const held = [
+      { id: 'fold', parentId: 'froot', allowedGroups: ['admin'], items: 1, dataSources: 0 },
+    ];
+    expect(keptTree(ours, held)).toEqual([
+      ...ours,
+      { id: 'fold', parentId: 'froot', allowedGroups: ['admin'] },
     ]);
   });
 });
