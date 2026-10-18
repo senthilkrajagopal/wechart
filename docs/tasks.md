@@ -2545,10 +2545,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 ### Lane CHARTS-B: the Map
 
-- [ ] T973 (AC-622, AC-305, AC-037) One Map type in place of the Country map: a boundary set and Regions, Points and Density layers in its spec, and saved country maps opening as Regions on Countries, unchanged
-  - Files: `packages/core/src/chart-types/map.ts` (+ test), `packages/core/src/chart-migrations.ts` (+ test), `packages/web/src/editor/wells/map.tsx` (+ test), `packages/charts/src/series/map.ts`.
-  - Failing test: `chart-migrations.test.ts`: a country map saved before R81 reads as a Map with a Regions layer on Countries and the same measure and dimension; `map.test.ts` (series): it draws the same countries in the same colours as before; `map.test.tsx` (wells): Boundary set offers Countries, Admin-1 and custom sets, and the three layers; the gallery has one Map card (AC-622, AC-305, AC-037).
-  - Depends on: T934
+- [x] T973 (AC-622, AC-305, AC-037) One Map type in place of the Country map: a boundary set and Regions, Points and Density layers in its spec, and saved country maps opening as Regions on Countries, unchanged
 
 - [ ] T974 (AC-623) A region key for every boundary set, from its values or the model's mark, and every unplaced value named in the page's text
   - Files: `packages/core/src/geo/regionKeys.ts` (+ test), `packages/core/src/geo/iso3.ts`, `packages/web/src/workspaces/model/form/ObjectForm.tsx`, `packages/web/src/workspaces/model/form/regionKey.test.tsx`, `packages/web/src/tiles/UnplacedCodes.tsx`.

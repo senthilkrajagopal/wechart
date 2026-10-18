@@ -14,7 +14,13 @@
  * Only placed codes are passed, one per row: ECharts sums the values of a
  * name it sees twice, which is wrong for any measure that isn't a sum.
  */
-import { formatterFor, memberOn, type RenderSpec } from '@wechart/core';
+import {
+  formatterFor,
+  mapSettingsOf,
+  memberOn,
+  type BoundarySet,
+  type RenderSpec,
+} from '@wechart/core';
 import { COLORS } from '@wechart/ui';
 import { geoEqualEarth } from 'd3-geo';
 
@@ -66,15 +72,47 @@ export function unplacedCodes(
   spec: RenderSpec,
   map: CountryMap | undefined = countryMap(),
 ): string[] {
-  // Before the boundaries are in, no code is known to be off them.
-  if (map === undefined) return [];
+  // Before the boundaries are in, no code is known to be off them; nor are
+  // they the boundaries of a Map on another set, not drawn yet (T973).
+  if (map === undefined || mapSettingsOf(spec.options).boundarySet !== 'countries') return [];
   return codesOf(spec)
     .map(({ code }) => code)
     .filter((code) => !map.keys.has(code));
 }
 
+/**
+ * What a Map on a boundary set not drawn yet says, in place of any region
+ * (T973): Admin-1 is drawn from T975, custom sets from T979.
+ */
+function notDrawnYet(boundarySet: BoundarySet): EChartsOption {
+  return {
+    animation: false,
+    series: [],
+    graphic: [
+      {
+        type: 'text',
+        left: 'center',
+        top: 'middle',
+        style: {
+          text:
+            boundarySet === 'admin1'
+              ? 'Admin-1 boundaries are not drawn yet.'
+              : 'Custom boundary sets are not drawn yet.',
+          fill: COLORS.light['text-secondary'],
+          fontSize: 12,
+        },
+      },
+    ],
+  };
+}
+
 export function mapOption(spec: RenderSpec, map: CountryMap): EChartsOption {
   if (!isMapType(spec.chartType)) throw new Error(`${spec.chartType} is not a map`);
+  // The Map's Regions on its boundary set (T973, AC-622): Countries draws as
+  // the country map did; a country map saved before R81 has no settings and
+  // reads as Countries.
+  const { boundarySet } = mapSettingsOf(spec.options);
+  if (boundarySet !== 'countries') return notDrawnYet(boundarySet);
   const measure = memberOn(spec.encoding, 'y') ?? '';
   const format = formatterFor(measure, spec.formats ?? {});
 

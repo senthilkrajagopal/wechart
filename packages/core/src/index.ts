@@ -334,4 +334,16 @@ export {
   type BoxplotDistribution,
   type BoxplotPoints,
 } from './chart-types/boxplotDistribution';
+export {
+  BOUNDARY_SETS,
+  DEFAULT_MAP,
+  mapLayersOf,
+  mapModule,
+  mapSettingsOf,
+  type BoundarySet,
+  type DensityLayer,
+  type MapLayers,
+  type MapSettings,
+  type PointsLayer,
+} from './chart-types/map';
 export { sealSecretV1, type XcubeKey } from './data-sources/seal';

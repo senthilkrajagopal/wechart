@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CHART_DOCUMENT_VERSION, readChartDocument } from './chart-document';
 import { LEGACY_FIXTURES, migrateChartDocument } from './chart-migrations';
+import { mapLayersOf, mapSettingsOf } from './chart-types/map';
 
 /**
  * AC-181: WHEN a saved chart written in an earlier document format is opened,
@@ -97,4 +98,45 @@ describe('the pre-definition catalog body', () => {
     // No chart type is pinned, so the recommender still gets to choose.
     expect(document.chart.chartType).toBeUndefined();
   });
+});
+
+/**
+ * T973 / AC-622, AC-305: a country map saved before R81 SHALL open as the
+ * Map, with a Regions layer on the Countries boundary set, drawing as it did.
+ * `Fails when: … a country map saved before R81 opens as another type, another
+ * boundary set, or draws a country another colour.`
+ *
+ * No step is needed: a Map with no settings of its own reads as Regions on
+ * Countries, its region key the chart's dimension and its colour the measure.
+ */
+describe('a country map saved before R81', () => {
+  // As T398 stored one, in each format a country map was saved in.
+  const countryMap = (schemaVersion: number) => ({
+    schemaVersion,
+    title: 'Revenue by country',
+    owner: 'admin',
+    folderId: 'seed-folder-0',
+    chart: {
+      source: { cube: 'orders' },
+      wells: {
+        measures: ['orders.total_amount'],
+        dimensions: ['customers.country'],
+        timeDimensions: [],
+      },
+      chartType: 'map',
+    },
+  });
+
+  for (const version of [1, 2]) {
+    it(`opens, from version ${String(version)}, as a Map with Regions on Countries and the same fields`, () => {
+      const document = read(countryMap(version));
+      expect(document.chart.chartType).toBe('map');
+      expect(document.chart.wells.measures).toEqual(['orders.total_amount']);
+      expect(document.chart.wells.dimensions).toEqual(['customers.country']);
+      expect(mapSettingsOf(document.chart.options)).toEqual({ boundarySet: 'countries' });
+      expect(mapLayersOf(document.chart)).toEqual({
+        regions: { key: 'customers.country', measure: 'orders.total_amount' },
+      });
+    });
+  }
 });

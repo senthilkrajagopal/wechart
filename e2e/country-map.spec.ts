@@ -76,6 +76,44 @@ test('a measure by ISO-3 codes is offered as a country map, coloured, with a leg
   await expect(result.getByTestId('unplaced-codes')).toHaveText('Not on the map: GUF');
 });
 
+/**
+ * T973 / AC-622: one Map type, in place of the Country map, taking a Boundary
+ * set (Countries; Admin-1, by country; or a custom set) and up to three
+ * layers, Regions, Points and Density. The real surface: the chart editor's
+ * Map wells, on the real Cube. Admin-1 is drawn from T975.
+ */
+test('the Map’s wells offer its boundary sets and three layers, Regions drawn from its fields', async ({
+  page,
+  request,
+}, testInfo) => {
+  const cube = await newChartOnCountries(page, request, testInfo.project.name);
+  await wellPicker(page, 'dimensions').selectOption(`${cube}.iso3`);
+  const result = page.getByTestId('editor-result');
+  await expect(result.locator('svg').first()).toContainText('FRA');
+  await chooseChartType(page, 'map');
+  await expectChartType(page, 'map');
+
+  const set = page.getByRole('combobox', { name: 'Boundary set' });
+  await expect(set).toHaveValue('countries');
+  await expect(set.locator('option')).toHaveText(['Countries', 'Admin-1, by country']);
+  for (const layer of ['Regions layer', 'Points layer', 'Density layer'])
+    await expect(page.getByRole('heading', { name: layer })).toBeVisible();
+  await expect(page.getByTestId('map-layer-regions')).toContainText(/ coloured by /);
+  await expect(result.getByTestId('unplaced-codes')).toHaveText('Not on the map: GUF');
+
+  // On Admin-1, not drawn yet, and saying so; no country checked against it.
+  await set.selectOption('admin1');
+  await expect(result.locator('svg').first()).toContainText(
+    'Admin-1 boundaries are not drawn yet.',
+  );
+  await expect(result.getByTestId('unplaced-codes')).toHaveCount(0);
+
+  // Back on Countries, the map is as it was.
+  await set.selectOption('countries');
+  await expect(result.getByTestId('unplaced-codes')).toHaveText('Not on the map: GUF');
+  await expect(result.locator('svg').first()).toContainText('No data');
+});
+
 test('the map is offered for a dimension the model marks a country code only as the model says', async ({
   page,
   request,

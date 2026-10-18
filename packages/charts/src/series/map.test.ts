@@ -190,3 +190,51 @@ describe('a country map', () => {
     expect(unplacedCodes(spec(ROWS.slice(0, 4)))).toEqual([]);
   });
 });
+
+/**
+ * T973 / AC-622, AC-305: the Map in place of the country map. A country map
+ * saved before R81 is a Map with a Regions layer on Countries, and draws the
+ * same countries in the same colours; on Countries chosen as such, too.
+ * `Fails when: … a country map saved before R81 opens as another type, another
+ * boundary set, or draws a country another colour.`
+ */
+describe('the Map', () => {
+  // What a reader sees: each country's fill, and the legend's words.
+  const drawing = (svg: string) => ({
+    regions: regionsOf(svg),
+    texts: [...svg.matchAll(/<text\b[^>]*>([^<]*)<\/text>/g)].map((match) => match[1]),
+  });
+
+  it('draws Regions on Countries exactly as the country map did', () => {
+    const before = renderToSvg(optionFor(spec(ROWS)));
+    const chosen = renderToSvg(
+      optionFor({ ...spec(ROWS), options: { map: { boundarySet: 'countries' } } }),
+    );
+    expect(regionsOf(before).length).toBeGreaterThan(100);
+    expect(drawing(chosen)).toEqual(drawing(before));
+  });
+
+  it('draws a Points or Density layer’s settings on Countries no differently, until those layers draw', () => {
+    const before = renderToSvg(optionFor(spec(ROWS)));
+    const layered = renderToSvg(
+      optionFor({
+        ...spec(ROWS),
+        options: { map: { points: { location: 'stores.location' } } },
+      }),
+    );
+    expect(drawing(layered)).toEqual(drawing(before));
+  });
+
+  it('says a boundary set not drawn yet isn’t, and colours no country from the ramp', () => {
+    for (const [boundarySet, said] of [
+      ['admin1', 'Admin-1 boundaries are not drawn yet.'],
+      ['custom:territories', 'Custom boundary sets are not drawn yet.'],
+    ] as const) {
+      const svg = renderToSvg(optionFor({ ...spec(ROWS), options: { map: { boundarySet } } }));
+      expect(svg, boundarySet).toContain(said);
+      expect(regionsOf(svg), boundarySet).toEqual([]);
+      // Nor are its keys checked against the countries: none is said unplaced.
+      expect(unplacedCodes({ ...spec(ROWS), options: { map: { boundarySet } } })).toEqual([]);
+    }
+  });
+});

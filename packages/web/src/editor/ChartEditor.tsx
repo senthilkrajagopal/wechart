@@ -1131,7 +1131,19 @@ function EditorBody({
                       ? highlighted.well
                       : undefined
                   }
-                  typeWells={shownType === null ? undefined : { chartType: shownType }}
+                  typeWells={
+                    shownType === null
+                      ? undefined
+                      : {
+                          chartType: shownType,
+                          // What a type's own wells read and set (T973: the Map's).
+                          options,
+                          onOptions: setOptions,
+                          available,
+                          titleOf: (member: string) => titles[member] ?? member,
+                          spec,
+                        }
+                  }
                   // A box plot's "Each point is" (T400, AC-314), for a box plot alone.
                   {...(shownType === 'boxplot'
                     ? {
