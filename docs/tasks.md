@@ -1632,11 +1632,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T788 (AC-477, AC-469) List jobs, builds and schedules through MCP, with Run now and Cancel where the owner may, and no schedule edits
 
-- [ ] T789 (AC-440, AC-441) Offer no tool that approves or rejects, or that touches data sources, a shared folder directly, the SQL runner, the audit trail or tokens
-  - Lane: MCP
-  - Files: `packages/api/src/mcp/excluded.test.ts`.
-  - Failing test: `excluded.test.ts`: for a Super-Admin's token with every scope, `tools/list` holds no tool that approves or rejects a proposal (AC-440), or creates, changes, tests, deletes or copies a data source, makes a subfolder, sets a permission, renames, moves or deletes a shared item, switches or runs the SQL runner (Cube Store and the "Cube" group included), reads the audit trail, or makes, lists or revokes tokens (AC-441); `tools/call` naming any such tool is refused and no proposal's state, data source, folder or token changes.
-  - Depends on: T784, T786, T787, T788
+- [x] T789 (AC-440, AC-441) Offer no tool that approves or rejects, or that touches data sources, a shared folder directly, the SQL runner, the audit trail or tokens
 
 - [ ] T790 (AC-444) Connect Claude Code to `/mcp` with a token, list the token's tools and answer a read as its owner
   - Lane: MCP

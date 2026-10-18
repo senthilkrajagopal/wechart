@@ -464,6 +464,16 @@
       - **Refusals' reasons** (low): Run now's two refusals and the six cancel refusals are now checked by their words (the route's, or `NOT_OFFERED` and `NOT_IN_QUEUE`), not only as errors.
       - **Left as is** (low): `before`, `offset` and the `cubeSchedulesListed: false` fallback aren't exercised; the no-edit check is by name, with `transport.test.ts` pinning the exact tool list. The same commit fixes `proposals.test.ts`'s formatting from T787's follow-up.
 
+- [x] T789 (AC-440, AC-441) Offer no tool that approves or rejects, or that touches data sources, a shared folder directly, the SQL runner, the audit trail or tokens
+  - Lane: MCP
+  - Files: `packages/api/src/mcp/excluded.test.ts`.
+  - Failing test: `excluded.test.ts`: for a Super-Admin's token with every scope, `tools/list` holds no tool that approves or rejects a proposal (AC-440), or creates, changes, tests, deletes or copies a data source, makes a subfolder, sets a permission, renames, moves or deletes a shared item, switches or runs the SQL runner (Cube Store and the "Cube" group included), reads the audit trail, or makes, lists or revokes tokens (AC-441); `tools/call` naming any such tool is refused and no proposal's state, data source, folder or token changes.
+  - Depends on: T784, T786, T787, T788
+  - **Built 2026-10-18** (lane MCP, batch 6). **Ticks AC-440 and AC-441.** A test alone: no code changed.
+    - **Tests:** `mcp/excluded.test.ts` (3, new), with sign-in on, for `super`'s token with all three scopes. `tools/list` is exactly the 22 tools served (decision T789-1), and no name says it approves, rejects or decides, changes a data source, makes a folder, sets a permission or access, renames or moves, or touches the SQL runner, Cube Store, the audit trail or tokens (`read_data_source` is a read). Twenty unserved names (`approve_proposal`, `reject_proposal`, `create_data_source`, `test_data_source`, `copy_data_source`, `create_folder`, `set_permissions`, `rename_item`, `move_item`, `run_sql`, `run_cube_store_sql`, `switch_sql_runner`, `read_audit_trail`, `list_tokens`, `create_token`, `revoke_token` and others) are refused as not found. The tools there are, asked by `super` to do what they may in the web app, are refused: withdrawing another's open proposal into the shared folder, changing (a rename) or deleting its dashboard, creating there, moving their own dashboard there, saving or deleting a model file there, and proposing a data source. Before and after each, a fingerprint of every proposal's state, every data source, every folder, the shared folder's items, every SQL runner switch, the count of SQL runs and every token's name, scopes and revocation is unchanged, and the proposal is still open and undecided.
+    - **Not red first:** the test asserts what isn't offered, and nothing offers it, so it passed on its first run (with T787's follow-up). It guards what comes later: a new tool fails the pinned list.
+    - **Unit suite:** all green: api 2,070, web 3,149, core 553, charts 556, recommender 133, ui 47.
+
 ## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
 
 - **Asked:** why `GET /api/images/:id` in `access/route-matrix.test.ts` times out at 5 s in most full unit runs.
