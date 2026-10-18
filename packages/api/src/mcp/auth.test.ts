@@ -6,7 +6,7 @@ import { closeDb, getDb } from '../db/client';
 import { accessTokenStore } from '../repos/access-tokens';
 import { signInStore } from '../repos/sign-ins';
 import { buildServer } from '../server';
-import { rateLimitCounter } from './rateLimitStore';
+import { forgetTestCounts, testCounter } from './counter.fixture';
 import { mintToken } from './tokenText';
 
 /**
@@ -19,8 +19,12 @@ import { mintToken } from './tokenText';
  */
 const HOST = 'mcp.wechart.example.com';
 const store = () => accessTokenStore(getDb());
-/** Where `/mcp` counts each token's requests (T779): with none, it takes nothing. */
-const counter = () => rateLimitCounter(getDb());
+/**
+ * Where `/mcp` counts each token's requests (T779): with none, it takes
+ * nothing. Its own, so these refusals from 127.0.0.1 share no address's
+ * count with other files (T780).
+ */
+const counter = () => testCounter();
 const DAY = 86_400_000;
 const MISSING = 'Bearer error="invalid_token", error_description="Missing Authorization header"';
 const REFUSED =
@@ -71,6 +75,7 @@ const ACCEPT = { accept: 'application/json, text/event-stream' };
 
 afterAll(async () => {
   await getDb().deleteFrom('personal_access_tokens').where('name', 'like', 't776 %').execute();
+  await forgetTestCounts();
   await closeDb();
 });
 

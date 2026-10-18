@@ -1,6 +1,6 @@
 import { type AddressInfo, connect, createServer, type Server, type Socket } from 'node:net';
 
-import { Kysely, PostgresDialect } from 'kysely';
+import { Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -83,6 +83,18 @@ const post = (app: App, token: string, payload: object) =>
   });
 
 afterAll(async () => {
+  // The tokens' counts first, while their ids can still be found by name.
+  await getDb()
+    .deleteFrom('mcp_rate_limit')
+    .where(
+      'key',
+      'in',
+      getDb()
+        .selectFrom('personal_access_tokens')
+        .select(sql<string>`'tok:' || id`.as('key'))
+        .where('name', '=', NAME),
+    )
+    .execute();
   await getDb().deleteFrom('personal_access_tokens').where('name', '=', NAME).execute();
   await closeDb();
 });
@@ -227,6 +239,17 @@ describe('the limit’s store unavailable (T779, AC-473)', () => {
         expect(refused.statusCode, payload.method).toBe(503);
         expect(refused.body, payload.method).not.toContain('"result"');
         expect(refused.json<{ error: string }>().error).toMatch(/can’t count/i);
+      }
+      // A bad or missing token, and a GET or DELETE, are counted too (T780): refused alike.
+      expect((await post(app, mintToken().text, initialize(6))).statusCode).toBe(503);
+      for (const method of ['POST', 'GET', 'DELETE'] as const) {
+        const unsigned = await app.inject({
+          method,
+          url: '/mcp',
+          headers: { host: HOST, ...ACCEPT },
+          ...(method === 'POST' ? { payload: initialize(7) } : {}),
+        });
+        expect(unsigned.statusCode, method).toBe(503);
       }
 
       await relay.start();

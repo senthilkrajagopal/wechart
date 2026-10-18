@@ -1,4 +1,4 @@
-import rateLimit from '@fastify/rate-limit';
+import rateLimit, { normalizeIP } from '@fastify/rate-limit';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import { bearerAuthChallengeResponse } from '@modelcontextprotocol/server';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -7,6 +7,7 @@ import { PUBLIC } from '../auth/guard';
 import { type McpAuth, noTokens } from './auth';
 import { mcpGuard } from './guard';
 import {
+  MCP_BAD_TOKEN_LIMIT,
   MCP_RATE_LIMIT,
   type RateLimitCounter,
   RateLimited,
@@ -38,14 +39,21 @@ export interface McpOptions {
   readonly rateLimits?: RateLimitCounter;
   /** A token's requests a minute, `WECHART_MCP_RATE_LIMIT`: 60 unset (AC-472). */
   readonly rateLimit?: number;
+  /** An address's bad-token requests a minute, `WECHART_MCP_BAD_TOKEN_LIMIT`: 20 unset (AC-474). */
+  readonly badTokenLimit?: number;
 }
 
 const MINUTE_MS = 60_000;
+/** The count's keys: a working token's, by its id; a bad or missing one's, by address. */
+const TOKEN_KEY = 'tok:';
+const ADDRESS_KEY = 'ip:';
 
 declare module 'fastify' {
   interface FastifyRequest {
     /** The caller of `/mcp`, once its token is taken (T776); null everywhere else. */
     mcpAuth: McpAuth | null;
+    /** Why `/mcp` took no token, answered 401 once the request is counted (T780). */
+    mcpRefusal: { readonly error: unknown } | null;
   }
 }
 
@@ -57,26 +65,35 @@ declare module 'fastify' {
  * Its routes are public to the session guard: a client signs in with its
  * token in the Authorization header alone, never the web app's cookie
  * (design 18, E3). Each route first checks the Host and Origin (T775,
- * AC-436), then, for a POST, the token (T776, AC-435), all in `onRequest`,
- * before the body is read. A refused token is answered as the SDK's
- * `bearerAuthChallengeResponse` builds it: 401 with its
- * `WWW-Authenticate: Bearer` challenge.
+ * AC-436), then takes the token (T776, AC-435), then counts the request
+ * (T779, T780), all in `onRequest`, before the body is read. A refused token
+ * is then answered as the SDK's `bearerAuthChallengeResponse` builds it: 401
+ * with its `WWW-Authenticate: Bearer` challenge.
  */
 export function registerMcp(app: FastifyInstance, options: McpOptions): void {
   const guard = mcpGuard(options.host);
   const verifyToken = options.verifyToken ?? noTokens;
   app.decorateRequest('mcpAuth', null);
-  const tokenCheck = async (request: FastifyRequest, reply: FastifyReply) => {
+  app.decorateRequest('mcpRefusal', null);
+  // The token taken, or why not, without answering yet: the limiter counts
+  // a bad or missing token by address first (T780, AC-474;
+  // `fastify-rate-limit.md`, "Order relative to the auth hook").
+  const tokenCheck = async (request: FastifyRequest) => {
     try {
       request.mcpAuth = await verifyToken(request.headers.authorization);
     } catch (error) {
-      const refusal = bearerAuthChallengeResponse(error);
-      reply.status(refusal.status);
-      refusal.headers.forEach((value, name) => {
-        reply.header(name, value);
-      });
-      return reply.send(await refusal.text());
+      request.mcpRefusal = { error };
     }
+  };
+  // Then, once counted, a refused token is answered 401 (T776, AC-435).
+  const refuseUntaken = async (request: FastifyRequest, reply: FastifyReply, payload: unknown) => {
+    if (request.mcpAuth !== null) return payload;
+    const refusal = bearerAuthChallengeResponse(request.mcpRefusal?.error);
+    reply.status(refusal.status);
+    refusal.headers.forEach((value, name) => {
+      reply.header(name, value);
+    });
+    return reply.send(await refusal.text());
   };
   // One JSON-RPC request per POST (the 2026-07-28 Streamable HTTP transport,
   // `mcp-typescript-sdk.md`, "Transports and client support").
@@ -101,27 +118,38 @@ export function registerMcp(app: FastifyInstance, options: McpOptions): void {
   // Its own scope, so the limiter's `onRoute` hook sees `/mcp`'s routes alone
   // (`fastify-rate-limit.md`, "Scoping to `/mcp` only").
   app.register(async (mcp) => {
-    // Each token's requests, whatever their method, counted in the metadata
-    // database (T779, AC-472). The limiter is a route-level `onRequest` hook,
-    // so it runs after the Host, Origin and token checks, keyed by the
-    // token's id, never its text (Gotcha 13). A count that fails is rethrown
-    // (`skipOnError` off): 503, fail closed (AC-473). The error handler
-    // answers both (`server.ts`).
+    // Every request counted in the metadata database, whatever its method:
+    // one bearing a working token under the token alone (T779, AC-472),
+    // keyed by its id, never its text (Gotcha 13); one bearing a bad or
+    // missing token under its address, an IPv6 address by its /64, as the
+    // plugin's own key does (T780, AC-474; Gotchas 5 and 9). So a flood of
+    // bad tokens from a shared egress never throttles the working tokens
+    // behind it (`mcp-deployment-and-tokens.md`, "A shared egress means two
+    // budgets"). The limiter is a route-level `onRequest` hook, so it runs
+    // after the Host, Origin and token checks. A count that fails is
+    // rethrown (`skipOnError` off): 503, fail closed (AC-473). The error
+    // handler answers both (`server.ts`).
+    const tokenLimit = options.rateLimit ?? MCP_RATE_LIMIT;
+    const addressLimit = options.badTokenLimit ?? MCP_BAD_TOKEN_LIMIT;
     await mcp.register(rateLimit, {
       hook: 'onRequest',
-      max: options.rateLimit ?? MCP_RATE_LIMIT,
+      max: (_request, key) => (key.startsWith(TOKEN_KEY) ? tokenLimit : addressLimit),
       timeWindow: MINUTE_MS,
       store: rateLimitStore(options.rateLimits),
       skipOnError: false,
-      keyGenerator: (request) => {
-        if (request.mcpAuth === null) throw new Error('/mcp counted a request with no token.');
-        return `tok:${request.mcpAuth.clientId}`;
-      },
+      keyGenerator: (request) =>
+        request.mcpAuth === null
+          ? `${ADDRESS_KEY}${normalizeIP(request.ip, 64)}`
+          : `${TOKEN_KEY}${request.mcpAuth.clientId}`,
       errorResponseBuilder: (_request, context) => new RateLimited(context.after),
     });
     mcp.post(
       MCP_PATH,
-      { ...PUBLIC, onRequest: [...guard, tokenCheck], preParsing: actAsCaller },
+      {
+        ...PUBLIC,
+        onRequest: [...guard, tokenCheck],
+        preParsing: [refuseUntaken, actAsCaller],
+      },
       async (request, reply) => {
         reply.hijack();
         // `auth` on the raw request is where the adapter reads it from (the SDK's Fastify recipe).
@@ -131,9 +159,9 @@ export function registerMcp(app: FastifyInstance, options: McpOptions): void {
         await node(raw, reply.raw, request.body);
       },
     );
-    // These take no token and run nothing, so they aren't counted.
-    const uncounted = { config: { ...PUBLIC.config, rateLimit: false as const } };
-    mcp.get(MCP_PATH, { ...uncounted, onRequest: guard }, notAllowed);
-    mcp.delete(MCP_PATH, { ...uncounted, onRequest: guard }, notAllowed);
+    // Counted as a POST is, by its token or its address (T780), then 405
+    // whatever the token: each its own hook array, which the limiter pushes into.
+    mcp.get(MCP_PATH, { ...PUBLIC, onRequest: [...guard, tokenCheck] }, notAllowed);
+    mcp.delete(MCP_PATH, { ...PUBLIC, onRequest: [...guard, tokenCheck] }, notAllowed);
   });
 }

@@ -5,6 +5,8 @@ import type { Database } from '../db/schema';
 
 /** A token's requests to `/mcp` a minute where the deployment sets none (AC-472, `[R78-5]`). */
 export const MCP_RATE_LIMIT = 60;
+/** An address's requests to `/mcp` with a bad or missing token a minute, unset (AC-474, "20 per minute"). */
+export const MCP_BAD_TOKEN_LIMIT = 20;
 
 /** One count, as the limiter wants it: hits in the window so far, and the window's ms left. */
 export interface RateLimitHit {

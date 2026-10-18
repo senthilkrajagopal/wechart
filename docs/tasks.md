@@ -1612,11 +1612,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T779 (AC-472, AC-473) Limit each token's requests to `/mcp` in the metadata database, 60 a minute where unset, with 429 and `Retry-After` over it and 503 while the store fails; the error handler answers both
 
-- [ ] T780 (AC-474) Limit requests to `/mcp` bearing a bad or missing token per IP address, 20 a minute where unset, IPv6 by its /64
-  - Lane: MCP
-  - Files: `packages/api/src/mcp/plugin.ts`, `packages/api/src/mcp/auth.ts` (a resolution that doesn't throw, then 401 after the limiter, per `fastify-rate-limit.md` "Order relative to the auth hook"), `packages/api/src/config.ts` (`WECHART_MCP_BAD_TOKEN_LIMIT`), `packages/api/src/mcp/bad-token-limit.test.ts`.
-  - Failing test: `bad-token-limit.test.ts`: with no limit set, one address's 21st bad-token request in a minute answers 429 with `Retry-After`, where the first 20 answered 401; addresses rotated within one IPv6 /64 share the count; a valid token's requests from that address aren't counted against it, nor are they refused; with `WECHART_TRUST_PROXY` set, the address counted is the one the proxy forwarded (AC-474, with T773).
-  - Depends on: T773, T779
+- [x] T780 (AC-474, AC-473) Limit requests to `/mcp` bearing a bad or missing token per IP address, 20 a minute where unset, IPv6 by its /64
 
 - [ ] T781 (AC-478, AC-442) Record every MCP tool call in the audit trail with who, the token's name, the tool, the outcome and when, and no argument values; mark every event caused through MCP with the token's name
   - Lane: MCP
@@ -2065,7 +2061,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 | AC-463 | T821 | AC-464 | T823 | AC-465 | T818, T811 |
 | AC-466 | T799, T824 | AC-467 | T825 | AC-468 | T767, T769 |
 | AC-469 | T767, T769, T782, T785, T787, T788 | AC-470 | T772 | AC-471 | T777 |
-| AC-472 | T779 | AC-473 | T779 | AC-474 | T773, T780, T793, T795 |
+| AC-472 | T779 | AC-473 | T779, T780 | AC-474 | T773, T780, T793, T795 |
 | AC-475 | T784 | AC-476 | T774, T792, T793, T794, T795 | AC-477 | T788 |
 | AC-478 | T781 | AC-479 | T769, T773, T791 | AC-480 | T827 (waits on the keyboard research) |
 | AC-481 | T826 | AC-482 | T810, T826 | AC-483 | T812 |

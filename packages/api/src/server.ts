@@ -4523,6 +4523,8 @@ export function buildServer({
       // Each token's requests limited across replicas (T779, AC-472, AC-473).
       ...(mcpRateLimits === undefined ? {} : { rateLimits: mcpRateLimits }),
       ...(config.mcpRateLimit === undefined ? {} : { rateLimit: config.mcpRateLimit }),
+      // And bad or missing tokens by address (T780, AC-474).
+      ...(config.mcpBadTokenLimit === undefined ? {} : { badTokenLimit: config.mcpBadTokenLimit }),
       // A token acts as its owner, with their latest sign-in's groups (T777,
       // AC-471); with none kept, no token is taken with sign-in on.
       ...(accessTokens === undefined || (security === 'oidc' && signIns === undefined)

@@ -4,6 +4,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { closeDb } from '../db/client';
 import { buildServer } from '../server';
+import { forgetTestCounts, testCounter } from './counter.fixture';
 import { registerMcp } from './plugin';
 
 /**
@@ -21,7 +22,8 @@ async function mcpApp() {
     throw new OAuthError(OAuthErrorCode.InvalidToken, 'no token is taken here');
   });
   const app = Fastify();
-  registerMcp(app, { host: HOST, verifyToken });
+  // Its requests counted (T779, T780): with no count kept, it takes none.
+  registerMcp(app, { host: HOST, verifyToken, rateLimits: testCounter() });
   await app.ready();
   return { app, verifyToken };
 }
@@ -109,6 +111,7 @@ describe('the Host and Origin guard on /mcp (T775, AC-436)', () => {
 
 describe('the guard in the wechart API (T775, AC-436, AC-479)', () => {
   afterAll(async () => {
+    await forgetTestCounts();
     await closeDb();
   });
 
@@ -123,6 +126,7 @@ describe('the guard in the wechart API (T775, AC-436, AC-479)', () => {
         security: 'off',
         mcpHost: HOST,
       },
+      mcpRateLimits: testCounter(),
     });
     try {
       const foreignHost = await app.inject({

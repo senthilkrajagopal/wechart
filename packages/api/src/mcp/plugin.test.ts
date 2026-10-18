@@ -5,6 +5,7 @@ import { pgSessionStore } from '../auth/session-store';
 import { closeDb, getDb } from '../db/client';
 import { accessTokenStore } from '../repos/access-tokens';
 import { buildServer } from '../server';
+import { forgetTestCounts, testCounter } from './counter.fixture';
 
 /**
  * T774 (AC-476, as amended 2026-10-17; design 18's Q6, "MCP off"): `/mcp`
@@ -22,6 +23,7 @@ const base = {
 };
 
 afterAll(async () => {
+  await forgetTestCounts();
   await closeDb();
 });
 
@@ -98,7 +100,8 @@ describe('/mcp with an MCP host (T774, AC-476)', () => {
   const config = { ...base, mcpHost: 'mcp.wechart.example.com' };
 
   it('routes /mcp, refusing what it can’t yet check with 401 and running nothing', async () => {
-    const app = buildServer({ config });
+    // Its requests counted (T779, T780): with no count kept, it takes none.
+    const app = buildServer({ config, mcpRateLimits: testCounter() });
     try {
       await app.ready();
       expect(

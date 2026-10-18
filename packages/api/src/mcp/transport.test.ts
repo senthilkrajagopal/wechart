@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb } from '../db/client';
 import { accessTokenStore } from '../repos/access-tokens';
 import { buildServer } from '../server';
-import { rateLimitCounter } from './rateLimitStore';
+import { forgetTestCounts, testCounter } from './counter.fixture';
 import { MCP_INSTRUCTIONS } from './server';
 import { mintToken } from './tokenText';
 
@@ -35,6 +35,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await getDb().deleteFrom('personal_access_tokens').where('name', '=', NAME).execute();
+  await forgetTestCounts();
   await closeDb();
 });
 
@@ -50,7 +51,7 @@ function wechart() {
       mcpHost: HOST,
     },
     accessTokens: accessTokenStore(getDb()),
-    mcpRateLimits: rateLimitCounter(getDb()),
+    mcpRateLimits: testCounter(),
   });
 }
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { AUDIT_RETENTION_DAYS } from './audit/retention';
 import type { SecurityMode } from './auth/user';
-import { MCP_RATE_LIMIT } from './mcp/rateLimitStore';
+import { MCP_BAD_TOKEN_LIMIT, MCP_RATE_LIMIT } from './mcp/rateLimitStore';
 import type { XcubePublicKey } from './secrets/xcube-key';
 
 /**
@@ -79,6 +79,12 @@ export interface Config {
    * make a minute, a whole number from 1; 60 unset (T779, AC-472).
    */
   readonly mcpRateLimit?: number;
+  /**
+   * `WECHART_MCP_BAD_TOKEN_LIMIT`: how many requests to `/mcp` bearing a bad
+   * or missing token each address may make a minute, an IPv6 address by its
+   * /64; 20 unset (T780, AC-474).
+   */
+  readonly mcpBadTokenLimit?: number;
   /**
    * `WECHART_SUPER_ADMIN_GROUP`: the AD group whose members are Super-Admins,
    * exactly as the provider's groups claim carries it (T323, AC-256). Required
@@ -232,6 +238,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ...(trustProxy === undefined ? {} : { trustProxy }),
     ...(mcpHost === undefined ? {} : { mcpHost }),
     mcpRateLimit: perMinuteOf(env, 'WECHART_MCP_RATE_LIMIT', MCP_RATE_LIMIT),
+    mcpBadTokenLimit: perMinuteOf(env, 'WECHART_MCP_BAD_TOKEN_LIMIT', MCP_BAD_TOKEN_LIMIT),
     ...(security === 'oidc' ? signInOf(env, trustProxy) : {}),
     cubeApiUrl,
     cubeApiSecret,

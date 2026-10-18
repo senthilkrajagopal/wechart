@@ -2,6 +2,7 @@ import type { FastifyInstance, InjectOptions } from 'fastify';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getDb } from '../db/client';
+import { forgetTestCounts, testCounter } from '../mcp/counter.fixture';
 import { accessTokenStore } from '../repos/access-tokens';
 import { auditStore } from '../repos/audit';
 import { dataSourceStore } from '../repos/data-sources';
@@ -52,6 +53,7 @@ const secured = {
 const servers: FastifyInstance[] = [];
 afterAll(async () => {
   await Promise.all(servers.map((server) => server.close()));
+  await forgetTestCounts();
   await closeDb();
 });
 
@@ -82,6 +84,8 @@ function everyRoute(): FastifyInstance {
     proposals: proposalStore(getDb()),
     // The personal access tokens' routes (T767 on).
     accessTokens: accessTokenStore(getDb()),
+    // And `/mcp`'s request counts (T779, T780): with none kept, it takes nothing.
+    mcpRateLimits: testCounter(),
   });
   servers.push(app);
   return app;
