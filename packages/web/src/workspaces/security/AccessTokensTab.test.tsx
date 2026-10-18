@@ -77,7 +77,7 @@ const OLD = {
   stoppedAt: inDays(-10),
 };
 
-function serve(lists: unknown[][]) {
+function serve(lists: unknown[][], mcpUrl: string | null = null) {
   let listed = 0;
   const asked: string[] = [];
   vi.stubGlobal(
@@ -88,7 +88,7 @@ function serve(lists: unknown[][]) {
       if (url === '/api/security/tokens') {
         const tokens = lists[Math.min(listed, lists.length - 1)]!;
         listed += 1;
-        return Response.json({ tokens });
+        return Response.json({ tokens, mcpUrl });
       }
       return Response.json({}, { status: 404 });
     }),
@@ -288,6 +288,24 @@ describe('Security › Access tokens (T772, AC-470; design 18, screen 4)', () =>
         'Revoked Wren Writer’s “Claude Code · laptop”. Clients using it now get 401.',
       ),
     ).toBeTruthy();
+  });
+
+  it('says MCP isn’t set up where no host is named (T774, AC-476)', async () => {
+    serve([[LAPTOP]], null);
+    open();
+    expect(
+      (await screen.findByText(/^MCP isn’t set up on this deployment\./)).textContent,
+    ).toContain('No host is named for it in the Helm values');
+    expect(screen.queryByRole('textbox', { name: 'Server URL' })).toBeNull();
+  });
+
+  it('gives the server URL where a host is named (T774, AC-476)', async () => {
+    serve([[LAPTOP]], 'https://mcp.wechart.example.com/mcp');
+    open();
+    expect(
+      ((await screen.findByRole('textbox', { name: 'Server URL' })) as HTMLInputElement).value,
+    ).toBe('https://mcp.wechart.example.com/mcp');
+    expect(screen.queryByText(/MCP isn’t set up/)).toBeNull();
   });
 
   it('says so when the tokens couldn’t be read', async () => {

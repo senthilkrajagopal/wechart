@@ -71,12 +71,15 @@ export function registerAccessTokens(
     audit,
     now,
     security = 'off',
+    mcpUrl = null,
   }: {
     readonly store: AccessTokenStore;
     readonly audit: Pick<AuditStore, 'record'> | undefined;
     readonly now: () => Date;
     /** With sign-in off there is one user, and no list of everyone's (design 18, H). */
     readonly security?: SecurityMode;
+    /** MCP's address for the pages, or none where MCP isn't set up (T774, AC-476). */
+    readonly mcpUrl?: string | null;
   },
 ): void {
   /** Who revoked it, and whether that was the one asking: "by you" (design 18, D3 and F2). */
@@ -91,6 +94,7 @@ export function registerAccessTokens(
       store.stopped(user.key, at),
     ]);
     return {
+      mcpUrl,
       tokens: tokens.map(shown),
       // "No longer working" (T768, AC-431; design 18's Q1 and Q4).
       stopped: stopped.map((token) => ({
@@ -156,6 +160,7 @@ export function registerAccessTokens(
     if (!overseer(user)) return reply.status(404).send(NOT_FOUND);
     const tokens = await store.everyone(now());
     return reply.header('cache-control', 'no-store').send({
+      mcpUrl,
       tokens: tokens.map((token) => ({
         ...shown(token),
         owner: token.owner,

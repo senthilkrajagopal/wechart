@@ -137,3 +137,27 @@
     - **`docs/deploy.md`'s "Limits today"** now says the chart sets it from `api.trustProxy`.
     - **After the cold review (follow-up commit):** `api.trustProxy` also takes a YAML list, which the template joins with commas. The values comment now says to name the proxy pods' own range, never the cluster's whole pod range. The helm test needs `helm` on the PATH; it fails rather than skips without it.
     - **Tests:** `config.test.ts` (5, new), `server.test.ts` (2 new, through `loadConfig` and a test route answering `request.ip`), and `deploy/trust-proxy.test.ts` (2, new; runs `helm template` with the docker-desktop values). There is no e2e: nothing on a page changes.
+
+- [x] T774 (AC-476) Serve `/mcp` only where an MCP host is configured, and say on the token pages that MCP isn't set up where none is
+  - Lane: MCP
+  - Files: `packages/api/src/config.ts` (+ test), `packages/api/src/mcp/plugin.ts` (+ `plugin.test.ts`), `packages/api/src/server.ts`, `packages/api/src/routes/access-tokens.ts`, `packages/web/src/account/AccessTokensPage.tsx` (+ test), `packages/web/src/workspaces/security/AccessTokensTab.tsx`.
+  - Failing test: `plugin.test.ts`: with no `WECHART_MCP_HOST`, `POST /mcp` answers 404 and no MCP code runs; with it set, `/mcp` is routed. `AccessTokensPage.test.tsx`: with no host, the page and Security's tab say "MCP isn't set up on this deployment" with design 18 state G's wording, and show no server URL or command; with a host, they show `https://<host>/mcp` (AC-476, as amended 2026-10-17).
+  - Depends on: T769
+  - **Built 2026-10-17** (lane MCP, batch 2). **AC-476 stays open:** its first sentence (the Gateway API HTTPRoute, TLS, the source allow-list, Anthropic's range off by default) is T792 on. Its "MCP off" sentence is shown here, on the real surface: the single-user e2e sees the note and gets 404 from the API at `/mcp`.
+    - **The config:** `WECHART_MCP_HOST` sets `mcpHost`, in either security mode. It must be a host name alone, lower-cased: a scheme, path, port or space is a `ConfigError`. Empty or unset means MCP is off.
+    - **The endpoint (`mcp/plugin.ts`):** `registerMcp(app)` is called only when `mcpHost` is set. With no host there is no `/mcp` route at all, so a request gets Fastify's plain "Route POST:/mcp not found" and no MCP code runs.
+      - With a host, `/mcp` routes are `PUBLIC` to the session guard, since the token, not the cookie, signs a client in.
+      - **POST answers 401 with `WWW-Authenticate: Bearer` until T776 (the lane's call, overturnable).** This fails closed: nothing can run before the token check exists.
+      - GET and DELETE answer 405 with `Allow: POST`, as `mcp-typescript-sdk.md` reads the 2026-07-28 Streamable HTTP transport.
+      - The Host check is T775's: the host isn't passed to the plugin yet.
+    - **The pages:** both `GET /api/account/tokens` and `GET /api/security/tokens` now carry `mcpUrl`, which is `https://‹host›/mcp` or `null` (`mcpUrlOf`). `EVERYONES_TOKENS_QUERY` now answers `{ tokens, mcpUrl }`.
+      - `McpServerUrl` (in `AccessTokensPage.tsx`, also used by Security's tab) has two states.
+        - With a host: "Server URL", a read-only field named by that heading, and Copy (named "Copy the server URL"), then "Your deployment's MCP address. It serves only /mcp, over TLS." (screen 1, pin 9).
+        - With none, a warning line: "MCP isn't set up on this deployment. No host is named for it in the Helm values, so no MCP client can reach wechart. An administrator sets it there." This is G3's wording, widened from "Claude.ai and Claude Desktop" to every client, since Q6 chose (a2), MCP off.
+      - The shown-once dialog's Claude Code command uses the API's `mcpUrl`, not this origin's `/mcp`. With no host it shows no command and no Copy command; the text and its Copy stay.
+      - The "Connect a client" pane's Claude Code and Claude.ai tabs (AC-444, AC-445) aren't built here.
+    - **Tests changed:**
+      - `TokenShownOnce.test.tsx`'s C3 test now serves an `mcpUrl` and expects the command built from it.
+      - T769's page test checks the text in "Your token", not the dialog's text content: with no `mcpUrl` the command textarea isn't there.
+      - The security e2e checks there's no command, since the e2e stack names no host.
+    - **Tests:** `plugin.test.ts` (4, new), `config.test.ts` (3 new), `AccessTokensPage.test.tsx` (2 new), `AccessTokensTab.test.tsx` (2 new), and `e2e/access-tokens-single-user.spec.ts` (1 new).

@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import {
   expiresText,
+  McpServerUrl,
   RevokedIcon,
   stoppedText,
   TokenScopeTags,
@@ -65,7 +66,7 @@ export function AccessTokensTab() {
   const focusAfter = useRef<{ readonly next: string | null } | null>(null);
   const table = useRef<HTMLTableElement>(null);
   const now = new Date();
-  const tokens = list.data ?? [];
+  const tokens = list.data?.tokens ?? [];
   const refresh = async () => {
     await queries.invalidateQueries({ queryKey: EVERYONES_TOKENS_QUERY.queryKey });
     // The Super-Admin's own list too, should it hold the token.
@@ -242,6 +243,9 @@ export function AccessTokensTab() {
           </table>
         </div>
       )}
+
+      {/* Where MCP is served, or that it isn't (T774, AC-476). */}
+      {list.data === undefined ? null : <McpServerUrl url={list.data.mcpUrl} />}
 
       <p className="account-page__once">
         <b>A token’s text is never shown here,</b> or anywhere after it’s made. Revoking one stops

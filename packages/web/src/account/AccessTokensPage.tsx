@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { ExportedToast } from '../dashboard/export/ExportedToast';
 import { clockOf, dayOf, exactOf, whenOf } from '../shell/formatTime';
@@ -21,11 +21,6 @@ import {
 
 const DAY_MS = 86_400_000;
 
-/**
- * The MCP server's address, as the command names it: this origin's `/mcp`
- * until T774 gives the deployment's own MCP host (AC-476).
- */
-const mcpUrl = () => `${window.location.origin}/mcp`;
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
@@ -248,6 +243,8 @@ export function AccessTokensPage() {
         make another. Making and revoking tokens is recorded in the audit trail.
       </p>
 
+      {list.data === undefined ? null : <McpServerUrl url={list.data.mcpUrl} />}
+
       <section className="account-page__section" aria-labelledby="token-can-do">
         <h2 id="token-can-do">What a token can do</h2>
         <ul className="account-page__can">
@@ -285,7 +282,7 @@ export function AccessTokensPage() {
       {shown === null ? null : (
         <TokenShownOnce
           made={shown}
-          serverUrl={mcpUrl()}
+          serverUrl={list.data?.mcpUrl ?? null}
           onClose={() => {
             // Gone for good: the text was held here alone (AC-430). Focus
             // back to New token, which opened it all (rule 85): the dialog
@@ -345,6 +342,58 @@ function TokenCells({ token, now }: { readonly token: AccessToken; readonly now:
       </td>
       <td title={exactOf(made)}>{dayOf(made, now)}</td>
     </>
+  );
+}
+
+/**
+ * Where MCP is served (T774, AC-476; design 18, screen 1 pin 9): the
+ * deployment's `https://‹host›/mcp`, with Copy; or, where the Helm values
+ * name no MCP host, that MCP isn't set up (Q6, "MCP off"; G3's words, for no
+ * client at all).
+ */
+export function McpServerUrl({ url }: { readonly url: string | null }) {
+  const ids = useId();
+  const [copied, setCopied] = useState(false);
+  if (url === null)
+    return (
+      <StateLine kind="warn" role="status" className="mcp-off">
+        MCP isn’t set up on this deployment. No host is named for it in the Helm values, so no MCP
+        client can reach wechart. An administrator sets it there.
+      </StateLine>
+    );
+  return (
+    <section className="account-page__section mcp-url" aria-labelledby={`${ids}-head`}>
+      <h2 id={`${ids}-head`}>Server URL</h2>
+      <div className="mcp-url__row">
+        <input
+          type="text"
+          readOnly
+          spellCheck={false}
+          aria-labelledby={`${ids}-head`}
+          className="token-once__text"
+          value={url}
+          onFocus={(event) => {
+            event.currentTarget.select();
+          }}
+        />
+        <button
+          type="button"
+          className="btn"
+          aria-label="Copy the server URL"
+          onClick={() => {
+            const clipboard = 'clipboard' in navigator ? navigator.clipboard : undefined;
+            void clipboard?.writeText(url).then(() => {
+              setCopied(true);
+            });
+          }}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <p className="account-page__once">
+        Your deployment’s MCP address. It serves only <code>/mcp</code>, over TLS.
+      </p>
+    </section>
   );
 }
 

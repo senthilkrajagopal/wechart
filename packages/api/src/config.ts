@@ -68,6 +68,12 @@ export interface Config {
    */
   readonly trustProxy?: readonly string[];
   /**
+   * `WECHART_MCP_HOST`: the host the Helm values name for MCP, lower-cased
+   * (T774, AC-476). Unset, MCP is off: nothing is served at `/mcp` (design
+   * 18's Q6, "MCP off (Recommended)").
+   */
+  readonly mcpHost?: string;
+  /**
    * `WECHART_SUPER_ADMIN_GROUP`: the AD group whose members are Super-Admins,
    * exactly as the provider's groups claim carries it (T323, AC-256). Required
    * with security on (T416, AC-318); with security off the single user is the
@@ -214,9 +220,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
 
   const trustProxy = trustProxyOf(env);
+  const mcpHost = mcpHostOf(env);
   return {
     security,
     ...(trustProxy === undefined ? {} : { trustProxy }),
+    ...(mcpHost === undefined ? {} : { mcpHost }),
     ...(security === 'oidc' ? signInOf(env, trustProxy) : {}),
     cubeApiUrl,
     cubeApiSecret,
@@ -336,6 +344,22 @@ function trustProxyOf(env: NodeJS.ProcessEnv): readonly string[] | undefined {
         'caller’s X-Forwarded-For.',
     );
   return entries;
+}
+
+/** A DNS host name: dot-separated labels of letters, digits and inner hyphens. */
+const HOST_NAME =
+  /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+
+/** The MCP host (T774, AC-476): a host name alone, or none for MCP off. */
+function mcpHostOf(env: NodeJS.ProcessEnv): string | undefined {
+  const host = (env['WECHART_MCP_HOST'] ?? '').trim().toLowerCase();
+  if (host === '') return undefined;
+  if (!HOST_NAME.test(host))
+    throw new ConfigError(
+      `WECHART_MCP_HOST is a host name alone, such as mcp.wechart.example.com: “${host}” isn’t ` +
+        '(no scheme, path or port; MCP is served at https://‹host›/mcp).',
+    );
+  return host;
 }
 
 /** With security on, everything sign-in needs is required: a missing piece is a startup error. */

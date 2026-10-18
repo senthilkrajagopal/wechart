@@ -44,6 +44,8 @@ export interface Revoker {
 export interface TokenList {
   readonly tokens: readonly AccessToken[];
   readonly stopped: readonly StoppedToken[];
+  /** MCP's address, `https://‹host›/mcp`, or null where MCP isn't set up (T774, AC-476). */
+  readonly mcpUrl: string | null;
 }
 
 /** A token on Security's list of everyone's (T772, AC-470): its owner and state with it. */
@@ -56,13 +58,21 @@ export interface AnyonesToken extends AccessToken {
   readonly revokedBy: Revoker | null;
 }
 
-/** Every user's tokens, for a Super-Admin (T772, AC-470), newest first. */
+/** Every user's tokens, for a Super-Admin (T772, AC-470), newest first, and MCP's address. */
 export const EVERYONES_TOKENS_QUERY = {
   queryKey: ['access-tokens', 'everyone'] as const,
-  queryFn: async ({ signal }: { signal?: AbortSignal }): Promise<readonly AnyonesToken[]> => {
+  queryFn: async ({
+    signal,
+  }: {
+    signal?: AbortSignal;
+  }): Promise<{ readonly tokens: readonly AnyonesToken[]; readonly mcpUrl: string | null }> => {
     const response = await fetch('/api/security/tokens', signal === undefined ? {} : { signal });
     if (!response.ok) throw new Error('The tokens couldn’t be read.');
-    return ((await response.json()) as { tokens?: AnyonesToken[] }).tokens ?? [];
+    const answer = (await response.json()) as { tokens?: AnyonesToken[]; mcpUrl?: unknown };
+    return {
+      tokens: answer.tokens ?? [],
+      mcpUrl: typeof answer.mcpUrl === 'string' ? answer.mcpUrl : null,
+    };
   },
 };
 
@@ -78,7 +88,11 @@ export const TOKENS_QUERY = {
     const response = await fetch('/api/account/tokens', signal === undefined ? {} : { signal });
     if (!response.ok) throw new Error('Your tokens couldn’t be read.');
     const list = (await response.json()) as Partial<TokenList>;
-    return { tokens: list.tokens ?? [], stopped: list.stopped ?? [] };
+    return {
+      tokens: list.tokens ?? [],
+      stopped: list.stopped ?? [],
+      mcpUrl: typeof list.mcpUrl === 'string' ? list.mcpUrl : null,
+    };
   },
 };
 

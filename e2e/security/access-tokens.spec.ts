@@ -54,12 +54,10 @@ test.describe('Access tokens, signed in (T769, AC-430)', () => {
     const text = shown.getByRole('textbox', { name: 'Your token' });
     await expect(text).toHaveValue(/^wct_[0-9a-f]{64}_[0-9a-f]{8}$/);
     const token = await text.inputValue();
-    const server = new URL('/mcp', page.url()).href;
+    // This stack names no MCP host, so there's no command to fill in (T774, AC-476).
     await expect(
       shown.getByRole('textbox', { name: 'Add wechart to Claude Code, in a terminal' }),
-    ).toHaveValue(
-      `claude mcp add --transport http wechart ${server} --header "Authorization: Bearer ${token}"`,
-    );
+    ).toHaveCount(0);
     // Done before any Copy asks first (C2); Close then closes it for good.
     await shown.getByRole('button', { name: 'Done' }).click();
     const asking = page.getByRole('alertdialog', { name: 'Close without copying?' });

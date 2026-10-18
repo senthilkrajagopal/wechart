@@ -147,6 +147,7 @@ import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
 import type { ModelOrigin } from './db/schema';
 import type { StoredModelFile, WorkspaceModelFile } from './repos/model-files';
 import { workspaceModels } from './routes/workspace-models';
+import { mcpUrlOf, registerMcp } from './mcp/plugin';
 import { registerAccessTokens } from './routes/access-tokens';
 import type { AccessTokenStore } from './repos/access-tokens';
 import {
@@ -4492,7 +4493,16 @@ export function buildServer({
 
   // Personal access tokens for MCP (T767, AC-430).
   if (accessTokens !== undefined)
-    registerAccessTokens(app, { store: accessTokens, audit, now, security });
+    registerAccessTokens(app, {
+      store: accessTokens,
+      audit,
+      now,
+      security,
+      mcpUrl: mcpUrlOf(config.mcpHost),
+    });
+  // MCP only where the deployment names its host (T774, AC-476).
+  // Its own Host check is T775's (AC-436).
+  if (config.mcpHost !== undefined) registerMcp(app);
 
   /**
    * Calculation requests (T383, AC-050): asked of the read-write members of

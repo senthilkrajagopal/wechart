@@ -1600,11 +1600,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T773 [P] (AC-474, AC-479) Trust the proxy named in `WECHART_TRUST_PROXY` in every security mode, and set it from the Helm values
 
-- [ ] T774 (AC-476) Serve `/mcp` only where an MCP host is configured, and say on the token pages that MCP isn't set up where none is
-  - Lane: MCP
-  - Files: `packages/api/src/config.ts` (+ test), `packages/api/src/mcp/plugin.ts` (+ `plugin.test.ts`), `packages/api/src/server.ts`, `packages/api/src/routes/access-tokens.ts`, `packages/web/src/account/AccessTokensPage.tsx` (+ test), `packages/web/src/workspaces/security/AccessTokensTab.tsx`.
-  - Failing test: `plugin.test.ts`: with no `WECHART_MCP_HOST`, `POST /mcp` answers 404 and no MCP code runs; with it set, `/mcp` is routed. `AccessTokensPage.test.tsx`: with no host, the page and Security's tab say "MCP isn't set up on this deployment" with design 18 state G's wording, and show no server URL or command; with a host, they show `https://<host>/mcp` (AC-476, as amended 2026-10-17).
-  - Depends on: T769
+- [x] T774 (AC-476) Serve `/mcp` only where an MCP host is configured, and say on the token pages that MCP isn't set up where none is
 
 - [ ] T775 (AC-436) Answer a request to `/mcp` with a foreign `Host` or a foreign `Origin` with 403, before its token is read
   - Lane: MCP

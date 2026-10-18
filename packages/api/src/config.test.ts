@@ -65,3 +65,36 @@ describe('WECHART_TRUST_PROXY in every security mode (T773, AC-474, AC-479)', ()
     ).toThrow(/“nginx”/);
   });
 });
+
+/**
+ * T774 (AC-476): `WECHART_MCP_HOST`, the host the Helm values name for MCP.
+ * Unset, MCP is off: nothing is served at `/mcp` (design 18's Q6, "MCP off").
+ */
+describe('WECHART_MCP_HOST (T774, AC-476)', () => {
+  it('is the MCP host, as a host name alone, in either security mode', () => {
+    expect(
+      loadConfig({ CUBE_API_SECRET: 's', WECHART_MCP_HOST: 'mcp.wechart.example.com' }).mcpHost,
+    ).toBe('mcp.wechart.example.com');
+    expect(
+      loadConfig({ CUBE_API_SECRET: 's', ...SIGN_IN_ENV, WECHART_MCP_HOST: 'MCP.Example.com' })
+        .mcpHost,
+    ).toBe('mcp.example.com');
+  });
+
+  it('is off when unset or empty', () => {
+    expect(loadConfig({ CUBE_API_SECRET: 's' }).mcpHost).toBeUndefined();
+    expect(loadConfig({ CUBE_API_SECRET: 's', WECHART_MCP_HOST: '' }).mcpHost).toBeUndefined();
+  });
+
+  it('refuses an address, a path or a port in place of a host name', () => {
+    for (const value of [
+      'https://mcp.example.com',
+      'mcp.example.com/mcp',
+      'mcp.example.com:443',
+      'mcp example',
+    ])
+      expect(() => loadConfig({ CUBE_API_SECRET: 's', WECHART_MCP_HOST: value })).toThrow(
+        /WECHART_MCP_HOST/,
+      );
+  });
+});

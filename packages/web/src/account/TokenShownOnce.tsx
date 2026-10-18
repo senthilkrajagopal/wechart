@@ -21,8 +21,8 @@ export function TokenShownOnce({
   onClose,
 }: {
   readonly made: MadeToken;
-  /** The MCP server's address, as the command names it. */
-  readonly serverUrl: string;
+  /** The MCP server's address, as the command names it; null where MCP isn't set up (T774). */
+  readonly serverUrl: string | null;
   readonly onClose: () => void;
 }) {
   const ids = useId();
@@ -32,7 +32,8 @@ export function TokenShownOnce({
   const [copied, setCopied] = useState<'text' | 'command' | null>(null);
   const [failed, setFailed] = useState(false);
   const [asking, setAsking] = useState(false);
-  const command = claudeCodeCommand(serverUrl, made.text);
+  // No command where MCP isn't set up: there is nothing to connect to (AC-476).
+  const command = serverUrl === null ? null : claudeCodeCommand(serverUrl, made.text);
 
   /** Done, and Esc: at once after a Copy, else asked first. */
   const done = useRef(() => {});
@@ -79,7 +80,7 @@ export function TokenShownOnce({
       setFailed(true);
       return;
     }
-    clipboard.writeText(what === 'text' ? made.text : command).then(
+    clipboard.writeText(what === 'text' || command === null ? made.text : command).then(
       () => {
         setCopied(what);
         setFailed(false);
@@ -146,38 +147,40 @@ export function TokenShownOnce({
             )}
           </button>
         </div>
-        <div className="token-once__row">
-          <label className="new-token__label" htmlFor={`${ids}-command`}>
-            Add wechart to Claude Code, in a terminal
-          </label>
-          <textarea
-            id={`${ids}-command`}
-            readOnly
-            spellCheck={false}
-            rows={3}
-            className="token-once__command"
-            value={command}
-            onFocus={(event) => {
-              event.currentTarget.select();
-            }}
-          />
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              copy('command');
-            }}
-          >
-            {copied === 'command' ? (
-              <>
-                <CheckIcon />
-                Copied command
-              </>
-            ) : (
-              'Copy command'
-            )}
-          </button>
-        </div>
+        {command === null ? null : (
+          <div className="token-once__row">
+            <label className="new-token__label" htmlFor={`${ids}-command`}>
+              Add wechart to Claude Code, in a terminal
+            </label>
+            <textarea
+              id={`${ids}-command`}
+              readOnly
+              spellCheck={false}
+              rows={3}
+              className="token-once__command"
+              value={command}
+              onFocus={(event) => {
+                event.currentTarget.select();
+              }}
+            />
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                copy('command');
+              }}
+            >
+              {copied === 'command' ? (
+                <>
+                  <CheckIcon />
+                  Copied command
+                </>
+              ) : (
+                'Copy command'
+              )}
+            </button>
+          </div>
+        )}
         {/* "Copied", said politely (design 18's keyboard and screen-reader row). */}
         <span role="status" aria-live="polite" className="visually-hidden">
           {copied === null ? '' : 'Copied'}

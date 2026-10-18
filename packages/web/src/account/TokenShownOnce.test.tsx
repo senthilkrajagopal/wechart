@@ -168,7 +168,9 @@ describe('the token, shown once (T770, AC-430; design 18, screen 3)', () => {
 
 describe('once closed, the text is gone (T770, AC-430; design 18, C3)', () => {
   it('leaves no page state, cache or request that shows it again', async () => {
-    const LISTED = { tokens: [MADE.token], stopped: [] };
+    // The deployment's MCP address, as the API gives it (T774, AC-476).
+    const MCP_URL = 'https://mcp.wechart.example.com/mcp';
+    const LISTED = { tokens: [MADE.token], stopped: [], mcpUrl: MCP_URL };
     const asked: string[] = [];
     vi.stubGlobal(
       'fetch',
@@ -186,7 +188,7 @@ describe('once closed, the text is gone (T770, AC-430; design 18, C3)', () => {
           return Response.json(MADE, { status: 201 });
         if (url === '/api/account/tokens')
           return Response.json(
-            asked.includes('POST /api/account/tokens') ? LISTED : { tokens: [] },
+            asked.includes('POST /api/account/tokens') ? LISTED : { tokens: [], mcpUrl: MCP_URL },
           );
         return Response.json({}, { status: 404 });
       }),
@@ -211,7 +213,7 @@ describe('once closed, the text is gone (T770, AC-430; design 18, C3)', () => {
     );
     expect(
       within(shown).getByRole('textbox', { name: 'Add wechart to Claude Code, in a terminal' }),
-    ).toHaveProperty('value', claudeCodeCommand(`${window.location.origin}/mcp`, TEXT));
+    ).toHaveProperty('value', claudeCodeCommand(MCP_URL, TEXT));
     await screen.findByRole('table', { name: 'Your tokens' });
 
     await userEvent.click(within(shown).getByRole('button', { name: 'Copy' }));

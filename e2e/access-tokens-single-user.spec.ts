@@ -53,4 +53,26 @@ test.describe('Access tokens with sign-in off (T769, AC-479)', () => {
     await expect(row).toBeVisible();
     await expect(row.getByRole('cell').nth(3)).toContainText('in 7 days');
   });
+
+  /**
+   * T774 (AC-476, as amended; design 18's Q6, "MCP off"): this stack names
+   * no MCP host, so the page says MCP isn't set up and gives no address, and
+   * the API serves nothing at /mcp.
+   */
+  test('with no MCP host, the page says MCP isn’t set up, and /mcp is not served', async ({
+    page,
+    request,
+  }) => {
+    await page.goto('/account/tokens');
+    await expect(page.getByText(/^MCP isn’t set up on this deployment\./)).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Server URL' })).toHaveCount(0);
+    // The API itself, past the web server: no route at all.
+    const answer = await request.post('http://localhost:4100/mcp', {
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+    });
+    expect(answer.status()).toBe(404);
+    expect(((await answer.json()) as { message: string }).message).toBe(
+      'Route POST:/mcp not found',
+    );
+  });
 });

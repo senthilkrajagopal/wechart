@@ -10052,6 +10052,8 @@ nav.outline :focus-visible,
 .token-state { display: inline-flex; align-items: center; gap: 6px; }
 .account-page__subhead { margin: 8px 0 0; font-size: 13px; font-weight: 600; }
 .dialog.revoke-token { width: min(520px, calc(100vw - 32px)); max-width: none; }
+/* T774: the server URL with Copy (screen 1, pin 9), or that MCP isn't set up (G3). */
+.mcp-url__row { display: grid; grid-template-columns: minmax(0, 480px) auto; gap: 8px; align-items: center; }
 /* T772: Security's Access tokens (screen 4): filters, count, and the dialog's facts. */
 .tokens-tab { display: grid; gap: 10px; align-content: start; }
 .tokens-tab__filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

@@ -47,7 +47,7 @@ const ME = {
 };
 
 function serve(
-  lists: { tokens: unknown[]; stopped?: unknown[] }[],
+  lists: { tokens: unknown[]; stopped?: unknown[]; mcpUrl?: string | null }[],
   me: Record<string, unknown> = ME,
   made?: unknown,
 ) {
@@ -163,7 +163,11 @@ describe('the Access tokens page (T769, AC-430; design 18, screen 1)', () => {
     // The text the API answered is nowhere in the list: only the shown-once
     // dialog over it holds it (T770).
     expect(screen.getByRole('table', { name: 'Your tokens' }).innerHTML).not.toContain(TEXT);
-    expect(screen.getByRole('dialog', { name: 'Copy your token now' }).textContent).toContain(TEXT);
+    expect(
+      within(screen.getByRole('dialog', { name: 'Copy your token now' })).getByRole('textbox', {
+        name: 'Your token',
+      }),
+    ).toHaveProperty('value', TEXT);
   });
 
   it('gives a read-only user’s dialog the other scopes disabled (AC-469)', async () => {
@@ -396,6 +400,77 @@ describe('revoking, and No longer working (T771, AC-431; design 18, states D and
     open();
     await screen.findByRole('table', { name: 'Your tokens' });
     expect(screen.queryByRole('heading', { name: 'No longer working' })).toBeNull();
+  });
+});
+
+const MCP_URL = 'https://mcp.wechart.example.com/mcp';
+
+describe('where MCP is served, or isn’t (T774, AC-476; design 18, pin 9 and G3)', () => {
+  it('gives the server URL, with Copy, and the command a new token fills in', async () => {
+    const MADE = { ...READING, id: 'pat-3', name: 'Claude Code · desktop' };
+    serve(
+      [
+        { tokens: [], mcpUrl: MCP_URL },
+        { tokens: [MADE], mcpUrl: MCP_URL },
+      ],
+      ME,
+      {
+        token: MADE,
+        text: TEXT,
+      },
+    );
+    open();
+    const url = await screen.findByRole('textbox', { name: 'Server URL' });
+    expect((url as HTMLInputElement).value).toBe(MCP_URL);
+    expect(screen.getByRole('button', { name: 'Copy the server URL' })).toBeTruthy();
+    expect(screen.queryByText(/MCP isn’t set up/)).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New token' }));
+    const dialog = screen.getByRole('dialog', { name: 'New access token' });
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /^Name/ }), MADE.name);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create token' }));
+    const shown = await screen.findByRole('dialog', { name: 'Copy your token now' });
+    expect(
+      (
+        within(shown).getByRole('textbox', {
+          name: 'Add wechart to Claude Code, in a terminal',
+        }) as HTMLTextAreaElement
+      ).value,
+    ).toBe(
+      `claude mcp add --transport http wechart ${MCP_URL} --header "Authorization: Bearer ${TEXT}"`,
+    );
+  });
+
+  it('says MCP isn’t set up where no host is named, with no server URL or command', async () => {
+    const MADE = { ...READING, id: 'pat-3', name: 'Claude Code · desktop' };
+    serve(
+      [
+        { tokens: [], mcpUrl: null },
+        { tokens: [MADE], mcpUrl: null },
+      ],
+      ME,
+      {
+        token: MADE,
+        text: TEXT,
+      },
+    );
+    open();
+    expect((await screen.findByText(/^MCP isn’t set up on this deployment\./)).textContent).toBe(
+      'MCP isn’t set up on this deployment. No host is named for it in the Helm values, so no MCP client can reach wechart. An administrator sets it there.',
+    );
+    expect(screen.queryByRole('textbox', { name: 'Server URL' })).toBeNull();
+    expect(document.body.textContent).not.toContain('/mcp');
+
+    await userEvent.click(screen.getByRole('button', { name: 'New token' }));
+    const dialog = screen.getByRole('dialog', { name: 'New access token' });
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /^Name/ }), MADE.name);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create token' }));
+    const shown = await screen.findByRole('dialog', { name: 'Copy your token now' });
+    expect(within(shown).queryByRole('textbox', { name: /Claude Code/ })).toBeNull();
+    expect(within(shown).queryByRole('button', { name: 'Copy command' })).toBeNull();
+    expect(
+      (within(shown).getByRole('textbox', { name: 'Your token' }) as HTMLInputElement).value,
+    ).toBe(TEXT);
   });
 });
 
