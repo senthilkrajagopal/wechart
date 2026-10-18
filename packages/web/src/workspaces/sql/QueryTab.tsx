@@ -6,6 +6,7 @@ import { csvFileName, csvOf } from '../data-sources/sqlCsv';
 import { SqlEditor } from '../data-sources/SqlEditor';
 import { SqlResult, type SqlOutcome } from '../data-sources/SqlResult';
 import { RunLine } from './RunLine';
+import { dialectFor, statementAt } from './statementAt';
 import { routeOf, type SqlSource } from './sqlSource';
 import { tabState, type SqlTab, type TabsAction } from './tabs';
 
@@ -69,6 +70,9 @@ export function QueryTab({
   const warningId = useId();
   const limitsId = useId();
   const [selected, setSelected] = useState('');
+  /** With nothing selected, the statement at the cursor, which is what runs (T803, AC-387); the first, on opening. */
+  const dialect = dialectFor(source.cubeStore === true ? null : source.driver);
+  const [statement, setStatement] = useState(() => statementAt(tab.sql, 0, dialect)?.text ?? '');
   const [said, setSaid] = useState('');
   const [focusing, setFocusing] = useState<object | undefined>(undefined);
   const bar = useRef<HTMLDivElement>(null);
@@ -125,7 +129,7 @@ export function QueryTab({
     setSaid(`Downloaded ${rows === 1 ? '1 row' : `${rows.toLocaleString('en')} rows`} as a CSV file.`);
   };
 
-  const toRun = selected === '' ? tab.sql : selected;
+  const toRun = selected === '' ? statement : selected;
   return (
     <>
       <div className="sql-centre__editor sql-query" data-testid="sql-editor-area">
@@ -137,6 +141,9 @@ export function QueryTab({
           }}
           onRun={(sql) => void run(sql)}
           onSelection={setSelected}
+          atCursor
+          dialect={dialect}
+          onStatement={setStatement}
           label={`SQL for ${source.name}`}
           describedBy={`${warningId} ${limitsId}`}
           focusing={focusing}

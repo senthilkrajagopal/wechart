@@ -259,4 +259,6 @@ main:has(.sql-workspace) {
 .sql-query .sql-editor .cm-editor { flex: 1; min-height: 0; max-height: none; }
 .sql-query .sql-runner__bar { flex: none; }
 .sql-query__results { padding: 8px 12px; }
+/* The statement at the cursor, which Run runs with nothing selected (T803; pin 11). */
+.sql-query .cm-sql-statement { background: var(--wc-bg-subtle); box-shadow: inset 0 -1px var(--wc-border-strong, var(--wc-border-subtle)); }
 `;

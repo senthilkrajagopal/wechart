@@ -1749,11 +1749,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T802 (AC-373, AC-385, AC-380) Run a tab's SQL on its data source from the workspace, under the run line and the warning naming that tab's source and login, with the result grid and CSV
 
-- [ ] T803 (AC-387) Run the selection, or with none the statement at the cursor, bounded by semicolons outside strings and comments
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/statementAt.ts` (+ test; the tokens of `@codemirror/lang-sql` 6.10.0), `packages/web/src/workspaces/sql/QueryTab.tsx` (+ test), `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: `statementAt.test.ts`: with the cursor in the second of `SELECT 1; SELECT ';' AS a; -- x;` the statement is `SELECT ';' AS a`, a semicolon in a string or comment bounding nothing. `QueryTab.test.tsx`: with text selected, Run reads "Run selection" and only the selection is sent, from Run and from ⌘/Ctrl+Enter; with none, the statement at the cursor is marked in the editor and only it is sent. The e2e: with two statements and the cursor in the second, only that one reaches the database, and the run isn't refused as two statements (AC-387).
-  - Depends on: T802
+- [x] T803 (AC-387) Run the selection, or with none the statement at the cursor, bounded by semicolons outside strings and comments
 
 - [ ] T804 (AC-452, AC-379) Show a run's state the same way on its tab, in its result head and in History; hold Run on every other tab with "Go to it · Cancel that run"; keep a run going while the user is away
   - Lane: SQL

@@ -1,4 +1,4 @@
-import { EditorView } from '@codemirror/view';
+import { EditorView, runScopeHandlers } from '@codemirror/view';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -185,5 +185,85 @@ describe('a query tab on a data source (T802, AC-373, AC-385, AC-380)', () => {
 
     await screen.findByRole('table', { name: 'Result: 2 rows, 2 columns' });
     expect(posts.map((post) => post.url)).toEqual(['/api/cube-store/sql']);
+  });
+});
+
+/**
+ * T803 (AC-387): WHEN text is selected, only the selection runs, with Run
+ * reading "Run selection", from Run and from ⌘/Ctrl+Enter; with none, only
+ * the statement at the cursor, marked in the editor.
+ * Fails when: a run with text selected runs anything but the selection, or
+ * Run doesn't say so; or with the cursor in the second of two statements
+ * anything but that statement is sent.
+ */
+describe('the selection, or the statement at the cursor (T803, AC-387)', () => {
+  const TWO = "SELECT 1; SELECT ';' AS a; -- x;";
+  const view = (container: HTMLElement) =>
+    EditorView.findFromDOM(container.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+  const cursorAt = (container: HTMLElement, anchor: number, head = anchor) => {
+    act(() => {
+      view(container).dispatch({ selection: { anchor, head } });
+    });
+  };
+  /** ⌘/Ctrl+Enter, as CodeMirror reads `Mod-Enter`: Ctrl off a Mac, as jsdom is. */
+  const modEnter = (container: HTMLElement) =>
+    act(() => {
+      runScopeHandlers(
+        view(container),
+        new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, metaKey: false }),
+        'editor',
+      );
+    });
+  const sent = () => posts.map((post) => (post.body as { sql: string }).sql);
+
+  it('marks the statement at the cursor, and sends only it from Run', async () => {
+    const { container } = open(tab({ sql: TWO }));
+    cursorAt(container, TWO.indexOf('AS a'));
+
+    const marked = [...container.querySelectorAll('.cm-sql-statement')].map((each) => each.textContent);
+    expect(marked.join('')).toBe("SELECT ';' AS a");
+    expect(screen.getByRole('button', { name: 'Run' })).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await screen.findByRole('table', { name: 'Result: 2 rows, 2 columns' });
+    expect(sent()).toEqual(["SELECT ';' AS a"]);
+  });
+
+  it('bounds it as the tab’s source reads strings: PostgreSQL’s $$…$$ (T803’s review)', async () => {
+    const text = 'SELECT $$a;b$$ AS x; SELECT 2';
+    const { container } = open(tab({ sql: text }));
+    cursorAt(container, 3);
+
+    modEnter(container);
+
+    await screen.findByRole('table', { name: 'Result: 2 rows, 2 columns' });
+    expect(sent()).toEqual(['SELECT $$a;b$$ AS x']);
+  });
+
+  it('sends only the statement at the cursor from ⌘/Ctrl+Enter', async () => {
+    const { container } = open(tab({ sql: TWO }));
+    cursorAt(container, 2);
+
+    modEnter(container);
+
+    await screen.findByRole('table', { name: 'Result: 2 rows, 2 columns' });
+    expect(sent()).toEqual(['SELECT 1']);
+  });
+
+  it('with text selected, reads “Run selection” and sends only the selection, from Run and from ⌘/Ctrl+Enter', async () => {
+    const { container } = open(tab({ sql: TWO }));
+    cursorAt(container, 0, 'SELECT 1'.length);
+
+    expect(screen.getByRole('button', { name: 'Run selection' })).toBeTruthy();
+    // A selection marks no statement: it is what runs.
+    expect(container.querySelector('.cm-sql-statement')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Run selection' }));
+    await screen.findByRole('table', { name: 'Result: 2 rows, 2 columns' });
+
+    cursorAt(container, TWO.indexOf('SELECT \''), TWO.indexOf(' AS a'));
+    modEnter(container);
+    await vi.waitFor(() => {
+      expect(sent()).toEqual(['SELECT 1', "SELECT ';'"]);
+    });
   });
 });

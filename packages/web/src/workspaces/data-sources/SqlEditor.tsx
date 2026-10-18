@@ -1,11 +1,19 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { sql } from '@codemirror/lang-sql';
+import { sql, StandardSQL, type SQLDialect } from '@codemirror/lang-sql';
 import { syntaxHighlighting } from '@codemirror/language';
-import { Annotation, EditorState, Prec } from '@codemirror/state';
-import { EditorView, keymap, lineNumbers, placeholder } from '@codemirror/view';
+import { Annotation, EditorState, Facet, Prec, StateField } from '@codemirror/state';
+import {
+  Decoration,
+  EditorView,
+  keymap,
+  lineNumbers,
+  placeholder,
+  type DecorationSet,
+} from '@codemirror/view';
 import { useEffect, useRef } from 'react';
 
 import { changeBetween, TOKEN_HIGHLIGHT, TOKEN_THEME } from '../model/YamlEditor';
+import { statementAt } from '../sql/statementAt';
 
 /** Marks a change that came in through `value`, so it is not handed back out. */
 const FROM_VALUE = Annotation.define<boolean>();
@@ -15,6 +23,38 @@ const selectedIn = (state: EditorState) => {
   const range = state.selection.main;
   return range.empty ? '' : state.sliceDoc(range.from, range.to);
 };
+
+/** The dialect the statement at the cursor is read in: the tab's source's (T803's review). */
+const STATEMENT_DIALECT = Facet.define<SQLDialect, SQLDialect>({
+  combine: (values) => values[0] ?? StandardSQL,
+});
+
+/** The statement at the cursor, with nothing selected (T803, AC-387); none otherwise. */
+const statementIn = (state: EditorState) => {
+  const range = state.selection.main;
+  return range.empty
+    ? statementAt(state.doc.toString(), range.head, state.facet(STATEMENT_DIALECT))
+    : null;
+};
+
+/**
+ * The statement at the cursor, marked (T803; design 17, pin 11), as the
+ * model's editor marks its lines (`YamlEditor.tsx`): a field of decorations
+ * derived from the text and the selection.
+ */
+const STATEMENT_MARK = Decoration.mark({ class: 'cm-sql-statement' });
+const marksOf = (state: EditorState): DecorationSet => {
+  const found = statementIn(state);
+  return found === null || found.from === found.to
+    ? Decoration.none
+    : Decoration.set([STATEMENT_MARK.range(found.from, found.to)]);
+};
+const statementMark = StateField.define<DecorationSet>({
+  create: marksOf,
+  update: (marks, transaction) =>
+    transaction.docChanged || transaction.selection !== undefined ? marksOf(transaction.state) : marks,
+  provide: (field) => EditorView.decorations.from(field),
+});
 
 /**
  * The SQL tab's editor (T535; design 15's P2): the app's CodeMirror, as the
@@ -35,7 +75,20 @@ export function SqlEditor({
   describedBy,
   insertion,
   focusing,
+  atCursor = false,
+  onStatement,
+  dialect = StandardSQL,
 }: {
+  /** The source's dialect, for the statement at the cursor's bounds (with `atCursor`). Read once. */
+  dialect?: SQLDialect;
+  /**
+   * The SQL runner workspace's (T803, AC-387): with nothing selected,
+   * ⌘/Ctrl+Enter runs the statement at the cursor, which is marked, rather
+   * than the whole text. Read once, as the editor is built.
+   */
+  atCursor?: boolean;
+  /** The statement at the cursor's text, or '' for none, as it changes (with `atCursor`). */
+  onStatement?: (statement: string) => void;
   value: string;
   onChange: (next: string) => void;
   /** The text to run: the selection, or the whole. */
@@ -53,10 +106,10 @@ export function SqlEditor({
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   // The latest handlers, read by the editor without rebuilding it.
-  const handlers = useRef({ onChange, onRun, onSelection });
+  const handlers = useRef({ onChange, onRun, onSelection, onStatement });
   useEffect(() => {
-    handlers.current = { onChange, onRun, onSelection };
-  }, [onChange, onRun, onSelection]);
+    handlers.current = { onChange, onRun, onSelection, onStatement };
+  }, [onChange, onRun, onSelection, onStatement]);
 
   useEffect(() => {
     if (host.current === null) return undefined;
@@ -74,12 +127,19 @@ export function SqlEditor({
                 key: 'Mod-Enter',
                 run: (target) => {
                   const selected = selectedIn(target.state);
-                  handlers.current.onRun(selected === '' ? target.state.doc.toString() : selected);
+                  handlers.current.onRun(
+                    selected !== ''
+                      ? selected
+                      : atCursor
+                        ? (statementIn(target.state)?.text ?? '')
+                        : target.state.doc.toString(),
+                  );
                   return true;
                 },
               },
             ]),
           ),
+          ...(atCursor ? [STATEMENT_DIALECT.of(dialect), statementMark] : []),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           sql(),
           syntaxHighlighting(TOKEN_HIGHLIGHT),
@@ -91,8 +151,10 @@ export function SqlEditor({
             ...(describedBy === undefined ? {} : { 'aria-describedby': describedBy }),
           }),
           EditorView.updateListener.of((update) => {
-            if (update.selectionSet || update.docChanged)
+            if (update.selectionSet || update.docChanged) {
               handlers.current.onSelection(selectedIn(update.state));
+              if (atCursor) handlers.current.onStatement?.(statementIn(update.state)?.text ?? '');
+            }
             if (!update.docChanged) return;
             if (update.transactions.every((each) => each.annotation(FROM_VALUE) === true)) return;
             handlers.current.onChange(update.state.doc.toString());

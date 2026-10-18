@@ -641,6 +641,44 @@ test.describe('running a tab’s SQL in the workspace (T802)', () => {
     }
   });
 
+  test('runs only the statement at the cursor, or only the selection, from ⌘/Ctrl+Enter and Run (T803, AC-387)', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    const sentSql: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/sql'))
+        sentSql.push((JSON.parse(request.postData() ?? '{}') as { sql: string }).sql);
+    });
+    try {
+      await page.goto('/sql');
+      await choose(page, SOURCES.on);
+      // Typed, the cursor ends in the second statement.
+      await typeSql(page, "SELECT 1 AS first;\nSELECT ';' AS second");
+      await expect(page.locator('.cm-sql-statement')).toHaveText("SELECT ';' AS second");
+
+      await page.keyboard.press('ControlOrMeta+Enter');
+      // Run, and not refused as two statements: only the second reached the database.
+      await expect(
+        page.getByRole('table', { name: 'Result: 1 row, 1 column' }).getByRole('columnheader'),
+      ).toHaveText(['#', 'secondtext']);
+      expect(sentSql).toEqual(["SELECT ';' AS second"]);
+
+      // The first line selected: Run says so, and runs only it.
+      await editor(page).locator('.cm-line').first().click();
+      await page.keyboard.press('Home');
+      await page.keyboard.press('Shift+End');
+      const run = page.getByRole('button', { name: 'Run selection' });
+      await run.click();
+      await expect(
+        page.getByRole('table', { name: 'Result: 1 row, 1 column' }).getByRole('columnheader'),
+      ).toHaveText(['#', 'firstint4']);
+      expect(sentSql).toEqual(["SELECT ';' AS second", 'SELECT 1 AS first;']);
+    } finally {
+      await context.close();
+    }
+  });
+
   test('a reload of a tab’s address brings back its source and its text, kept in no request or database (AC-446, AC-451)', async ({
     browser,
   }) => {
