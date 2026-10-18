@@ -12,6 +12,7 @@ import { DataTable, type DataTableProps } from './DataTable';
 import { Kpi } from './Kpi';
 import { PivotTable } from './PivotTable';
 import { TileEmpty } from './TileEmpty';
+import { ParallelNotes } from './ParallelNotes';
 import { UnplacedCodes } from './UnplacedCodes';
 
 /**
@@ -106,6 +107,12 @@ export interface ChartTileProps {
    * (design 04 pin 7).
    */
   readonly countRows?: boolean | undefined;
+  /**
+   * Where this chart's filters are changed — the editor's Filters well — for
+   * a note's Filter (T982: parallel coordinates past 1,000 lines). None
+   * where the tile has nowhere to filter.
+   */
+  readonly onFilter?: (() => void) | undefined;
   /**
    * The marked-items badge, in the header row beside the title (AC-201): the
    * prototype's `.mbadge`, rather than a line above that pushed the title down.
@@ -214,6 +221,7 @@ export function ChartTile({
   rowsTotal,
   kpiSolo,
   countRows,
+  onFilter,
   onItemClick,
   onShapeMark,
   onAxisRange,
@@ -433,6 +441,14 @@ export function ChartTile({
       )}
       {/* A map's codes it can't place, named under it (T398, rule 87). */}
       {spec.chartType === 'map' && !showingTable ? <UnplacedCodes spec={spec} /> : null}
+      {/* Parallel coordinates' scale warning and cut, as text (T982, rule 159). */}
+      {spec.chartType === 'parallel' && !showingTable ? (
+        <ParallelNotes
+          spec={spec}
+          onFilter={onFilter}
+          {...(canSwitch && tableToggle ? { onTable: () => setAsTable(true) } : {})}
+        />
+      ) : null}
       {foot}
     </div>
   );

@@ -2,6 +2,7 @@ import type { ChartType, RenderSpec } from '@wechart/core';
 
 import type { EChartsOption } from '../theme';
 import type { Canvas } from './bar';
+import { parallelOption } from './parallel';
 
 /**
  * R81's series, one module per type (T934; docs/tasks.md §P2.27): each new
@@ -14,4 +15,6 @@ import type { Canvas } from './bar';
 export type SeriesOption = (spec: RenderSpec, canvas: Canvas) => EChartsOption;
 
 /** Each type with a series module of its own, by its type. One line per type. */
-export const SERIES: Partial<Record<ChartType, SeriesOption>> = {};
+export const SERIES: Partial<Record<ChartType, SeriesOption>> = {
+  parallel: parallelOption,
+};

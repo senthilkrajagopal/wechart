@@ -170,8 +170,28 @@ function boxplotTooltip(spec: RenderSpec): EChartsOption {
   return { tooltip: { trigger: 'item', formatter: render } };
 }
 
+/** A parallel-coordinate line (T982): its member, then its value on each axis, in order. */
+function parallelTooltip(spec: RenderSpec): EChartsOption {
+  const axes = membersOn(spec.encoding, 'y');
+  const formats = spec.formats ?? {};
+  const writers = axes.map((measure) => formatterFor(measure, formats));
+  const render = (params: Params | Params[]) => {
+    const line = Array.isArray(params) ? params[0] : params;
+    const values = Array.isArray(line?.value) ? line.value : [];
+    return [
+      escapeHtml(String(line?.name ?? '')),
+      ...axes.map(
+        (measure, at) =>
+          `${escapeHtml(titleOf(spec, measure))}: ${escapeHtml(writers[at]?.(values[at]) ?? '')}`,
+      ),
+    ].join('<br/>');
+  };
+  return { tooltip: { trigger: 'item', formatter: render } };
+}
+
 export function tooltipFor(spec: RenderSpec): EChartsOption {
   if (NO_TOOLTIP.includes(spec.chartType)) return {};
+  if (spec.chartType === 'parallel') return parallelTooltip(spec);
   if (spec.chartType === 'scatter') return scatterTooltip(spec);
   if (spec.chartType === 'heatmap') return heatmapTooltip(spec);
   if (spec.chartType === 'boxplot') return boxplotTooltip(spec);

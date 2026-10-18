@@ -12,6 +12,13 @@ export { treemapOption, isTreemapType } from './series/treemap';
 export { heatmapOption, isHeatmapType } from './series/heatmap';
 export { isMapType, mapOption, unplacedCodes } from './series/map';
 export { countryMap, loadCountryMap, type CountryMap } from './geo/countryMap';
+export {
+  isParallelType,
+  PARALLEL_LINE_CAP,
+  parallelLinesOf,
+  parallelOption,
+  type ParallelLines,
+} from './series/parallel';
 export { DRAWABLE_TYPES, isDrawable, optionFor } from './optionFor';
 export { SERIES, type SeriesOption } from './series/registry';
 export { DESCRIBE, describeChart, type Describe } from './describe';

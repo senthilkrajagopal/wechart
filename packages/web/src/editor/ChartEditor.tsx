@@ -965,6 +965,14 @@ function EditorBody({
                       // reader back from the table to the chart (AC-178).
                       tableView={tableView}
                       onTableViewChange={setTableView}
+                      // A note's Filter opens the Filters well's menu (T982).
+                      onFilter={() => {
+                        const add = document.querySelector<HTMLElement>(
+                          '[data-testid="add-filters"]',
+                        );
+                        add?.focus();
+                        add?.click();
+                      }}
                     />
                   )}
                 </PreviewFrame>

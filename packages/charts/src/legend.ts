@@ -45,6 +45,12 @@ export function seriesCount(spec: RenderSpec): number {
   // A pie's slices, each named by every value it is grouped by (AC-221).
   if (PIE_TYPES.includes(spec.chartType))
     return new Set(slicesOf(spec).map((slice) => slice.name)).size;
+  // Parallel coordinates' lines are coloured by Colour alone, never by
+  // measure: their measures are axes (T982).
+  if (spec.chartType === 'parallel') {
+    const colour = memberOn(spec.encoding, 'color');
+    return colour === undefined ? 0 : distinctValues(spec.rows, colour).length;
+  }
   if (COLOURED_BY_CATEGORY.includes(spec.chartType)) {
     const category = memberOn(spec.encoding, 'x');
     return category === undefined ? 0 : distinctValues(spec.rows, category).length;

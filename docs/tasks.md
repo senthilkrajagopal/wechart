@@ -2530,10 +2530,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T981 (AC-597, AC-037) Parallel coordinates' spec and wells: Line by, 3 or more ordered measures, Colour, and Scale with Shared only for one format
 
-- [ ] T982 (AC-598) Draw one line per member over min-to-max axes, the scale warning as text, and at most 1,000 lines with the cut said
-  - Files: `packages/charts/src/series/parallel.ts` (+ test), `packages/web/src/tiles/ParallelNotes.tsx` (+ test).
-  - Failing test: `parallel.test.ts` (series): each `parallelAxis` has its own min and max, its name its max above and its min below; lines are 1.5 px and, with 60 lines, at opacity 0.6; `ParallelNotes.test.tsx`: the warning is DOM text; 4,210 products draw 1,000 by Revenue with "Showing 1,000 of 4,210 products, by Revenue. Filter, or open the table." (AC-598).
-  - Depends on: T981
+- [x] T982 (AC-598) Draw one line per member over min-to-max axes, the scale warning as text, and at most 1,000 lines with the cut said
 
 - [ ] T983 (AC-599) Brush along parallel axes to mark the members passing every brushed range, as a member list of at most 1,000, and cross-filter to them
   - Files: `packages/charts/src/interaction/parallelBrush.ts` (+ test), `packages/charts/src/series/parallel.ts`.

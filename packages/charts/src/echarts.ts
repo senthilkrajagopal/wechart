@@ -19,6 +19,7 @@ import {
   HeatmapChart,
   LineChart,
   MapChart,
+  ParallelChart,
   PieChart,
   ScatterChart,
   TreemapChart,
@@ -47,6 +48,9 @@ echarts.use([
   // The country map (T398): its geo component and `registerMap` come with
   // it, and `registerMap` does nothing until it is used (research/country-map.md).
   MapChart,
+  // Parallel coordinates (T982): it installs its `parallel` component itself
+  // (research/echarts-parallel.md).
+  ParallelChart,
   // The map legend's "No data" swatch (rule 86).
   GraphicComponent,
   GridComponent,

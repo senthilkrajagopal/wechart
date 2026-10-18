@@ -12,7 +12,6 @@ export const AWAITING_SERIES: ReadonlySet<string> = new Set([
   'waterfall',
   'histogram',
   'bubble',
-  'parallel',
   'bullet',
   'sankey',
   'funnel',
