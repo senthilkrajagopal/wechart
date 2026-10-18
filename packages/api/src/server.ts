@@ -6619,7 +6619,11 @@ export function buildServer({
       });
     }
 
-    if (error instanceof BadRequest) {
+    // A dashboard's Text tile its schema refuses, from any writer (T871, AC-513).
+    if (
+      error instanceof BadRequest ||
+      (error instanceof Error && error.name === 'TextTileRefused')
+    ) {
       return reply.status(400).send({ error: error.message });
     }
 

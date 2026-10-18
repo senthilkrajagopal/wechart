@@ -1,4 +1,4 @@
-import { migrateChartDocument } from '@wechart/core';
+import { migrateChartDocument, textDocumentProblems } from '@wechart/core';
 import { sql, type Kysely } from 'kysely';
 
 import type { Database } from '../db/schema';
@@ -57,6 +57,61 @@ export class DocumentNotFoundError extends Error {
   }
 }
 
+/**
+ * A dashboard holding a Text tile whose document fails the Text tile's schema
+ * or holds more than 10 elements (T871, AC-513, AC-518): refused with 400,
+ * naming the tile and every problem, and nothing is written.
+ */
+export class TextTileRefused extends Error {
+  constructor(
+    readonly tile: string,
+    readonly problems: readonly string[],
+  ) {
+    super(`The Text tile "${tile}" can’t be saved: ${problems.join(' ')}`);
+    this.name = 'TextTileRefused';
+  }
+}
+
+/**
+ * The first Text tile of a dashboard's body whose document fails the schema
+ * (`textDocumentProblems`), wherever it sits — on a page, in a section, in a
+ * tab — or none. A tile still in markdown is not a Text tile, and is stored
+ * as it is until it's converted (AC-512).
+ *
+ * Checked here, in the repo, so every writer of a dashboard meets it: the
+ * routes, an import, an MCP write and a workspace copy alike. The body is
+ * walked with a stack, not by recursion, as the document check is.
+ */
+export function refusedTextTile(kind: DocumentKind, body: unknown): TextTileRefused | undefined {
+  if (kind !== 'dashboard' || typeof body !== 'object' || body === null) return undefined;
+  const stack: unknown[] = [(body as { pages?: unknown }).pages];
+  while (stack.length > 0) {
+    const value = stack.pop();
+    if (Array.isArray(value)) {
+      for (let at = value.length - 1; at >= 0; at -= 1) stack.push(value[at]);
+      continue;
+    }
+    if (typeof value !== 'object' || value === null) continue;
+    const element = value as Record<string, unknown>;
+    if (element['kind'] === 'text') {
+      const problems = textDocumentProblems(element['document']);
+      if (problems.length > 0)
+        return new TextTileRefused(
+          typeof element['id'] === 'string' ? element['id'] : 'without an id',
+          problems,
+        );
+      continue;
+    }
+    for (const key of Object.keys(element).reverse()) stack.push(element[key]);
+  }
+  return undefined;
+}
+
+function checkTextTiles(kind: DocumentKind, body: unknown): void {
+  const refused = refusedTextTile(kind, body);
+  if (refused !== undefined) throw refused;
+}
+
 export interface CreateInput {
   readonly kind: DocumentKind;
   readonly id: string;
@@ -94,6 +149,7 @@ async function created(db: Kysely<Database>, write: UpdateInput): Promise<Stored
 export function documents(db: Kysely<Database>) {
   return {
     async create({ kind, id, body }: CreateInput): Promise<StoredDocument> {
+      checkTextTiles(kind, body);
       const row = await db
         .insertInto('documents')
         .values({ kind, id, body: JSON.stringify(body) })
@@ -121,6 +177,7 @@ export function documents(db: Kysely<Database>) {
      * actually is now (AC-015).
      */
     async update({ kind, id, body, expectedVersion }: UpdateInput): Promise<StoredDocument> {
+      checkTextTiles(kind, body);
       const updated = await db
         .updateTable('documents')
         .set({ body: JSON.stringify(body), version: expectedVersion + 1, updated_at: new Date() })
@@ -213,6 +270,7 @@ export function documents(db: Kysely<Database>) {
      */
     async createTogether(creates: readonly CreateInput[]): Promise<StoredDocument[]> {
       if (creates.length === 0) return [];
+      for (const { kind, body } of creates) checkTextTiles(kind, body);
       const rows = await db.transaction().execute(async (trx) =>
         trx
           .insertInto('documents')
