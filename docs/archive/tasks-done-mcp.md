@@ -494,6 +494,16 @@
       - It has its own script, `pnpm --filter @wechart/e2e e2e:mcp`, which builds the API first.
       - `playwright.config.ts` now leaves out `e2e/mcp/**`, as it does `security/**`. No skip was added.
       - How to run it is in `e2e/README.md`, with the main and security suites beside it.
+      - `e2e:mcp` passed 2/2 through the new config.
+    - **Batch run** (lane MCP, batch 6), real Chrome, at 9d2ac4be. The main run started before the suite move, so it still held the MCP spec.
+      - **Main** (`--project=chrome`): 847 passed (the MCP spec's two among them), 1 failed, `model-design.spec.ts:855`, the known flake. It passes alone (1/1).
+      - **Security** (`--project=chrome`): 392 passed, 4 failed, 9 did not run.
+        - `sql-workspace.spec.ts:468` passes alone.
+        - Three fail alone too:
+          - `propose.spec.ts:83`, the known flake: a chart's create answered 400, "Name the shared folder it is to go to".
+          - `calc-request-resolve.spec.ts:200`: "Open in My workspace" never shows on the request.
+          - `reviews.spec.ts:168`: the writer's proposal isn't in `super`'s "To review".
+        - **Not this branch's:** its only runtime change is the MCP tool list, which is registered only where a host is named for MCP, and the security stack names none. Reported to the coordinator, not chased.
 
 ## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
 
