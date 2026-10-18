@@ -341,3 +341,16 @@
       - **The pass's tests** (low): a new test shows a pass taken once, a second request bearing it no one, and a pass no one at all once its ask has ended.
       - **AC-432's change half** (consistency): now on T785's line too (decision T782-5, amended).
       - **Left as is:** the scope test checks the refusal and that no data came back, not that `run` wasn't called; `called` refuses before `run`, as the review read. Sign-in off's pass path has no test of its own: with it off the caller is the single user either way.
+
+## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
+
+- **Asked:** why `GET /api/images/:id` in `access/route-matrix.test.ts` times out at 5 s in most full unit runs.
+- **Measured (2026-10-18, each request timed and its Postgres queries counted, by a temporary hook in the test, since removed):**
+  - **The images case is not slow here.** It took 298 ms, 310 ms and 409 ms in three runs, alone and with the web suite loading the machine. Its 134 image GETs take 1.6 ms and 8.5 queries each, 1,144 queries in all. It didn't time out in any of this batch's five full runs. A cause that is load alone would need a 17-fold slowdown.
+  - **The cases that did time out** (in this batch's first full run, at load average 30) were **`GET /api/cube-store` and `POST /api/cube-store/sql`**, at 1.7 s each alone. Each of their requests made about 373 queries.
+- **Cause:** `allowedOnASwitchedFolder` (`routes/sql-runner.ts`) asks after every SQL runner switch in turn, for anyone who isn't a Super-Admin. The test database held **364 switches whose data sources were gone**. The route removes a switch with its data source (T531's review), but tests remove their data sources' rows directly, so every run left more behind (181 by the test `super`, 181 by Dex's super, since 2026-10-08).
+- **Fix** (follow-up commit): `src/db/orphan-switches.ts`'s `removeOrphanSwitches`, run by `vitest.globalSetup.ts` before every run, removes the switches with no data source, keeping Cube Store's. **After:** the two Cube Store cases take 108 ms and 135 ms. New test: `db/orphan-switches.test.ts`.
+  - **Not done:** a migration with a trigger removing a switch with its row in every database. Lane SQL's `1758680000000` is already run in the shared test database, and node-pg-migrate's order check compares run and on-disk migrations by position, so a new lane-MCP migration would stop every lane's runs until the picks align. Worth a migration once they do.
+  - The test runs that only test is red is missing: the function was written before its test ran.
+- **Also seen:** `GET /api/reviews` makes 550 queries a request for `writer` (110 ms), over the 986 proposals the test database keeps. It is far from the timeout and was left alone.
+- **Unit suite with the fix:** web 3,023, core 550, charts 556, recommender 133, ui 47 green; api 1,985 passed, 2 failed, both `phase1-content.test.ts`, the handoff's known flake, which passes alone (3/3) and passed in the T782 run.

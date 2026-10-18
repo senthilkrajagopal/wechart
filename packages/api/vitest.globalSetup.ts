@@ -4,8 +4,9 @@ import { promisify } from 'node:util';
 
 import pg from 'pg';
 
-import { databaseUrl } from './src/db/client';
+import { closeDb, databaseUrl, getDb } from './src/db/client';
 import { migrateToLatest } from './src/db/migrate';
+import { removeOrphanSwitches } from './src/db/orphan-switches';
 
 const run = promisify(execFile);
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -35,6 +36,13 @@ export async function setup(): Promise<void> {
   await createTestDatabase();
   await waitForConnection(databaseUrl());
   await migrateToLatest();
+  // Switches left by tests' own clean-ups slow every Cube Store ask (orphan-switches.ts).
+  const db = getDb();
+  try {
+    await removeOrphanSwitches(db);
+  } finally {
+    await closeDb();
+  }
 }
 
 /** The maintenance database on the same server, used to create the test one. */
