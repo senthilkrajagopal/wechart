@@ -189,9 +189,18 @@ describe('only four marks and two axes (AC-497)', () => {
     ]);
   });
 
-  it('refuses series settings that are not a map of measures', () => {
-    expect(comboProblems({ series: [{ mark: 'bar' }] })).toEqual([
-      "The chart's series settings are not a map of series to their settings.",
+  /**
+   * T845's review: only a mark or an axis the combo doesn't have is refused.
+   * Series settings of another shape hold no mark or axis, are read as none
+   * by every renderer, and so draw by Auto; refusing them would make a chart
+   * of any type unopenable for nothing a combo stores.
+   */
+  it('reads series settings that are not a map as none, and refuses nothing', () => {
+    expect(comboProblems({ series: [{ mark: 'pie' }] })).toEqual([]);
+    expect(comboProblems({ series: null })).toEqual([]);
+    expect(drawn([REVENUE, TARGET], { series: [{ mark: 'pie' }] })).toEqual([
+      `${REVENUE} bar/left`,
+      `${TARGET} line/left`,
     ]);
   });
 

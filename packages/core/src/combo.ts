@@ -97,11 +97,10 @@ export function comboSeriesOf(
  * grain Cube doesn't have is.
  */
 export function comboProblems(options: Readonly<Record<string, unknown>> | undefined): string[] {
+  // Settings of another shape hold no mark or axis: every renderer reads
+  // them as none (T845's review).
   const series = options?.['series'];
-  if (series === undefined) return [];
-  if (!isRecord(series)) {
-    return ["The chart's series settings are not a map of series to their settings."];
-  }
+  if (!isRecord(series)) return [];
   const problems: string[] = [];
   for (const [name, settings] of Object.entries(series)) {
     if (!isRecord(settings)) continue;
