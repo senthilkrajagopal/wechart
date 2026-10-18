@@ -1630,11 +1630,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T787 (AC-439, AC-442, AC-469) Propose, withdraw and list the owner's proposals through MCP, checked as the web app's are, and marked in the audit trail as through MCP
 
-- [ ] T788 (AC-477, AC-469) List jobs, builds and schedules through MCP, with Run now and Cancel where the owner may, and no schedule edits
-  - Lane: MCP
-  - Files: `packages/api/src/mcp/tools/jobs.ts` (+ `jobs.test.ts`).
-  - Failing test: `jobs.test.ts`: a read-write member's token lists only the jobs, builds and schedules AC-297 shows them; Run now starts a build and Cancel stops one exactly where their web app offers each, and is refused elsewhere; no tool changes, pauses, resumes or deletes a schedule (AC-477); both need proposals-and-jobs (AC-469).
-  - Depends on: T783
+- [x] T788 (AC-477, AC-469) List jobs, builds and schedules through MCP, with Run now and Cancel where the owner may, and no schedule edits
 
 - [ ] T789 (AC-440, AC-441) Offer no tool that approves or rejects, or that touches data sources, a shared folder directly, the SQL runner, the audit trail or tokens
   - Lane: MCP

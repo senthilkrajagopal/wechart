@@ -61,7 +61,8 @@ let rootBefore: Awaited<ReturnType<ReturnType<typeof docs>['get']>> = null;
 let app: FastifyInstance;
 let writerKey = '';
 const tokenIds: string[] = [];
-const tokens: Partial<Record<'edit' | 'readOnly' | 'noRead' | 'noEdit', string>> = {};
+const tokens: Partial<Record<'edit' | 'readOnly' | 'noRead' | 'noEdit' | 'noProposals', string>> =
+  {};
 const at = { writable: '', readable: '' };
 
 async function make(kind: DocumentKind, body: Record<string, unknown>): Promise<string> {
@@ -142,6 +143,7 @@ beforeAll(async () => {
   tokens.readOnly = await tokenFor(['read']);
   tokens.noRead = await tokenFor(['workspace-edit']);
   tokens.noEdit = await tokenFor(['read']);
+  tokens.noProposals = await tokenFor(['read', 'workspace-edit']);
 }, 60_000);
 
 /** The copies made here, and their project folders, removed after. */
@@ -255,11 +257,12 @@ describe('Edit in my workspace through MCP (T785, AC-438, AC-432)', () => {
 
 describe('every tool’s scope, in both eras (T785’s review, AC-433)', () => {
   it('answers a call by a token without its tool’s scope 403 insufficient_scope, for every tool, 2026-07-28 and 2025 alike', async () => {
-    // `noEdit` holds read alone, so it lacks proposals-and-jobs too (T787).
+    // A token of its own per scope: each is held to 60 requests a minute (AC-472),
+    // and every tool here is asked in two eras (T788).
     const without = {
       read: tokens.noRead!,
       'workspace-edit': tokens.noEdit!,
-      'proposals-and-jobs': tokens.noEdit!,
+      'proposals-and-jobs': tokens.noProposals!,
     } as const;
     for (const era of ['modern', '2025'] as const) {
       for (const tool of MCP_TOOLS) {
