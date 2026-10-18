@@ -31,7 +31,10 @@ test.describe('workspaces survive a reload', () => {
 
       await page.reload();
 
-      await expect(page).toHaveURL(new RegExp(`${path}$`));
+      // SQL runner names its open tab in the address too (AC-446, T801).
+      await expect(page).toHaveURL(
+        new RegExp(path === '/sql' ? `${path}\\?tab=[0-9a-f]{8}$` : `${path}$`),
+      );
       await expect(page.getByRole('link', { name: label, exact: true })).toHaveAttribute(
         'aria-current',
         'page',
