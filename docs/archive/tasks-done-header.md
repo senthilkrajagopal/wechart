@@ -71,3 +71,8 @@ Lane HEADER's ticked tasks from `docs/tasks.md` §P2.25 (F43), their sub-lines w
   - Files: `packages/web/src/dashboard/DashboardView.tsx` (`headerActions`), `packages/web/src/dashboard/bookmarks/Bookmarks.tsx`, `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
   - Failing test: the e2e at 1,024 and 1,152 px: the row is 48 px tall and one line; History and Bookmarks show no visible text, and their accessible names and `title`s are "History" and "Bookmarks"; the document's `scrollWidth` equals its `clientWidth` (AC-494).
   - Depends on: T837
+
+- [x] T842 (AC-495, AC-304) Below 1,024 px, keep the way back, the title, the toggle and ⋯ in the row, History and Bookmarks… in ⋯, a "Page: ‹name› ▾" menu on a 40 px row for more than one page, and the sheet's pills one under another
+  - Files: `packages/web/src/dashboard/header/PageMenu.tsx` (+ test; through `shell/MenuButton.tsx`), `packages/web/src/dashboard/DashboardView.tsx` (`headerActions` and ⋯ through `useNarrowWindow`), `packages/web/src/filters/FilterBar.tsx` (stacked pills when narrow), `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
+  - Failing test: `PageMenu.test.tsx`: with two pages, "Page: Overview ▾" lists both with Overview checked, and choosing the other opens it; with one page there's no menu. The e2e at 390 and 900 px: the row holds the way back, the `h1` at 16 px, the toggle and ⋯, and ⋯ holds History and Bookmarks…; the page row is 40 px tall; the open sheet's pills share one left edge; at 390 px the document doesn't scroll sideways (AC-495, AC-304).
+  - Depends on: T829, T831

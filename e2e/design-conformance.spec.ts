@@ -1617,7 +1617,7 @@ test.describe('T246: the dashboard header and the filter band', () => {
     expect((await band(page).boundingBox())?.height).toBe(53);
   });
 
-  test('many page tabs scroll within their strip, never the page (T246’s review)', async ({
+  test('many pages at 900 px are a menu, the page never scrolling sideways (T246’s review, T842)', async ({
     page,
     request,
   }) => {
@@ -1649,19 +1649,28 @@ test.describe('T246: the dashboard header and the filter band', () => {
     });
     await page.setViewportSize({ width: 900, height: 700 });
     await page.goto(`/explore/dashboards/${id}`);
-    const tabs = page.getByRole('tablist', { name: 'Pages' });
-    await expect(tabs.getByRole('tab')).toHaveCount(16);
+    // Below 1,024 px the pages are a "Page: ‹name› ▾" menu since T842
+    // (AC-495; design 19 D2), not a strip; a strip wider than the window, in
+    // edit mode, is dashboard-edit.spec's (T836).
+    const pages = page.getByRole('button', { name: 'Page: Quarterly page 1' });
+    await expect(pages).toBeVisible();
+    await expect(page.getByRole('tablist', { name: 'Pages' })).toHaveCount(0);
 
     const [pageWide, windowWide] = await page.evaluate(() => [
       document.documentElement.scrollWidth,
       window.innerWidth,
     ]);
     expect(pageWide).toBeLessThanOrEqual(windowWide ?? 0);
-    const [strip, shown] = await tabs.evaluate((list) => [list.scrollWidth, list.clientWidth]);
-    expect(strip).toBeGreaterThan(shown ?? 0);
-    // The last tab is still reachable: it scrolls into its strip.
-    await tabs.getByRole('tab').last().click();
-    await expect(tabs.getByRole('tab').last()).toBeInViewport();
+    await pages.click();
+    const menu = page.getByRole('menu', { name: 'Page: Quarterly page 1' });
+    await expect(menu.getByRole('menuitemradio')).toHaveCount(16);
+    // The last page is still reachable: chosen from the menu.
+    await menu.getByRole('menuitemradio').last().click();
+    const last = page.getByRole('button', { name: 'Page: Quarterly page 16' });
+    await expect(last).toBeInViewport();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+    ).toBeLessThanOrEqual(0);
   });
 });
 

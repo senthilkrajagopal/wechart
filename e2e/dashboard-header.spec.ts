@@ -987,6 +987,130 @@ test('at 1,024 and 1,152 px the row is one 48 px line, History and Bookmarks ico
 });
 
 /**
+ * T842 (AC-495, AC-304; design 19 states D2–D4): below 1,024 px the row
+ * holds the way back, the title at 16/22, the toggle and ⋯; History and
+ * Bookmarks… are in ⋯; the pages are a "Page: ‹name› ▾" menu on a 40 px row;
+ * the open sheet's pills stand one under another; nothing scrolls sideways.
+ */
+for (const width of [390, 900]) {
+  test(`at ${String(width)} px the row is the way back, the title, the toggle and ⋯, the pages a menu on a 40 px row, the pills stacked`, async ({
+    page,
+    request,
+  }) => {
+    const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+    const title = `Narrow ${unique}`;
+    const id = await sharedIn(request, 'dashboard', 'root', {
+      title,
+      description: 'Monthly revenue and orders.',
+      settings: { width: 'full' },
+      pages: [
+        {
+          id: 'overview',
+          title: 'Overview',
+          items: [{ id: 'n1', kind: 'markdown', w: 6, h: 8, text: 'On Overview' }],
+        },
+        {
+          id: 'detail',
+          title: 'Detail',
+          items: [{ id: 'n2', kind: 'markdown', w: 6, h: 8, text: 'On Detail' }],
+        },
+      ],
+      filters: [
+        { id: 'f-status', widget: 'checkbox', member: 'orders.status' },
+        { id: 'f-status-2', widget: 'checkbox', member: 'orders.status' },
+        { id: 'f-ordered', widget: 'dateRange', member: 'orders.ordered_at' },
+      ],
+    });
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`/explore/dashboards/${id}`);
+    const heading = page.getByRole('heading', { level: 1, name: title });
+    await expect(heading).toBeVisible();
+    await expect(page.getByText('On Overview', { exact: true })).toBeVisible();
+
+    // The row: the way back, the title at text-md 16/22, the toggle and ⋯.
+    await expect(heading).toHaveCSS('font-size', '16px');
+    await expect(heading).toHaveCSS('line-height', '22px');
+    const toggle = row(page).locator('button.header-toggle');
+    const more = row(page).getByRole('button', { name: 'More', exact: true });
+    await expect(toggle).toBeVisible();
+    await expect(more).toBeVisible();
+    await expect(row(page).locator('.header-back')).toBeVisible();
+    expect(
+      await row(page)
+        .locator('button:visible, a:visible')
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? '')),
+    ).toEqual([expect.stringMatching(/^Back to /), 'More', expect.stringMatching(/^Filters\b/)]);
+    await expect(row(page).getByRole('button', { name: 'History', exact: true })).toHaveCount(0);
+    await expect(row(page).getByRole('button', { name: 'Bookmarks', exact: true })).toHaveCount(0);
+    await expect(row(page).getByRole('tablist', { name: 'Pages' })).toHaveCount(0);
+
+    // ⋯ holds History and Bookmarks…, first.
+    await more.click();
+    const menu = page.getByRole('menu', { name: 'More' });
+    await expect(menu.getByRole('menuitem').first()).toBeVisible();
+    expect((await menu.getByRole('menuitem').allTextContents()).slice(0, 3)).toEqual([
+      'History',
+      'Bookmarks…',
+      'Export…',
+    ]);
+    await menu.getByRole('menuitem', { name: 'Bookmarks…' }).click();
+    const bookmarks = page.getByRole('dialog', { name: 'Bookmarks' });
+    await expect(bookmarks).toBeVisible();
+    await expect(bookmarks).toBeInViewport({ ratio: 1 });
+    await page.keyboard.press('Escape');
+    await expect(bookmarks).toHaveCount(0);
+    await expect(more).toBeFocused();
+
+    // The pages: "Page: Overview ▾" on a 40 px row, the open one checked.
+    const pages = page.getByRole('button', { name: 'Page: Overview' });
+    await expect(pages).toBeVisible();
+    expect((await page.locator('.page-menu-row').boundingBox())?.height).toBe(40);
+    await pages.click();
+    const listed = page.getByRole('menu', { name: 'Page: Overview' });
+    await expect(listed.getByRole('menuitemradio', { name: 'Overview' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await expect(listed.getByRole('menuitemradio', { name: 'Detail' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+    await listed.getByRole('menuitemradio', { name: 'Detail' }).click();
+    await expect(page.getByText('On Detail', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Page: Detail' })).toBeVisible();
+
+    // The sheet, open: full width, padded 16 px, the pills one under another.
+    await openHeaderSheet(page);
+    const pills = headerSheet(page).locator('.filter-pill');
+    await expect(pills).toHaveCount(3);
+    const lefts = await pills.evaluateAll((nodes) =>
+      nodes.map((node) => Math.round(node.getBoundingClientRect().left)),
+    );
+    expect(new Set(lefts).size).toBe(1);
+    const tops = await pills.evaluateAll((nodes) =>
+      nodes.map((node) => node.getBoundingClientRect().top),
+    );
+    expect(tops[1]! - tops[0]!).toBeGreaterThanOrEqual(32);
+    const sheetBox = (await headerSheet(page).boundingBox())!;
+    expect(sheetBox.width).toBe(width);
+    expect(lefts[0]! - sheetBox.x).toBe(16);
+    // The page row stays under the sheet (D3).
+    const pageRow = (await page.locator('.page-menu-row').boundingBox())!;
+    expect(pageRow.y).toBeGreaterThanOrEqual(sheetBox.y + sheetBox.height - 1);
+
+    // Nothing sideways, open or closed.
+    const sideways = () =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+    expect(await sideways()).toBe(0);
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(await sideways()).toBe(0);
+  });
+}
+
+/**
  * Watches every polite live region on the page (`aria-live="polite"`, or a
  * `status`, polite by default) and keeps each new message, in order, with
  * the times the Filters toggle took and lost its change highlight.

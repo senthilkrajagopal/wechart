@@ -117,9 +117,51 @@ export const HEADER_CSS = `
    a sentence, can take a second line rather than run out of it (T836-1).
    Below 1,024 px the row may still wrap: the narrow row is T842's (T829-1). */
 .dashboard[data-editing='true'] .dashboard__header { height: auto; }
-@media (max-width: 1023px) {
-  .dashboard__header { flex-wrap: wrap; height: auto; }
+/* Below 1,024 px (AC-495; design 19 D2-D4): in view mode one 48 px row
+   padded 0 16, holding the way back, the title at text-md 16/22, ⋯ and the
+   toggle; each but the buttons gives way, the title first. While editing the
+   row may still wrap (T829-1). The Bookmarks popover, opened from ⋯, hangs
+   under the row's right end, 16 px in. */
+@media (max-width: 1023.98px) {
+  .dashboard__header { position: relative; padding: 0 16px; }
+  .dashboard[data-editing='true'] .dashboard__header { flex-wrap: wrap; }
+  .dashboard__header > .header-back { flex: 0 1 auto; min-width: 24px; }
+  .dashboard__header h1 {
+    min-width: 0;
+    font-size: var(--wc-text-md-size);
+    line-height: var(--wc-text-md-line);
+  }
+  .dashboard__header .compact-chips,
+  .dashboard__header .mark-chip-note { display: none; }
+  .dashboard__header .dashboard__bookmarks--menu { display: contents; }
+  .dashboard__header .dashboard__bookmarks--menu > .bookmarks { right: 16px; }
+  .header-sheet__about { padding: 8px 16px; }
+  /* The sheet's pills one under another, each kept inside the window
+     (direction §2: "the filter bar becomes a sheet"). */
+  .header-sheet .filter-bar {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    padding: 10px 16px;
+  }
+  .header-sheet .filter-bar > * { max-width: 100%; }
+  .header-sheet .filter-bar > .filter-bar__spacer { display: none; }
 }
+/* Bookmarks' own button, hidden where ⋯ opens it (AC-495): a .btn draws
+   inline-flex, which would otherwise outweigh the hidden attribute. */
+.dashboard__bookmarks-button[hidden] { display: none; }
+/* The pages below 1,024 px (AC-495; design 19 D2, D3): a 40 px row under the
+   sheet, ruled off like the compact row, its "Page: ‹name› ▾" a 32 px .btn. */
+.page-menu-row {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 40px;
+  padding: 0 16px;
+  background: var(--wc-bg-page);
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.page-menu { gap: 6px; max-width: 100%; }
 /* From 1,024 to 1,279 px (AC-494; design 19 D1): History and Bookmarks are
    32 px icon buttons, their words in their names and tooltips only, so the
    row keeps to one 48 px line with room for the tabs. */

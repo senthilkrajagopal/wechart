@@ -173,6 +173,7 @@ import { Canvas, type CanvasProps } from './grid/Canvas';
 import { CompactChips } from './header/CompactChips';
 import { filterChangeSaid, markFilterSaid } from './header/filterChangeSaid';
 import { filtersSet } from './header/filtersSet';
+import { PageMenu } from './header/PageMenu';
 import { PageTabsMore } from './header/PageTabsMore';
 import { useTabsThatFit } from './header/useTabsThatFit';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
@@ -2300,6 +2301,8 @@ export function DashboardView({
    * already open when the window narrows keeps its bar, so nothing is lost.
    */
   const narrow = useNarrowWindow();
+  /** How many times ⋯'s "Bookmarks…" was chosen, below 1,024 px (AC-495). */
+  const [bookmarksAsked, setBookmarksAsked] = useState(0);
   /**
    * Whether the dashboard is being edited, mirrored up with it: clicking a
    * mark selects the tile while editing, so cross-filtering is off there —
@@ -5458,9 +5461,20 @@ export function DashboardView({
         onDiscard={onDiscard}
         description={(shown) => shown.description}
         // The page tabs, inline in the compact row (AC-484; design 19 pin 3).
-        tabs={(session) => (
-          <PageTabsRow session={session} pageId={pageId} onOpenPage={setOpenPage} />
-        )}
+        // Below 1,024 px in view mode, a "Page: ‹name› ▾" menu on a row of its
+        // own under the sheet instead (AC-495; design 19 D2, D3).
+        tabs={(session) =>
+          narrow && !session.editing ? null : (
+            <PageTabsRow session={session} pageId={pageId} onOpenPage={setOpenPage} />
+          )
+        }
+        under={(session) =>
+          narrow && !session.editing && session.document.pages.length > 1 ? (
+            <div className="page-menu-row">
+              <PageMenu pages={session.document.pages} openId={pageId} onOpen={setOpenPage} />
+            </div>
+          ) : null
+        }
         // History and Bookmarks, before the primary (AC-484; design 19 screen 1).
         headerLead={(session) => (
           <>
@@ -5468,7 +5482,8 @@ export function DashboardView({
                 2026-09-27 04 state E; T684): for those the API shows them to,
                 never while editing or read-only. A .btn, pressed while its
                 panel is open. */}
-            {onHistory === undefined || session.editing || readOnly ? null : (
+            {/* Below 1,024 px, in ⋯ (AC-495; design 19 D4). */}
+            {onHistory === undefined || session.editing || readOnly || narrow ? null : (
               <button
                 type="button"
                 className={historyOpen ? 'btn pressed dashboard__history' : 'btn dashboard__history'}
@@ -5498,6 +5513,20 @@ export function DashboardView({
                   from: markSources,
                 }}
                 onApply={applyView}
+                // Below 1,024 px, opened from ⋯'s "Bookmarks…", the same
+                // popover under the row (AC-495; design 19 D4).
+                opener={
+                  narrow
+                    ? {
+                        asked: bookmarksAsked,
+                        focus: () => {
+                          window.document
+                            .querySelector<HTMLElement>('[data-testid="dashboard-more"]')
+                            ?.focus();
+                        },
+                      }
+                    : undefined
+                }
               />
             )}
           </>
@@ -5506,8 +5535,10 @@ export function DashboardView({
           <>
             {/* A shared one's way to change it: a copy in My workspace
                 (T348, AC-278; design 04, state E). A workspace one's way
-                back: its proposal (state F). */}
-            {session.editing || readOnly || place === undefined ? null : place.copy !==
+                back: its proposal (state F). Not below 1,024 px, where the
+                row holds only the way back, the title, ⋯ and the toggle
+                (AC-495; design 19 D2). */}
+            {session.editing || readOnly || place === undefined || narrow ? null : place.copy !==
               undefined ? (
               <button type="button" className="btn-primary" onClick={place.copy.onClick}>
                 <PencilIcon />
@@ -5582,6 +5613,22 @@ export function DashboardView({
                   exporting ? 'icon-button dashboard__more is-pressed' : 'icon-button dashboard__more'
                 }
                 items={[
+                  // Below 1,024 px, History and Bookmarks… first (AC-495;
+                  // design 19 D4), as the row's buttons would be.
+                  ...(narrow && onHistory !== undefined && !readOnly
+                    ? [{ key: 'history', label: 'History', onSelect: onHistory }]
+                    : []),
+                  ...(narrow && preview === undefined && !readOnly
+                    ? [
+                        {
+                          key: 'bookmarks',
+                          label: 'Bookmarks…',
+                          onSelect: () => {
+                            setBookmarksAsked((was) => was + 1);
+                          },
+                        },
+                      ]
+                    : []),
                   {
                     key: 'export',
                     label: 'Export…',
@@ -5988,6 +6035,9 @@ export function DashboardView({
         // While the sheet is closed, its chips in short in the row (AC-200,
         // AC-119; design 19 pin 4): the cross-filters in cross-filter mode,
         // or each non-empty marking, by the same words as the full chips.
+        // Not drawn below 1,024 px, where the row holds only the way back,
+        // the title, ⋯ and the toggle, whose count still says it (AC-495;
+        // headerStyles.ts).
         compact={() => (
           <CompactChips
             crossFilters={

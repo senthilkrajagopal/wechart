@@ -188,9 +188,17 @@ test.describe('T250: below 1,024 px, a dashboard is for reading', () => {
     await page.goto(await seedDashboardCopy());
     await expect(drawnTile(page, 'tile-status')).toBeVisible({ timeout: 15_000 });
     await page.setViewportSize({ width: 1280, height: 844 });
+    // Side by side again, six columns each: read once the page has come to
+    // rest, since the narrow header's page row (T842) goes as it widens.
+    await expect
+      .poll(async () => {
+        const status = (await page.locator('[data-tile="tile-status"]').boundingBox())!;
+        const notes = (await page.locator('[data-tile="tile-notes"]').boundingBox())!;
+        return notes.y - status.y;
+      })
+      .toBe(0);
     const status = (await page.locator('[data-tile="tile-status"]').boundingBox())!;
     const notes = (await page.locator('[data-tile="tile-notes"]').boundingBox())!;
-    // Side by side again, six columns each.
     expect(notes.y).toBe(status.y);
     await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
     // With room, the freshness badge's dot and word keep design 04's 5 px apart

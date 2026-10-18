@@ -720,3 +720,34 @@ describe('as design 10 draws it (T742)', () => {
     expect(foot.textContent).toBe('Bookmark this view…');
   });
 });
+
+/**
+ * T842 (AC-495; design 19 D4): below 1,024 px, opened from ⋯'s "Bookmarks…"
+ * rather than by a button of its own; Escape gives focus back to what opened it.
+ */
+describe('opened from elsewhere', () => {
+  it('has no button of its own, opens each time it is asked, and gives focus back', async () => {
+    const asked = api(() => new Response(null, { status: 500 }));
+    const focus = vi.fn();
+    const { rerender } = render(
+      <Bookmarks dashboardId="d1" current={STATE} onApply={vi.fn()} opener={{ asked: 0, focus }} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Bookmarks' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Bookmarks' })).toBeNull();
+    const reads = asked.length;
+
+    rerender(
+      <Bookmarks dashboardId="d1" current={STATE} onApply={vi.fn()} opener={{ asked: 1, focus }} />,
+    );
+    const popover = screen.getByRole('dialog', { name: 'Bookmarks' });
+    // Read again as it opens, as its own button does (T367's review).
+    await vi.waitFor(() => {
+      expect(asked.length).toBeGreaterThan(reads);
+    });
+    expect(document.activeElement).toBe(popover);
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Bookmarks' })).toBeNull();
+    expect(focus).toHaveBeenCalledOnce();
+  });
+});

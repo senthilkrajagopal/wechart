@@ -199,6 +199,12 @@ export interface EditChromeProps<T> {
    */
   readonly sheet?: ((session: EditSession<T>) => ReactNode) | undefined;
   /**
+   * A row under the header sheet, held with it while the canvas scrolls — a
+   * dashboard's "Page: ‹name› ▾" menu below 1,024 px (AC-495; design 19 D2,
+   * D3: "the page row stays under the sheet").
+   */
+  readonly under?: ((session: EditSession<T>) => ReactNode) | undefined;
+  /**
    * The filters in summary, for the toggle's count, name and description
    * (AC-486). None reads "Details".
    */
@@ -255,6 +261,7 @@ export function EditChrome<T>({
   readOnly = false,
   band,
   sheet,
+  under,
   filtersSummary = NO_FILTERS,
   compact,
   foot,
@@ -520,7 +527,7 @@ export function EditChrome<T>({
           ) : null}
         </header>
 
-        {!hasSheet && band === undefined ? null : (
+        {!hasSheet && band === undefined && under === undefined ? null : (
           // Inert with the body while a save is under way, as it was inside it.
           <div className="dashboard__fixed" inert={saving}>
             {band?.(session)}
@@ -551,6 +558,7 @@ export function EditChrome<T>({
                 {sheet?.(session)}
               </HeaderSheet>
             ) : null}
+            {under?.(session)}
           </div>
         )}
 

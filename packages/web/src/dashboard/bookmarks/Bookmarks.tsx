@@ -139,11 +139,18 @@ export function Bookmarks({
   dashboardId,
   current,
   onApply,
+  opener,
 }: {
   dashboardId: string;
   current: ViewState;
   /** Restore what a bookmark kept, read back as a view (`viewStateFrom`). */
   onApply: (state: ViewState, name: string) => void;
+  /**
+   * Opened from elsewhere rather than by its own button (AC-495; design 19
+   * D4: "Bookmarks…" in ⋯ below 1,024 px): no button of its own, the popover
+   * opening each time `asked` counts up, and focus going back by `focus`.
+   */
+  opener?: { readonly asked: number; readonly focus: () => void } | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const [asking, setAsking] = useState<Asking | undefined>(undefined);
@@ -155,6 +162,27 @@ export function Bookmarks({
   /** Read again after each change, so what changed is listed as it is now. */
   const [reads, setReads] = useState(0);
   const [listed, setListed] = useState<Listed>({ kind: 'reading' });
+  /**
+   * Opened from ⋯ (AC-495): each time it asks, open and read again, as its
+   * own button does. Compared while rendering, so it opens in that render.
+   */
+  const asked = opener?.asked ?? 0;
+  const [seenAsk, setSeenAsk] = useState(asked);
+  if (asked !== seenAsk) {
+    setSeenAsk(asked);
+    setOpen(true);
+    setReads((was) => was + 1);
+  }
+  /** Where focus goes back to as it closes: its button, or what opened it. */
+  const backTo = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    backTo.current =
+      opener === undefined
+        ? () => {
+            trigger.current?.focus();
+          }
+        : opener.focus;
+  });
 
   useEffect(() => {
     const aborted = new AbortController();
@@ -197,7 +225,7 @@ export function Bookmarks({
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       setOpen(false);
-      if (box.current?.contains(document.activeElement) === true) trigger.current?.focus();
+      if (box.current?.contains(document.activeElement) === true) backTo.current();
     };
     const onDown = (event: MouseEvent) => {
       if (!box.current?.contains(event.target as Node)) setOpen(false);
@@ -214,7 +242,7 @@ export function Bookmarks({
   const closeAll = () => {
     setOpen(false);
     setAsking(undefined);
-    trigger.current?.focus();
+    backTo.current();
   };
   const changed = (words: string) => {
     setSaid(words);
@@ -383,10 +411,19 @@ export function Bookmarks({
     );
 
   return (
-    <span ref={box} className="dashboard__bookmarks">
+    <span
+      ref={box}
+      className={
+        opener === undefined
+          ? 'dashboard__bookmarks'
+          : 'dashboard__bookmarks dashboard__bookmarks--menu'
+      }
+    >
       <button
         ref={trigger}
         type="button"
+        // Opened from ⋯ instead, below 1,024 px (AC-495).
+        hidden={opener !== undefined}
         className="btn dashboard__bookmarks-button"
         aria-haspopup="dialog"
         aria-expanded={open}
