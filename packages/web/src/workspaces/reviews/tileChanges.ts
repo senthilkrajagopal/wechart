@@ -6,6 +6,9 @@
  * is kept and whose it is aside: a copy's charts have ids and places of
  * their own. Sections and tab groups aren't marked; the tiles in them are.
  */
+import type { Element_ } from '../../dashboard/model/document';
+import { readAsText } from '../../dashboard/model/stored';
+
 export type TileChange = 'new' | 'changed';
 
 interface Drawn {
@@ -64,8 +67,20 @@ const chartOf = (drawn: Drawn, tile: Record<string, unknown>) => {
     : Object.fromEntries(Object.entries(body).filter(([key]) => !PLACE.has(key)));
 };
 
+/**
+ * A tile as it is read, its chart aside: a markdown tile as the Text tile it
+ * converts to (T875, AC-512), so a draft saved through the editor — which
+ * stores the conversion — isn't marked changed against a folder's version
+ * still holding the markdown (T875's review).
+ */
 const tileAlone = (tile: Record<string, unknown>) =>
-  Object.fromEntries(Object.entries(tile).filter(([key]) => key !== 'chartId'));
+  Object.fromEntries(
+    Object.entries(
+      tile['kind'] === 'markdown'
+        ? (readAsText(tile as unknown as Element_) as unknown as Record<string, unknown>)
+        : tile,
+    ).filter(([key]) => key !== 'chartId'),
+  );
 
 export function tileChangesOf(
   proposed: Drawn,

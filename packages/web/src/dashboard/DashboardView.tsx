@@ -5805,7 +5805,9 @@ export function DashboardView({
                 );
               }}
               saveBlocked={(pending) =>
-                whyUnsaveableWith(session.document, dashboardId, editingChart.chartId, pending)
+                whyUnsaveableWith(session.document, dashboardId, editingChart.chartId, pending) ??
+                // Held here too, where it is pressed (T875's review).
+                whyTextUnsaveable(session.document)
               }
               // A shared chart's "Make a local copy" (T135, AC-129): the tile
               // repointed to a copy with the edits so far, the editor on it.

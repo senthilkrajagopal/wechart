@@ -1,5 +1,6 @@
 import type { ChartDocument } from '@wechart/core';
 
+import { whyTextUnsaveable } from '../tiles/text/elementLimit';
 import { saveDashboard, StaleSaveError } from './edit/save';
 import { pageKey } from './model/document';
 import { insertElement } from './model/insert';
@@ -40,6 +41,14 @@ export async function copyChartToDashboard({
   const target = dashboardOf(stored);
   const page = target.pages[0];
   if (page === undefined) throw new Error('That dashboard has no page to put the chart on.');
+  // A Text tile over its 10 elements — a markdown tile of more tokens,
+  // converted in full — holds every save of it until edited (decision
+  // T875-1), so nothing is written and the copy says why (T875's review).
+  const held = whyTextUnsaveable(target);
+  if (held !== undefined)
+    throw new Error(
+      `That dashboard can’t be saved until it is edited, so nothing was written. ${held}`,
+    );
 
   const chartId = mintChartId();
   // Everything the source's chart carries but its folder: a local chart is

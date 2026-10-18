@@ -127,4 +127,31 @@ describe('copying a tile’s chart to another dashboard', () => {
       }),
     ).rejects.toThrow('Could not read that dashboard (404).');
   });
+
+  // T875's review: a dashboard holding a markdown tile of more than 10
+  // tokens converts in full and can't be saved as it is (decision T875-1),
+  // so the copy says why and writes nothing, rather than a refusal naming a
+  // tile no one edited.
+  it('writes nothing to a dashboard holding a Text tile over its 10 elements, and says why', async () => {
+    const methods: string[] = [];
+    const text = Array.from({ length: 12 }, () => '{{measure:orders.count}}').join(' ');
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      methods.push(init?.method ?? 'GET');
+      return new Response(
+        JSON.stringify({
+          id: 'target',
+          version: 3,
+          body: {
+            schemaVersion: 1,
+            title: 'Sales',
+            pages: [{ id: 'p1', title: 'P', items: [{ id: 'm', kind: 'markdown', w: 6, text }] }],
+          },
+        }),
+      );
+    });
+    await expect(
+      copyChartToDashboard({ targetId: 'target', chart: CHART, size: { w: 6 }, fetchImpl }),
+    ).rejects.toThrow('Remove 2 live values to save');
+    expect(methods).toEqual(['GET']);
+  });
 });

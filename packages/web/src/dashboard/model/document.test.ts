@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { textDocumentFromMarkdown } from '@wechart/core';
+
 import {
   containersOf,
   moveBy,
   moveTile,
+  nameOfTile,
   pageKey,
   placeOf,
   removeElement,
@@ -357,6 +360,22 @@ describe('the text tile kind (AC-058)', () => {
   it('holds text among the tile kinds, sized as the markdown tile was', () => {
     expect(TILE_KINDS).toContain('text');
     expect(SIZED_KINDS).toContain('text');
+  });
+
+  it('names a Text tile by its first line, as a markdown tile was named by its text (T875’s review)', () => {
+    const document: DashboardDocument = {
+      ...DOC,
+      pages: [
+        {
+          id: 'p1',
+          title: 'Overview',
+          items: [
+            { id: 'n', kind: 'text', w: 6, document: textDocumentFromMarkdown('## Notes\n\nMore') },
+          ],
+        },
+      ],
+    };
+    expect(nameOfTile(document, 'n')).toBe('text: Notes');
   });
 
   it('never makes a markdown tile, from any palette entry or template', () => {

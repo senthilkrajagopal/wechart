@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { textDocumentFromMarkdown } from '@wechart/core';
+
 import { tileChangesOf } from './tileChanges';
 
 /**
@@ -80,6 +82,29 @@ describe('which tiles a proposal changes or adds (T356, AC-341)', () => {
       t2: 'changed',
       t5: 'new',
     });
+  });
+
+  // T875's review: a draft saved through the editor holds its markdown tiles
+  // as the Text tiles they convert to; the folder's version still holds
+  // markdown. That is no change.
+  it('marks a markdown tile saved as its converted Text tile unchanged, and a changed one changed', () => {
+    const proposed = {
+      body: board([
+        { id: 't1', kind: 'chart', chartId: 'w1', layout: { w: 6 } },
+        { id: 't2', kind: 'chart', chartId: 'w2', layout: { w: 6 } },
+        { id: 't3', kind: 'text', document: textDocumentFromMarkdown('Notes') },
+        {
+          id: 's1',
+          kind: 'section',
+          items: [{ id: 't4', kind: 'text', document: textDocumentFromMarkdown('Edited') }],
+        },
+      ]),
+      charts: {
+        w1: { ...chart('Revenue', ['orders.total']), folderId: 'ws:ada', origin: { id: 'c1' } },
+        w2: { ...chart('Orders', ['orders.count']), localToDashboardId: 'wd1', owner: 'wren' },
+      },
+    };
+    expect(tileChangesOf(proposed, current)).toEqual({ t4: 'changed' });
   });
 
   it('marks every tile new when there is no current version', () => {

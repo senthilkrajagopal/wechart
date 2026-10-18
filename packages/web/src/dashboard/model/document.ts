@@ -26,6 +26,7 @@ import type {
 } from '@wechart/core';
 
 import type { DashboardFilter } from '../../filters/model';
+import { firstReadingOfDocument } from '../../tiles/text/documents';
 import type { GridTile } from '../grid/geometry';
 import type { Interactions } from '../settings/interactionMode';
 import type { NothingMarkedState } from '../tiles/NothingMarked';
@@ -530,7 +531,8 @@ export function nameOfTile(document: DashboardDocument, id: string): string {
   if (isSection(found)) return found.title;
   if (isTabGroup(found)) return 'tab group';
 
-  const text = found.text?.trim();
+  // A Text tile by its first line (T875's review), as a markdown tile was.
+  const text = found.kind === 'text' ? firstReadingOfDocument(found.document) : found.text?.trim();
   return text === undefined || text === ''
     ? `${found.kind} tile`
     : `${found.kind}: ${text.slice(0, 40)}`;
