@@ -1829,10 +1829,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T842 (AC-495, AC-304) Below 1,024 px, keep the way back, the title, the toggle and ⋯ in the row, History and Bookmarks… in ⋯, a "Page: ‹name› ▾" menu on a 40 px row for more than one page, and the sheet's pills one under another
 
-- [ ] T843 (AC-496) Measure the chrome with sign-in on: at most 96 px closed, 128 px in My workspace and 205 px open, at 1,440 × 900 and 1,280 × 720
-  - Files: `e2e/security/dashboard-header.spec.ts`.
-  - Failing test: `dashboard-header.spec.ts`, signed in as a read-write member, on a shared dashboard with a one-line description, its ownership line, three page tabs and a filter set: at 1,440 × 900 and 1,280 × 720 the canvas's top edge (`[data-testid="canvas-scroll"]`) is at most 96 px below the viewport's top with the sheet closed and at most 205 px with it open (one row of pills); its copy in My workspace, under the band, at most 128 px (AC-496). It fails today at 274 px; T829 and T832 make it pass, and it holds the case with the ownership line that single-user mode doesn't show.
-  - Depends on: T832, T838
+- [x] T843 (AC-496) Measure the chrome with sign-in on: at most 96 px closed, 128 px in My workspace and 205 px open, at 1,440 × 900 and 1,280 × 720
 
 - [ ] T844 (AC-352, AC-343, AC-187) Check the dashboard's header, page tabs and filter band against design 19 and direction.md §7g in the conformance spec
   - Files: `e2e/design-conformance.spec.ts`, `packages/web/src/shell/styles.ts` (only where a value differs).

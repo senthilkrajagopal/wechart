@@ -76,3 +76,8 @@ Lane HEADER's ticked tasks from `docs/tasks.md` §P2.25 (F43), their sub-lines w
   - Files: `packages/web/src/dashboard/header/PageMenu.tsx` (+ test; through `shell/MenuButton.tsx`), `packages/web/src/dashboard/DashboardView.tsx` (`headerActions` and ⋯ through `useNarrowWindow`), `packages/web/src/filters/FilterBar.tsx` (stacked pills when narrow), `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
   - Failing test: `PageMenu.test.tsx`: with two pages, "Page: Overview ▾" lists both with Overview checked, and choosing the other opens it; with one page there's no menu. The e2e at 390 and 900 px: the row holds the way back, the `h1` at 16 px, the toggle and ⋯, and ⋯ holds History and Bookmarks…; the page row is 40 px tall; the open sheet's pills share one left edge; at 390 px the document doesn't scroll sideways (AC-495, AC-304).
   - Depends on: T829, T831
+
+- [x] T843 (AC-496) Measure the chrome with sign-in on: at most 96 px closed, 128 px in My workspace and 205 px open, at 1,440 × 900 and 1,280 × 720
+  - Files: `e2e/security/dashboard-header.spec.ts`.
+  - Failing test: `dashboard-header.spec.ts`, signed in as a read-write member, on a shared dashboard with a one-line description, its ownership line, three page tabs and a filter set: at 1,440 × 900 and 1,280 × 720 the canvas's top edge (`[data-testid="canvas-scroll"]`) is at most 96 px below the viewport's top with the sheet closed and at most 205 px with it open (one row of pills); its copy in My workspace, under the band, at most 128 px (AC-496). It fails today at 274 px; T829 and T832 make it pass, and it holds the case with the ownership line that single-user mode doesn't show.
+  - Depends on: T832, T838

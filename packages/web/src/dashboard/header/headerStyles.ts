@@ -282,13 +282,13 @@ export const HEADER_CSS = `
   .header-sheet,
   .header-sheet[data-motion] { transition-duration: 0s; }
 }
-/* The description and the ownership line, 8 + 20 + 4 + 16 + 8 (design 19
-   .about), ruled off from the row above. */
+/* The description and the ownership line, 8 + 20 + 4 + 16 + 8 = 56 (design
+   19 .about), under the row's own rule: a second rule here drew a doubled
+   line and put the open chrome at 206 px, past AC-496's 205 (T843). */
 .header-sheet__about {
   display: grid;
   gap: 4px;
   padding: 8px 24px;
-  border-top: 1px solid var(--wc-border-subtle);
 }
 .header-sheet__about > .dashboard__description,
 .header-sheet__about > .dashboard__ownership { margin: 0; }
