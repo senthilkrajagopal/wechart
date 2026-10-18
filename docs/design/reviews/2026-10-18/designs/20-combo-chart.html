@@ -1,0 +1,913 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 20 · Combo chart</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  /* tokens: docs/design/direction.md §3–§5, §7d (light theme); no new colour, size or weight */
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8; --role-measure: #a85400; --role-measure-soft: #f8ecdf;
+    --mk1: #151107;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --other: #b3b1ab;
+    --grid: #ecebe7; --axis: #c9c7c1;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  b, strong, th, h1, h2, h3 { font-weight: 600; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head ul { margin: 0 0 6px; padding-left: 20px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .doc-head code { color: #f2f2f0; background: #333; padding: 0 4px; border-radius: 3px; font: 400 12px var(--font-code); }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .screen-label { background: #2b2b29; color: #e8e7e2; padding: 10px 32px; font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2, .states h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; }
+  .notes > p, .states > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .notes code, .states code, .decision code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .stategrid { display: grid; grid-template-columns: repeat(2, 676px); gap: 32px 24px; align-items: start; }
+  .state { display: grid; gap: 8px; align-content: start; }
+  .state.wide { grid-column: 1 / -1; }
+  .state > h3 { margin: 0; font-size: 14px; line-height: 20px; }
+  .state > p { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); max-width: 1180px; }
+  .row2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; align-items: start; }
+  .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
+  .frame { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg-surface); box-shadow: 0 1px 2px rgba(0,0,0,.06); position: relative; }
+  .cap { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0 0 6px; }
+  .said { margin: 6px 0 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .said b { color: var(--text-primary); }
+  .decision { margin: 22px 0 0; padding: 16px 20px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-page); max-width: 1376px; }
+  .decision h3 { margin: 0 0 8px; font-size: 16px; line-height: 22px; }
+  .decision > p { margin: 0 0 10px; color: var(--text-secondary); font-size: 13px; line-height: 18px; }
+  .decision table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 18px; }
+  .decision th, .decision td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); }
+  .decision th { font-size: 12px; color: var(--text-secondary); background: var(--bg-subtle); }
+  .decision td.w { white-space: nowrap; font: 600 12px/18px var(--font-code); color: var(--note); }
+
+  svg.i { width: 16px; height: 16px; flex: none; }
+  svg.s { width: 14px; height: 14px; flex: none; }
+  svg.xs { width: 10px; height: 10px; flex: none; }
+  svg text { font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; white-space: nowrap; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 240px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .iconbtn.sm { width: 24px; height: 24px; }
+  .iconbtn.dis { opacity: .4; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .acct { display: inline-flex; align-items: center; gap: 8px; font: 600 12px/16px var(--font-ui); }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); flex: none; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.md { height: 28px; padding: 0 10px; font-size: 12px; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.dis { opacity: .45; }
+  .ring { box-shadow: 0 0 0 3px var(--accent-ring); }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .band { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 24px; background: var(--bg-subtle); border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .menu { position: absolute; z-index: 70; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 4px; }
+  .mi { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+  .mi.hl { background: var(--bg-hover); }
+  .mi .ck { width: 14px; color: var(--accent); display: inline-grid; place-items: center; }
+  .mi .r { margin-left: auto; color: var(--text-muted); }
+  .mi.dis { color: var(--text-muted); }
+  .mh { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-muted); padding: 6px 8px 2px; }
+  .msep { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+  .tip { position: absolute; z-index: 90; background: var(--text-primary); color: #f2f2f0; font-size: 12px; line-height: 16px; padding: 8px 10px; border-radius: 6px; box-shadow: var(--shadow-pop); }
+  .tip b { color: #fff; }
+  kbd.k { font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--bg-surface); color: var(--text-primary); white-space: nowrap; }
+  .legend6 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 24px; }
+  .legend6 div { display: flex; gap: 10px; align-items: center; min-height: 34px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; }
+  .legend6 div > span:last-child { margin-left: auto; color: var(--text-secondary); text-align: right; }
+
+  /* ---- editor shell (design 01, 2026-09-24) ---- */
+  .ed-head { height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); }
+  .title-in { height: 32px; padding: 0 8px; font-size: 15px; font-weight: 600; display: flex; align-items: center; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; background: var(--bg-subtle); color: var(--text-secondary); white-space: nowrap; }
+  .workbench { display: grid; grid-template-columns: 280px 800px 360px; height: 804px; }
+  .pane { background: var(--bg-surface); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .pane.left { border-right: 1px solid var(--border-subtle); }
+  .pane.right { border-left: 1px solid var(--border-subtle); }
+  .pane-head { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
+  .pane-head h2 { margin: 0; font-size: 14px; line-height: 20px; }
+  .tgroup-head { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .frow { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 22px; font-size: 12px; margin: 0 4px; border-radius: 4px; }
+  .frow .fname { flex: 1; }
+  .frow .fmeta { color: var(--text-muted); }
+  .frow.used .fname::after { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; }
+  .ficon { width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; font: 600 12px var(--font-code); flex: none; }
+  .ficon.dim { color: var(--role-dim); background: var(--role-dim-soft); }
+  .ficon.measure { color: var(--role-measure); background: var(--role-measure-soft); }
+  .center { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .canvas-wrap { flex: 1; min-height: 0; padding: 12px; display: grid; grid-template-rows: auto 1fr; gap: 8px; }
+  .canvas-tool { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+  .tile { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 16px; min-height: 0; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+  .tile-head { display: flex; align-items: center; gap: 8px; min-height: 20px; margin-bottom: 8px; }
+  .tile-head h3 { margin: 0; font-size: 14px; line-height: 20px; }
+  .drawerbar { height: 37px; border-top: 1px solid var(--border-subtle); background: var(--bg-surface); display: flex; align-items: center; gap: 2px; padding: 0 8px; }
+  .tabs { display: flex; align-items: center; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); flex: none; }
+  .tabs .tb { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 4px; }
+  .tabs .tb.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .section { padding: 10px 12px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 8px; }
+  .shead { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); }
+  .shead .r { margin-left: auto; font-weight: 400; color: var(--text-muted); }
+  .field { display: grid; gap: 4px; }
+  .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); display: flex; gap: 6px; align-items: baseline; }
+  .lbl .opt { font-weight: 400; color: var(--text-muted); }
+  .select, .input { height: 28px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; }
+  .select::after { content: ''; margin-left: auto; width: 7px; height: 7px; border-right: 1.5px solid var(--text-secondary); border-bottom: 1.5px solid var(--text-secondary); transform: rotate(45deg) translate(-2px, -2px); flex: none; }
+  .input.ph { color: var(--text-muted); }
+  .r2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; flex: none; background: var(--bg-surface); }
+  .seg > span { height: 26px; min-width: 24px; padding: 0 8px; font-size: 12px; display: flex; align-items: center; justify-content: center; border-left: 1px solid var(--border-subtle); color: var(--text-secondary); }
+  .seg > span:first-child { border-left: 0; }
+  .seg > span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .seg > span.dis { color: var(--border-strong); }
+  .seg.ic > span { width: 24px; padding: 0; height: 22px; }
+  .seg.ic { border-radius: 4px; }
+  .well { border: 1px dashed var(--border-strong); border-radius: 6px; padding: 5px; min-height: 36px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; background: var(--bg-surface); position: relative; }
+  .pill { height: 24px; display: inline-flex; align-items: center; gap: 4px; padding: 0 2px 0 6px; border-radius: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .pill.dim { background: var(--role-dim-soft); color: var(--role-dim); }
+  .pill.measure { background: var(--role-measure-soft); color: var(--role-measure); }
+  .pill .agg { font-weight: 400; }
+  .pill .x { width: 18px; height: 18px; border-radius: 3px; display: grid; place-items: center; font-weight: 400; }
+  .pill .ax { font-weight: 600; font-size: 12px; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; line-height: 14px; }
+  .pill.off { background: var(--bg-surface); color: var(--text-muted); outline: 1px dashed var(--border-strong); outline-offset: -1px; }
+  .pill.open { box-shadow: 0 0 0 2px var(--accent); }
+  .addbtn { height: 24px; padding: 0 6px; border-radius: 4px; font-size: 12px; color: var(--text-muted); display: inline-flex; align-items: center; }
+  .reco-row { display: grid; grid-template-columns: 28px 1fr; gap: 8px; align-items: center; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px; }
+  .ico { width: 28px; height: 28px; border-radius: 6px; background: var(--bg-subtle); display: grid; place-items: center; color: var(--text-secondary); }
+  .warnline { display: grid; grid-template-columns: 16px 1fr; gap: 6px; font-size: 12px; line-height: 16px; padding: 8px; border-radius: 6px; background: color-mix(in srgb, var(--warn-icon) 16%, var(--bg-surface)); }
+  .warnline .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .infoline { display: grid; grid-template-columns: 16px 1fr; gap: 6px; font-size: 12px; line-height: 16px; padding: 8px; border-radius: 6px; background: var(--bg-subtle); color: var(--text-secondary); }
+  .tog { display: inline-block; width: 28px; height: 16px; border-radius: 999px; background: var(--border-strong); position: relative; flex: none; }
+  .tog::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+  .tog.on { background: var(--accent); }
+  .tog.on::after { left: 14px; }
+  .tog.dis { opacity: .45; }
+  .swrow { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: 12px; line-height: 16px; }
+  .swrow .d { color: var(--text-muted); }
+  .lockline { display: flex; align-items: center; gap: 6px; min-height: 28px; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .grp { border: 1px solid var(--border-subtle); border-radius: 6px; }
+  .grp-h { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; font-size: 12px; font-weight: 600; }
+  .grp-h .r { margin-left: auto; font-weight: 400; color: var(--text-muted); display: inline-flex; gap: 6px; align-items: center; }
+  .grp-b { padding: 4px 8px 8px; display: grid; gap: 6px; border-top: 1px solid var(--border-subtle); }
+  /* series rows */
+  .ser { display: grid; grid-template-columns: 12px minmax(0,1fr) auto auto 20px; gap: 8px; align-items: center; height: 28px; font-size: 12px; }
+  .ser .sw { width: 12px; height: 12px; border-radius: 3px; }
+  .ser .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ser .auto { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 4px; color: var(--text-secondary); }
+  .ser.sub { padding-left: 16px; grid-template-columns: 12px minmax(0,1fr) auto; }
+  .sergrp { font-size: 12px; font-weight: 600; color: var(--text-secondary); height: 24px; display: flex; align-items: center; gap: 6px; }
+  /* reference rows */
+  .ref { display: grid; grid-template-columns: 20px minmax(0,1fr) auto 20px; gap: 8px; align-items: center; height: 28px; font-size: 12px; }
+  .ref .k2 { color: var(--text-muted); }
+  /* legend in tiles */
+  .lg { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; font-size: 12px; line-height: 16px; color: var(--text-primary); }
+  .lg span.e { display: inline-flex; align-items: center; gap: 6px; }
+  .lg .gl { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; }
+  .lg .gl.btn2 { border: 1px solid var(--border-subtle); }
+  .lg .gl.btn2.open { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ring); }
+  .lg .t { color: var(--text-secondary); }
+  .lg .hd { font-weight: 600; color: var(--text-secondary); }
+  .grid-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; width: 100%; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; height: 28px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; font-size: 12px; }
+  .grid-table td { height: 24px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table .num { text-align: right; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chevr" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="12.5" cy="8" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 16 16"><path d="M3 8a5 5 0 1 0 1.5-3.6M3.2 2.6v2.6h2.6" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="2" fill="currentColor"/></symbol>
+  <symbol id="i-table" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.5h12M6 3v10" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-grid4" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="9" y="2" width="5" height="5" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="2" y="9" width="5" height="5" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="9" y="9" width="5" height="5" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-combo" viewBox="0 0 16 16"><path d="M3 13V9M7 13V6M11 13V8" stroke="currentColor" stroke-width="2"/><path d="M2 7l4-3 4 2 4-4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-sync" viewBox="0 0 16 16"><path d="M2.5 5h9l-2-2M13.5 11h-9l2 2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-oneaxis" viewBox="0 0 16 16"><path d="M3 2v11h11" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6 10l3-3 2 1 3-3" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-line-ref" viewBox="0 0 16 16"><path d="M1.5 8h13" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2"/></symbol>
+  <symbol id="i-band-ref" viewBox="0 0 16 16"><rect x="4" y="2" width="8" height="12" fill="currentColor" opacity=".25"/><path d="M4 2v12M12 2v12" stroke="currentColor" stroke-width="1"/></symbol>
+  <symbol id="i-vline-ref" viewBox="0 0 16 16"><path d="M8 1.5v13" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2"/></symbol>
+  <symbol id="i-hband-ref" viewBox="0 0 16 16"><rect x="2" y="5" width="12" height="6" fill="currentColor" opacity=".25"/><path d="M2 5h12M2 11h12" stroke="currentColor" stroke-width="1"/></symbol>
+  <!-- mark-type icons for the segmented control -->
+  <symbol id="m-bar" viewBox="0 0 16 16"><path d="M3.5 13.5V8M8 13.5V4M12.5 13.5V9" stroke="currentColor" stroke-width="2.4"/></symbol>
+  <symbol id="m-line" viewBox="0 0 16 16"><path d="M2 11.5l3.5-4 3 2.5 5.5-6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+  <symbol id="m-area" viewBox="0 0 16 16"><path d="M2 13.5V10l3.5-4 3 2.5L14 3v10.5z" fill="currentColor" opacity=".3"/><path d="M2 10l3.5-4 3 2.5L14 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="m-point" viewBox="0 0 16 16"><circle cx="3.5" cy="10.5" r="1.9" fill="currentColor"/><circle cx="8" cy="6" r="1.9" fill="currentColor"/><circle cx="12.5" cy="9" r="1.9" fill="currentColor"/></symbol>
+  <!-- status -->
+  <symbol id="s-warn" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" style="fill:var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="s-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2M8 4.6v.4" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="s-notdrawn" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.5 2"/><path d="M5 11L11 5" stroke="currentColor" stroke-width="1.5"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI design 2026-10-18 · Design 20 · for approval</div>
+    <h1>Combo chart: each series its own mark and axis, two aligned value axes, one split across every measure, and reference lines and bands</h1>
+    <p>The user, 2026-10-18: "let us work on combo charts and rich text charts... make it modern.. use the best technologies available." R80's answers, followed exactly here: <b>2 value axes, left and right</b>; <b>one split dimension across all measures</b>, so series = measure × member, capped at <b>8</b>; and this round's extras: <b>area as a series mark, log scale per axis, reference lines and bands, and a Synchronize axes toggle</b>. Both experts agreed, and R80 takes as given: each series picks its own mark and axis; a second axis is never automatic and, when drawn, its zero and ticks align; AC-218 warns only while more than one unsynchronized value axis is drawn.</p>
+    <p>This design draws:</p>
+    <ul>
+      <li><b>Customize › Series:</b> one row per series with its mark (Bar, Line, Area, Point) and its axis (Left, Right), and Auto. The same two choices sit in the Metrics pill's menu and, in the chart editor, behind each legend entry's glyph.</li>
+      <li><b>Two value axes</b> drawn zero- and tick-aligned, each titled with its measures and their mark glyphs; <b>Synchronize axes</b>; log scale per axis, matching on both while two are drawn; the Right axis group in Customize › Axes.</li>
+      <li><b>The split:</b> one dimension across every measure; colour follows the member, the mark tells the measures apart; at most 8 series, with "not drawn" pills beyond.</li>
+      <li><b>Reference lines and bands,</b> horizontal and vertical, each labelled where it's drawn.</li>
+      <li><b>The AC-218 warning,</b> only with two unsynchronized axes, offering One axis, Synchronize, Small multiples and Table.</li>
+      <li><b>States:</b> the legend's menu, Synchronize on, the warning's variants, log scale, the reference forms, limits, the axis groups, below 1,024 px, and the table view.</li>
+    </ul>
+    <p><b>Screens 1 and 2</b> are Wren Writer, a read-write member of Sales / EMEA, editing the dashboard-local chart "Revenue and margin by month" in My workspace, from the sample model's <code>orders</code> cube.</p>
+    <p><b>What doesn't change:</b> the editor's shell, header, field list, results drawer and Data tab layout (design 01, 2026-09-24); the type card, quick picks and Recommended card; the recommender, which still never proposes two value axes (AC-030, rule 8); the palette and its order (§5); marking and cross-filtering on combo marks (§7a); the tile frame on dashboards.</p>
+    <div class="ids">R80 · changes AC-037, AC-218, AC-219 · amends R67's offer inside a combo · holds AC-030, AC-029, AC-176, AC-304, AC-187 · rules 1–8, 17, 18, 30, 85 · references-combo-and-rich-tiles.md §5 · references-spotfire-combo-textarea.md A2–A6, D, E · research rich-tiles-and-combo-tech.md §2 · names, values and counts are illustrative</div>
+  </header>
+
+  <!-- ======================= SCREEN 1 ======================= -->
+  <div class="screen-label">Screen 1 · The chart editor, Customize: three series on two aligned axes, with a plan line, an average and a promotion band (1,440 × 900)</div>
+  <div class="screen" id="s1">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="ed-head">
+      <span class="btn sm">← Back to Revenue overview</span>
+      <span class="title-in">Revenue and margin by month</span>
+      <span class="badge tnum">12 rows · 61 ms</span>
+      <span class="spacer"></span>
+      <span class="iconbtn" title="Undo">↶</span><span class="iconbtn dis" title="Redo">↷</span>
+      <span class="btn sm">Discard changes</span>
+      <span class="btn sm primary">Save dashboard</span>
+    </div>
+    <div class="workbench">
+      <aside class="pane left">
+        <div class="pane-head"><h2>Cube: <span class="mono" style="font-size:13px">orders</span></h2><span class="xs muted" style="margin-left:auto">3 cubes</span></div>
+        <div style="padding:8px 12px"><div class="input ph">Search fields</div></div>
+        <div class="tgroup-head">▾ Orders<span style="margin-left:auto;font-weight:400" class="muted">7</span></div>
+        <div class="frow"><span class="ficon measure">Σ</span><span class="fname">Count</span><span class="fmeta">count</span></div>
+        <div class="frow used"><span class="ficon measure">Σ</span><span class="fname">Revenue</span><span class="fmeta">sum</span></div>
+        <div class="frow used"><span class="ficon measure">Σ</span><span class="fname">Revenue target</span><span class="fmeta">sum</span></div>
+        <div class="frow used"><span class="ficon measure">Σ</span><span class="fname">Margin %</span><span class="fmeta">number</span></div>
+        <div class="frow"><span class="ficon dim">Aa</span><span class="fname">Status</span><span class="fmeta">3</span></div>
+        <div class="frow used"><span class="ficon dim">◷</span><span class="fname">Ordered at</span><span class="fmeta">time</span></div>
+        <div class="frow"><span class="ficon dim">Aa</span><span class="fname">Region</span><span class="fmeta">4</span></div>
+        <div class="tgroup-head">▸ Customers <span style="font-weight:400" class="muted">· via join</span></div>
+        <div class="tgroup-head">▸ Products <span style="font-weight:400" class="muted">· via join</span></div>
+      </aside>
+
+      <section class="center">
+        <div class="canvas-wrap">
+          <div class="canvas-tool">Showing <b style="color:var(--text-secondary)">Combo</b> · chosen manually · 3 series on 2 value axes, aligned at zero</div>
+          <div class="tile">
+            <div class="tile-head"><h3>Revenue and margin by month</h3></div>
+            <div class="lg" style="margin-bottom:4px">
+              <span class="e"><span class="gl btn2"><svg width="10" height="10"><rect x="1" y="1" width="8" height="8" rx="2" fill="var(--s1)"/></svg></span>Revenue</span>
+              <span class="e"><span class="gl btn2"><svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="var(--s3)" stroke="#fff" stroke-width="1"/></svg></span>Revenue target</span>
+              <span class="e"><span class="gl btn2"><svg width="14" height="10"><rect x="1" y="4" width="12" height="2" fill="var(--s2)"/></svg></span>Margin % <span class="t">(right)</span></span>
+            </div>
+            <svg width="744" height="500" viewBox="0 0 744 500" role="img" aria-label="Combo chart. Revenue: bars, left axis, dollars. Revenue target: points, left axis, dollars. Margin %: line, right axis, percent. Monthly plan line at 100 thousand dollars; average Margin % 16.9 percent; promotion band June to July.">
+              <!-- band behind everything -->
+              <rect x="338.3" y="60" width="103.4" height="400" fill="var(--bg-subtle)"/>
+              <text x="344" y="76" font-size="12" fill="var(--text-secondary)">Promo · Jun–Jul</text>
+              <!-- gridlines: the left axis's only -->
+              <g stroke="var(--grid)"><line x1="80" y1="60" x2="700" y2="60"/><line x1="80" y1="140" x2="700" y2="140"/><line x1="80" y1="220" x2="700" y2="220"/><line x1="80" y1="300" x2="700" y2="300"/><line x1="80" y1="460" x2="700" y2="460"/></g>
+              <line x1="80" y1="380" x2="700" y2="380" stroke="var(--axis)"/>
+              <line x1="80" y1="60" x2="80" y2="460" stroke="var(--axis)"/>
+              <line x1="700" y1="60" x2="700" y2="460" stroke="var(--axis)"/>
+              <!-- axis titles with glyphs -->
+              <g font-size="12" fill="var(--text-secondary)">
+                <rect x="80" y="30" width="8" height="8" rx="2" fill="var(--s1)"/><text x="93" y="38">Revenue</text>
+                <circle cx="152" cy="34" r="4" fill="var(--s3)" stroke="#fff"/><text x="161" y="38">Revenue target ($)</text>
+                <rect x="588" y="33" width="12" height="2" fill="var(--s2)"/><text x="700" y="38" text-anchor="end">Margin % (%)</text>
+              </g>
+              <!-- left ticks -->
+              <g font-size="12" fill="var(--text-secondary)" text-anchor="end"><text x="72" y="64">$160K</text><text x="72" y="144">$120K</text><text x="72" y="224">$80K</text><text x="72" y="304">$40K</text><text x="72" y="384">$0</text><text x="72" y="464">−$40K</text></g>
+              <!-- right ticks, on the left's gridlines -->
+              <g font-size="12" fill="var(--text-secondary)"><text x="708" y="64">40%</text><text x="708" y="144">30%</text><text x="708" y="224">20%</text><text x="708" y="304">10%</text><text x="708" y="384">0%</text><text x="708" y="464">−10%</text></g>
+              <!-- bars: Revenue -->
+              <g fill="var(--s1)">
+                <path d="M92 380V260q0-4 4-4h20q4 0 4 4V380z"/>
+                <path d="M143.5 380V268q0-4 4-4h20q4 0 4 4V380z"/>
+                <path d="M195 380V234q0-4 4-4h20q4 0 4 4V380z"/>
+                <path d="M247 380V222q0-4 4-4h20q4 0 4 4V380z"/>
+                <path d="M298.5 380V204q0-4 4-4h20q4 0 4 4V380z"/>
+                <path d="M350 380V148q0-4 4-4h20q4 0 4 4V380z"/>
+                <path d="M402 380V120q0-4 4-4h20q4 0 4 4V380z"/>
+                <path d="M453.5 380V176q0-4 4-4h20q4 0 4 4V380z"/>
+                <path d="M505 380V192q0-4 4-4h20q4 0 4 4V380z"/>
+                <path d="M557 380V164q0-4 4-4h20q4 0 4 4V380z"/>
+                <path d="M608.5 380V128q0-4 4-4h20q4 0 4 4V380z"/>
+                <path d="M660 380V92q0-4 4-4h20q4 0 4 4V380z"/>
+              </g>
+              <!-- reference line: fixed, left axis -->
+              <line x1="80" y1="180" x2="700" y2="180" stroke="var(--text-secondary)" stroke-width="1.5" stroke-dasharray="5 4"/>
+              <text x="696" y="174" text-anchor="end" font-size="12" fill="var(--text-primary)" style="paint-order:stroke;stroke:#fff;stroke-width:3px">Monthly plan · $100K</text>
+              <!-- reference line: average of Margin %, right axis -->
+              <line x1="80" y1="244.7" x2="700" y2="244.7" stroke="var(--s2)" stroke-width="1.5" stroke-dasharray="5 4"/>
+              <text x="86" y="239" font-size="12" fill="var(--text-primary)" style="paint-order:stroke;stroke:#fff;stroke-width:3px">Average Margin % · 16.9%</text>
+              <!-- line: Margin %, right axis, with surface halo -->
+              <polyline fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" points="105.8,284 157.5,412 209.2,316 260.8,268 312.5,236 364.2,204 415.8,172 467.5,228 519.2,260 570.8,212 622.5,188 674.2,156"/>
+              <polyline fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round" points="105.8,284 157.5,412 209.2,316 260.8,268 312.5,236 364.2,204 415.8,172 467.5,228 519.2,260 570.8,212 622.5,188 674.2,156"/>
+              <!-- points: Revenue target, left axis -->
+              <g fill="var(--s3)" stroke="#fff" stroke-width="1.5">
+                <circle cx="105.8" cy="240" r="4.5"/><circle cx="157.5" cy="240" r="4.5"/><circle cx="209.2" cy="220" r="4.5"/><circle cx="260.8" cy="220" r="4.5"/><circle cx="312.5" cy="200" r="4.5"/><circle cx="364.2" cy="160" r="4.5"/><circle cx="415.8" cy="140" r="4.5"/><circle cx="467.5" cy="160" r="4.5"/><circle cx="519.2" cy="180" r="4.5"/><circle cx="570.8" cy="160" r="4.5"/><circle cx="622.5" cy="140" r="4.5"/><circle cx="674.2" cy="100" r="4.5"/>
+              </g>
+              <!-- x labels -->
+              <g font-size="12" fill="var(--text-secondary)" text-anchor="middle"><text x="105.8" y="482">Jan</text><text x="157.5" y="482">Feb</text><text x="209.2" y="482">Mar</text><text x="260.8" y="482">Apr</text><text x="312.5" y="482">May</text><text x="364.2" y="482">Jun</text><text x="415.8" y="482">Jul</text><text x="467.5" y="482">Aug</text><text x="519.2" y="482">Sep</text><text x="570.8" y="482">Oct</text><text x="622.5" y="482">Nov</text><text x="674.2" y="482">Dec</text></g>
+              <text x="390" y="498" text-anchor="middle" font-size="12" fill="var(--text-muted)">Ordered at · month, 2026</text>
+            </svg>
+          </div>
+        </div>
+        <div class="drawerbar"><span class="tabs" style="border:0;padding:0"><span class="tb">Results</span><span class="tb">Underlying rows</span><span class="tb">Cube query</span><span class="tb">Acceleration</span></span><span class="spacer"></span><span class="iconbtn sm">⌃</span></div>
+      </section>
+
+      <aside class="pane right">
+        <div class="tabs"><span class="tb">Data</span><span class="tb on">Customize</span></div>
+        <div class="section">
+          <div class="shead">Series<span class="r tnum">3 of 8</span></div>
+          <div class="ser"><span class="sw" style="background:var(--s1)"></span><span class="nm">Revenue</span>
+            <span class="seg ic"><span class="on" title="Bar"><svg class="s"><use href="#m-bar"/></svg></span><span title="Line"><svg class="s"><use href="#m-line"/></svg></span><span title="Area"><svg class="s"><use href="#m-area"/></svg></span><span title="Point"><svg class="s"><use href="#m-point"/></svg></span></span>
+            <span class="seg"><span class="on">Left</span><span>Right</span></span><span></span></div>
+          <div class="ser"><span class="sw" style="background:var(--s3)"></span><span class="nm">Revenue target</span>
+            <span class="seg ic"><span title="Bar"><svg class="s"><use href="#m-bar"/></svg></span><span title="Line"><svg class="s"><use href="#m-line"/></svg></span><span title="Area"><svg class="s"><use href="#m-area"/></svg></span><span class="on" title="Point"><svg class="s"><use href="#m-point"/></svg></span></span>
+            <span class="seg"><span class="on">Left</span><span>Right</span></span><span class="auto" title="Back to Auto: line, left"><svg class="s"><use href="#i-reset"/></svg></span></div>
+          <div class="ser"><span class="sw" style="background:var(--s2)"></span><span class="nm">Margin %</span>
+            <span class="seg ic"><span title="Bar"><svg class="s"><use href="#m-bar"/></svg></span><span class="on" title="Line"><svg class="s"><use href="#m-line"/></svg></span><span title="Area"><svg class="s"><use href="#m-area"/></svg></span><span title="Point"><svg class="s"><use href="#m-point"/></svg></span></span>
+            <span class="seg"><span>Left</span><span class="on">Right</span></span><span class="auto" title="Back to Auto: line, left"><svg class="s"><use href="#i-reset"/></svg></span></div>
+          <div class="swrow" style="justify-content:space-between"><span class="sec strong">Bars</span><span class="seg"><span class="on">Side by side</span><span>Stacked</span></span></div>
+        </div>
+        <div class="section">
+          <div class="shead">Axes</div>
+          <div class="swrow"><span class="tog"></span><span><b>Synchronize axes</b> <span class="d">· one scale, labelled on both sides</span></span></div>
+          <div class="warnline"><svg class="s" style="margin-top:1px"><use href="#s-warn"/></svg><span><b>Two scales: Revenue ($) and Margin % (%) can be made to look related.</b> Where the line crosses the bars depends only on where each axis ends.
+            <span class="acts"><span class="btn sm"><svg class="xs"><use href="#i-oneaxis"/></svg>One axis</span><span class="btn sm dis" title="Revenue is $ and Margin % is %; one scale needs one unit">Synchronize</span><span class="btn sm"><svg class="xs"><use href="#i-grid4"/></svg>Small multiples</span><span class="btn sm"><svg class="xs"><use href="#i-table"/></svg>Table</span></span></span></div>
+          <div class="grp"><div class="grp-h"><svg class="xs"><use href="#i-chevr"/></svg>Left axis<span class="r"><svg width="8" height="8"><rect width="8" height="8" rx="2" fill="var(--s1)"/></svg>Revenue · <svg width="8" height="8"><circle cx="4" cy="4" r="3.5" fill="var(--s3)"/></svg>target · $</span></div></div>
+          <div class="grp"><div class="grp-h"><svg class="xs"><use href="#i-chevd"/></svg>Right axis<span class="r"><svg width="12" height="8"><rect y="3" width="12" height="2" fill="var(--s2)"/></svg>Margin % · %</span></div>
+            <div class="grp-b">
+              <div class="r2"><div class="field"><span class="lbl">Title</span><div class="input">Margin % (%)</div></div><div class="field"><span class="lbl">Format</span><div class="select">Percent</div></div></div>
+              <div class="r2"><div class="field"><span class="lbl">Min</span><div class="input ph">Auto</div></div><div class="field"><span class="lbl">Max</span><div class="input ph">Auto</div></div></div>
+              <div class="lockline"><svg class="s"><use href="#i-lock"/></svg><span><b style="color:var(--text-primary)">Include zero</b> · on, because the left axis has bars and both zeros align</span></div>
+              <div class="swrow"><span class="tog"></span><span><b>Log scale</b> <span class="d">· unavailable while either axis has bars</span></span></div>
+            </div></div>
+          <div class="grp"><div class="grp-h"><svg class="xs"><use href="#i-chevr"/></svg>X axis<span class="r">Ordered at · month</span></div></div>
+        </div>
+        <div class="section" style="border-bottom:0">
+          <div class="shead">Reference lines and bands<span class="r">3</span></div>
+          <div class="ref"><svg class="s sec"><use href="#i-line-ref"/></svg><span>Monthly plan · <span class="tnum">$100K</span></span><span class="k2">left</span><svg class="s muted"><use href="#i-dots"/></svg></div>
+          <div class="ref"><svg class="s" style="color:var(--s2)"><use href="#i-line-ref"/></svg><span>Average · Margin %</span><span class="k2">right</span><svg class="s muted"><use href="#i-dots"/></svg></div>
+          <div class="ref"><svg class="s sec"><use href="#i-band-ref"/></svg><span>Promo · Jun–Jul</span><span class="k2">vertical</span><svg class="s muted"><use href="#i-dots"/></svg></div>
+          <div style="display:flex;gap:6px"><span class="btn sm"><svg class="xs"><use href="#i-plus"/></svg>Line</span><span class="btn sm"><svg class="xs"><use href="#i-plus"/></svg>Band</span></div>
+        </div>
+      </aside>
+    </div>
+
+    <span class="pin" style="left:1060px;top:142px">1</span>
+    <span class="pin" style="left:1416px;top:175px">2</span>
+    <span class="pin" style="left:1352px;top:229px">3</span>
+    <span class="pin" style="left:1416px;top:268px">4</span>
+    <span class="pin" style="left:1060px;top:322px">5</span>
+    <span class="pin" style="left:1060px;top:366px">6</span>
+    <span class="pin" style="left:1060px;top:458px">7</span>
+    <span class="pin" style="left:1416px;top:575px">8</span>
+    <span class="pin" style="left:1416px;top:604px">9</span>
+    <span class="pin" style="left:1060px;top:688px">10</span>
+    <span class="pin" style="left:296px;top:165px">11</span>
+    <span class="pin" style="left:372px;top:198px">12</span>
+    <span class="pin" style="left:1022px;top:198px">13</span>
+    <span class="pin" style="left:400px;top:545px">14</span>
+    <span class="pin" style="left:942px;top:340px">15</span>
+    <span class="pin" style="left:654px;top:236px">16</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 1: what's new, and why</h2>
+    <p>A combo is a set of layers over one category axis. Each measure is its own series, with its own mark and its own side; nothing about a second axis happens unless the author asks for it. Once two axes are drawn, wechart makes them as honest as two axes can be (zero and ticks aligned, titled by glyph) and says plainly, to the author only, what they can still imply.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>The canvas line says what's drawn</b><span class="t">"3 series on 2 value axes, aligned at zero". With one axis it reads "3 series on one value axis". The type card on the Data tab says "Combo · Chosen manually" as today, and carries the warning's icon while two unsynchronized axes are drawn (state D).</span><span class="fix">AC-217 · AC-218 (amended)</span></div></li>
+      <li><span class="n">2</span><div><b>Customize › Series: one row per series</b><span class="t">28 px rows (rule 17): the series' swatch, its name, then its <b>mark</b> as four 24 px icon buttons (Bar, Line, Area, Point; each named in its tooltip and accessible name) and its <b>axis</b> as Left | Right. A radio group each, so arrows move along it. "3 of 8" counts drawn series against the limit.</span><span class="fix">AC-219 (extended) · references-combo §5 · Spotfire A2</span></div></li>
+      <li><span class="n">3</span><div><b>Auto, per row</b><span class="t">A new combo draws the first measure as bars and the rest as lines, all on the left (today's <code>combo.ts</code>; Sigma's default). A row the author changed shows ↺, "Back to Auto: line, left"; a manual mark or axis stays pinned through later field changes (principle 2). Auto never puts a series on the right.</span><span class="fix">rule 8 · principle 2 · AC-030</span></div></li>
+      <li><span class="n">4</span><div><b>Bars: Side by side or Stacked</b><span class="t">One setting for every bar series in the chart, as Spotfire's Appearance page has it; stacks never cross axes (each axis stacks its own bars). Areas get the same row, Overlap or Stacked, while any series is an area (Q11).</span><span class="fix">AC-219 "whether series stack" · Spotfire A4</span></div></li>
+      <li><span class="n">5</span><div><b>Synchronize axes</b><span class="t">A switch, off by default. On, both sides show one scale, labelled left and right, and the warning goes. It's offered only when both axes share a format; here Revenue is $ and Margin % is %, so the warning's Synchronize is disabled and says why (Q12). Tableau's Synchronize Axis requires the same data type.</span><span class="fix">R80 · Tableau [t-dual]</span></div></li>
+      <li><span class="n">6</span><div><b>The AC-218 warning, only now</b><span class="t">A <code>status-warning</code> row with its icon: while a combo draws two value axes that aren't synchronized, and never otherwise. It names both measures and their units, says what can mislead, and offers <b>One axis</b> (every series back on the left), <b>Synchronize</b>, <b>Small multiples</b> and <b>Table</b>. Authors see it in the editor and in the tile's edit mode; viewers don't (Q6).</span><span class="fix">AC-218 (amended) · rule 30 (amended) · Datawrapper [dw-old]</span></div></li>
+      <li><span class="n">7</span><div><b>The Left and Right axis groups</b><span class="t">Customize › Axes gains a <b>Right axis</b> group, shown only while some series is on the right. Its head lists the series it carries with their glyphs and unit. Its fields are §6's (title, format, min, max, include zero, log, label rotation, label count); gridlines are the left axis's alone, so it has none.</span><span class="fix">AC-219 · §6 Axes</span></div></li>
+      <li><span class="n">8</span><div><b>Include zero, locked with a reason</b><span class="t">While either axis carries a bar series, both include zero and their zero lines sit at the same height. The switch shows as a locked line saying why. With lines, areas or points only, include zero is the author's on each axis.</span><span class="fix">rule 118 (new) · Datawrapper [dw-new] · Looker Studio [ls-combo]</span></div></li>
+      <li><span class="n">9</span><div><b>Log scale per axis, matching</b><span class="t">Each axis has log scale. While two axes are drawn, turning it on for one turns it on for both, because ticks align only value to value or log to log (ECharts <code>alignTicks</code>). Bars need a zero baseline, which a log axis has none of, so it's unavailable while either axis has bars (Q3; state E).</span><span class="fix">R80 · research §2 alignTicks</span></div></li>
+      <li><span class="n">10</span><div><b>Reference lines and bands</b><span class="t">A list: each row with its kind's icon, its label and value, the axis it reads (left, right, or vertical for the category axis), and ⋯ (Edit, Duplicate, Delete). <b>+ Line</b> and <b>+ Band</b> open the form in state F. Lines read a fixed value or a drawn series' average, median, minimum or maximum (Q7).</span><span class="fix">R80 · Spotfire A6 · ECharts markLine, markArea</span></div></li>
+      <li><span class="n">11</span><div><b>The legend: each entry with its mark glyph</b><span class="t">Bar: an 8 × 8 swatch, radius 2. Line: a 12 × 2 rule. Point: an 8 px dot. Area: a 12 × 8 block with its top edge. A right-axis series adds "(right)" in <code>text-secondary</code>. Legend rules hold: 2 or more series (rule 4).</span><span class="fix">rule 4 · rule 120 (new)</span></div></li>
+      <li><span class="n">12</span><div><b>Axis titles carry the glyphs</b><span class="t">Each value axis is titled above itself with its measures, each preceded by its glyph in the series colour, then the unit. Ticks stay <code>text-secondary</code> in both themes: series-coloured ticks would fail contrast for aqua, yellow and magenta on light surfaces (rule 2).</span><span class="fix">rule 119 (new) · Q10</span></div></li>
+      <li><span class="n">13</span><div><b>Ticks aligned; one set of gridlines</b><span class="t">The right axis's ticks fall on the left's gridlines: −10 % to 40 % against −$40K to $160K, both five steps with zero on the same line. wechart computes both extents so zero matches, then aligns ticks (zero alignment isn't something ECharts does itself; research §2).</span><span class="fix">rule 118 (new) · research §2</span></div></li>
+      <li><span class="n">14</span><div><b>Zero, shared</b><span class="t">Margin dipped to −4 % in February, so both axes run below zero by the same share, and the baseline at zero is one line for both. A bar is never drawn from anywhere but zero.</span><span class="fix">rule 118 (new)</span></div></li>
+      <li><span class="n">15</span><div><b>Reference lines, labelled in place</b><span class="t">A fixed line is 1.5 px dashed in <code>text-secondary</code>; a line computed from a series is dashed in that series' colour. Each label is <code>text-xs</code> in <code>text-primary</code> on a surface halo, at the line's end or start, never in the legend. Its value is in the series' format, tabular.</span><span class="fix">rule 124 (new)</span></div></li>
+      <li><span class="n">16</span><div><b>A vertical band, behind the marks</b><span class="t">Bands fill with <code>bg-subtle</code> behind everything, labelled at their top left. Order, back to front: bands, areas, bars, lines, points, reference lines, labels. A horizontal band (a target range on one axis) works the same way (state F).</span><span class="fix">rule 124 (new) · no new colour</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= SCREEN 2 ======================= -->
+  <div class="screen-label">Screen 2 · Data: Revenue and Margin % split by Region, 2 measures × 4 regions = 8 series, a third measure over the limit, and the Metrics pill's menu</div>
+  <div class="screen" id="s2">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="ed-head">
+      <span class="btn sm">← Back to Revenue overview</span>
+      <span class="title-in">Revenue and margin by region</span>
+      <span class="badge tnum">16 rows · 74 ms</span>
+      <span class="spacer"></span>
+      <span class="iconbtn">↶</span><span class="iconbtn dis">↷</span>
+      <span class="btn sm">Discard changes</span>
+      <span class="btn sm primary">Save dashboard</span>
+    </div>
+    <div class="workbench">
+      <aside class="pane left">
+        <div class="pane-head"><h2>Cube: <span class="mono" style="font-size:13px">orders</span></h2></div>
+        <div style="padding:8px 12px"><div class="input ph">Search fields</div></div>
+        <div class="tgroup-head">▾ Orders</div>
+        <div class="frow"><span class="ficon measure">Σ</span><span class="fname">Count</span><span class="fmeta">count</span></div>
+        <div class="frow used"><span class="ficon measure">Σ</span><span class="fname">Revenue</span><span class="fmeta">sum</span></div>
+        <div class="frow used"><span class="ficon measure">Σ</span><span class="fname">Margin %</span><span class="fmeta">number</span></div>
+        <div class="frow used"><span class="ficon measure">Σ</span><span class="fname">Orders</span><span class="fmeta">count</span></div>
+        <div class="frow used"><span class="ficon dim">◷</span><span class="fname">Ordered at</span><span class="fmeta">time</span></div>
+        <div class="frow used"><span class="ficon dim">Aa</span><span class="fname">Region</span><span class="fmeta">4</span></div>
+      </aside>
+      <section class="center">
+        <div class="canvas-wrap">
+          <div class="canvas-tool">Showing <b style="color:var(--text-secondary)">Combo</b> · chosen manually · 8 series: 2 measures × 4 regions · Orders not drawn</div>
+          <div class="tile">
+            <div class="tile-head"><h3>Revenue and margin by region</h3></div>
+            <div class="lg" style="margin-bottom:4px">
+              <span class="hd">Region</span>
+              <span class="e"><svg width="10" height="10"><rect x="1" y="1" width="8" height="8" rx="2" fill="var(--s1)"/></svg>EMEA</span>
+              <span class="e"><svg width="10" height="10"><rect x="1" y="1" width="8" height="8" rx="2" fill="var(--s2)"/></svg>North America</span>
+              <span class="e"><svg width="10" height="10"><rect x="1" y="1" width="8" height="8" rx="2" fill="var(--s3)"/></svg>LATAM</span>
+              <span class="e"><svg width="10" height="10"><rect x="1" y="1" width="8" height="8" rx="2" fill="var(--s4)"/></svg>APAC</span>
+              <span style="width:1px;height:16px;background:var(--border-subtle)"></span>
+              <span class="hd">Measure</span>
+              <span class="e"><span class="gl btn2"><svg width="12" height="10"><rect x="2" y="1" width="8" height="8" rx="2" fill="var(--text-secondary)"/></svg></span>Revenue · bars</span>
+              <span class="e"><span class="gl btn2"><svg width="16" height="10"><rect x="1" y="4" width="14" height="2" fill="var(--text-secondary)"/><circle cx="8" cy="5" r="3" fill="var(--text-secondary)"/></svg></span>Margin % · line <span class="t">(right)</span></span>
+            </div>
+            <svg width="744" height="420" viewBox="0 0 744 420" role="img" aria-label="Combo chart split by Region. Revenue: bars, left axis, dollars, one per region. Margin %: lines, right axis, percent, one per region.">
+              <g stroke="var(--grid)"><line x1="80" y1="60" x2="700" y2="60"/><line x1="80" y1="140" x2="700" y2="140"/><line x1="80" y1="220" x2="700" y2="220"/><line x1="80" y1="300" x2="700" y2="300"/></g>
+              <line x1="80" y1="380" x2="700" y2="380" stroke="var(--axis)"/>
+              <line x1="80" y1="60" x2="80" y2="380" stroke="var(--axis)"/><line x1="700" y1="60" x2="700" y2="380" stroke="var(--axis)"/>
+              <g font-size="12" fill="var(--text-secondary)">
+                <rect x="80" y="30" width="8" height="8" rx="2" fill="var(--text-secondary)"/><text x="93" y="38">Revenue ($)</text>
+                <rect x="604" y="33" width="12" height="2" fill="var(--text-secondary)"/><text x="700" y="38" text-anchor="end">Margin % (%)</text>
+              </g>
+              <g font-size="12" fill="var(--text-secondary)" text-anchor="end"><text x="72" y="64">$400K</text><text x="72" y="144">$300K</text><text x="72" y="224">$200K</text><text x="72" y="304">$100K</text><text x="72" y="384">$0</text></g>
+              <g font-size="12" fill="var(--text-secondary)"><text x="708" y="64">32%</text><text x="708" y="144">24%</text><text x="708" y="224">16%</text><text x="708" y="304">8%</text><text x="708" y="384">0%</text></g>
+              <!-- bars, colour = region -->
+              <g><path d="M110.5 380V216q0-4 4-4h14q4 0 4 4V380z" fill="var(--s1)"/><path d="M134.5 380V128q0-4 4-4h14q4 0 4 4V380z" fill="var(--s2)"/><path d="M158.5 380V312q0-4 4-4h14q4 0 4 4V380z" fill="var(--s3)"/><path d="M182.5 380V264q0-4 4-4h14q4 0 4 4V380z" fill="var(--s4)"/></g>
+              <g><path d="M265.5 380V192q0-4 4-4h14q4 0 4 4V380z" fill="var(--s1)"/><path d="M289.5 380V144q0-4 4-4h14q4 0 4 4V380z" fill="var(--s2)"/><path d="M313.5 380V296q0-4 4-4h14q4 0 4 4V380z" fill="var(--s3)"/><path d="M337.5 380V248q0-4 4-4h14q4 0 4 4V380z" fill="var(--s4)"/></g>
+              <g><path d="M420.5 380V172q0-4 4-4h14q4 0 4 4V380z" fill="var(--s1)"/><path d="M444.5 380V112q0-4 4-4h14q4 0 4 4V380z" fill="var(--s2)"/><path d="M468.5 380V300q0-4 4-4h14q4 0 4 4V380z" fill="var(--s3)"/><path d="M492.5 380V224q0-4 4-4h14q4 0 4 4V380z" fill="var(--s4)"/></g>
+              <g><path d="M575.5 380V152q0-4 4-4h14q4 0 4 4V380z" fill="var(--s1)"/><path d="M599.5 380V80q0-4 4-4h14q4 0 4 4V380z" fill="var(--s2)"/><path d="M623.5 380V280q0-4 4-4h14q4 0 4 4V380z" fill="var(--s3)"/><path d="M647.5 380V200q0-4 4-4h14q4 0 4 4V380z" fill="var(--s4)"/></g>
+              <!-- lines, colour = region, with halos -->
+              <g fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round">
+                <polyline points="157.5,200 312.5,180 467.5,160 622.5,170"/><polyline points="157.5,140 312.5,160 467.5,130 622.5,110"/><polyline points="157.5,290 312.5,260 467.5,300 622.5,240"/><polyline points="157.5,230 312.5,210 467.5,190 622.5,150"/>
+              </g>
+              <g fill="none" stroke-width="2" stroke-linejoin="round">
+                <polyline stroke="var(--s1)" points="157.5,200 312.5,180 467.5,160 622.5,170"/><polyline stroke="var(--s2)" points="157.5,140 312.5,160 467.5,130 622.5,110"/><polyline stroke="var(--s3)" points="157.5,290 312.5,260 467.5,300 622.5,240"/><polyline stroke="var(--s4)" points="157.5,230 312.5,210 467.5,190 622.5,150"/>
+              </g>
+              <g stroke="#fff" stroke-width="1.5">
+                <circle cx="157.5" cy="200" r="4" fill="var(--s1)"/><circle cx="312.5" cy="180" r="4" fill="var(--s1)"/><circle cx="467.5" cy="160" r="4" fill="var(--s1)"/><circle cx="622.5" cy="170" r="4" fill="var(--s1)"/>
+                <circle cx="157.5" cy="140" r="4" fill="var(--s2)"/><circle cx="312.5" cy="160" r="4" fill="var(--s2)"/><circle cx="467.5" cy="130" r="4" fill="var(--s2)"/><circle cx="622.5" cy="110" r="4" fill="var(--s2)"/>
+                <circle cx="157.5" cy="290" r="4" fill="var(--s3)"/><circle cx="312.5" cy="260" r="4" fill="var(--s3)"/><circle cx="467.5" cy="300" r="4" fill="var(--s3)"/><circle cx="622.5" cy="240" r="4" fill="var(--s3)"/>
+                <circle cx="157.5" cy="230" r="4" fill="var(--s4)"/><circle cx="312.5" cy="210" r="4" fill="var(--s4)"/><circle cx="467.5" cy="190" r="4" fill="var(--s4)"/><circle cx="622.5" cy="150" r="4" fill="var(--s4)"/>
+              </g>
+              <g font-size="12" fill="var(--text-secondary)" text-anchor="middle"><text x="157.5" y="402">Q1 2026</text><text x="312.5" y="402">Q2 2026</text><text x="467.5" y="402">Q3 2026</text><text x="622.5" y="402">Q4 2026</text></g>
+            </svg>
+            <p class="xs sec" style="margin:8px 0 0">In the legend, the swatches are colour (Region) and the glyphs are mark (measure). Each glyph is drawn in <code>text-secondary</code> because it stands for every region.</p>
+          </div>
+        </div>
+        <div class="drawerbar"><span class="tabs" style="border:0;padding:0"><span class="tb">Results</span><span class="tb">Underlying rows</span><span class="tb">Cube query</span></span><span class="spacer"></span><span class="iconbtn sm">⌃</span></div>
+      </section>
+      <aside class="pane right" style="overflow:visible">
+        <div class="tabs"><span class="tb on">Data</span><span class="tb">Customize</span></div>
+        <div class="section">
+          <div class="field"><span class="lbl">Chart type</span>
+            <div class="reco-row"><span class="ico"><svg class="i"><use href="#i-combo"/></svg></span><span><span class="xs strong">Combo</span><br><span class="xs sec">Chosen manually · <span style="color:var(--accent);font-weight:600">Change…</span></span></span></div>
+            <div class="xs" style="display:flex;gap:6px;align-items:center;color:var(--warn)"><svg class="s"><use href="#s-warn"/></svg>Two scales, not synchronized · <span style="color:var(--accent);font-weight:600">See Axes</span></div>
+          </div>
+        </div>
+        <div class="section" style="position:relative">
+          <div class="field"><span class="lbl">Metrics <span class="opt">· each with its mark and axis</span></span>
+            <div class="well">
+              <span class="pill measure"><svg width="10" height="10"><rect x="1" y="1" width="8" height="8" rx="2" fill="currentColor"/></svg>Revenue <span class="agg">sum</span><span class="ax">L</span><span class="x">×</span></span>
+              <span class="pill measure open"><svg width="14" height="10"><rect x="1" y="4" width="12" height="2" fill="currentColor"/></svg>Margin % <span class="ax">R</span><span class="x">×</span></span>
+              <span class="pill off"><svg class="xs"><use href="#s-notdrawn"/></svg>Orders <span class="agg">count · not drawn · over 8 series</span><span class="x">×</span></span>
+              <span class="addbtn">+ metric</span>
+            </div>
+          </div>
+          <div class="warnline"><svg class="s" style="margin-top:1px"><use href="#s-warn"/></svg><span><b>Orders isn't drawn.</b> 2 measures × 4 regions already make 8 series, the most a combo draws.<span class="acts"><span class="btn sm">Small multiples by Region</span><span class="btn sm">Table</span><span class="btn sm ghost">Remove Orders</span></span></span></div>
+          <div class="field"><span class="lbl">Time</span><div class="well"><span class="pill dim">Ordered at <span class="agg">quarter</span><span class="x">×</span></span></div></div>
+          <div class="field"><span class="lbl">Split by <span class="opt">· one dimension, across every measure</span></span><div class="well"><span class="pill dim">Region <span class="agg">4</span><span class="x">×</span></span></div>
+            <div class="xs sec tnum">2 measures × 4 regions = <b style="color:var(--text-primary)">8 of 8 series</b></div></div>
+          <div class="r2"><div class="field"><span class="lbl">Regions shown</span><div class="select">All 4</div></div><div class="field"><span class="lbl">Filters</span><div class="well" style="min-height:28px;padding:1px 5px"><span class="addbtn">+ filter</span></div></div></div>
+
+          <div class="menu" style="left:-122px;top:96px;width:236px" role="menu" aria-label="Margin %">
+            <div class="mh">Draw as</div>
+            <div class="mi"><span class="ck"></span><svg class="s"><use href="#m-bar"/></svg>Bar<span class="r xs">used by Revenue</span></div>
+            <div class="mi hl"><span class="ck"><svg class="xs"><use href="#i-check"/></svg></span><svg class="s"><use href="#m-line"/></svg>Line</div>
+            <div class="mi"><span class="ck"></span><svg class="s"><use href="#m-area"/></svg>Area</div>
+            <div class="mi"><span class="ck"></span><svg class="s"><use href="#m-point"/></svg>Point</div>
+            <div class="msep"></div>
+            <div class="mh">Axis</div>
+            <div class="mi"><span class="ck"></span>Left</div>
+            <div class="mi"><span class="ck"><svg class="xs"><use href="#i-check"/></svg></span>Right</div>
+            <div class="msep"></div>
+            <div class="mi"><svg class="s"><use href="#i-reset"/></svg>Back to Auto (line, left)</div>
+            <div class="mi">Format…</div>
+            <div class="mi">Remove</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+    <span class="pin" style="left:1060px;top:186px">1</span>
+    <span class="pin" style="left:1060px;top:262px">2</span>
+    <span class="pin" style="left:940px;top:330px">3</span>
+    <span class="pin" style="left:1416px;top:300px">4</span>
+    <span class="pin" style="left:1416px;top:360px">5</span>
+    <span class="pin" style="left:1416px;top:466px">6</span>
+    <span class="pin" style="left:1416px;top:520px">7</span>
+    <span class="pin" style="left:296px;top:170px">8</span>
+    <span class="pin" style="left:690px;top:170px">9</span>
+    <span class="pin" style="left:296px;top:540px">10</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 2: the split, and how marks and axes are set from the Data tab</h2>
+    <p>R80: "One dimension, all measures". The split is set once for the chart, and every measure is drawn for every member: series = measure × member. Colour then means the member, as it does in every other wechart tile (rule 7), so the mark has to tell the measures apart.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>The type card names the risk once</b><span class="t">While two unsynchronized axes are drawn, the card adds the warning's icon and "Two scales, not synchronized · See Axes", which opens Customize at the warning. The full warning lives in one place (screen 1 pin 6).</span><span class="fix">AC-218 (amended)</span></div></li>
+      <li><span class="n">2</span><div><b>Metric pills show mark and axis</b><span class="t">Each pill starts with its mark's glyph and ends with an <b>L</b> or <b>R</b> tag before ×. Its menu (open here on Margin %) holds <b>Draw as</b> (Bar, Line, Area, Point) and <b>Axis</b> (Left, Right) as radio groups, then Back to Auto, Format… and Remove. The inspector stays the complete keyboard path; the menu is a shortcut (principle 5).</span><span class="fix">references-combo §5 · Looker, Metabase, Sigma</span></div></li>
+      <li><span class="n">3</span><div><b>One mark per measure, while split</b><span class="t">With a split, two measures with the same mark couldn't be told apart, because colour already means the region. So a mark another measure uses is shown disabled, naming that measure ("used by Revenue"). Unsplit, any two series may share a mark (Q1).</span><span class="fix">rule 122 (new) · Q1</span></div></li>
+      <li><span class="n">4</span><div><b>"not drawn · over 8 series"</b><span class="t">A third measure would make 12 series. Its pill takes the "not drawn" form R67 introduced, with the reason, and the row under the well offers <b>Small multiples by Region</b> (one combo per region, every measure drawn), <b>Table</b>, or Remove. Nothing is dropped silently.</span><span class="fix">R67 · R69 · rule 6 · rule 117 (new)</span></div></li>
+      <li><span class="n">5</span><div><b>The Split by well</b><span class="t">One dimension, across every measure (R80). A second dimension dropped here replaces the first (the well's replace rule); Shift-drop is refused with "A combo splits by one dimension; use Small multiples for a second". Each measure's members all sit on that measure's axis.</span><span class="fix">R80 · Looker "pivoted values on the same axis"</span></div></li>
+      <li><span class="n">6</span><div><b>The count against the limit</b><span class="t">"2 measures × 4 regions = 8 of 8 series", tabular. It turns into the warning row's wording when a field would exceed it, before anything is drawn.</span><span class="fix">rule 117 (new)</span></div></li>
+      <li><span class="n">7</span><div><b>Regions shown</b><span class="t">All, or the top <i>k</i> by the first measure plus "Other" in the null neutral (§5). When a split would exceed 8, wechart first folds members to top <i>k</i> + Other, at least one member per measure, and only then leaves whole measures not drawn, last added first (Q2; state G).</span><span class="fix">rule 6 · §5 "Other" · Q2</span></div></li>
+      <li><span class="n">8</span><div><b>A two-part legend</b><span class="t">"Region" with a swatch per member, then "Measure" with a glyph per measure, in <code>text-secondary</code> because each stands for every region. The right-axis measure adds "(right)". In the editor, each measure glyph is a button opening the same menu as its pill (state B).</span><span class="fix">rule 4 · rule 7 · rule 120 (new)</span></div></li>
+      <li><span class="n">9</span><div><b>Colour follows the member</b><span class="t">EMEA is blue in its bar and its line, and in every other tile on the dashboard (rule 7). Each line has a 2 px surface halo, so a line over a bar of its own colour still reads.</span><span class="fix">rule 7 · §6 Marks</span></div></li>
+      <li><span class="n">10</span><div><b>Grouped bars per quarter, lines at the centre</b><span class="t">Bars of one measure group within each category, in member order; lines pass through each category's centre. With Stacked, each quarter's bars become one stack per axis.</span><span class="fix">§6 Marks · AC-037</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= STATES ======================= -->
+  <section class="states">
+    <h2>States A–L</h2>
+    <p>Unless a frame says otherwise, the chart is screen 1's. Inspector frames are 336 px wide, the inspector's content width.</p>
+    <div class="stategrid">
+
+      <!-- A -->
+      <div class="state">
+        <h3>A · Customize › Series while split (R80; AC-219)</h3>
+        <p>Rows group by measure. The measure's row holds its mark, axis and Auto, for all its members; member rows below hold the swatch, the name and visibility. Margin %'s Bar is disabled, because Revenue draws bars (Q1). A hidden member stops being drawn but still counts toward 8.</p>
+        <div class="frame"><div class="section" style="border:0">
+          <div class="shead">Series<span class="r tnum">8 of 8 · 2 measures × 4 regions</span></div>
+          <div class="ser"><svg width="12" height="12"><rect x="2" y="2" width="8" height="8" rx="2" fill="var(--text-secondary)"/></svg><span class="nm strong">Revenue</span><span class="seg ic"><span class="on"><svg class="s"><use href="#m-bar"/></svg></span><span class="dis" title="Used by Margin %"><svg class="s"><use href="#m-line"/></svg></span><span><svg class="s"><use href="#m-area"/></svg></span><span><svg class="s"><use href="#m-point"/></svg></span></span><span class="seg"><span class="on">Left</span><span>Right</span></span><span></span></div>
+          <div class="ser sub"><span class="sw" style="background:var(--s1)"></span><span class="nm">EMEA</span><svg class="s sec"><use href="#i-eye"/></svg></div>
+          <div class="ser sub"><span class="sw" style="background:var(--s2)"></span><span class="nm">North America</span><svg class="s sec"><use href="#i-eye"/></svg></div>
+          <div class="ser sub"><span class="sw" style="background:var(--s3)"></span><span class="nm">LATAM</span><svg class="s sec"><use href="#i-eye"/></svg></div>
+          <div class="ser sub"><span class="sw" style="background:var(--s4)"></span><span class="nm">APAC</span><svg class="s sec"><use href="#i-eye"/></svg></div>
+          <div class="ser"><svg width="12" height="12"><rect x="0" y="5" width="12" height="2" fill="var(--text-secondary)"/></svg><span class="nm strong">Margin %</span><span class="seg ic"><span class="dis" title="Used by Revenue"><svg class="s"><use href="#m-bar"/></svg></span><span class="on"><svg class="s"><use href="#m-line"/></svg></span><span><svg class="s"><use href="#m-area"/></svg></span><span><svg class="s"><use href="#m-point"/></svg></span></span><span class="seg"><span>Left</span><span class="on">Right</span></span><span class="auto"><svg class="s"><use href="#i-reset"/></svg></span></div>
+          <div class="xs muted" style="padding-left:20px">Same members, same colours, as Revenue</div>
+          <div class="ser"><svg class="s muted"><use href="#s-notdrawn"/></svg><span class="nm muted">Orders · not drawn · over 8 series</span><span></span><span></span><span></span></div>
+        </div></div>
+        <p class="said">The disabled Bar's tooltip and accessible description: "Revenue draws bars. While the chart is split by Region, each measure needs its own mark."</p>
+      </div>
+
+      <!-- B -->
+      <div class="state">
+        <h3>B · The legend's menu, in the chart editor (Spotfire's "Show as bars / lines")</h3>
+        <p>In the editor's preview, each legend entry's glyph is a 20 px button; it opens the pill's menu, so a Spotfire user flips a series from the legend without a trip to the inspector. The entry's name keeps its job: marking in Markings mode, toggling in cross-filter mode (§6). On dashboards the glyph is not a button (Q5).</p>
+        <div class="frame" style="height:330px;padding:16px">
+          <div class="lg">
+            <span class="e"><span class="gl btn2"><svg width="10" height="10"><rect x="1" y="1" width="8" height="8" rx="2" fill="var(--s1)"/></svg></span>Revenue</span>
+            <span class="e"><span class="gl btn2 open"><svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="var(--s3)" stroke="#fff"/></svg></span>Revenue target</span>
+            <span class="e"><span class="gl btn2"><svg width="14" height="10"><rect x="1" y="4" width="12" height="2" fill="var(--s2)"/></svg></span>Margin % <span class="t">(right)</span></span>
+          </div>
+          <div class="menu" style="left:96px;top:46px;width:236px" role="menu" aria-label="Revenue target">
+            <div class="mh">Draw as</div>
+            <div class="mi"><span class="ck"></span><svg class="s"><use href="#m-bar"/></svg>Bar</div>
+            <div class="mi"><span class="ck"></span><svg class="s"><use href="#m-line"/></svg>Line</div>
+            <div class="mi"><span class="ck"></span><svg class="s"><use href="#m-area"/></svg>Area</div>
+            <div class="mi hl"><span class="ck"><svg class="xs"><use href="#i-check"/></svg></span><svg class="s"><use href="#m-point"/></svg>Point</div>
+            <div class="msep"></div>
+            <div class="mh">Axis</div>
+            <div class="mi"><span class="ck"><svg class="xs"><use href="#i-check"/></svg></span>Left</div>
+            <div class="mi"><span class="ck"></span>Right</div>
+            <div class="msep"></div>
+            <div class="mi"><svg class="s"><use href="#i-reset"/></svg>Back to Auto (line, left)</div>
+          </div>
+        </div>
+        <p class="said">The glyph button's name: "Revenue target: points, left axis. Change mark or axis". Hovering an entry, or a series, emphasises its axis: that axis's title and ticks go to <code>text-primary</code> and the other axis's marks fade to 0.28, as Datawrapper's interactive keys highlight "the related metrics and vertical axes".</p>
+      </div>
+
+      <!-- C -->
+      <div class="state">
+        <h3>C · Synchronize axes on (R80; both axes in $)</h3>
+        <p>Revenue and Revenue target on the left, Cost on the right, all $. Synchronize on: one scale, $0–$160K, labelled on both sides; the right axis group's Min, Max and Log follow the left's and say so; the warning is gone. A combo with one axis, or two synchronized, has no warning.</p>
+        <div class="frame" style="padding:12px">
+          <svg width="650" height="200" viewBox="0 0 650 200" role="img" aria-label="Synchronized axes">
+            <g stroke="var(--grid)"><line x1="60" y1="20" x2="590" y2="20"/><line x1="60" y1="60" x2="590" y2="60"/><line x1="60" y1="100" x2="590" y2="100"/><line x1="60" y1="140" x2="590" y2="140"/></g>
+            <line x1="60" y1="180" x2="590" y2="180" stroke="var(--axis)"/><line x1="60" y1="20" x2="60" y2="180" stroke="var(--axis)"/><line x1="590" y1="20" x2="590" y2="180" stroke="var(--axis)"/>
+            <g font-size="12" fill="var(--text-secondary)" text-anchor="end"><text x="54" y="24">$160K</text><text x="54" y="64">$120K</text><text x="54" y="104">$80K</text><text x="54" y="144">$40K</text><text x="54" y="184">$0</text></g>
+            <g font-size="12" fill="var(--text-secondary)"><text x="596" y="24">$160K</text><text x="596" y="64">$120K</text><text x="596" y="104">$80K</text><text x="596" y="144">$40K</text><text x="596" y="184">$0</text></g>
+            <g fill="var(--s1)"><rect x="80" y="118" width="24" height="62" rx="3"/><rect x="146" y="122" width="24" height="58" rx="3"/><rect x="212" y="105" width="24" height="75" rx="3"/><rect x="278" y="99" width="24" height="81" rx="3"/><rect x="344" y="90" width="24" height="90" rx="3"/><rect x="410" y="62" width="24" height="118" rx="3"/><rect x="476" y="48" width="24" height="132" rx="3"/><rect x="542" y="76" width="24" height="104" rx="3"/></g>
+            <polyline fill="none" stroke="var(--s2)" stroke-width="2" points="92,140 158,142 224,130 290,128 356,120 422,100 488,92 554,110"/>
+          </svg>
+          <div class="grp" style="margin-top:8px"><div class="grp-h"><svg class="xs"><use href="#i-chevd"/></svg>Right axis<span class="r"><svg width="12" height="8"><rect y="3" width="12" height="2" fill="var(--s2)"/></svg>Cost · $</span></div>
+            <div class="grp-b"><div class="swrow"><span class="tog on"></span><span><b>Synchronize axes</b> <span class="d">· on: Min, Max and Log follow the left axis</span></span></div></div></div>
+        </div>
+        <p class="said">Turning Synchronize on when the right axis has a fixed Min or Max clears them, with a toast and Undo ("Right axis now follows the left axis · Undo").</p>
+      </div>
+
+      <!-- D -->
+      <div class="state">
+        <h3>D · The AC-218 warning: when it shows, and its variants</h3>
+        <p>It's for the author: the chart editor, and the tile's edit mode as a ⚠ in the tile head that opens the editor at Axes. Viewers get titled, glyph-keyed axes and no warning (Q6).</p>
+        <div style="display:grid;gap:8px">
+          <div class="frame" style="padding:8px"><p class="cap" style="margin:0 0 6px">D1 · Two axes, different formats (screen 1)</p><div class="warnline"><svg class="s"><use href="#s-warn"/></svg><span><b>Two scales: Revenue ($) and Margin % (%) can be made to look related.</b><span class="acts"><span class="btn sm">One axis</span><span class="btn sm dis">Synchronize</span><span class="btn sm">Small multiples</span><span class="btn sm">Table</span></span></span></div></div>
+          <div class="frame" style="padding:8px"><p class="cap" style="margin:0 0 6px">D2 · Two axes, the same format: stronger, Synchronize first (Q4)</p><div class="warnline"><svg class="s"><use href="#s-warn"/></svg><span><b>Revenue and Cost are both in $.</b> On one scale they compare honestly; on two, their gap is whatever the axes make it.<span class="acts"><span class="btn sm">Synchronize</span><span class="btn sm">One axis</span><span class="btn sm">Small multiples</span><span class="btn sm">Table</span></span></span></div></div>
+          <div class="frame" style="padding:8px"><p class="cap" style="margin:0 0 6px">D3 · Lines only, and an axis that doesn't include zero</p><div class="warnline"><svg class="s"><use href="#s-warn"/></svg><span><b>Two scales: Sessions and Conversion % can be made to look related.</b> The right axis doesn't start at zero.<span class="acts"><span class="btn sm">One axis</span><span class="btn sm dis">Synchronize</span><span class="btn sm">Small multiples</span><span class="btn sm">Table</span></span></span></div></div>
+          <div class="frame" style="padding:8px"><p class="cap" style="margin:0 0 6px">D4 · One axis, or two synchronized: nothing</p><div class="infoline"><svg class="s"><use href="#s-info"/></svg><span>No row. The canvas line reads "3 series on one value axis" or "… 2 axes, synchronized".</span></div></div>
+        </div>
+      </div>
+
+      <!-- E -->
+      <div class="state">
+        <h3>E · Log scale per axis (R80)</h3>
+        <p>Sessions (line, left) and Orders (points, right), no bars. Turning Log on for either turns it on for both, and both groups say so. Values at or below zero can't sit on a log axis: they're left out and counted.</p>
+        <div class="frame"><div class="section" style="border:0">
+          <div class="grp"><div class="grp-h"><svg class="xs"><use href="#i-chevd"/></svg>Left axis<span class="r">Sessions</span></div><div class="grp-b"><div class="swrow"><span class="tog on"></span><span><b>Log scale</b> <span class="d">· on for both axes, so their ticks align</span></span></div></div></div>
+          <div class="grp"><div class="grp-h"><svg class="xs"><use href="#i-chevd"/></svg>Right axis<span class="r">Orders</span></div><div class="grp-b"><div class="swrow"><span class="tog on"></span><span><b>Log scale</b> <span class="d">· on for both axes, so their ticks align</span></span></div></div></div>
+          <div class="warnline"><svg class="s"><use href="#s-warn"/></svg><span><b>3 values not drawn:</b> Orders was 0 in Jan, Feb and Mar, and a log scale has no zero.</span></div>
+          <div class="grp"><div class="grp-h"><svg class="xs"><use href="#i-chevd"/></svg>With a bar series</div><div class="grp-b"><div class="swrow"><span class="tog dis"></span><span><b>Log scale</b> <span class="d">· unavailable: Revenue draws bars, which need a zero baseline</span></span></div></div></div>
+        </div></div>
+      </div>
+
+      <!-- F -->
+      <div class="state wide">
+        <h3>F · Reference lines and bands: the form, and how each kind draws (R80)</h3>
+        <p><b>+ Line</b> and <b>+ Band</b> open the form inline under the list; ⋯ › Edit opens the same form. Horizontal lines and bands read one value axis; vertical ones read the category axis (a category, or a date). The label is required and is drawn in the chart; "Show value" adds the value in the axis's format.</p>
+        <div class="row3">
+          <div><p class="cap">F1 · A horizontal line, from a series</p>
+            <div class="frame"><div class="section" style="border:0">
+              <div class="field"><span class="lbl">Direction</span><span class="seg"><span class="on">Horizontal</span><span>Vertical</span></span></div>
+              <div class="r2"><div class="field"><span class="lbl">Axis</span><div class="select">Right · Margin %</div></div><div class="field"><span class="lbl">Value</span><div class="select">Average of a series</div></div></div>
+              <div class="field"><span class="lbl">Series</span><div class="select">Margin %</div></div>
+              <div class="field"><span class="lbl">Label</span><div class="input">Average Margin %</div></div>
+              <div class="swrow"><span class="tog on"></span><b>Show value</b> <span class="muted">· 16.9%</span></div>
+              <div class="field"><span class="lbl">Label at</span><span class="seg"><span class="on">Start</span><span>End</span></span></div>
+              <div style="display:flex;gap:6px;justify-content:flex-end"><span class="btn sm ghost">Cancel</span><span class="btn sm primary">Add line</span></div>
+            </div></div>
+            <p class="said">Value: <b>Fixed</b>, or the <b>Average</b>, <b>Median</b>, <b>Minimum</b> or <b>Maximum</b> of a drawn series, recomputed with its filters. Drawn in the series' colour, dashed.</p>
+          </div>
+          <div><p class="cap">F2 · A vertical line at a date, and a horizontal band</p>
+            <div class="frame"><div class="section" style="border:0">
+              <div class="field"><span class="lbl">Direction</span><span class="seg"><span>Horizontal</span><span class="on">Vertical</span></span></div>
+              <div class="field"><span class="lbl">At</span><div class="input">Sep 2026</div></div>
+              <div class="field"><span class="lbl">Label</span><div class="input">Price change</div></div>
+            </div>
+            <div class="section" style="border:0;border-top:1px solid var(--border-subtle)">
+              <div class="shead">Band · Horizontal</div>
+              <div class="r2"><div class="field"><span class="lbl">From</span><div class="input">$90K</div></div><div class="field"><span class="lbl">To</span><div class="input">$120K</div></div></div>
+              <div class="field"><span class="lbl">Label</span><div class="input">Target range</div></div>
+            </div></div>
+            <p class="said">A vertical line or band on a time axis takes a date, at the axis's granularity; on a category axis, a member. A band's From must be below its To, or Add stays disabled with that reason.</p>
+          </div>
+          <div><p class="cap">F3 · How they draw</p>
+            <div class="frame" style="padding:8px">
+              <svg width="400" height="200" viewBox="0 0 400 200" role="img" aria-label="Reference kinds">
+                <rect x="40" y="70" width="340" height="40" fill="var(--bg-subtle)"/>
+                <text x="46" y="84" font-size="12" fill="var(--text-secondary)">Target range · $90K–$120K</text>
+                <g stroke="var(--grid)"><line x1="40" y1="20" x2="380" y2="20"/><line x1="40" y1="100" x2="380" y2="100"/></g>
+                <line x1="40" y1="170" x2="380" y2="170" stroke="var(--axis)"/>
+                <g fill="var(--s1)"><rect x="60" y="100" width="22" height="70" rx="3"/><rect x="120" y="80" width="22" height="90" rx="3"/><rect x="180" y="60" width="22" height="110" rx="3"/><rect x="240" y="90" width="22" height="80" rx="3"/><rect x="300" y="50" width="22" height="120" rx="3"/></g>
+                <line x1="221" y1="20" x2="221" y2="170" stroke="var(--text-secondary)" stroke-width="1.5" stroke-dasharray="5 4"/>
+                <text x="226" y="34" font-size="12" fill="var(--text-primary)" style="paint-order:stroke;stroke:#fff;stroke-width:3px">Price change · Sep</text>
+                <line x1="40" y1="130" x2="380" y2="130" stroke="var(--text-secondary)" stroke-width="1.5" stroke-dasharray="5 4"/>
+                <text x="376" y="125" text-anchor="end" font-size="12" fill="var(--text-primary)" style="paint-order:stroke;stroke:#fff;stroke-width:3px">Monthly plan · $100K</text>
+              </svg>
+            </div>
+            <p class="said">Labels never overlap one another: a later label moves to the line's other end, then 16 px inward. A line outside the axis's range isn't drawn; its row says "Outside the axis range" with the warning icon. With log scale, a line at or below zero is the same.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- G -->
+      <div class="state">
+        <h3>G · Over the limits: "not drawn" pills (R67, rule 6, R80's 8)</h3>
+        <p>Folding first, then whole measures. Every pill names why; nothing disappears without a trace.</p>
+        <div class="frame"><div class="section" style="border:0">
+          <p class="cap" style="margin:0">G1 · 2 measures split by Country (21 countries): folded to top 3 + Other</p>
+          <div class="well"><span class="pill dim">Country <span class="agg">top 3 + Other of 21</span><span class="x">×</span></span></div>
+          <div class="xs sec tnum">2 measures × 4 (3 countries + Other) = 8 of 8 series</div>
+          <p class="cap" style="margin:6px 0 0">G2 · Five measures, unsplit: the ninth series isn't drawn</p>
+          <div class="well"><span class="pill measure">Revenue <span class="ax">L</span></span><span class="pill measure">Cost <span class="ax">L</span></span><span class="pill measure">Margin % <span class="ax">R</span></span><span class="pill off"><svg class="xs"><use href="#s-notdrawn"/></svg>Returns <span class="agg">not drawn · over 8 series</span></span></div>
+          <p class="cap" style="margin:6px 0 0">G3 · R67 inside a combo: a measure on another scale, before any right axis</p>
+          <div class="well"><span class="pill measure">Revenue <span class="ax">L</span></span><span class="pill off"><svg class="xs"><use href="#s-notdrawn"/></svg>Margin % <span class="agg">not drawn · on another scale</span></span></div>
+          <div class="warnline"><svg class="s"><use href="#s-warn"/></svg><span><b>Margin % is on another scale</b> from Revenue, so it isn't drawn on the left axis.<span class="acts"><span class="btn sm">Draw on a right axis</span><span class="btn sm">Small multiples</span><span class="btn sm">Table</span></span></span></div>
+        </div></div>
+        <p class="said">G3 is what Auto draws when a second measure's scale differs (R67, R69): only "Draw on a right axis", an explicit click, puts it on the right (rule 117). In every other chart type R67's offers stay Small multiples and Table.</p>
+      </div>
+
+      <!-- H -->
+      <div class="state">
+        <h3>H · Customize › Axes, the left group open, the right group gone</h3>
+        <p>With every series on the left, there's no Right axis group, no Synchronize and no warning. The left group is §6's axis editor, unchanged, with include zero locked only for the bars' reason.</p>
+        <div class="frame"><div class="section" style="border:0">
+          <div class="shead">Axes</div>
+          <div class="grp"><div class="grp-h"><svg class="xs"><use href="#i-chevd"/></svg>Left axis<span class="r"><svg width="8" height="8"><rect width="8" height="8" rx="2" fill="var(--s1)"/></svg>Revenue · <svg width="12" height="8"><rect y="3" width="12" height="2" fill="var(--s2)"/></svg>Cost · $</span></div>
+            <div class="grp-b">
+              <div class="r2"><div class="field"><span class="lbl">Title</span><div class="input">Revenue and Cost ($)</div></div><div class="field"><span class="lbl">Format</span><div class="select">Currency</div></div></div>
+              <div class="r2"><div class="field"><span class="lbl">Min</span><div class="input ph">Auto</div></div><div class="field"><span class="lbl">Max</span><div class="input ph">Auto</div></div></div>
+              <div class="lockline"><svg class="s"><use href="#i-lock"/></svg><span><b style="color:var(--text-primary)">Include zero</b> · on, because Revenue draws bars</span></div>
+              <div class="swrow"><span class="tog dis"></span><span><b>Log scale</b> <span class="d">· unavailable while the axis has bars</span></span></div>
+              <div class="r2"><div class="field"><span class="lbl">Label rotation</span><span class="seg"><span class="on">0°</span><span>45°</span><span>90°</span></span></div><div class="field"><span class="lbl">Gridlines</span><span class="seg"><span class="on">On</span><span>Off</span></span></div></div>
+            </div></div>
+          <div class="grp"><div class="grp-h"><svg class="xs"><use href="#i-chevr"/></svg>X axis<span class="r">Ordered at · month</span></div></div>
+        </div></div>
+      </div>
+
+      <!-- I -->
+      <div class="state">
+        <h3>I · Below 1,024 px: a combo tile in view mode (direction §2; AC-304)</h3>
+        <p>390 px, one column. Axis titles stay above their axes, ticks go compact ($160K → $160K, 40 % → 40 %), category labels thin to every third. The legend wraps under the title. Reference labels shorten to their label only; the value is in the tooltip.</p>
+        <div class="frame" style="width:392px;padding:12px">
+          <div class="tile-head"><h3>Revenue and margin by month</h3></div>
+          <div class="lg" style="margin-bottom:4px"><span class="e"><svg width="10" height="10"><rect x="1" y="1" width="8" height="8" rx="2" fill="var(--s1)"/></svg>Revenue</span><span class="e"><svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="var(--s3)"/></svg>Target</span><span class="e"><svg width="14" height="10"><rect x="1" y="4" width="12" height="2" fill="var(--s2)"/></svg>Margin % <span class="t">(right)</span></span></div>
+          <svg width="366" height="220" viewBox="0 0 366 220" role="img" aria-label="Narrow combo">
+            <g font-size="12" fill="var(--text-secondary)"><rect x="44" y="6" width="8" height="8" rx="2" fill="var(--s1)"/><text x="56" y="14">Revenue ($)</text><text x="322" y="14" text-anchor="end">Margin % (%)</text></g>
+            <g stroke="var(--grid)"><line x1="44" y1="24" x2="322" y2="24"/><line x1="44" y1="64" x2="322" y2="64"/><line x1="44" y1="104" x2="322" y2="104"/><line x1="44" y1="144" x2="322" y2="144"/><line x1="44" y1="184" x2="322" y2="184"/></g>
+            <line x1="44" y1="152" x2="322" y2="152" stroke="var(--axis)"/>
+            <g font-size="12" fill="var(--text-secondary)" text-anchor="end"><text x="40" y="28">$160K</text><text x="40" y="108">$80K</text><text x="40" y="156">$0</text></g>
+            <g font-size="12" fill="var(--text-secondary)"><text x="326" y="28">40%</text><text x="326" y="108">20%</text><text x="326" y="156">0%</text></g>
+            <g fill="var(--s1)"><rect x="50" y="121" width="14" height="31" rx="2"/><rect x="73" y="123" width="14" height="29" rx="2"/><rect x="96" y="115" width="14" height="37" rx="2"/><rect x="119" y="112" width="14" height="40" rx="2"/><rect x="142" y="107" width="14" height="45" rx="2"/><rect x="165" y="93" width="14" height="59" rx="2"/><rect x="188" y="86" width="14" height="66" rx="2"/><rect x="211" y="100" width="14" height="52" rx="2"/><rect x="234" y="104" width="14" height="48" rx="2"/><rect x="257" y="97" width="14" height="55" rx="2"/><rect x="280" y="88" width="14" height="64" rx="2"/><rect x="303" y="79" width="14" height="73" rx="2"/></g>
+            <polyline fill="none" stroke="var(--s2)" stroke-width="2" points="57,128 80,160 103,136 126,124 149,116 172,108 195,100 218,114 241,122 264,110 287,104 310,96"/>
+            <g font-size="12" fill="var(--text-secondary)" text-anchor="middle"><text x="57" y="204">Jan</text><text x="126" y="204">Apr</text><text x="195" y="204">Jul</text><text x="264" y="204">Oct</text></g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- J -->
+      <div class="state">
+        <h3>J · The table view and the text alternative (rule 5; rule 125)</h3>
+        <p>"View as table" (tile ⋯, and the editor's quick picks) shows the same data with each column naming its mark and axis. Split, the head has two rows: measure, then member. The chart's text alternative reads the same facts.</p>
+        <div class="frame">
+          <table class="grid-table">
+            <thead><tr><th rowspan="2">Ordered at</th><th colspan="2" style="text-align:center">Revenue · bars, left · $</th><th colspan="2" style="text-align:center">Margin % · line, right · %</th></tr>
+              <tr><th class="num">EMEA</th><th class="num">North America</th><th class="num">EMEA</th><th class="num">North America</th></tr></thead>
+            <tbody>
+              <tr><td>Q1 2026</td><td class="num">$210,400</td><td class="num">$320,180</td><td class="num">18.0%</td><td class="num">24.1%</td></tr>
+              <tr><td>Q2 2026</td><td class="num">$240,050</td><td class="num">$300,720</td><td class="num">20.2%</td><td class="num">22.0%</td></tr>
+              <tr><td>Q3 2026</td><td class="num">$265,310</td><td class="num">$340,000</td><td class="num">22.4%</td><td class="num">25.3%</td></tr>
+              <tr><td>Q4 2026</td><td class="num">$290,880</td><td class="num">$380,410</td><td class="num">21.1%</td><td class="num">27.0%</td></tr>
+            </tbody>
+          </table>
+          <p class="xs sec" style="margin:8px">Text alternative: "Combo, by quarter, split by Region. Revenue: bars, left axis, dollars. Margin %: line, right axis, percent. Axes aligned at zero. 8 series." A reference line adds "Monthly plan: line at $100K, left axis".</p>
+        </div>
+      </div>
+
+      <!-- K -->
+      <div class="state">
+        <h3>K · Loading, error and a series with no data (rule 18)</h3>
+        <p>Loading is a skeleton of the combo form: grey bars and a grey line, both axes' rules. An error is the tile's existing error state. A series whose measure returns nothing keeps its legend entry with "No data" and is counted in the 8.</p>
+        <div class="row2">
+          <div class="frame" style="padding:12px"><svg width="300" height="120" viewBox="0 0 300 120" aria-hidden="true"><line x1="30" y1="10" x2="30" y2="100" stroke="var(--border-subtle)"/><line x1="270" y1="10" x2="270" y2="100" stroke="var(--border-subtle)"/><line x1="30" y1="100" x2="270" y2="100" stroke="var(--border-subtle)"/><g fill="var(--bg-subtle)"><rect x="45" y="60" width="20" height="40" rx="3"/><rect x="85" y="50" width="20" height="50" rx="3"/><rect x="125" y="40" width="20" height="60" rx="3"/><rect x="165" y="55" width="20" height="45" rx="3"/><rect x="205" y="30" width="20" height="70" rx="3"/></g><polyline fill="none" stroke="var(--border-strong)" stroke-width="2" points="55,70 95,58 135,52 175,60 215,40"/></svg><p class="cap" style="margin:0">Loading · <code>aria-busy</code> on the tile</p></div>
+          <div class="frame" style="padding:12px"><div class="lg"><span class="e"><svg width="10" height="10"><rect x="1" y="1" width="8" height="8" rx="2" fill="var(--s1)"/></svg>Revenue</span><span class="e muted"><svg class="s"><use href="#s-info"/></svg>Returns · No data for these filters</span></div><p class="cap" style="margin:8px 0 0">A series with no rows</p></div>
+        </div>
+      </div>
+
+      <!-- L -->
+      <div class="state">
+        <h3>L · Recommendation and the "Why" trace stay as they are (AC-029, AC-030)</h3>
+        <p>Auto never proposes a combo with two axes. In a combo the author picked, "Why this recommendation?" still shows the recommended chart and its rules; its "One value axis" line reads "You drew a second axis by hand; the recommender never does".</p>
+        <div class="frame" style="padding:12px"><div style="display:grid;grid-template-columns:20px 1fr;gap:6px;font-size:12px;line-height:16px"><svg class="s"><use href="#s-ok"/></svg><span>Signature: time × 2 measures on different scales</span><svg class="s"><use href="#s-warn"/></svg><span>One value axis: you drew a second axis by hand; the recommender never does</span><svg class="s"><use href="#s-ok"/></svg><span><b>Recommended: Small multiples</b> · one panel per measure, shared time axis</span></div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= KEYBOARD ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Keyboard and accessibility</h2>
+    <p>No new shortcut (R75). Everything here is a button, a radio group, a switch or a menu, with the keys those already have. The inspector is the complete path; the pill menu and the legend glyph are shortcuts to the same choices.</p>
+    <div class="decision" style="margin-top:0">
+      <table>
+        <thead><tr><th style="width:220px">Control</th><th style="width:220px">Keys</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>Series row: Mark, Axis</td><td><kbd class="k">Tab</kbd> · <kbd class="k">←</kbd> <kbd class="k">→</kbd></td><td>Each is a <code>radiogroup</code> named "Revenue mark" and "Revenue axis"; one Tab stop each, arrows choose. A disabled mark is skipped and its reason is in its description. ↺ is a button named "Back to Auto for Revenue: line, left".</td></tr>
+          <tr><td>Metric pill menu</td><td><kbd class="k">Enter</kbd> · <kbd class="k">↑</kbd> <kbd class="k">↓</kbd> · <kbd class="k">Esc</kbd></td><td>As today's pill menu (T182). Draw as and Axis are groups of <code>menuitemradio</code>; Esc returns focus to the pill.</td></tr>
+          <tr><td>Legend glyph (editor only)</td><td><kbd class="k">Tab</kbd> · <kbd class="k">Enter</kbd></td><td>A button per entry, after the tile's ⋯ in focus order. Opens the same menu as the pill.</td></tr>
+          <tr><td>Synchronize, Log, Show value</td><td><kbd class="k">Space</kbd></td><td><code>switch</code> roles. Turning Log on for one axis announces "Log scale on for both axes" politely.</td></tr>
+          <tr><td>Warning row</td><td><kbd class="k">Tab</kbd></td><td>Its text is a <code>status</code> region, read once when it appears; its four offers are ordinary buttons, a disabled one with its reason as description.</td></tr>
+          <tr><td>Reference list</td><td><kbd class="k">Tab</kbd> · <kbd class="k">Enter</kbd></td><td>Each row's ⋯ is a menu button (Edit, Duplicate, Delete; Delete with an Undo toast, rule 38). The form takes focus on open and Esc cancels it (rule 85).</td></tr>
+          <tr><td>The chart</td><td>—</td><td>Its text alternative and table view name each series' mark, axis and unit, and each reference line (state J). Marking keys on combo marks are §7a's, unchanged; a line marks whole.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Every state as an icon and a label</h3>
+      <div class="legend6">
+        <div><svg class="s"><use href="#s-warn"/></svg><span>Two scales, not synchronized</span><span>the AC-218 warning</span></div>
+        <div><svg class="s muted"><use href="#s-notdrawn"/></svg><span>not drawn · over 8 series</span><span>a measure past the limit</span></div>
+        <div><svg class="s muted"><use href="#s-notdrawn"/></svg><span>not drawn · on another scale</span><span>R67, in a combo</span></div>
+        <div><svg class="s"><use href="#i-lock"/></svg><span>Include zero · on, because …</span><span>locked, with the reason</span></div>
+        <div><svg class="s"><use href="#s-warn"/></svg><span>3 values not drawn</span><span>log scale and zero</span></div>
+        <div><svg class="s"><use href="#s-warn"/></svg><span>Outside the axis range</span><span>a reference line</span></div>
+        <div><svg class="s"><use href="#i-reset"/></svg><span>Back to Auto</span><span>a manual mark or axis</span></div>
+        <div><svg class="s"><use href="#i-sync"/></svg><span>… 2 axes, synchronized</span><span>the canvas line</span></div>
+        <div><svg class="s sec"><use href="#s-info"/></svg><span>No data for these filters</span><span>a series with no rows</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= ACs AND QUESTIONS ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Criteria this changes, and questions for you</h2>
+    <p>No R80 criteria exist yet; write-spec follows approval. These are the existing ones whose words change. Each question is drawn one way, the recommended one, listed first; it's only a default until you decide.</p>
+    <div class="decision" style="margin-top:0">
+      <h3>Acceptance criteria and direction</h3>
+      <table>
+        <thead><tr><th style="width:120px">Where</th><th>Today</th><th>With design 20</th></tr></thead>
+        <tbody>
+          <tr><td class="w">AC-037</td><td>Renders combo charts from a chart spec (first measure bars, the rest lines, one axis).</td><td><b>Amend:</b> a combo draws each measure as a series with its own mark (bar, line, area, point) and axis (left, right), split by at most one dimension across every measure, at most 8 series.</td></tr>
+          <tr><td class="w">AC-218</td><td>Warns "WHILE a manually chosen type is a combo".</td><td><b>Amend:</b> warns while a combo draws two value axes that aren't synchronized, offering One axis, Synchronize (when both share a format), Small multiples and Table; a one-axis or synchronized combo shows none.</td></tr>
+          <tr><td class="w">AC-219</td><td>Customize: axis settings, legend, each series' colour, visibility and stacking, labels, format.</td><td><b>Extend:</b> each series' mark and axis; the Right axis group; Synchronize axes; matching log scale; reference lines and bands.</td></tr>
+          <tr><td class="w">R67 · R69</td><td>A measure on another scale is "not drawn · on another scale", offering Small multiples and Table.</td><td><b>Amend, in a combo only:</b> the first offer is "Draw on a right axis".</td></tr>
+          <tr><td class="w">AC-030 · rule 8</td><td>Never recommends two value axes.</td><td>Hold.</td></tr>
+          <tr><td class="w">§6 · rule 30</td><td>"The inspector allows a dual axis only as an explicit override, and shows a warning when it is on"; "A dual-axis (combo) chart … shows a warning".</td><td><b>Amend:</b> rule 30 reads "A second value axis is drawn only by the author's choice, in a combo, and while unsynchronized it shows a warning" (it no longer equates combo with dual axis).</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Questions — your decision</h3>
+      <table>
+        <thead><tr><th style="width:40px">#</th><th style="width:280px">Question</th><th>Drawn as (recommended), and the alternatives</th><th style="width:120px">Where</th></tr></thead>
+        <tbody>
+          <tr><td>Q1</td><td>While split, may two measures share a mark? Colour already means the member.</td><td><b>Drawn (a):</b> no; each split measure has its own mark, a used mark disabled with its reason. (b) Yes; the second measure's lines are dashed and its bars hatched. (c) Yes, told apart by axis and legend only.</td><td class="w">A · S2 pin 3</td></tr>
+          <tr><td>Q2</td><td>A split that would pass 8 series.</td><td><b>Drawn (a):</b> fold members to the top <i>k</i> + Other first (at least one member each), then leave whole measures not drawn, last added first. (b) Leave measures not drawn first, keep every member. (c) Never fold; any field past 8 is not drawn.</td><td class="w">G · S2 pin 7</td></tr>
+          <tr><td>Q3</td><td>Log scale with bars.</td><td><b>Drawn (a):</b> unavailable while either axis has bars, with the reason. (b) Allowed; bars start at the axis minimum, with a note on the axis.</td><td class="w">E · S1 pin 9</td></tr>
+          <tr><td>Q4</td><td>The warning's wording when both axes share a format.</td><td><b>Drawn (a):</b> a stronger sentence, with Synchronize first (Tableau's caveat that shared axes suit the same units). (b) One wording always.</td><td class="w">D2</td></tr>
+          <tr><td>Q5</td><td>Where the legend changes a series' mark or axis.</td><td><b>Drawn (a):</b> in the chart editor only; on dashboards the legend keeps marking and toggling. (b) Also in the dashboard's edit mode.</td><td class="w">B</td></tr>
+          <tr><td>Q6</td><td>Who sees the AC-218 warning.</td><td><b>Drawn (a):</b> authors only: the editor and the tile's edit mode. (b) Viewers too, as an ⓘ in the tile head.</td><td class="w">D</td></tr>
+          <tr><td>Q7</td><td>Where a reference line's value comes from.</td><td><b>Drawn (a):</b> a fixed value, or the average, median, minimum or maximum of a drawn series. (b) Also any measure's total from Cube with its own filters. (c) Also a dashboard parameter, when what-if parameters come (R80: later).</td><td class="w">F1 · S1 pin 10</td></tr>
+          <tr><td>Q8</td><td>A computed line on a split chart.</td><td><b>Drawn (a):</b> one line per measure, over every member. (b) One per member, as Spotfire's "One per color", each in the member's colour and counted toward the 8.</td><td class="w">F1</td></tr>
+          <tr><td>Q9</td><td>How many reference lines and bands a chart may hold.</td><td><b>Drawn (a):</b> no set limit; labels that collide move. (b) A limit, with "+ Line" disabled and the reason at it. The number would be yours.</td><td class="w">S1 pin 10</td></tr>
+          <tr><td>Q10</td><td>Axis titles.</td><td><b>Drawn (a):</b> horizontal, above each axis, with mark glyphs (12 px text stays upright). (b) Rotated 90° beside each axis, as §6's single axis is today.</td><td class="w">S1 pin 12</td></tr>
+          <tr><td>Q11</td><td>Stacking.</td><td><b>Drawn (a):</b> chart-wide: Bars side by side or stacked, Areas overlap or stacked; stacks never cross axes. (b) A stack group per series.</td><td class="w">S1 pin 4</td></tr>
+          <tr><td>Q12</td><td>Synchronize when the axes' formats differ ($ and %).</td><td><b>Drawn (a):</b> unavailable, with the reason, as Tableau requires the same data type. (b) Allowed, with the warning kept and reworded.</td><td class="w">S1 pin 5 · D1</td></tr>
+          <tr><td>Q13</td><td>"Index to 100" as a fifth offer (Datawrapper's alternative to two axes).</td><td><b>(a) Not now;</b> research first, as it needs a calculation. (b) Add it now.</td><td class="w">D</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+</body>
+</html>

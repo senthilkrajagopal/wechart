@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 21 · Rich text tile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  /* tokens: docs/design/direction.md §3–§5, §7d, §7g (light theme); no new colour, size or weight */
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8; --role-measure: #a85400; --role-measure-soft: #f8ecdf;
+    --mk1: #151107; --crossfilter: #7a3fb0;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+    --grid: #ecebe7; --axis: #c9c7c1;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  b, strong, th, h1, h2, h3 { font-weight: 600; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head ul { margin: 0 0 6px; padding-left: 20px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .doc-head code { color: #f2f2f0; background: #333; padding: 0 4px; border-radius: 3px; font: 400 12px var(--font-code); }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .screen-label { background: #2b2b29; color: #e8e7e2; padding: 10px 32px; font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2, .states h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; }
+  .notes > p, .states > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .notes code, .states code, .decision code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .stategrid { display: grid; grid-template-columns: repeat(2, 676px); gap: 32px 24px; align-items: start; }
+  .state { display: grid; gap: 8px; align-content: start; }
+  .state.wide { grid-column: 1 / -1; }
+  .state > h3 { margin: 0; font-size: 14px; line-height: 20px; }
+  .state > p { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); max-width: 1180px; }
+  .row2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; align-items: start; }
+  .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
+  .frame { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg-surface); box-shadow: 0 1px 2px rgba(0,0,0,.06); position: relative; }
+  .cap { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0 0 6px; }
+  .said { margin: 6px 0 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .said b { color: var(--text-primary); }
+  .decision { margin: 22px 0 0; padding: 16px 20px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-page); max-width: 1376px; }
+  .decision h3 { margin: 0 0 8px; font-size: 16px; line-height: 22px; }
+  .decision > p { margin: 0 0 10px; color: var(--text-secondary); font-size: 13px; line-height: 18px; }
+  .decision table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 18px; }
+  .decision th, .decision td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); }
+  .decision th { font-size: 12px; color: var(--text-secondary); background: var(--bg-subtle); }
+  .decision td.w { white-space: nowrap; font: 600 12px/18px var(--font-code); color: var(--note); }
+
+  svg.i { width: 16px; height: 16px; flex: none; }
+  svg.s { width: 14px; height: 14px; flex: none; }
+  svg.xs { width: 10px; height: 10px; flex: none; }
+  svg text { font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; white-space: nowrap; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 240px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .iconbtn.sm { width: 24px; height: 24px; }
+  .iconbtn.on { background: var(--bg-subtle); color: var(--text-primary); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .acct { display: inline-flex; align-items: center; gap: 8px; font: 600 12px/16px var(--font-ui); }
+  .count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--text-on-accent); font: 600 12px/18px var(--font-ui); text-align: center; font-variant-numeric: tabular-nums; }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); flex: none; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.md { height: 28px; padding: 0 10px; font-size: 12px; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.link { border-color: transparent; background: none; color: var(--accent); font-weight: 600; padding: 0 4px; }
+  .btn.dis { opacity: .45; }
+  .ring { box-shadow: 0 0 0 3px var(--accent-ring); }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .band { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 24px; background: var(--bg-subtle); border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .menu { position: absolute; z-index: 70; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 4px; }
+  .mi { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+  .mi.hl { background: var(--bg-hover); box-shadow: inset 2px 0 0 var(--accent); }
+  .mi .r { margin-left: auto; color: var(--text-muted); }
+  .mi.dis { color: var(--text-muted); }
+  .mi .ki { width: 20px; display: inline-grid; place-items: center; color: var(--text-secondary); }
+  .mh { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-muted); padding: 6px 8px 2px; }
+  .msep { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+  .mfoot { border-top: 1px solid var(--border-subtle); margin-top: 4px; padding: 6px 8px 2px; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+  .tip { position: absolute; z-index: 90; background: var(--text-primary); color: #f2f2f0; font-size: 12px; line-height: 16px; padding: 8px 10px; border-radius: 6px; box-shadow: var(--shadow-pop); }
+  .tip b { color: #fff; }
+  .tip .tl { color: #b4b3ab; }
+  kbd.k { font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--bg-surface); color: var(--text-primary); white-space: nowrap; }
+  .legend6 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 24px; }
+  .legend6 div { display: flex; gap: 10px; align-items: center; min-height: 34px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; }
+  .legend6 div > span:last-child { margin-left: auto; color: var(--text-secondary); text-align: right; }
+
+  /* ---- dashboard header (design 19) ---- */
+  .dhrow { position: relative; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 24px; background: var(--bg-page); border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .back { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; line-height: 16px; flex: none; }
+  .sl { color: var(--text-muted); font-size: 12px; }
+  .dtitle { margin: 0; font-size: 20px; line-height: 26px; letter-spacing: -0.01em; white-space: nowrap; }
+  .dtitle .ed { color: var(--text-secondary); font-weight: 400; }
+  .vrule { width: 1px; height: 24px; background: var(--border-subtle); flex: none; margin: 0 4px; }
+  .itabs { display: flex; align-self: stretch; gap: 2px; }
+  .itabs > span { display: flex; align-items: center; gap: 4px; padding: 0 12px; font-size: 13px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .itabs > span.on { color: var(--text-primary); border-bottom-color: var(--accent); }
+  .itabs > span.add { font-size: 12px; border-bottom: 0; }
+  .togb { gap: 6px; padding: 0 8px 0 10px; }
+  .sheet { background: var(--bg-page); border-bottom: 1px solid var(--border-subtle); }
+  .about { padding: 8px 24px; display: grid; gap: 4px; border-top: 1px solid var(--border-subtle); }
+  .about .desc { margin: 0; font-size: 14px; line-height: 20px; color: var(--text-secondary); }
+  .about .own { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .fbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 52px; padding: 10px 24px; }
+  .fw { position: relative; height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-surface); font-size: 13px; white-space: nowrap; }
+  .fw.c { height: 28px; font-size: 12px; }
+  .fw .scope { font-size: 12px; font-weight: 600; color: var(--text-muted); border: 1px solid var(--border-subtle); border-radius: 3px; padding: 0 4px; line-height: 18px; }
+  .fw.open { border-color: var(--accent); }
+  .hint { font-size: 12px; line-height: 16px; color: var(--text-muted); }
+
+  /* ---- canvas and tiles ---- */
+  .dgrid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; padding: 16px 24px 40px; align-items: start; }
+  .tile { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; min-width: 0; position: relative; }
+  .tile.edit { border-style: dashed; border-color: var(--border-strong); }
+  .tile.sel { border: 2px solid var(--accent); padding: 15px; }
+  .tile.editing { border: 2px solid var(--accent); padding: 0; }
+  .tile-head { display: flex; align-items: center; gap: 8px; min-height: 20px; margin-bottom: 8px; }
+  .tile-head h3 { margin: 0; font-size: 14px; line-height: 20px; white-space: nowrap; }
+  .fresh { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--bg-subtle); color: var(--ok); font-size: 12px; white-space: nowrap; }
+  .edbadge { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--bg-subtle); font-size: 12px; color: var(--warn); white-space: nowrap; }
+
+  /* ---- the rich text tile ---- */
+  .tbar { height: 40px; display: flex; align-items: center; gap: 2px; padding: 4px 8px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); border-radius: 4px 4px 0 0; }
+  .tbar .tb { height: 32px; min-width: 32px; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 6px; font-size: 12px; color: var(--text-secondary); }
+  .tbar .tb.on { background: var(--bg-subtle); color: var(--text-primary); }
+  .tbar .tb.sel { border: 1px solid var(--border-strong); padding: 0 8px; min-width: 128px; justify-content: space-between; color: var(--text-primary); }
+  .tbar .sep { width: 1px; height: 20px; background: var(--border-subtle); margin: 0 4px; }
+  .tbar .ctr { margin-left: auto; font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; display: inline-flex; gap: 6px; align-items: center; }
+  .rt { padding: 16px; display: grid; gap: 12px; }
+  .rt h4 { margin: 0; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .rt h5 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .rt p { margin: 0; font-size: 14px; line-height: 24px; }
+  .rt .big { font-size: 32px; line-height: 40px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .caret { display: inline-block; width: 1.5px; height: 18px; background: var(--text-primary); vertical-align: -4px; margin: 0 1px; }
+  .ph { color: var(--text-muted); }
+  /* a live element, edit form */
+  .le { display: inline-flex; align-items: center; gap: 4px; padding: 0 4px; border-radius: 4px; background: var(--bg-subtle); border: 1px solid var(--border-subtle); font-variant-numeric: tabular-nums; line-height: 20px; vertical-align: 0; white-space: nowrap; }
+  .le.selx { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ring); }
+  .le.bad { border-color: var(--warn-icon); }
+  .rt .big .le { line-height: 38px; }
+  /* view form */
+  .lv { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .lv.hov { text-decoration: underline dotted var(--text-muted); text-underline-offset: 3px; }
+  .up { color: var(--ok); } .down { color: var(--err); }
+  .stt { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .stt.ok { color: var(--ok); } .stt.wn { color: var(--warn); } .stt.er { color: var(--err); } .stt.nt { color: var(--text-secondary); }
+  .spark { display: inline-block; vertical-align: -3px; }
+  .skel { display: inline-block; height: 14px; border-radius: 3px; background: var(--bg-subtle); vertical-align: -2px; }
+  /* control blocks */
+  .ctlrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .ctl-l { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; background: var(--bg-surface); flex: none; }
+  .seg > span { height: 26px; padding: 0 10px; font-size: 12px; display: flex; align-items: center; border-left: 1px solid var(--border-subtle); color: var(--text-secondary); }
+  .seg > span:first-child { border-left: 0; }
+  .seg > span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .seg.lg > span { height: 30px; font-size: 13px; }
+  /* sidebar */
+  .esb { position: absolute; right: 0; bottom: 0; width: 300px; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); display: flex; flex-direction: column; }
+  .esb-tabs { display: flex; gap: 2px; height: 37px; border-bottom: 1px solid var(--border-subtle); padding: 0 12px; flex: none; }
+  .esb-tabs span { display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+  .esb-tabs span.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .section { padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 8px; }
+  .shead { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); }
+  .shead .r { margin-left: auto; font-weight: 400; color: var(--text-muted); }
+  .field { display: grid; gap: 4px; }
+  .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); display: flex; gap: 6px; align-items: baseline; }
+  .lbl .opt { font-weight: 400; color: var(--text-muted); }
+  .select, .input { height: 28px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; }
+  .select::after { content: ''; margin-left: auto; width: 7px; height: 7px; border-right: 1.5px solid var(--text-secondary); border-bottom: 1.5px solid var(--text-secondary); transform: rotate(45deg) translate(-2px, -2px); flex: none; }
+  .input.ph { color: var(--text-muted); }
+  .input.foc { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .r2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .elrow { display: grid; grid-template-columns: 20px minmax(0,1fr) 16px; gap: 8px; align-items: center; height: 28px; font-size: 12px; border-radius: 4px; padding: 0 4px; }
+  .elrow.on { background: var(--accent-soft); }
+  .elrow .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .elrow .k2 { color: var(--text-muted); }
+  .kic { width: 20px; height: 20px; border-radius: 4px; background: var(--bg-subtle); display: grid; place-items: center; color: var(--text-secondary); }
+  .tog { display: inline-block; width: 28px; height: 16px; border-radius: 999px; background: var(--border-strong); position: relative; flex: none; }
+  .tog::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+  .tog.on { background: var(--accent); }
+  .swrow { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: 12px; line-height: 16px; }
+  .check { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--border-strong); background: var(--bg-surface); flex: none; display: inline-grid; place-items: center; }
+  .check.on { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+  .cbrow { display: flex; align-items: center; gap: 8px; height: 28px; font-size: 12px; }
+  .pill { height: 24px; display: inline-flex; align-items: center; gap: 4px; padding: 0 2px 0 6px; border-radius: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .pill.dim { background: var(--role-dim-soft); color: var(--role-dim); }
+  .pill.measure { background: var(--role-measure-soft); color: var(--role-measure); }
+  .pill.param { background: var(--bg-subtle); color: var(--text-primary); border: 1px solid var(--border-strong); }
+  .pill .agg { font-weight: 400; }
+  .pill .x { width: 18px; height: 18px; display: grid; place-items: center; font-weight: 400; }
+  .well { border: 1px dashed var(--border-strong); border-radius: 6px; padding: 5px; min-height: 36px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; background: var(--bg-surface); position: relative; }
+  .addbtn { height: 24px; padding: 0 6px; border-radius: 4px; font-size: 12px; color: var(--text-muted); display: inline-flex; align-items: center; }
+  .ficon { width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; font: 600 12px var(--font-code); flex: none; }
+  .ficon.dim { color: var(--role-dim); background: var(--role-dim-soft); }
+  .ficon.measure { color: var(--role-measure); background: var(--role-measure-soft); }
+  .warnline { display: grid; grid-template-columns: 16px 1fr; gap: 6px; font-size: 12px; line-height: 16px; padding: 8px; border-radius: 6px; background: color-mix(in srgb, var(--warn-icon) 16%, var(--bg-surface)); }
+  .infoline { display: grid; grid-template-columns: 16px 1fr; gap: 6px; font-size: 12px; line-height: 16px; padding: 8px; border-radius: 6px; background: var(--bg-subtle); color: var(--text-secondary); }
+  .okline { display: grid; grid-template-columns: 16px 1fr; gap: 6px; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  /* AI */
+  .draft { border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-surface); padding: 12px; display: grid; gap: 8px; box-shadow: inset 3px 0 0 var(--border-strong); }
+  .draft-h { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); }
+  .draft-h .r { margin-left: auto; font-weight: 400; color: var(--text-muted); }
+  .facts { border-top: 1px solid var(--border-subtle); padding-top: 8px; display: grid; gap: 2px; }
+  .fact { display: grid; grid-template-columns: 16px 1fr; gap: 6px; font-size: 12px; line-height: 16px; color: var(--text-secondary); padding: 2px 0; }
+  .ailabel { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border-subtle); background: var(--bg-surface); font-size: 12px; line-height: 16px; color: var(--text-secondary); white-space: nowrap; }
+  .step { display: flex; align-items: center; gap: 8px; height: 28px; font-size: 12px; line-height: 16px; }
+  /* settings page (design 05, 2026-09-24) */
+  .sethead { height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .sethead h1 { margin: 0; font-size: 16px; line-height: 22px; }
+  .snav { background: var(--bg-surface); border-right: 1px solid var(--border-subtle); padding: 8px 0; }
+  .snav .it { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 24px; font-size: 12px; }
+  .snav .it.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent); }
+  .snav .it .tag { margin-left: auto; display: inline-flex; gap: 4px; align-items: center; color: var(--text-secondary); font-weight: 400; }
+  .ptable { border-collapse: collapse; width: 100%; font-size: 12px; line-height: 16px; }
+  .ptable th { text-align: left; background: var(--bg-subtle); height: 28px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); font-weight: 600; color: var(--text-secondary); }
+  .ptable td { height: 34px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); }
+  .ptable tr.on td { background: var(--accent-soft); }
+  .chrow { display: grid; grid-template-columns: 16px 220px minmax(0,1fr) 24px; gap: 10px; align-items: center; height: 34px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; }
+  .grip { color: var(--text-muted); font-size: 12px; letter-spacing: -2px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chevr" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 16 16"><path d="M13 8H3.5M7.5 4L3.5 8l4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="12.5" cy="8" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 16 16"><path d="M2 3h12l-4.6 5.4V13l-2.8-1.4V8.4z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 16 16"><path d="M5.5 3.5L2.5 6.5l3 3M2.8 6.5H10a3.5 3.5 0 0 1 0 7H7" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 16 16"><path d="M10.5 3.5l3 3-3 3M13.2 6.5H6a3.5 3.5 0 0 0 0 7h3" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 16 16"><path d="M11.5 2.5l2 2L6 12H4v-2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+  <symbol id="i-bold" viewBox="0 0 16 16"><path d="M4.5 2.5h4.2a2.8 2.8 0 0 1 0 5.6H4.5zM4.5 8.1h5a2.7 2.7 0 0 1 0 5.4h-5z" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-italic" viewBox="0 0 16 16"><path d="M7 2.5h5M4 13.5h5M10 2.5l-4 11" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-ul" viewBox="0 0 16 16"><circle cx="3" cy="4" r="1.2" fill="currentColor"/><circle cx="3" cy="8" r="1.2" fill="currentColor"/><circle cx="3" cy="12" r="1.2" fill="currentColor"/><path d="M6 4h8M6 8h8M6 12h8" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-ol" viewBox="0 0 16 16"><path d="M6 4h8M6 8h8M6 12h8" stroke="currentColor" stroke-width="1.5"/><path d="M2 2.5h1.4v3M2 5.5h2.4M1.8 7.6c.4-.6 2.2-.6 2.2.4 0 .8-2.2 1.4-2.2 2.2h2.3" fill="none" stroke="currentColor" stroke-width="1"/></symbol>
+  <symbol id="i-link" viewBox="0 0 16 16"><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.1-2.1a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.4 8.9a2.6 2.6 0 0 0 3.7 3.7l.9-.9" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-text" viewBox="0 0 16 16"><path d="M3 3.5h10M8 3.5v10" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="k-value" viewBox="0 0 16 16"><path d="M6 2.5l-1.5 11M11.5 2.5l-1.5 11M2.5 6h11M2 10.5h11" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="k-change" viewBox="0 0 16 16"><path d="M8 3l4.5 6h-9z" fill="currentColor"/><path d="M4 12.5h8" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="k-spark" viewBox="0 0 16 16"><path d="M1.5 11l3-3 2.5 2 3-5 2 2 2.5-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+  <symbol id="k-icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 8.2l1.8 1.8 3.3-3.6" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="k-bullet" viewBox="0 0 16 16"><rect x="1" y="4" width="14" height="8" fill="currentColor" opacity=".2"/><rect x="1" y="6.5" width="9" height="3" fill="currentColor"/><path d="M12 3v10" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="k-marking" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="5.5" y="5.5" width="5" height="5" rx="1" fill="currentColor"/></symbol>
+  <symbol id="k-fvalue" viewBox="0 0 16 16"><path d="M2 3h12l-4.6 5.4V13l-2.8-1.4V8.4z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="k-asof" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.5 1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="k-fctl" viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 7l1.5 1.5L13 7" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
+  <symbol id="k-button" viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8" rx="2" fill="currentColor" opacity=".25"/><rect x="1.5" y="4" width="13" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="k-param" viewBox="0 0 16 16"><path d="M8 1.8l6.2 6.2L8 14.2 1.8 8z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="1.6" fill="currentColor"/></symbol>
+  <symbol id="k-ai" viewBox="0 0 16 16"><path d="M3 3.5h10M3 7h10M3 10.5h6" stroke="currentColor" stroke-width="1.5"/><path d="M12 9.5v4M10 11.5h4" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-warn" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" style="fill:var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="s-err" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="#fff" stroke-width="1.8"/></symbol>
+  <symbol id="s-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2M8 4.6v.4" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="s-run" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="22 10"/></symbol>
+  <symbol id="s-neutral" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="s-lock" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI design 2026-10-18 · Design 21 · for approval</div>
+    <h1>The Text tile: today's Markdown tile, edited in place, with live elements, filter and parameter controls, action buttons, and a reviewed AI summary</h1>
+    <p>R80's answers, followed exactly: <b>Tiptap 3</b> as the editor; <b>Spotfire parity</b> inside the tile (live values, sparklines, icons and bullet graphs; filter controls; declarative action buttons for page, bookmark, reset filters and export; parameter controls bound to a new dashboard-parameter object; <b>no scripts</b>); <b>field-switch parameters now, what-if later</b>; <b>10 elements per tile and 1,000 values</b> in a list control; and <b>AI narrative now</b>, with facts computed through Cube, every number a live value, review by the author and no silent regeneration. Taken as given: the rich tile replaces today's markdown tile in place, so existing tiles keep working; no raw HTML; inline sparklines are wechart's own SVG. The phase 1 non-goal "Spotfire-style controls inside text tiles" is lifted.</p>
+    <p>This design draws:</p>
+    <ul>
+      <li><b>Editing in place</b> on the canvas in edit mode: the toolbar, markdown shortcuts as typed, and the insert menu opened by <code>/</code>, Insert or <code>{{</code>.</li>
+      <li><b>Live elements:</b> Value, Change, Sparkline, Icon, Bullet graph, Marking, Filter value and As of; each in its edit form, its view form and its states.</li>
+      <li><b>Controls:</b> filter controls sharing the filter bar's state; action buttons; a parameter control switching a chart's field, with the dashboard parameter defined in Dashboard settings › Parameters and bound from a chart's well.</li>
+      <li><b>Limits:</b> 10 elements; a list control's 1,000 values and search.</li>
+      <li><b>View mode:</b> values as text with a tooltip; the empty, loading, error and no-permission states.</li>
+      <li><b>AI narrative:</b> "Summarize…" in the insert menu; a facts-first draft card with Insert, Regenerate and Discard; the "Written with Copilot · reviewed by…" label; "Written for earlier data".</li>
+    </ul>
+    <p><b>Screens</b> are Wren Writer, a read-write member of Sales / EMEA, on "Revenue overview": editing it in My workspace (1, 3, 4) and reading the shared version (2). The AI provider is set up and Wren may use it (design 22).</p>
+    <p><b>What doesn't change:</b> the element palette and its place in Add (renamed from Markdown to Text); edit mode's bar, sidebar, grid and keys (§2); the compact header (design 19); markings and cross-filtering (§7a); the Link/button tile, whose styles the action buttons reuse; Image and Header tiles.</p>
+    <div class="ids">R80 · changes AC-208, AC-302, AC-116, AC-121 · lifts the phase 1 non-goal "Spotfire-style controls inside text tiles" · holds AC-443, AC-176, AC-200, AC-196, AC-304 · rules 1–3, 14, 17, 18, 25, 33, 39, 42, 85 · references-combo-and-rich-tiles.md §6 · references-spotfire-combo-textarea.md B1–B8, E · references-copilot.md §9 · research rich-tiles-and-combo-tech.md §1, §3 · names, values and counts are illustrative</div>
+  </header>
+
+  <!-- ======================= SCREEN 1 ======================= -->
+  <div class="screen-label">Screen 1 · Edit mode: the Text tile edited in place, with eight live elements and the insert menu opened by "/" (1,440 × 900)</div>
+  <div class="screen" id="s1">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="band"><svg class="s"><use href="#i-person"/></svg>My workspace · only you can see this</div>
+    <div class="dhrow" style="border-bottom-color:transparent">
+      <span class="back"><svg class="s"><use href="#i-back"/></svg>My workspace</span><span class="sl">/</span>
+      <h1 class="dtitle"><span class="ed">Editing </span>Revenue overview</h1>
+      <span class="vrule"></span>
+      <div class="itabs"><span class="on">Overview</span><span>By country</span><span>Detail</span><span class="add"><svg class="xs"><use href="#i-plus"/></svg>Page tab</span></div>
+      <span class="spacer"></span>
+      <span class="btn md"><svg class="s"><use href="#i-undo"/></svg>Undo</span>
+      <span class="btn md"><svg class="s"><use href="#i-redo"/></svg>Redo</span>
+      <span class="btn">Discard (3 changes)</span>
+      <span class="btn primary">Save</span>
+      <span class="iconbtn"><svg class="i"><use href="#i-gear"/></svg></span>
+    </div>
+    <div class="sheet">
+      <div class="fbar" style="border-top:1px solid var(--border-subtle)">
+        <span class="fw"><span class="scope">Dashboard</span><span>Ordered at: <b>2026</b></span></span>
+        <span class="fw"><span class="scope">Dashboard</span><span>Country: <b>Germany, France</b></span></span>
+        <span class="fw"><span class="scope">Tab</span><span>Category: <b>Beverages</b></span></span>
+        <span class="spacer"></span><span class="hint">Marking is off while editing</span>
+      </div>
+    </div>
+
+    <div style="position:absolute;left:0;top:181px;width:1140px">
+      <div class="dgrid">
+        <div class="tile editing" style="grid-column:span 7;height:420px">
+          <div class="tbar" role="toolbar" aria-label="Text formatting">
+            <span class="tb sel">Paragraph<svg class="xs"><use href="#i-chevd"/></svg></span>
+            <span class="sep"></span>
+            <span class="tb" title="Bold"><svg class="s"><use href="#i-bold"/></svg></span>
+            <span class="tb" title="Italic"><svg class="s"><use href="#i-italic"/></svg></span>
+            <span class="sep"></span>
+            <span class="tb" title="Bulleted list"><svg class="s"><use href="#i-ul"/></svg></span>
+            <span class="tb" title="Numbered list"><svg class="s"><use href="#i-ol"/></svg></span>
+            <span class="tb" title="Link"><svg class="s"><use href="#i-link"/></svg></span>
+            <span class="sep"></span>
+            <span class="tb on" style="padding:0 8px"><svg class="s"><use href="#i-plus"/></svg>Insert<svg class="xs"><use href="#i-chevd"/></svg></span>
+            <span class="ctr">8 / 10 elements</span>
+          </div>
+          <div class="rt">
+            <h4>EMEA, this quarter</h4>
+            <div class="big"><span class="le">$1.27M</span></div>
+            <p>Revenue is <span class="le up">▲ 4.2%</span> on last quarter <span class="le"><svg class="spark" width="64" height="16" viewBox="0 0 64 16"><polyline fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" points="1,13 7,12 13,10 19,11 25,8 31,9 37,7 43,8 49,5 55,6 63,3"/></svg></span> and <span class="le"><span class="stt ok"><svg class="s"><use href="#s-ok"/></svg>On track</span></span> against plan. Margin sits at <span class="le selx">21.4%</span> <span class="le"><svg width="96" height="16" viewBox="0 0 96 16"><rect x="0" y="2" width="96" height="12" fill="var(--border-strong)"/><rect x="0" y="2" width="77" height="12" fill="var(--border-subtle)"/><rect x="0" y="2" width="58" height="12" fill="var(--bg-subtle)"/><rect x="0" y="6" width="82" height="4" fill="var(--text-primary)"/><rect x="85" y="1" width="2" height="14" fill="var(--text-primary)"/></svg></span> of its 25% target.</p>
+            <p class="sec">Showing <span class="le">Germany, France</span> · <span class="le">as of 14:05</span></p>
+            <p>/<span class="caret"></span><span class="ph"> Type to find an element or a measure</span></p>
+          </div>
+          <div class="menu" style="left:16px;top:330px;width:320px" role="listbox" aria-label="Insert">
+            <div class="mh">Live values</div>
+            <div class="mi hl"><span class="ki"><svg class="s"><use href="#k-value"/></svg></span>Value<span class="r">a measure, formatted</span></div>
+            <div class="mi"><span class="ki"><svg class="s"><use href="#k-change"/></svg></span>Change<span class="r">▲ ▼ against a period</span></div>
+            <div class="mi"><span class="ki"><svg class="s"><use href="#k-spark"/></svg></span>Sparkline<span class="r">a trend, word-sized</span></div>
+            <div class="mi"><span class="ki"><svg class="s"><use href="#k-icon"/></svg></span>Icon<span class="r">a state, by rule</span></div>
+            <div class="mi"><span class="ki"><svg class="s"><use href="#k-bullet"/></svg></span>Bullet graph<span class="r">value against a target</span></div>
+            <div class="mi"><span class="ki"><svg class="s"><use href="#k-marking"/></svg></span>Marking<span class="r">count or summary</span></div>
+            <div class="mi"><span class="ki"><svg class="s"><use href="#k-fvalue"/></svg></span>Filter value<span class="r">what a filter is set to</span></div>
+            <div class="mi"><span class="ki"><svg class="s"><use href="#k-asof"/></svg></span>As of<span class="r">the data's age</span></div>
+            <div class="mh">Controls</div>
+            <div class="mi"><span class="ki"><svg class="s"><use href="#k-fctl"/></svg></span>Filter control<span class="r">one of this dashboard's</span></div>
+            <div class="mi"><span class="ki"><svg class="s"><use href="#k-param"/></svg></span>Parameter control<span class="r">switch a field</span></div>
+            <div class="mi"><span class="ki"><svg class="s"><use href="#k-button"/></svg></span>Action button<span class="r">page, bookmark, reset, export</span></div>
+            <div class="mh">Copilot</div>
+            <div class="mi"><span class="ki"><svg class="s"><use href="#k-ai"/></svg></span>Summarize…<span class="r">a reviewed draft</span></div>
+            <div class="mfoot">↑ ↓ choose · Enter inserts · Esc closes · type a measure's name to insert its value</div>
+          </div>
+        </div>
+        <div class="tile edit" style="grid-column:span 5;height:420px">
+          <div class="tile-head"><h3>Revenue by month, EMEA</h3></div>
+          <svg viewBox="0 0 420 320" width="100%" height="320" aria-hidden="true">
+            <g stroke="var(--grid)"><line x1="40" y1="20" x2="410" y2="20"/><line x1="40" y1="100" x2="410" y2="100"/><line x1="40" y1="180" x2="410" y2="180"/><line x1="40" y1="260" x2="410" y2="260"/></g>
+            <line x1="40" y1="290" x2="410" y2="290" stroke="var(--axis)"/>
+            <polyline fill="none" stroke="var(--s1)" stroke-width="2" points="56,240 88,236 120,220 152,226 184,200 216,190 248,196 280,170 312,160 344,166 376,138 404,120"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <aside class="esb" style="top:181px">
+      <div class="esb-tabs"><span>Add</span><span>Outline</span><span class="on">Properties</span></div>
+      <div class="section">
+        <div class="shead"><svg class="s"><use href="#i-text"/></svg>Text · EMEA summary<span class="r"><svg class="s"><use href="#i-dots"/></svg></span></div>
+        <span class="btn md" style="justify-self:start"><svg class="s"><use href="#i-pencil"/></svg>Edit text on the canvas</span>
+        <span class="xs muted">Or double-click the tile. Esc leaves the text.</span>
+      </div>
+      <div class="section">
+        <div class="shead">Elements<span class="r tnum">8 of 10</span></div>
+        <div class="elrow"><span class="kic"><svg class="s"><use href="#k-value"/></svg></span><span class="nm">Value · Revenue</span><svg class="s muted"><use href="#i-chevr"/></svg></div>
+        <div class="elrow"><span class="kic"><svg class="s"><use href="#k-change"/></svg></span><span class="nm">Change · Revenue <span class="k2">vs previous quarter</span></span><svg class="s muted"><use href="#i-chevr"/></svg></div>
+        <div class="elrow"><span class="kic"><svg class="s"><use href="#k-spark"/></svg></span><span class="nm">Sparkline · Revenue <span class="k2">by month, last 12</span></span><svg class="s muted"><use href="#i-chevr"/></svg></div>
+        <div class="elrow"><span class="kic"><svg class="s"><use href="#k-icon"/></svg></span><span class="nm">Icon · Revenue <span class="k2">vs plan, 3 rules</span></span><svg class="s muted"><use href="#i-chevr"/></svg></div>
+        <div class="elrow on"><span class="kic"><svg class="s"><use href="#k-value"/></svg></span><span class="nm">Value · Margin %</span><svg class="s muted"><use href="#i-chevr"/></svg></div>
+        <div class="elrow"><span class="kic"><svg class="s"><use href="#k-bullet"/></svg></span><span class="nm">Bullet graph · Margin % <span class="k2">vs 25%</span></span><svg class="s muted"><use href="#i-chevr"/></svg></div>
+        <div class="elrow"><span class="kic"><svg class="s"><use href="#k-fvalue"/></svg></span><span class="nm">Filter value · Country</span><svg class="s muted"><use href="#i-chevr"/></svg></div>
+        <div class="elrow"><span class="kic"><svg class="s"><use href="#k-asof"/></svg></span><span class="nm">As of · Revenue</span><svg class="s muted"><use href="#i-chevr"/></svg></div>
+      </div>
+      <div class="section">
+        <div class="shead">Value · Margin %</div>
+        <div class="field"><span class="lbl">Measure</span><div class="select"><span class="ficon measure" style="width:16px;height:16px">Σ</span>Orders › Margin %</div></div>
+        <div class="r2"><div class="field"><span class="lbl">Format</span><div class="select">Model's (%)</div></div><div class="field"><span class="lbl">Limit by marking</span><div class="select">None</div></div></div>
+        <div class="field"><span class="lbl">Own filter <span class="opt">· added to the tile's</span></span><div class="input ph">+ filter</div></div>
+      </div>
+      <div class="section" style="border-bottom:0">
+        <div class="shead">Interactions</div>
+        <span class="xs sec">Markings mode: an element follows a marking only when it names one. Filters that reach this tile reach every element.</span>
+      </div>
+    </aside>
+
+    <span class="pin" style="left:6px;top:200px">1</span>
+    <span class="pin" style="left:156px;top:204px">2</span>
+    <span class="pin" style="left:254px;top:204px">3</span>
+    <span class="pin" style="left:440px;top:204px">4</span>
+    <span class="pin" style="left:640px;top:204px">5</span>
+    <span class="pin" style="left:6px;top:290px">6</span>
+    <span class="pin" style="left:306px;top:325px">7</span>
+    <span class="pin" style="left:560px;top:325px">8</span>
+    <span class="pin" style="left:610px;top:362px">9</span>
+    <span class="pin" style="left:6px;top:400px">10</span>
+    <span class="pin" style="left:6px;top:520px">11</span>
+    <span class="pin" style="left:1146px;top:236px">12</span>
+    <span class="pin" style="left:1146px;top:304px">13</span>
+    <span class="pin" style="left:1146px;top:600px">14</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 1: editing in place, and why</h2>
+    <p>Spotfire's text area could only be authored in the installed client, with free fonts, raw HTML and scripts. wechart's Text tile is authored where it's read, on the canvas, with typed blocks on §3's scale and elements that are references, never HTML. The Markdown tile becomes this tile; nothing a reader sees today changes until an author adds something.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Edited on the canvas</b><span class="t">In edit mode, double-click a Text tile, or "Edit text on the canvas" in Properties, and its text becomes editable in place: a 2 px <code>accent</code> border, the toolbar on top. Esc or a click outside leaves the text; the tile stays selected. The dashboard's Undo takes the whole edit as one change when the text is left.</span><span class="fix">AC-302 (amended) · rule 128 (new) · Hex text cells</span></div></li>
+      <li><span class="n">2</span><div><b>Block style, from §3's scale only</b><span class="t">Paragraph (<code>text-sm</code>), Heading small, medium and large (<code>text-md</code>, <code>text-lg</code>, <code>text-xl</code>), and Large value (<code>text-kpi</code> 32/40, for a lone Value or Change). No free colour, font or size, so the 12 px floor and the contrast audit hold (state A).</span><span class="fix">rules 1, 2 · rule 128 (new) · Spotfire B7.9</span></div></li>
+      <li><span class="n">3</span><div><b>Bold, italic, lists, link</b><span class="t">The markdown subset AC-208 renders today. A link takes a dashboard or an http(s) address, as the Link/button tile does; anything else is refused with its reason. Markdown shortcuts work as typed: <code>#</code>, <code>-</code>, <code>1.</code>, <code>**…**</code>, <code>*…*</code> (state A).</span><span class="fix">AC-208 · rule 42 · Tiptap StarterKit</span></div></li>
+      <li><span class="n">4</span><div><b>Insert</b><span class="t">Opens the same menu as <code>/</code> and <code>{{</code> (pin 6), at the cursor. It's a menu button, so it's reachable from the toolbar by keyboard.</span><span class="fix">rule 129 (new)</span></div></li>
+      <li><span class="n">5</span><div><b>"8 / 10 elements"</b><span class="t">Every element counts: live values, controls and buttons (Q4). At 10, Insert and the menu's rows are disabled with the reason (state E). Elements sharing filters and granularity are batched into one Cube query.</span><span class="fix">R80 "10 elements" · rule 131 (new)</span></div></li>
+      <li><span class="n">6</span><div><b>The insert menu</b><span class="t">Opened by <code>/</code> at a line's start or after a space, by Insert, or by <code>{{</code> (today's token syntax). A combobox and listbox, 320 px wide, 28 px rows (APG): ↑ ↓, Enter, Esc. Kinds first in three groups, Live values, Controls and Copilot; typing narrows them and adds measures from this dashboard's cubes, grouped by cube (state B).</span><span class="fix">rule 129 (new) · W3C APG combobox · Notion, Hex</span></div></li>
+      <li><span class="n">7</span><div><b>A live element, in edit mode</b><span class="t">An atom: the cursor steps over it as one character; Backspace removes it whole. Drawn on <code>bg-subtle</code> with a 1 px <code>border-subtle</code> outline, radius 4, at the text's own size. Selecting one (click, or arrow onto it) opens its settings in Properties (pin 13).</span><span class="fix">rule 130 (new) · research §1 inline atom node</span></div></li>
+      <li><span class="n">8</span><div><b>Change, Icon: state with a shape</b><span class="t">Change shows ▲ or ▼ and its sign, coloured by its direction setting. Icon always pairs an icon with its label ("On track"); an icon with no matching rule shows the neutral ○ and "No rule matched", never nothing (Spotfire's blank icon fixed).</span><span class="fix">rule 3 · rule 133 (new) · Spotfire B3, B7.6</span></div></li>
+      <li><span class="n">9</span><div><b>Sparkline and bullet graph, word-sized</b><span class="t">wechart's own SVG in the line: a 64 × 16 sparkline, a 2 px line in the measure's dashboard colour, no axes or markers; a 96 × 16 bullet graph, its value bar in <code>text-primary</code>, its target a 2 px rule, its ranges in three greys from §5 (<code>bg-subtle</code>, <code>border-subtle</code>, <code>border-strong</code>).</span><span class="fix">R80 "wechart's own SVG" · research §3 option D · rule 133 (new)</span></div></li>
+      <li><span class="n">10</span><div><b>Filter value and As of</b><span class="t">Filter value prints what a dashboard filter is set to ("Germany, France"; "all countries" when unset). As of prints the data's age ("as of 14:05"), and its tooltip says whether a pre-aggregation answered (rule 19).</span><span class="fix">rule 19 · rule 130 (new)</span></div></li>
+      <li><span class="n">11</span><div><b>The insert menu's three groups</b><span class="t">Live values (8 kinds), Controls (filter control, parameter control, action button) and Copilot (Summarize…). Copilot is listed only when a Super-Admin has turned AI on and this author may use it (state J).</span><span class="fix">R80 · rule 138 (new)</span></div></li>
+      <li><span class="n">12</span><div><b>The keyboard route in</b><span class="t">A focused Text tile's Enter focuses its Properties, as for every tile (§7); "Edit text on the canvas" is Properties' first control and moves focus into the text. No new key (Q11).</span><span class="fix">§7 Keyboard · AC-176 · rule 146 (new)</span></div></li>
+      <li><span class="n">13</span><div><b>Elements, listed</b><span class="t">Every element in text order with its kind and its source, "8 of 10". Choosing a row selects that element in the text and opens its settings below, here Value · Margin %: the measure, format (the model's, AC-046), Limit by marking, and its own filter, added to the tile's.</span><span class="fix">state C · AC-116 (extended)</span></div></li>
+      <li><span class="n">14</span><div><b>Interactions</b><span class="t">Markings mode: an element follows a marking only when it names one (AC-116). Cross-filter mode: the tile is a target like any tile, Filter or None; Highlight is shown disabled, "Text has no marks to highlight" (state H).</span><span class="fix">AC-116 · rule 32 · rule 130 (new)</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= SCREEN 2 ======================= -->
+  <div class="screen-label">Screen 2 · View mode: values read as text, a tooltip, and a Controls tile with a parameter control, two filter controls and four action buttons</div>
+  <div class="screen" id="s2">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="dhrow">
+      <span class="back"><svg class="s"><use href="#i-back"/></svg>EMEA</span><span class="sl">/</span>
+      <h1 class="dtitle">Revenue overview</h1>
+      <span class="vrule"></span>
+      <div class="itabs"><span class="on">Overview</span><span>By country</span><span>Detail</span></div>
+      <span class="spacer"></span>
+      <span class="btn md">History</span><span class="btn md">Bookmarks</span>
+      <span class="btn primary"><svg class="s"><use href="#i-pencil"/></svg>Edit in my workspace</span>
+      <span class="iconbtn"><svg class="i"><use href="#i-dots"/></svg></span>
+      <span class="vrule"></span>
+      <span class="btn togb"><svg class="s"><use href="#i-filter"/></svg>Filters<span class="count">3</span><svg class="s"><use href="#i-chevd"/></svg></span>
+    </div>
+    <div class="dgrid">
+      <div class="tile" style="grid-column:span 5;height:316px;padding:0">
+        <div class="rt">
+          <h4>EMEA, this quarter</h4>
+          <div class="big"><span class="lv">$1.27M</span></div>
+          <p>Revenue is <span class="lv up hov">▲ 4.2%</span> on last quarter <svg class="spark" width="64" height="16" viewBox="0 0 64 16" role="img" aria-label="Revenue by month, last 12: from $0.86M in Nov 2025 to $1.27M in Oct 2026; low $0.81M in Jan, high $1.27M in Oct"><polyline fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" points="1,13 7,12 13,10 19,11 25,8 31,9 37,7 43,8 49,5 55,6 63,3"/></svg> and <span class="stt ok"><svg class="s"><use href="#s-ok"/></svg>On track</span> against plan. Margin sits at <span class="lv">21.4%</span> <svg width="96" height="16" viewBox="0 0 96 16" role="img" aria-label="Margin % 21.4% against a 25% target; ranges 0 to 15%, 15 to 20%, 20 to 25%" style="vertical-align:-3px"><rect x="0" y="2" width="96" height="12" fill="var(--border-strong)"/><rect x="0" y="2" width="77" height="12" fill="var(--border-subtle)"/><rect x="0" y="2" width="58" height="12" fill="var(--bg-subtle)"/><rect x="0" y="6" width="82" height="4" fill="var(--text-primary)"/><rect x="85" y="1" width="2" height="14" fill="var(--text-primary)"/></svg> of its 25% target.</p>
+          <p class="sec">Showing <span class="lv">Germany, France</span> · <span class="lv">as of 14:05</span></p>
+        </div>
+        <div class="tip" style="left:94px;top:178px;width:300px"><b>Change · Revenue</b><br>This quarter against the previous: <span class="tnum">$1.27M</span> against <span class="tnum">$1.22M</span><br><span class="tl">Filters:</span> Ordered at 2026 · Country Germany, France · Category Beverages<br><span class="tl">Marking:</span> none<br><span class="tl">Data:</span> as of 14:05 · pre-aggregation</div>
+      </div>
+      <div class="tile" style="grid-column:span 7;height:316px">
+        <div class="tile-head"><h3>Revenue by month, EMEA</h3><span class="xs muted">· set by <b class="sec">Metric to show</b></span><span class="spacer"></span><span class="fresh"><svg class="xs"><use href="#s-ok"/></svg>Pre-agg · 4m</span></div>
+        <svg viewBox="0 0 760 250" width="100%" height="250" aria-hidden="true">
+          <g stroke="var(--grid)"><line x1="50" y1="20" x2="740" y2="20"/><line x1="50" y1="80" x2="740" y2="80"/><line x1="50" y1="140" x2="740" y2="140"/><line x1="50" y1="200" x2="740" y2="200"/></g>
+          <line x1="50" y1="220" x2="740" y2="220" stroke="var(--axis)"/>
+          <g font-size="12" fill="var(--text-secondary)" text-anchor="end"><text x="42" y="24">$150K</text><text x="42" y="84">$100K</text><text x="42" y="144">$50K</text><text x="42" y="224">$0</text></g>
+          <polyline fill="none" stroke="var(--s1)" stroke-width="2" points="70,160 126,156 182,140 238,146 294,120 350,110 406,116 462,92 518,82 574,88 630,62 686,48"/>
+          <g font-size="12" fill="var(--text-secondary)" text-anchor="middle"><text x="70" y="240">Jan</text><text x="238" y="240">Apr</text><text x="406" y="240">Jul</text><text x="574" y="240">Oct</text></g>
+        </svg>
+      </div>
+      <div class="tile" style="grid-column:span 12;padding:0">
+        <div class="rt" style="gap:10px">
+          <h5>Explore EMEA</h5>
+          <div class="ctlrow">
+            <span class="ctl-l">Show</span>
+            <span class="seg lg" role="radiogroup" aria-label="Metric to show"><span class="on">Revenue</span><span>Orders</span><span>Margin %</span></span>
+            <span style="width:16px"></span>
+            <span class="fw c"><span class="scope">Dashboard</span><span>Country: <b>Germany, France</b></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+            <span class="fw c open"><span class="scope">Tab</span><span>Category: <b>Beverages</b></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+          </div>
+          <p class="sec" style="font-size:14px">Pick a metric for the chart above, narrow the countries, then open the detail.</p>
+          <div class="ctlrow">
+            <span class="btn primary">Go to Detail<svg class="s"><use href="#i-chevr"/></svg></span>
+            <span class="btn">Apply "Q3 review"</span>
+            <span class="btn">Reset filters</span>
+            <span class="btn">Export data…</span>
+          </div>
+        </div>
+      </div>
+      <div class="tile" style="grid-column:span 6;height:180px"><div class="tile-head"><h3>Top products</h3></div></div>
+      <div class="tile" style="grid-column:span 6;height:180px"><div class="tile-head"><h3>Latest orders</h3></div></div>
+    </div>
+    <span class="pin" style="left:4px;top:112px">1</span>
+    <span class="pin" style="left:84px;top:226px">2</span>
+    <span class="pin" style="left:260px;top:226px">3</span>
+    <span class="pin" style="left:150px;top:166px">4</span>
+    <span class="pin" style="left:20px;top:340px">5</span>
+    <span class="pin" style="left:4px;top:476px">6</span>
+    <span class="pin" style="left:870px;top:110px">7</span>
+    <span class="pin" style="left:610px;top:476px">8</span>
+    <span class="pin" style="left:1410px;top:84px">9</span>
+    <span class="pin" style="left:4px;top:560px">10</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 2: what a reader sees and does</h2>
+    <p>A reader reads sentences, not chips. Every number is current for the filters and marking that reach the tile, and says where it came from when asked. The Controls tile is Spotfire's text area with property controls, filters and action buttons, built from declarations, not scripts.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Values read as text</b><span class="t">In the sentence's own type and weight, tabular, in the member's model format (AC-046), with no chip. The Large value line is <code>text-kpi</code>. A value is focusable; on hover or focus it takes a dotted underline in <code>text-muted</code> and shows its tooltip (Q2).</span><span class="fix">rule 132 (new)</span></div></li>
+      <li><span class="n">2</span><div><b>The tooltip: what this number is</b><span class="t">The element's kind and measure, what it compares, the filters in effect (the tile's and its own), the marking it follows, and the data's age with whether a pre-aggregation answered. The same text is the value's accessible description.</span><span class="fix">rule 132 (new) · rule 19 · Power BI dynamic values</span></div></li>
+      <li><span class="n">3</span><div><b>Sparkline and bullet graph, described</b><span class="t">Each is an image with a text alternative: the sparkline names the measure, the period, first and last values, low and high; the bullet graph names the value, the target and the ranges.</span><span class="fix">rule 133 (new)</span></div></li>
+      <li><span class="n">4</span><div><b>Change and Icon keep their shape</b><span class="t">"▲ 4.2%" in <code>status-success</code> because Revenue's direction is "Higher is better"; "On track" with its icon. The same states read without colour: the triangle, the sign and the word.</span><span class="fix">rule 3 · rule 133 (new)</span></div></li>
+      <li><span class="n">5</span><div><b>A parameter control</b><span class="t">"Show" switches the dashboard parameter <b>Metric to show</b> among Revenue, Orders and Margin % (screen 3). A segmented control with up to 5 choices, a list beyond. Its change applies at once, is said once politely ("Metric to show: Orders"), and goes into bookmarks and "Copy link" (AC-121 amended).</span><span class="fix">R80 "field switch now" · rule 137 (new) · Spotfire B4</span></div></li>
+      <li><span class="n">6</span><div><b>Filter controls are the filter bar's filters</b><span class="t">Not copies: the same filter, scope tag, value and popover as the bar (AC-077). Changing Country here changes the bar's pill and the header's count, and the reverse. A filter can sit in several Text tiles; there is still one filter.</span><span class="fix">rule 135 (new) · rule 14 · Spotfire B6</span></div></li>
+      <li><span class="n">7</span><div><b>A chart that follows a parameter says so</b><span class="t">"· set by Metric to show" beside its title, in view mode, so a reader knows what changed the chart. Its title, axis and format follow the chosen measure; its chart type stays as its author pinned it.</span><span class="fix">rule 137 (new) · principle 2</span></div></li>
+      <li><span class="n">8</span><div><b>Action buttons</b><span class="t">The Link/button tile's styles (Button, Primary, Text link), each running an ordered list of declared actions: go to a page tab, apply a bookmark, reset filters, export (state E). No script runs; nothing happens that a bookmark or a link couldn't record.</span><span class="fix">R80 · rule 136 (new) · Spotfire B5</span></div></li>
+      <li><span class="n">9</span><div><b>The compact header agrees</b><span class="t">"Filters 3": the same three filters the Controls tile shows two of. A change made in the tile highlights the count for 2 s, as any filter change while collapsed (design 19 B).</span><span class="fix">AC-493 · rule 113</span></div></li>
+      <li><span class="n">10</span><div><b>Prose beside controls</b><span class="t">A Text tile can hold only controls, only prose, or both. Its headings stay in the tile's outline (h3…h6), so a screen reader's heading list includes them.</span><span class="fix">AC-208 · rule 127 (new)</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= SCREEN 3 ======================= -->
+  <div class="screen-label">Screen 3 · Dashboard settings › Parameters: where a dashboard parameter is defined, and what uses it</div>
+  <div class="screen" id="s3">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="band"><svg class="s"><use href="#i-person"/></svg>My workspace · only you can see this</div>
+    <div class="sethead"><span class="btn sm">← Back to Revenue overview</span><h1>Dashboard settings</h1><span class="spacer"></span><span class="btn">Cancel</span><span class="btn primary">Save settings</span></div>
+    <div style="display:grid;grid-template-columns:220px 1fr;height:772px">
+      <nav class="snav">
+        <div class="it">General</div>
+        <div class="it">Interactions</div>
+        <div class="it">Markings<span class="tag"><svg class="xs"><use href="#s-ok"/></svg>Active</span></div>
+        <div class="it">Cross-filtering<span class="tag"><svg class="xs"><use href="#s-neutral"/></svg>Inactive</span></div>
+        <div class="it on">Parameters<span class="tag tnum">2</span></div>
+        <div class="it">Layout</div>
+      </nav>
+      <main style="padding:24px 32px;display:grid;gap:16px;align-content:start;max-width:1000px">
+        <div style="display:flex;align-items:flex-end;gap:12px">
+          <div><h2 style="margin:0;font-size:18px;line-height:24px">Parameters</h2>
+          <p class="sec" style="margin:4px 0 0;max-width:720px">A parameter is a value readers change from a control in a Text tile. Charts and text that use it follow it. A <b>field switch</b> chooses which measure or dimension they use.</p></div>
+          <span class="spacer"></span><span class="btn"><svg class="s"><use href="#i-plus"/></svg>New parameter</span>
+        </div>
+        <table class="ptable">
+          <thead><tr><th>Name</th><th>Kind</th><th>Switches a</th><th>Choices</th><th>Default</th><th>Used by</th><th></th></tr></thead>
+          <tbody>
+            <tr class="on"><td><b>Metric to show</b></td><td>Field switch</td><td>Measure</td><td class="tnum">3</td><td>Revenue</td><td>3 · 1 chart, 2 Text tiles</td><td><svg class="s muted"><use href="#i-dots"/></svg></td></tr>
+            <tr><td><b>Break down by</b></td><td>Field switch</td><td>Dimension</td><td class="tnum">2</td><td>Country</td><td>1 · 1 chart</td><td><svg class="s muted"><use href="#i-dots"/></svg></td></tr>
+          </tbody>
+        </table>
+        <div style="border:1px solid var(--border-subtle);border-radius:6px;background:var(--bg-surface);padding:16px;display:grid;gap:12px">
+          <div style="display:grid;grid-template-columns:320px 220px 1fr;gap:16px;align-items:end">
+            <div class="field"><span class="lbl">Name</span><div class="input" style="height:32px;font-size:14px">Metric to show</div></div>
+            <div class="field"><span class="lbl">Switches a</span><span class="seg"><span class="on">Measure</span><span>Dimension</span></span></div>
+            <div class="xs muted">Kind: field switch. Value parameters for what-if come later (R80).</div>
+          </div>
+          <div class="field"><span class="lbl">Choices <span class="opt">· in the order the control shows them · up to 1,000</span></span>
+            <div>
+              <div class="chrow"><span class="grip">⋮⋮</span><span class="pill measure">Σ Revenue <span class="agg">orders</span></span><div class="input">Revenue</div><svg class="s muted"><use href="#i-x"/></svg></div>
+              <div class="chrow"><span class="grip">⋮⋮</span><span class="pill measure">Σ Count <span class="agg">orders</span></span><div class="input">Orders</div><svg class="s muted"><use href="#i-x"/></svg></div>
+              <div class="chrow"><span class="grip">⋮⋮</span><span class="pill measure">Σ Margin % <span class="agg">orders</span></span><div class="input">Margin %</div><svg class="s muted"><use href="#i-x"/></svg></div>
+              <span class="addbtn" style="margin-top:6px">+ measure</span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start">
+            <div class="field"><span class="lbl">Default</span><div class="select" style="height:32px;font-size:14px">Revenue</div><span class="xs muted">What every reader starts with, and what Reset filters doesn't change.</span></div>
+            <div class="field"><span class="lbl">Used by</span>
+              <div class="xs" style="display:grid;gap:6px">
+                <span><span style="color:var(--accent);font-weight:600">Revenue by month, EMEA</span> <span class="muted">· chart · its Metrics well</span></span>
+                <span><span style="color:var(--accent);font-weight:600">Explore EMEA</span> <span class="muted">· Text · a parameter control</span></span>
+                <span><span style="color:var(--accent);font-weight:600">EMEA summary</span> <span class="muted">· Text · the Value "Metric to show"</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="okline"><svg class="s"><use href="#s-ok"/></svg><span>Every choice works in every chart that uses this parameter: all three come from <code>orders</code>, which each chart queries.</span></div>
+          <div style="display:flex;gap:8px"><span class="btn sm ghost" style="color:var(--err)">Delete parameter…</span></div>
+        </div>
+      </main>
+    </div>
+    <span class="pin" style="left:196px;top:270px">1</span>
+    <span class="pin" style="left:1170px;top:212px">2</span>
+    <span class="pin" style="left:240px;top:300px">3</span>
+    <span class="pin" style="left:576px;top:395px">4</span>
+    <span class="pin" style="left:240px;top:470px">5</span>
+    <span class="pin" style="left:240px;top:620px">6</span>
+    <span class="pin" style="left:592px;top:620px">7</span>
+    <span class="pin" style="left:240px;top:712px">8</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 3: defining a dashboard parameter</h2>
+    <p>Spotfire's document property, as a column name on an axis, is the classic "pick the measure from a drop-down". wechart's version is a typed object on the dashboard, not a string substituted into an expression, so a bookmark, a link and a chart can each name it.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Parameters, a settings section</b><span class="t">After Cross-filtering, before Layout, with the count. Settings is where a dashboard's other shared definitions (markings, cross-filtering) already live (§2 Dashboard settings page). Saving in edit mode is one undoable change (rule 56's pattern).</span><span class="fix">§2 · rule 137 (new) · Q6</span></div></li>
+      <li><span class="n">2</span><div><b>New parameter</b><span class="t">Also offered from the insert menu's "Parameter control" (state F) and from a chart well's picker, both of which open this form in a 520 px dialog and return to where they came from.</span><span class="fix">rule 137 (new)</span></div></li>
+      <li><span class="n">3</span><div><b>The list</b><span class="t">34 px rows (§4): name, kind, what it switches, the number of choices, the default, and what uses it. Field switch is the only kind now; R80 puts value parameters (what-if) later.</span><span class="fix">R80</span></div></li>
+      <li><span class="n">4</span><div><b>Measure or Dimension</b><span class="t">A parameter switches one role. A measure switch fits a Metrics well; a dimension switch fits a Dimensions, Time or Split by well. Changing it with choices set asks first, since the choices must go.</span><span class="fix">Power BI field parameters · Spotfire B4</span></div></li>
+      <li><span class="n">5</span><div><b>Choices, ordered, with labels</b><span class="t">Members from the dashboard's cubes, picked with the field picker (never typed), each with the label its control shows. Drag or the ⋮⋮ menu (Move up, Move down) orders them. Up to 1,000, Spotfire's and Power BI's cap; R80's 1,000 values.</span><span class="fix">R80 "1,000 values" · rule 11</span></div></li>
+      <li><span class="n">6</span><div><b>Default</b><span class="t">Every reader starts there. Reset filters leaves parameters alone; a bookmark carries a parameter's value, and applying it sets it (AC-121 amended). Q7 asks whether Reset filters should reset parameters too.</span><span class="fix">AC-121 (amended) · Q7</span></div></li>
+      <li><span class="n">7</span><div><b>Used by, as links</b><span class="t">Each use names its tile and where in it, and opens it selected in edit mode. Deleting a parameter in use lists these and asks; each use then falls back to the parameter's current value as a fixed field, and says so in its tile.</span><span class="fix">rule 38 · rule 137 (new)</span></div></li>
+      <li><span class="n">8</span><div><b>Checked against the charts</b><span class="t">A choice that some bound chart can't query (its cube isn't joined) fails here, naming the chart and the choice; Save settings is held until it's fixed. A shared chart from folders can't bind a dashboard parameter (Q5).</span><span class="fix">rule 137 (new) · Q5</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= SCREEN 4 ======================= -->
+  <div class="screen-label">Screen 4 · Summarize: the facts wechart computed, the draft card with Insert, Regenerate and Discard, and an older summary written for earlier data</div>
+  <div class="screen" id="s4">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="band"><svg class="s"><use href="#i-person"/></svg>My workspace · only you can see this</div>
+    <div class="dhrow" style="border-bottom-color:var(--border-subtle)">
+      <span class="back"><svg class="s"><use href="#i-back"/></svg>My workspace</span><span class="sl">/</span>
+      <h1 class="dtitle"><span class="ed">Editing </span>Revenue overview</h1>
+      <span class="spacer"></span>
+      <span class="btn md"><svg class="s"><use href="#i-undo"/></svg>Undo</span><span class="btn md"><svg class="s"><use href="#i-redo"/></svg>Redo</span><span class="btn">Discard (4 changes)</span><span class="btn primary">Save</span>
+    </div>
+    <div style="position:absolute;left:0;top:128px;width:1140px">
+      <div class="dgrid">
+        <div class="tile editing" style="grid-column:span 7;height:470px">
+          <div class="tbar"><span class="tb sel">Paragraph<svg class="xs"><use href="#i-chevd"/></svg></span><span class="sep"></span><span class="tb"><svg class="s"><use href="#i-bold"/></svg></span><span class="tb"><svg class="s"><use href="#i-italic"/></svg></span><span class="sep"></span><span class="tb"><svg class="s"><use href="#i-ul"/></svg></span><span class="tb"><svg class="s"><use href="#i-ol"/></svg></span><span class="tb"><svg class="s"><use href="#i-link"/></svg></span><span class="sep"></span><span class="tb" style="padding:0 8px"><svg class="s"><use href="#i-plus"/></svg>Insert<svg class="xs"><use href="#i-chevd"/></svg></span><span class="ctr">0 / 10 elements · 5 in the draft</span></div>
+          <div class="rt">
+            <h4>What happened this quarter</h4>
+            <div class="draft" role="group" aria-labelledby="dh">
+              <div class="draft-h" id="dh"><svg class="s"><use href="#k-ai"/></svg>Draft from Copilot · not in the tile yet<span class="r">Draft 1</span></div>
+              <p style="font-size:14px;line-height:24px;margin:0">EMEA revenue grew <span class="le up">▲ 4.2%</span> to <span class="le">$1.27M</span> this quarter. Germany led, at <span class="le">$512K</span>, while France slipped <span class="le down">▼ 2.1%</span>. Margin held at <span class="le">21.4%</span>, short of its 25% target.</p>
+              <div class="facts">
+                <div class="xs strong sec">Facts wechart computed through Cube · 4</div>
+                <div class="fact"><svg class="s"><use href="#s-ok"/></svg><span>Revenue, this quarter against the previous: $1.27M against $1.22M, +4.2%</span></div>
+                <div class="fact"><svg class="s"><use href="#s-ok"/></svg><span>Top contributor by Revenue: Germany, $512K (40%)</span></div>
+                <div class="fact"><svg class="s"><use href="#s-ok"/></svg><span>Largest fall by Revenue: France, −2.1%</span></div>
+                <div class="fact"><svg class="s"><use href="#s-ok"/></svg><span>Margin %: 21.4%; the tile's bullet graph target is 25%</span></div>
+              </div>
+              <div class="xs sec">Every number is a live element and will follow the filters. The 25% is the target you set, kept as text. Read it before you insert it.</div>
+              <div style="display:flex;gap:8px;align-items:center"><span class="btn primary">Insert</span><span class="btn">Regenerate</span><span class="btn ghost">Discard</span><span class="spacer"></span><span class="xs muted">Azure OpenAI · wechart-narrative · set by your Super-Admin</span></div>
+            </div>
+            <p><span class="caret"></span></p>
+          </div>
+        </div>
+        <div class="tile edit" style="grid-column:span 5;height:470px;padding:0">
+          <div class="rt">
+            <h5>Last quarter, in brief</h5>
+            <p>Revenue rose <span class="le up">▲ 6.8%</span> to <span class="le">$1.22M</span>. Germany led at <span class="le">$498K</span>; APAC was the fastest-growing region, up <span class="le up">▲ 11.0%</span>.</p>
+            <div><span class="ailabel"><svg class="s"><use href="#k-ai"/></svg>Written with Copilot · reviewed by Wren Writer, 12 Jul 2026</span></div>
+            <div class="warnline"><svg class="s"><use href="#s-warn"/></svg><span><b>Written for earlier data.</b> "APAC was the fastest-growing region" no longer holds: EMEA is now, at +4.2%. The numbers are current; the wording isn't.<span style="display:flex;gap:6px;margin-top:8px"><span class="btn sm">Review</span><span class="btn sm ghost">Keep as written</span></span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="esb" style="top:128px">
+      <div class="esb-tabs"><span>Add</span><span>Outline</span><span class="on">Properties</span></div>
+      <div class="section">
+        <div class="shead"><svg class="s"><use href="#k-ai"/></svg>Summarize</div>
+        <span class="xs sec">Copilot writes from facts wechart computes through Cube, with the filters on this page. It sees those facts, the tiles' titles and the members' names; never rows.</span>
+      </div>
+      <div class="section">
+        <div class="shead">Cover</div>
+        <div class="cbrow"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span>Revenue by month, EMEA</div>
+        <div class="cbrow"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span>Top products</div>
+        <div class="cbrow"><span class="check"></span>Latest orders <span class="muted">· a table; no facts to compute</span></div>
+        <div class="cbrow"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span>Margin % <span class="muted">· from this tile</span></div>
+      </div>
+      <div class="section">
+        <div class="shead">Facts to compute</div>
+        <div class="cbrow"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span>Change against the previous period</div>
+        <div class="cbrow"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span>Top and bottom contributors</div>
+        <div class="field"><span class="lbl">Length</span><span class="seg"><span>1 sentence</span><span class="on">A short paragraph</span></span></div>
+      </div>
+      <div class="section">
+        <div class="step"><svg class="s"><use href="#s-ok"/></svg>Computed 4 facts · 2 Cube queries</div>
+        <div class="step"><svg class="s"><use href="#s-ok"/></svg>Wrote a draft · every number live</div>
+        <span class="btn md" style="justify-self:start">Draft again with these settings</span>
+      </div>
+      <div class="section" style="border-bottom:0"><span class="xs muted tnum">You've drafted 3 of 20 today.</span></div>
+    </aside>
+    <span class="pin" style="left:1146px;top:205px">1</span>
+    <span class="pin" style="left:1146px;top:290px">2</span>
+    <span class="pin" style="left:1146px;top:390px">3</span>
+    <span class="pin" style="left:6px;top:240px">4</span>
+    <span class="pin" style="left:640px;top:296px">5</span>
+    <span class="pin" style="left:6px;top:340px">6</span>
+    <span class="pin" style="left:6px;top:476px">7</span>
+    <span class="pin" style="left:6px;top:530px">8</span>
+    <span class="pin" style="left:736px;top:322px">9</span>
+    <span class="pin" style="left:736px;top:388px">10</span>
+    <span class="pin" style="left:1146px;top:540px">11</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 4: an AI summary, facts first, reviewed before it lands</h2>
+    <p>R80: "facts computed through Cube, every number a live value, review by the author, and no silent regeneration". Copilot writes only the words; wechart computes every fact first, as Tableau Pulse computes its "ground truths" before AI writes them up. Nothing reaches the tile until the author reads it and presses Insert.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Summarize, in Properties</b><span class="t">Choosing "Summarize…" from the insert menu opens its settings in the edit sidebar, beside the text, keyboard-reachable and roomy. It says what Copilot is sent: these facts, tiles' titles and members' names; never rows or credentials (design 22).</span><span class="fix">rule 138 (new) · rule 145 (new)</span></div></li>
+      <li><span class="n">2</span><div><b>What it covers</b><span class="t">The chart tiles on this page and this tile's measures, checked by default; a table, image or text tile can't yield facts and says so. Facts use the filters on the page as they stand, so the summary is of what the author sees.</span><span class="fix">rule 138 (new)</span></div></li>
+      <li><span class="n">3</span><div><b>Which facts</b><span class="t">Change against the previous period, and top and bottom contributors (Q12). Each runs as an ordinary Cube query, as the user, under their access; a fact the user may not query is never computed.</span><span class="fix">Tableau Pulse · principle 6 · Q12</span></div></li>
+      <li><span class="n">4</span><div><b>The draft card</b><span class="t">At the cursor, inside the tile, but not part of the text: <code>bg-surface</code>, a 1 px <code>border-subtle</code>, radius 6, 12 px padding, with a 3 px <code>border-strong</code> rule on its left. Headed "Draft from Copilot · not in the tile yet". It's a group with that heading; nothing in it is saved.</span><span class="fix">rule 139 (new) · references-copilot change card</span></div></li>
+      <li><span class="n">5</span><div><b>Every number, a live element</b><span class="t">The draft's figures are elements, drawn as in edit mode, so they'll follow filters after Insert. A draft holding a digit outside an element is rejected before the author sees it, and drafted once more; a second failure says so (state J). The target "25%" is the bullet graph's setting, not a measure, and the card says so.</span><span class="fix">R80 · rule 138 (new)</span></div></li>
+      <li><span class="n">6</span><div><b>The facts it used, shown</b><span class="t">Each with its values, so the author checks the words against them. The heading names how many and that wechart computed them through Cube.</span><span class="fix">rule 138 (new) · Power BI "make sure it's accurate"</span></div></li>
+      <li><span class="n">7</span><div><b>Insert, Regenerate, Discard</b><span class="t">Insert puts the paragraph at the cursor as ordinary editable text, its elements counted toward 10 ("5 in the draft"); Regenerate replaces this draft with a new one (Draft 2); Discard removes the card. The dashboard's Undo reverses an Insert.</span><span class="fix">rule 139 (new) · principle 8</span></div></li>
+      <li><span class="n">8</span><div><b>Who wrote it, who set it up</b><span class="t">The provider and model in <code>text-muted</code>, "set by your Super-Admin", as the copilot study's empty state says it.</span><span class="fix">references-copilot §10</span></div></li>
+      <li><span class="n">9</span><div><b>The label, once inserted</b><span class="t">"Written with Copilot · reviewed by ‹name›, ‹date›": a 24 px chip, radius 999, an icon and <code>text-xs</code> in <code>text-secondary</code>, under the paragraph Copilot wrote, in view and edit mode. No sparkle, no AI colour. Editing the paragraph keeps it; deleting the paragraph removes it (Q9).</span><span class="fix">rule 140 (new) · "Made with Copilot"</span></div></li>
+      <li><span class="n">10</span><div><b>"Written for earlier data"</b><span class="t">The wording is never regenerated by a refresh, a filter or a viewer. The numbers stay live. When a fact the wording cites changes sign or rank, authors see this <code>status-warning</code> row with what changed, and Review (opens Summarize with the old wording beside a new draft) or Keep as written. Viewers see "Wording as of 12 Jul 2026" in the label (state J).</span><span class="fix">R80 "no silent regeneration" · rule 141 (new)</span></div></li>
+      <li><span class="n">11</span><div><b>The author's allowance</b><span class="t">"You've drafted 3 of 20 today", from the Super-Admin's limit (design 22). At the limit, Summarize shows the Super-Admin's message instead of its button.</span><span class="fix">rule 144 (new)</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= STATES ======================= -->
+  <section class="states">
+    <h2>States A–L</h2>
+    <p>Unless a frame says otherwise, it is screen 1's tile and author, or screen 2's reader.</p>
+    <div class="stategrid">
+
+      <!-- A -->
+      <div class="state">
+        <h3>A · The toolbar, block styles and markdown shortcuts (AC-208; rule 128)</h3>
+        <p>Block style is a menu button; each style is shown in its own type. Markdown shortcuts are typing patterns, converted as typed and undone by the next Undo; none is a new key.</p>
+        <div class="frame" style="height:290px;padding:12px">
+          <div class="tbar" style="border:1px solid var(--border-subtle);border-radius:6px"><span class="tb sel" style="border-color:var(--accent)">Heading medium<svg class="xs"><use href="#i-chevd"/></svg></span><span class="sep"></span><span class="tb on"><svg class="s"><use href="#i-bold"/></svg></span><span class="tb"><svg class="s"><use href="#i-italic"/></svg></span></div>
+          <div class="menu" style="left:12px;top:56px;width:260px">
+            <div class="mi"><span style="font-size:14px">Paragraph</span><span class="r">text-sm</span></div>
+            <div class="mi"><span style="font-size:16px;font-weight:600">Heading small</span><span class="r">text-md</span></div>
+            <div class="mi hl" style="height:34px"><span style="font-size:20px;font-weight:600">Heading medium</span><span class="r">text-lg</span></div>
+            <div class="mi" style="height:38px"><span style="font-size:24px;font-weight:600">Heading large</span><span class="r">text-xl</span></div>
+            <div class="mi" style="height:46px"><span style="font-size:32px;font-weight:600" class="tnum">Large value</span><span class="r">text-kpi</span></div>
+          </div>
+          <table class="ptable" style="position:absolute;right:12px;top:56px;width:340px">
+            <thead><tr><th>Type</th><th>Becomes</th></tr></thead>
+            <tbody>
+              <tr><td class="mono"># , ## , ###</td><td>Heading large, medium, small</td></tr>
+              <tr><td class="mono">- or * then space</td><td>Bulleted list</td></tr>
+              <tr><td class="mono">1. then space</td><td>Numbered list</td></tr>
+              <tr><td class="mono">**text**  *text*</td><td>Bold, italic</td></tr>
+              <tr><td class="mono">[text](url)</td><td>Link, checked as rule 42</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- B -->
+      <div class="state">
+        <h3>B · The insert menu: three ways in, a search, and measures by cube (rule 129)</h3>
+        <p>Opened by <code>{{</code> here, "marg" typed. Kinds that match come first; then measures from this dashboard's cubes, grouped as the field picker groups them. Enter on a measure inserts a Value of it. Esc closes the menu and leaves what was typed as text.</p>
+        <div class="frame" style="height:290px;padding:12px">
+          <p style="margin:0;font-size:14px">Margin sits at {{marg<span class="caret"></span></p>
+          <div class="menu" style="left:12px;top:40px;width:320px" role="listbox">
+            <div class="mh">Live values</div>
+            <div class="mi"><span class="ki"><svg class="s"><use href="#k-marking"/></svg></span>Marking<span class="r">count or summary</span></div>
+            <div class="mh">Orders</div>
+            <div class="mi hl"><span class="ficon measure">Σ</span>Margin %<span class="r">Value · %</span></div>
+            <div class="mi"><span class="ficon measure">Σ</span>Margin, gross<span class="r">Value · $</span></div>
+            <div class="mh">Products <span style="font-weight:400">· via join</span></div>
+            <div class="mi"><span class="ficon measure">Σ</span>Margin target<span class="r">Value · %</span></div>
+            <div class="mfoot">Enter inserts a Value · → for Change, Sparkline… of it</div>
+          </div>
+        </div>
+        <p class="said">→ on a measure lists the kinds that take one (Value, Change, Sparkline, Icon, Bullet graph, As of). These are the APG combobox's standard keys; nothing new.</p>
+      </div>
+
+      <!-- C -->
+      <div class="state wide">
+        <h3>C · Element settings in Properties (rules 130, 133)</h3>
+        <p>Each kind's settings, opened by selecting the element. Every element takes the tile's filters and, optionally, its own filter and a marking; those appear in its tooltip.</p>
+        <div class="row3">
+          <div><p class="cap">C1 · Change</p><div class="frame"><div class="section" style="border:0">
+            <div class="field"><span class="lbl">Measure</span><div class="select">Orders › Revenue</div></div>
+            <div class="field"><span class="lbl">Compare with</span><div class="select">The previous period</div></div>
+            <div class="r2"><div class="field"><span class="lbl">Period</span><div class="select">Quarter</div></div><div class="field"><span class="lbl">Show as</span><span class="seg"><span class="on">%</span><span>Amount</span></span></div></div>
+            <div class="field"><span class="lbl">Direction</span><span class="seg"><span class="on">Higher is better</span><span>Lower</span><span>Neutral</span></span></div>
+            <div class="xs sec">▲ 4.2% in <span class="up">status-success</span> · ▼ in <span class="down">status-error</span> · Neutral in text-secondary</div>
+          </div></div></div>
+          <div><p class="cap">C2 · Sparkline</p><div class="frame"><div class="section" style="border:0">
+            <div class="field"><span class="lbl">Measure</span><div class="select">Orders › Revenue</div></div>
+            <div class="r2"><div class="field"><span class="lbl">Over</span><div class="select">Ordered at</div></div><div class="field"><span class="lbl">By</span><div class="select">Month</div></div></div>
+            <div class="field"><span class="lbl">Show the last</span><div class="input">12 months</div></div>
+            <div class="swrow"><span class="tog"></span>Mark the last point</div>
+            <div class="xs sec">64 × 16 px; the measure's dashboard colour; no axes.</div>
+          </div></div></div>
+          <div><p class="cap">C3 · Icon: rules, top to bottom; a default that shows</p><div class="frame"><div class="section" style="border:0">
+            <div class="field"><span class="lbl">Measure</span><div class="select">Revenue as % of Revenue target</div></div>
+            <div class="xs" style="display:grid;gap:4px">
+              <span class="stt ok"><svg class="s"><use href="#s-ok"/></svg>On track <span class="muted">· when ≥ 100%</span></span>
+              <span class="stt wn"><svg class="s"><use href="#s-warn"/></svg>Watch <span class="muted">· when ≥ 90%</span></span>
+              <span class="stt er"><svg class="s"><use href="#s-err"/></svg>Behind <span class="muted">· otherwise</span></span>
+              <span class="stt nt"><svg class="s"><use href="#s-neutral"/></svg>No rule matched <span class="muted">· no data</span></span>
+            </div>
+            <span class="addbtn">+ rule</span>
+            <div class="xs sec">Each rule: a condition, one of the four states, and its label (editable). Always icon and word.</div>
+          </div></div></div>
+        </div>
+        <div class="row3" style="margin-top:16px">
+          <div><p class="cap">C4 · Bullet graph</p><div class="frame"><div class="section" style="border:0">
+            <div class="field"><span class="lbl">Measure</span><div class="select">Orders › Margin %</div></div>
+            <div class="field"><span class="lbl">Target</span><div class="r2"><span class="seg"><span class="on">Fixed</span><span>A measure</span></span><div class="input">25%</div></div></div>
+            <div class="field"><span class="lbl">Ranges <span class="opt">· up to 3, low to high</span></span><div class="input">15%, 20%, 25%</div></div>
+            <div class="r2"><div class="field"><span class="lbl">Min</span><div class="input ph">0</div></div><div class="field"><span class="lbl">Max</span><div class="input ph">Auto</div></div></div>
+          </div></div></div>
+          <div><p class="cap">C5 · Value, limited by a marking (AC-116)</p><div class="frame"><div class="section" style="border:0">
+            <div class="field"><span class="lbl">Measure</span><div class="select">Orders › Revenue</div></div>
+            <div class="field"><span class="lbl">Limit by marking</span><div class="select">Marking</div></div>
+            <div class="field"><span class="lbl">When nothing is marked, show</span><span class="seg"><span class="on">All data</span><span>"—"</span></span></div>
+            <div class="xs sec">As AC-116: all data when nothing is marked, Spotfire's calculated-value default.</div>
+          </div></div></div>
+          <div><p class="cap">C6 · Marking, Filter value, As of</p><div class="frame"><div class="section" style="border:0">
+            <div class="field"><span class="lbl">Marking</span><div class="r2"><div class="select">Marking</div><span class="seg"><span class="on">Count</span><span>Summary</span></span></div></div>
+            <div class="field"><span class="lbl">Filter value</span><div class="select">Country · Dashboard</div><span class="xs muted">Unset reads "all countries".</span></div>
+            <div class="field"><span class="lbl">As of</span><div class="select">Revenue's data</div></div>
+          </div></div></div>
+        </div>
+      </div>
+
+      <!-- D -->
+      <div class="state wide">
+        <h3>D · Filter controls share the filter bar's state; a list control holds 1,000 values with search (rules 135, 14)</h3>
+        <p>D1 and D2 are one filter in two places: Country in the Controls tile and in the sheet's filter bar. D3 is a list control over a dimension with 4,212 members: the first 1,000 load, search asks Cube for the rest.</p>
+        <div class="row3">
+          <div><p class="cap">D1 · In the Text tile, open</p><div class="frame" style="height:300px;padding:12px">
+            <span class="fw c open"><span class="scope">Dashboard</span><span>Country: <b>Germany, France</b></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+            <div class="menu" style="left:12px;top:46px;width:260px;padding:8px;display:grid;gap:4px">
+              <div class="input ph"><svg class="s"><use href="#i-search"/></svg>Find a country</div>
+              <div class="cbrow"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span>Germany</div>
+              <div class="cbrow"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span>France</div>
+              <div class="cbrow"><span class="check"></span>United Kingdom</div>
+              <div class="cbrow"><span class="check"></span>Spain</div>
+              <span class="xs sec">Applies to this dashboard · 21 countries</span>
+            </div></div></div>
+          <div><p class="cap">D2 · The same filter, in the sheet's bar, at the same moment</p><div class="frame" style="height:300px">
+            <div class="fbar" style="padding:10px 12px"><span class="fw"><span class="scope">Dashboard</span><span>Country: <b>Germany, France</b></span></span><span class="fw"><span class="scope">Tab</span><span>Category: <b>Beverages</b></span></span></div>
+            <p class="said" style="padding:0 12px">Choosing Spain in D1 updates this pill, the header's "Filters" count highlight, and every tile; announced once: "Country: Germany, France, Spain".</p></div></div>
+          <div><p class="cap">D3 · 1,000 values, then search</p><div class="frame" style="height:300px;padding:12px">
+            <div class="ctl-l" style="margin-bottom:6px">Customer</div>
+            <div style="border:1px solid var(--border-strong);border-radius:6px;padding:8px;display:grid;gap:4px">
+              <div class="input foc">acme</div>
+              <div class="cbrow"><span class="check"></span>Acme Foods GmbH</div>
+              <div class="cbrow"><span class="check"></span>Acme Retail SARL</div>
+              <div class="cbrow"><span class="check"></span>Acmeco Trading</div>
+              <span class="xs sec tnum">3 matches in all 4,212 customers</span>
+            </div>
+            <p class="said">Before searching: "Showing 1,000 of 4,212 · type to find the rest". Search queries Cube (<code>contains</code>), so no member is out of reach.</p></div></div>
+        </div>
+      </div>
+
+      <!-- E -->
+      <div class="state">
+        <h3>E · An action button's settings, and the 10-element limit (rules 131, 136)</h3>
+        <p>A button runs its actions in order; R80's four kinds only. At 10 elements, every row of the insert menu is disabled with the reason, and so is Insert.</p>
+        <div class="frame"><div class="section" style="border:0">
+          <div class="r2"><div class="field"><span class="lbl">Label</span><div class="input">Go to Detail</div></div><div class="field"><span class="lbl">Style</span><span class="seg"><span>Button</span><span class="on">Primary</span><span>Text link</span></span></div></div>
+          <div class="field"><span class="lbl">When pressed <span class="opt">· in this order</span></span>
+            <div class="elrow"><span class="grip">⋮⋮</span><span class="nm">1 · Reset filters <span class="k2">· to the dashboard's saved values</span></span><svg class="s muted"><use href="#i-x"/></svg></div>
+            <div class="elrow"><span class="grip">⋮⋮</span><span class="nm">2 · Go to page tab · Detail</span><svg class="s muted"><use href="#i-x"/></svg></div>
+            <span class="addbtn">+ action: Go to page tab · Apply bookmark · Reset filters · Export</span></div>
+          <div class="field"><span class="lbl">Export <span class="opt">· when chosen</span></span><div class="select">Data of tiles as CSV: Revenue by month, Top products</div></div>
+        </div>
+        <div class="section" style="border:0;border-top:1px solid var(--border-subtle)">
+          <div class="tbar" style="border:1px solid var(--border-subtle);border-radius:6px"><span class="tb dis" style="opacity:.45;padding:0 8px"><svg class="s"><use href="#i-plus"/></svg>Insert</span><span class="ctr"><svg class="s"><use href="#s-warn"/></svg>10 / 10 elements</span></div>
+          <div class="infoline"><svg class="s"><use href="#s-info"/></svg><span>This tile holds 10 elements, the most a Text tile can. Remove one, or add another Text tile.</span></div>
+        </div></div>
+      </div>
+
+      <!-- F -->
+      <div class="state">
+        <h3>F · Binding a chart's field to a parameter, and the parameter control (rule 137)</h3>
+        <p>In a dashboard-local chart's editor, a well's "+ metric" picker lists the dashboard's parameters of that role first. The pill then names the parameter and its current choice.</p>
+        <div class="frame" style="height:330px"><div class="section" style="border:0;position:relative">
+          <div class="field"><span class="lbl">Metrics</span><div class="well"><span class="pill param"><svg class="xs"><use href="#k-param"/></svg>Metric to show <span class="agg">· now Revenue</span><span class="x">×</span></span><span class="addbtn" style="background:var(--bg-hover);color:var(--text-primary)">+ metric</span></div></div>
+          <div class="menu" style="left:120px;top:76px;width:270px">
+            <div class="mh">Parameters of this dashboard</div>
+            <div class="mi dis"><svg class="s"><use href="#k-param"/></svg>Metric to show<span class="r">✓ in chart</span></div>
+            <div class="mi hl"><svg class="s"><use href="#i-plus"/></svg>New parameter…</div>
+            <div class="mh">Orders</div>
+            <div class="mi"><span class="ficon measure">Σ</span>Count<span class="r">count</span></div>
+            <div class="mi"><span class="ficon measure">Σ</span>Revenue<span class="r">sum</span></div>
+          </div>
+          <div class="xs sec" style="position:absolute;left:16px;top:270px;width:300px">The pill's tooltip: "Follows the dashboard parameter Metric to show: Revenue, Orders or Margin %". In a shared chart from folders, Parameters isn't listed (Q5).</div>
+        </div></div>
+      </div>
+
+      <!-- G -->
+      <div class="state wide">
+        <h3>G · View-mode states, each an icon and a label (rules 3, 18, 134)</h3>
+        <p>The sentence keeps its shape while a value loads or fails; the state sits where the value would.</p>
+        <div class="row3">
+          <div><p class="cap">G1 · Loading</p><div class="frame" style="padding:12px"><p style="margin:0;font-size:14px;line-height:24px">Revenue is <span class="skel" style="width:52px"></span> on last quarter <span class="skel" style="width:64px"></span> and <span class="skel" style="width:70px"></span> against plan.</p></div><p class="said">Skeletons the width of the last value, or 4ch; <code>aria-busy</code> on the tile.</p></div>
+          <div><p class="cap">G2 · No data for these filters</p><div class="frame" style="padding:12px;position:relative;height:96px"><p style="margin:0;font-size:14px;line-height:24px">Revenue is <span class="lv hov">—</span> on last quarter.</p><div class="tip" style="left:70px;top:40px">No data for these filters · Change · Revenue</div></div></div>
+          <div><p class="cap">G3 · Error, with Details on focus</p><div class="frame" style="padding:12px"><p style="margin:0;font-size:14px;line-height:24px">Revenue is <span class="stt wn"><svg class="s"><use href="#s-warn"/></svg>Unavailable</span> on last quarter.</p><p class="said">Focus shows Details: the measure and Cube's error. Retry is in the tile's ⋯.</p></div></div>
+          <div><p class="cap">G4 · No permission</p><div class="frame" style="padding:12px"><p style="margin:0;font-size:14px;line-height:24px">Cost is <span class="stt wn"><svg class="s"><use href="#s-lock"/></svg>Unavailable</span>.</p><p class="said">Never names the member or why (principle 6). Same text for a member the viewer may not query and one their groups can't reach.</p></div></div>
+          <div><p class="cap">G5 · A removed member, in edit mode</p><div class="frame" style="padding:12px"><div class="tile-head" style="margin:0 0 6px"><span class="edbadge"><svg class="s"><use href="#s-warn"/></svg>1 element needs fixing</span></div><p style="margin:0;font-size:14px;line-height:24px">Returns were <span class="le bad"><svg class="s"><use href="#s-warn"/></svg>orders.returns · not in the model</span>.</p></div><p class="said">View mode shows "Unavailable" as G3. The Elements list marks the row.</p></div>
+          <div><p class="cap">G6 · An empty tile</p><div class="frame" style="padding:12px"><p style="margin:0;font-size:14px" class="ph">Type, or press / to insert a live value</p></div><p class="said">The placeholder in edit mode; in view mode nothing renders, and the Outline names it "Empty text".</p></div>
+        </div>
+      </div>
+
+      <!-- H -->
+      <div class="state">
+        <h3>H · A Text tile in cross-filter mode (rule 32)</h3>
+        <p>In Settings › Cross-filtering's matrix, a Text tile is a target like any other.</p>
+        <div class="frame"><table class="ptable"><thead><tr><th>Source → target</th><th>EMEA summary (Text)</th></tr></thead><tbody>
+          <tr><td>Revenue by month</td><td><span class="seg"><span class="on">Filter</span><span style="color:var(--border-strong)" title="Text has no marks to highlight">Highlight</span><span>None</span></span></td></tr>
+          <tr><td>Top products</td><td><span class="seg"><span>Filter</span><span style="color:var(--border-strong)">Highlight</span><span class="on">None</span></span></td></tr>
+        </tbody></table></div>
+        <p class="said">Highlight is disabled with "Text has no marks to highlight". A Text tile is never a source: it has no marks.</p>
+      </div>
+
+      <!-- I -->
+      <div class="state">
+        <h3>I · An existing Markdown tile opens unchanged (R80; AC-208, AC-302)</h3>
+        <p>Every Markdown tile becomes a Text tile in place. Its markdown subset and AC-116 tokens are read into the tile's document the first time it's opened or the dashboard is saved; readers see no difference.</p>
+        <div class="row2">
+          <div><p class="cap">Stored today</p><div class="frame" style="padding:8px"><pre class="mono" style="margin:0;white-space:pre-wrap">## Marked share
+{{measure:orders.revenue | marking:Marking}} of {{measure:orders.revenue}}</pre></div></div>
+          <div><p class="cap">Opened as a Text tile, edit mode</p><div class="frame" style="padding:8px"><div class="rt" style="padding:0;gap:6px"><h5>Marked share</h5><p><span class="le">Value · Revenue · Marking</span> of <span class="le">Value · Revenue</span></p></div></div></div>
+        </div>
+        <p class="said">Properties no longer holds a Markdown textarea; the canvas is the editor (Q1). Text exported for MCP and AC-443 keeps the markdown form, elements as their tokens.</p>
+      </div>
+
+      <!-- J -->
+      <div class="state wide">
+        <h3>J · AI states (rules 138–141, 144)</h3>
+        <div class="row3">
+          <div><p class="cap">J1 · Drafting</p><div class="frame"><div class="section" style="border:0">
+            <div class="step"><svg class="s"><use href="#s-ok"/></svg>Computed 4 facts · 2 Cube queries</div>
+            <div class="step"><svg class="s sec"><use href="#s-run"/></svg>Writing… <span class="muted">Stop</span></div>
+          </div></div><p class="said">The card shows a skeleton paragraph; Stop cancels. Nothing is in the tile.</p></div>
+          <div><p class="cap">J2 · A draft that couldn't keep every number live</p><div class="frame"><div class="section" style="border:0">
+            <div class="warnline"><svg class="s"><use href="#s-warn"/></svg><span><b>Copilot couldn't write a summary that keeps every number live.</b> Try again, or write it yourself with the facts below.<span style="display:flex;gap:6px;margin-top:8px"><span class="btn sm">Try again</span><span class="btn sm ghost">Details</span></span></span></div>
+          </div></div><p class="said">After one automatic retry. Details never show the provider's key or a stack trace.</p></div>
+          <div><p class="cap">J3 · The daily limit reached</p><div class="frame"><div class="section" style="border:0">
+            <div class="infoline"><svg class="s"><use href="#s-info"/></svg><span><b>You've used today's 20 summaries.</b> "Summaries reset at midnight UTC. Ask the BI team if you need more." <span class="muted">· from your Super-Admin</span></span></div>
+          </div></div></div>
+          <div><p class="cap">J4 · The provider unreachable, or the key rejected</p><div class="frame"><div class="section" style="border:0">
+            <div class="warnline"><svg class="s"><use href="#s-err"/></svg><span><b>Copilot can't reach its provider.</b> Tell your Super-Admin.<span style="display:flex;gap:6px;margin-top:8px"><span class="btn sm">Retry</span><span class="btn sm ghost">Details</span></span></span></div>
+          </div></div><p class="said">A Super-Admin's version adds "Open Security › AI".</p></div>
+          <div><p class="cap">J5 · AI off, or not for this author</p><div class="frame"><div class="section" style="border:0">
+            <div class="mi dis" style="padding:0"><span class="ki"><svg class="s"><use href="#k-ai"/></svg></span>Summarize…<span class="r">Set up AI in Security › AI</span></div>
+          </div></div><p class="said">Only a Super-Admin sees this disabled row, with the link. Anyone else sees no Copilot group at all (principle 6's spirit).</p></div>
+          <div><p class="cap">J6 · The label, for a viewer, after the data moved</p><div class="frame" style="padding:12px"><span class="ailabel"><svg class="s"><use href="#k-ai"/></svg>Written with Copilot · reviewed by Wren Writer · wording as of 12 Jul 2026</span></div><p class="said">Viewers never see the warning row; the date tells them the words are older than the numbers.</p></div>
+        </div>
+      </div>
+
+      <!-- K -->
+      <div class="state">
+        <h3>K · Below 1,024 px (direction §2; AC-304)</h3>
+        <p>View only. The tile is full width; controls stack, each full width; buttons wrap. Tooltips open on tap and close on the next tap elsewhere.</p>
+        <div class="frame" style="width:392px"><div class="rt" style="gap:10px">
+          <h5>Explore EMEA</h5>
+          <div class="ctl-l">Show</div><span class="seg" style="align-self:start"><span class="on">Revenue</span><span>Orders</span><span>Margin %</span></span>
+          <span class="fw c" style="justify-content:space-between"><span><span class="scope">Dashboard</span> Country: <b>Germany, France</b></span><svg class="s sec"><use href="#i-chevd"/></svg></span>
+          <div class="ctlrow"><span class="btn primary">Go to Detail</span><span class="btn">Reset filters</span></div>
+        </div></div>
+      </div>
+
+      <!-- L -->
+      <div class="state">
+        <h3>L · The edit form of each control (rule 130)</h3>
+        <p>In edit mode, controls draw as themselves but inert, outlined as elements; clicking one selects it. A filter control whose filter was deleted shows the G5 badge.</p>
+        <div class="frame" style="padding:12px"><div class="ctlrow">
+          <span class="le" style="padding:4px 6px"><span class="ctl-l">Show</span><span class="seg"><span class="on">Revenue</span><span>Orders</span><span>Margin %</span></span></span>
+          <span class="le selx" style="padding:4px 6px"><span class="fw c"><span class="scope">Dashboard</span>Country: <b>Germany, France</b></span></span>
+          <span class="le" style="padding:4px 6px"><span class="btn sm primary">Go to Detail</span></span>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= KEYBOARD ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Keyboard and accessibility</h2>
+    <p>No new shortcut beyond the insert menu's combobox keys (R75; the brief). The editor is a <code>textbox</code> with <code>aria-multiline</code>, named after the tile; the toolbar is a <code>toolbar</code> (one Tab stop, ← → along it). Markdown shortcuts are typing, not keys. Whether the editor's standard ⌘B, ⌘I and ⌘Z inside the text stay on is Q11.</p>
+    <div class="decision" style="margin-top:0">
+      <table>
+        <thead><tr><th style="width:220px">Moment</th><th style="width:220px">Keys</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>Into the text</td><td><kbd class="k">Enter</kbd> on the tile, then <kbd class="k">Enter</kbd> on "Edit text…"</td><td>§7's Enter focuses Properties; its first control moves focus into the text, at its end.</td></tr>
+          <tr><td>Out of the text</td><td><kbd class="k">Esc</kbd> · <kbd class="k">Tab</kbd></td><td>Esc leaves the text with the tile selected and focused (rule 85's pattern). Tab leaves it too, to the next control: the text never traps focus.</td></tr>
+          <tr><td>The insert menu</td><td><kbd class="k">/</kbd> · <kbd class="k">{{</kbd> · <kbd class="k">↑</kbd> <kbd class="k">↓</kbd> · <kbd class="k">→</kbd> · <kbd class="k">Enter</kbd> · <kbd class="k">Esc</kbd></td><td>The APG combobox: focus stays in the text; <code>aria-activedescendant</code> marks the row; → on a measure opens its kinds; Esc closes the list only.</td></tr>
+          <tr><td>An element in the text</td><td><kbd class="k">←</kbd> <kbd class="k">→</kbd> · <kbd class="k">Backspace</kbd></td><td>An atom: arrows step over it and select it, which opens its settings in Properties; Backspace removes it whole. Its accessible name is its kind and source ("Change, Revenue against previous quarter").</td></tr>
+          <tr><td>View mode: a value</td><td><kbd class="k">Tab</kbd></td><td>Focusable; its tooltip is its description (<code>aria-describedby</code>). A sparkline and a bullet graph are <code>img</code> with their text alternative.</td></tr>
+          <tr><td>View mode: controls</td><td>as the filter bar's</td><td>Filter controls are the bar's widgets, with every key they have (T182). The parameter control is a <code>radiogroup</code> (arrows) or a listbox. Action buttons are buttons.</td></tr>
+          <tr><td>Announcements</td><td>—</td><td>A parameter change: "Metric to show: Orders". A filter change: as the bar's. Insert of a draft: "Summary inserted, 5 live values". Written for earlier data: in the Elements list, not announced.</td></tr>
+          <tr><td>The draft card</td><td><kbd class="k">Tab</kbd></td><td>A <code>group</code> named by its heading; its buttons are ordinary; no single key inserts, regenerates or discards (rule 85).</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Every state as an icon and a label</h3>
+      <div class="legend6">
+        <div><span class="stt ok"><svg class="s"><use href="#s-ok"/></svg>On track</span><span>an Icon rule</span></div>
+        <div><span class="stt nt"><svg class="s"><use href="#s-neutral"/></svg>No rule matched</span><span>Icon's visible default</span></div>
+        <div><span class="up">▲ 4.2%</span><span>Change, higher is better</span></div>
+        <div><span class="stt wn"><svg class="s"><use href="#s-warn"/></svg>Unavailable</span><span>an error, or a removed member</span></div>
+        <div><span class="stt wn"><svg class="s"><use href="#s-lock"/></svg>Unavailable</span><span>no permission; never named</span></div>
+        <div><span>—</span><span>No data for these filters</span></div>
+        <div><span class="edbadge"><svg class="s"><use href="#s-warn"/></svg>1 element needs fixing</span><span>edit mode</span></div>
+        <div><span class="xs"><svg class="s"><use href="#s-warn"/></svg> 10 / 10 elements</span><span>the limit</span></div>
+        <div><span class="ailabel" style="height:22px"><svg class="s"><use href="#k-ai"/></svg>Written with Copilot</span><span>AI wording, reviewed</span></div>
+        <div><span class="xs" style="color:var(--warn)"><svg class="s"><use href="#s-warn"/></svg> Written for earlier data</span><span>authors only</span></div>
+        <div><span class="xs"><svg class="s sec"><use href="#s-run"/></svg> Writing…</span><span>a draft in progress</span></div>
+        <div><span class="xs"><svg class="s"><use href="#k-param"/></svg> set by Metric to show</span><span>a chart following a parameter</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= ACs AND QUESTIONS ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Criteria this changes, and questions for you</h2>
+    <p>No R80 criteria exist yet; write-spec follows approval. Each question is drawn one way, the recommended one, listed first; it's only a default until you decide.</p>
+    <div class="decision" style="margin-top:0">
+      <h3>Acceptance criteria and direction</h3>
+      <table>
+        <thead><tr><th style="width:120px">Where</th><th>Today</th><th>With design 21</th></tr></thead>
+        <tbody>
+          <tr><td class="w">AC-208</td><td>A markdown tile renders headings, emphasis, lists and line breaks, and no raw HTML.</td><td><b>Amend:</b> the Text tile renders those, links and the live elements and controls of rule 130, and no raw HTML or script; every existing markdown tile renders unchanged.</td></tr>
+          <tr><td class="w">AC-302</td><td>Edit a markdown tile's text in Properties.</td><td><b>Amend:</b> edit it in place on the canvas, reached from Properties by keyboard (Q1).</td></tr>
+          <tr><td class="w">AC-116</td><td>Marking and measure tokens.</td><td><b>Extend</b> to every element kind; existing tokens become elements.</td></tr>
+          <tr><td class="w">AC-121</td><td>A bookmark stores the page tab, filter values and marks.</td><td><b>Amend:</b> and every dashboard parameter's value.</td></tr>
+          <tr><td class="w">Non-goal</td><td>"Spotfire-style controls inside text tiles" (phase 1).</td><td><b>Lifted</b> (R80) for filter controls, parameter controls and action buttons; scripts stay out.</td></tr>
+          <tr><td class="w">§2 · §8 · rule 25</td><td>"Markdown" element; MarkdownTile; "Markdown tiles never render raw HTML".</td><td><b>Rename</b> to Text; rule 25 reads "Text tiles never render raw HTML or run scripts. Live values are typed elements."</td></tr>
+          <tr><td class="w">AC-443</td><td>User-written text returned only as marked data.</td><td>Holds; Text tiles are returned as markdown with element tokens.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Questions — your decision</h3>
+      <table>
+        <thead><tr><th style="width:40px">#</th><th style="width:280px">Question</th><th>Drawn as (recommended), and the alternatives</th><th style="width:120px">Where</th></tr></thead>
+        <tbody>
+          <tr><td>Q1</td><td>Does Properties keep a Markdown source view? The research says to store Tiptap's JSON, not markdown, whose Tiptap extension is beta; controls and buttons have no markdown form.</td><td><b>Drawn (a):</b> no; the canvas is the editor, Properties holds element settings; markdown tiles are read in once. (b) A two-way Markdown view, with wechart's own mapping, for text and value tokens only. (c) A read-only Markdown export.</td><td class="w">I · S1 pin 12</td></tr>
+          <tr><td>Q2</td><td>How a value reads in view mode. The two studies differ: the sentence's own weight, or always 600.</td><td><b>Drawn (a):</b> the sentence's own type and weight; a dotted underline on hover and focus. (b) Always 600, as the Spotfire study proposes, so values stand out.</td><td class="w">S2 pin 1</td></tr>
+          <tr><td>Q3</td><td>Who sees a value's tooltip.</td><td><b>Drawn (a):</b> everyone, on hover and focus. (b) Only authors.</td><td class="w">S2 pin 2</td></tr>
+          <tr><td>Q4</td><td>What counts toward the 10.</td><td><b>Drawn (a):</b> every element: live values, controls and buttons. (b) Only elements that query (values, change, sparkline, icon, bullet, as of).</td><td class="w">S1 pin 5 · E</td></tr>
+          <tr><td>Q5</td><td>May a shared chart from folders bind a dashboard parameter?</td><td><b>Drawn (a):</b> no; only dashboard-local charts; "Make a local copy" first. (b) Yes; the shared chart declares a parameter slot each dashboard maps.</td><td class="w">F · S3 pin 8</td></tr>
+          <tr><td>Q6</td><td>Where parameters are defined.</td><td><b>Drawn (a):</b> Dashboard settings › Parameters, also reachable from the insert menu and a well's picker. (b) A Parameters list in the edit sidebar's Add tab.</td><td class="w">S3</td></tr>
+          <tr><td>Q7</td><td>Does "Reset filters" reset parameters?</td><td><b>Drawn (a):</b> no; parameters keep their value; a separate action "Reset parameters" is not added. (b) Yes, both to their defaults. (c) A fifth action kind, "Reset parameters".</td><td class="w">S3 pin 6 · E</td></tr>
+          <tr><td>Q8</td><td>What "Export" exports. wechart has CSV of a tile's data; Spotfire's action exports a PDF report.</td><td><b>Drawn (a):</b> the chosen tiles' data as CSV. (b) A PDF of the page, which needs research first. (c) Both, PDF once researched.</td><td class="w">E</td></tr>
+          <tr><td>Q9</td><td>The Copilot label after the author edits the paragraph.</td><td><b>Drawn (a):</b> it stays, naming who inserted it and when; deleting the paragraph removes it. (b) It names the last person to edit it. (c) It goes once the paragraph is edited.</td><td class="w">S4 pin 9</td></tr>
+          <tr><td>Q10</td><td>May a viewer ask for a summary of their own filters?</td><td><b>(a) No</b>; only authors draft, and readers see reviewed text. (b) Yes, temporary, labelled "Not reviewed", never saved.</td><td class="w">—</td></tr>
+          <tr><td>Q11</td><td>The editor's standard text keys ⌘B, ⌘I, ⌘Z inside the text (Tiptap's defaults; new keys under R75).</td><td><b>(a) Keep them,</b> inside the text only; ⌘Z there undoes typing, and leaving the text hands undo back to the dashboard. (b) Off; the toolbar and markdown typing only.</td><td class="w">Keyboard</td></tr>
+          <tr><td>Q12</td><td>Which facts Copilot may cite.</td><td><b>Drawn (a):</b> change against the previous period, and top and bottom contributors, now; phase 3 stage A's statistics later. (b) Wait for stage A.</td><td class="w">S4 pin 3</td></tr>
+          <tr><td>Q13</td><td>The sparkline's and bullet graph's sizes.</td><td><b>Drawn (a):</b> 64 × 16 and 96 × 16, within a 20 or 24 px line. (b) 80 × 20, the body's line height, as the Spotfire study suggests deriving.</td><td class="w">S1 pin 9</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+</body>
+</html>

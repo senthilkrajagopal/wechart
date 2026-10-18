@@ -3,6 +3,7 @@
 **Status:** proposed on 2026-09-19. Waiting for the user to accept it after reviewing the prototype.
 **Phase 2 (2026-09-25):** principles 6–9, §7e and rules 59–89 extend this direction to sign-in, folder access, workspaces, proposals, history, bookmarks, the audit trail, the country map and the box plot. Evidence: `references.md` › "Phase 2". **Accepted by the user on 2026-09-25.**
 **R78 (2026-10-17):** §7f and rules 90–108 extend it to the SQL runner workspace and personal access tokens. Evidence: `references-sql-runner.md` (its checklist rules 107–125, renumbered here and amended for R78's answers) and designs 17 and 18 (`reviews/2026-10-17/designs/`). **Accepted with designs 17 and 18 on 2026-10-17** ("Approve with defaults (Recommended)"; the defaults taken are in that review's `index.md`). Rule 107's Ctrl+Q and Ctrl+Alt+[ and ] wait on `docs/research/keyboard-shortcuts-sql-runner.md` (17-Q3, "Research first").
+**R80 (2026-10-18):** §7h and rules 115–146 extend it to the combo chart, the Text tile (which replaces Markdown), dashboard parameters and the AI provider settings. Evidence: `references-combo-and-rich-tiles.md`, `references-spotfire-combo-textarea.md`, `references-copilot.md` §9, research `rich-tiles-and-combo-tech.md`, and designs 20–22 (`reviews/2026-10-18/designs/`). **Proposed; waiting for the user's approval of designs 20–22.**
 **Sources:**
 
 - `references.md`: six enterprise BI products studied, with a committed direction.
@@ -550,6 +551,54 @@ No new colour, type size or weight. Every value reuses a token:
 | Change highlight | `accent-soft` ground and an `accent` border on the toggle's count, 2 s | existing tokens; the 2 s is wechart's (19-Q6) |
 | Below 1,024 px | the page menu on a 40 px second row; the sheet padded 16 px, pills one under another | design 19 state D; §2 breakpoints |
 
+## 7h. R80: combo charts, the Text tile, dashboard parameters and the AI provider (proposed 2026-10-18)
+
+**Direction** (both studies' common ground, settled by R80's answers). A combo is a set of per-series layers on one category axis: each measure picks its mark (bar, line, area, point) and its side (left, right); a second value axis exists only by the author's choice, and when drawn its zero and ticks align and it's titled by mark glyph; one dimension may split every measure, colour then meaning the member. The Text tile is today's Markdown tile edited in place with Tiptap 3: typed blocks on §3's scale, live elements that follow filters and markings, Spotfire's controls and action buttons built as declarations, and an AI summary written from facts wechart computed, reviewed before it lands and never silently regenerated. The AI provider is set once, by a Super-Admin, in Security › AI.
+
+Nothing in §2–§7g changes except as the designs' criteria tables say: §6's dual-axis sentence and rule 30 (design 20), §2's and §8's "Markdown" and rule 25 (design 21). No new colour, type size or weight. Every value below reuses a token or is derived from one, and says which, so design-critic can measure against it.
+
+| Token use | Value | Traced to |
+| --- | --- | --- |
+| Series row (Customize › Series) | 28 px, `text-xs`; Mark as four 24 × 22 icon buttons; Axis as a 28 px Left \| Right segmented control | §4 compact rows; rule 17; references-combo §5 |
+| Mark glyphs (legend, axis titles, pills) | bar: 8 × 8, radius 2; line: 12 × 2; point: 8 px dot with a 1 px surface ring; area: 12 × 8 with its top edge | wechart's product decision; nothing published (references-combo Tokens) |
+| Axis titles | `text-xs`, `text-secondary`, horizontal above each axis, glyphs in the series colour | §3; rule 2 (series-coloured ticks rejected); 20-Q10 |
+| Gridlines with two axes | the left axis's only | §6; ECharts `alignTicks` (research §2) |
+| Line over bar | 2 px line on a 5 px `bg-surface` halo; markers 8 px with a 1.5 px surface ring | §6 Marks; derived here |
+| Area fill | the series colour at 0.24 opacity, drawn behind bars | derived here, so bars behind stay readable (Spotfire study "derive it") |
+| Draw order | bands, areas, bars, lines, points, reference lines, labels | derived here |
+| Reference line | 1.5 px, dash 5 4: `text-secondary` when fixed, the series colour when computed from it | §5 roles; derived dash |
+| Reference band | `bg-subtle` fill, no edge | §5 |
+| Reference label | `text-xs` in `text-primary` on a 3 px `bg-surface` halo | §3; rule 2 |
+| AC-218 warning, "not drawn" row | `status-warning` icon and `text-xs` on the warn tint, 8 px padding, radius 6; offers as 24 px small buttons | §5; rule 3; design 01 state B |
+| Series limit | 8 drawn series after any split; "Other" in §5's null neutral | §5; rule 6; R80 |
+| Text tile toolbar | 40 px strip, 32 px buttons, radius 6; block-style button 128 px wide | §4 controls |
+| Editing border | 2 px `accent` | §5 accent; the selected-tile pattern |
+| Text body; headings; Large value | `text-sm` 14/20 (24 px line in tiles); `text-md` 16/22, `text-lg` 20/26, `text-xl` 24/32; `text-kpi` 32/40, `tnum` | §3 |
+| Live element, edit form | `bg-subtle`, 1 px `border-subtle`, radius 4, padding 0 4, the text's own size; selected: `accent` border and the 3 px `accent-ring` | §4, §5 |
+| Live value, view form | the sentence's own type and weight, `tnum`; a dotted `text-muted` underline on hover and focus | §3; 21-Q2 |
+| Change | ▲ / ▼ and the sign; `status-success`, `status-error` or `text-secondary` text by its direction | §5 status roles (not series colours) |
+| Icon element | a status icon and its word, `status-*` text; "No rule matched" with a neutral ring in `text-secondary` | rule 3 |
+| Sparkline | 64 × 16, 2 px line in the measure's dashboard colour, no axes or markers | 16 = `text-xs` line height; 64 = 16 × 4 (wechart's); §6 line width; 21-Q13 |
+| Bullet graph | 96 × 16; ranges `bg-subtle`, `border-subtle`, `border-strong`; value bar 4 px `text-primary`; target 2 px `text-primary` | §5 roles; derived sizes; 21-Q13 |
+| Insert menu | 320 px wide, 28 px rows, `bg-raised`, group headings `text-xs-strong` `text-muted` | §2 inspector width; §4; rule 17 |
+| Inline controls | filter control: the filter bar's widget at 28 px compact, with its scope tag; parameter control: a 32 px segmented control (≤ 5 choices) or a list; action buttons: the Link/button tile's styles at 32 px | §2 Link/button; §4; rule 14 |
+| Element limit | 10 per Text tile; list controls 1,000 values with search | R80 |
+| Parameters list | Settings › Parameters; 34 px rows; choice rows 34 px; dialogs 520 px | §2 settings page; §4; §7e dialogs |
+| AI draft card | `bg-surface`, 1 px `border-subtle`, radius 6, 12 px padding, a 3 px `border-strong` rule on its left; buttons 32 px | references-copilot change card tokens |
+| AI label | 24 px chip, radius 999, 1 px `border-subtle`, icon and `text-xs` `text-secondary`; no sparkle or AI colour | references-copilot "Made with Copilot"; §4 chips |
+| AI settings page | Security's fifth tab; 820 px form column of cards and a fluid right column; 32 px inputs; usage rows 34 px | design 18 screen 4; §4 |
+
+**Where each surface lives**
+
+| Surface | Placement |
+| --- | --- |
+| Combo series, axes, reference lines | The chart editor's Customize tab (Series, Axes, Reference lines and bands); mark and axis also in the Metrics pill's menu and, in the editor only, behind each legend glyph |
+| Split by | The combo's Data tab, a Split by well (one dimension) |
+| Text tile | The Add palette's Text element (renamed from Markdown); edited on the canvas in edit mode; element settings in the edit sidebar's Properties |
+| Dashboard parameters | Dashboard settings › Parameters, after Cross-filtering; also opened from the insert menu and a well's picker |
+| Summarize | The insert menu's Copilot group; its settings in Properties; the draft card in the tile |
+| AI provider | Security › AI, after Access tokens; Super-Admins only; `/security/ai` |
+
 ## 8. Components (primitives and states)
 
 - **Shell:** TopBar, WorkspaceSwitcher, Pane (with collapsed rail), Splitter, Drawer, CommandPalette.
@@ -592,6 +641,14 @@ No new colour, type size or weight. Every value reuses a token:
   - EditorTabs (state icon, ⋯, ×); RunLine; ParameterStrip; RunBar (held, with its reason); ResultHead (Make a cube…, Make a chart…, Download CSV)
   - SavedList and HistoryList (Only me); SaveQueryDialog; MakeCubePane (columns table)
   - TokenList (working, no longer working); NewTokenDialog; TokenShownOnce; ConnectHelp; RevokeDialog
+- **R80 (§7h, proposed):**
+  - SeriesRow (swatch, name, MarkSegmented, AxisSegmented, Auto); SeriesGroup (a split measure and its members); AxisGroup (Left, Right, with the locked include-zero line); ComboWarning; NotDrawnPill; SplitByWell; LegendGlyphButton; ReferenceList and ReferenceForm (line, band; horizontal, vertical)
+  - TextTile (view: static renderer; edit: the Tiptap editor); TextToolbar (block style, bold, italic, lists, link, Insert, the element counter); InsertMenu (combobox and listbox)
+  - LiveElement kinds: Value, Change, Sparkline, Icon, BulletGraph, Marking, FilterValue, AsOf; each with edit, view, loading, no-data, error, no-permission and broken states; ElementTooltip
+  - FilterControl (the filter bar's widget, compact); ParameterControl (segmented or list); ActionButton and ActionList
+  - ParametersSection, ParameterForm (role, choices, default, used by); ParameterPill (in a well)
+  - SummarizePanel; DraftCard (facts, Insert, Regenerate, Discard); AILabel; EarlierDataWarning
+  - AISettingsPage (General, Provider, Limits, What's sent, Test connection, Usage); StoredKey and ReplaceKeyDialog; ConnectionChecks
 
 ## 9. Checklist (numbered rules for design-critic and write-spec)
 
@@ -710,7 +767,7 @@ R78, the SQL runner workspace (§7f; design 17). From `references-sql-runner.md`
 107. The SQL runner adds only the keys R78 approved under R75: ⌘/Ctrl+Enter runs the selection, or else the statement at the cursor; ⌘/Ctrl+S saves; ⌘/Ctrl+F finds inside the editor; autocomplete opens as you type (↑ ↓ choose, Enter accepts, Esc closes the list only, Tab still leaves the editor); Ctrl+Q opens a tab on the current data source, and Ctrl+Alt+[ and Ctrl+Alt+] select the previous and next tab, with Control on macOS too. No key closes a tab. *(ref. 124; AC-387, AC-455, AC-456, AC-480; amended from "no shortcut … unless the user approves it" to the set R78 approved)*
 108. Every SQL runner pane, dialog and popover follows rule 85. The picker is a custom listbox that meets the 12 px floor. The workspace adds no colour, type size or weight. *(ref. 125)*
 
-R79, the compact dashboard header (§7g; design 19, approved 2026-10-17). From `references-compact-header.md` §4, "Proposed checklist rules", numbered from 109 in its order. The copilot study's proposed rules (`references-copilot.md`) are still unnumbered; when the copilot is taken up they follow these, from 115.
+R79, the compact dashboard header (§7g; design 19, approved 2026-10-17). From `references-compact-header.md` §4, "Proposed checklist rules", numbered from 109 in its order. ~~The copilot study's proposed rules (`references-copilot.md`) are still unnumbered; when the copilot is taken up they follow these, from 115.~~ R80's rules take 115–146 below; the copilot study's proposed rules, when the copilot is taken up, follow them, from 147 (2026-10-18).
 
 109. The dashboard header is one 48 px row by default. It holds the way back to the folder, the title, the page tabs, the interaction summary, the actions and the Filters toggle, and stays fixed above the scrolling tiles. *(AC-484, AC-196)*
 110. The toggle is a disclosure button with `aria-expanded`. Its visible label names "Filters" and the number set, or "Details" when the dashboard has no filters. *(AC-486)*
@@ -718,3 +775,52 @@ R79, the compact dashboard header (§7g; design 19, approved 2026-10-17). From `
 112. Under `prefers-reduced-motion: reduce` the sheet opens and closes without animation. *(AC-488)*
 113. A filter changed while the sheet is closed changes the toggle's count, or a compact chip, and is announced politely. *(AC-493)*
 114. In edit mode the sheet is open and has no toggle. *(AC-491)*
+
+R80, combo charts, the Text tile, dashboard parameters and the AI provider (§7h; designs 20–22, **proposed 2026-10-18**). Drawn from both studies' proposed rules and R80's answers. The copilot study's rules follow from 147 when the copilot is taken up; its 103 and 104 (its numbering) overlap 142–144 and would be merged then.
+
+*Combo charts (design 20)*
+
+115. A combo draws each measure as its own series with its own mark (Bar, Line, Area or Point) and value axis (Left or Right), set in Customize › Series, in the Metrics pill's menu, and, in the chart editor only, from each legend entry's glyph. A new combo draws the first measure as bars and the rest as lines, all on the left. Each series row shows Back to Auto once changed, and a manual mark or axis stays pinned through field changes.
+116. A combo has at most two value axes, one left and one right. The Right axis group, and Synchronize axes, appear only while a series is on the right. Synchronize is offered only when both axes share a format; otherwise it's disabled with the reason. Synchronized, both sides show one scale.
+117. Only the author's explicit choice puts a series on the right axis; the recommender, Auto and field changes never do. A combo draws at most 8 series after any split: members fold to the top *k* plus "Other" first, then a measure past the limit shows "not drawn · over 8 series" with Small multiples and Table. In a combo, a measure on another scale is "not drawn · on another scale", and its first offer is "Draw on a right axis".
+118. With two value axes, both include zero whenever either carries a bar series (the include-zero control shows locked, with the reason), their zero lines sit at the same height, the right axis's ticks fall on the left axis's gridlines, and the right axis draws no gridlines.
+119. Each value axis is titled with its measures, each preceded by its mark glyph in its series colour, then its unit. Tick labels stay `text-secondary` in both themes.
+120. A combo's legend entries show their mark glyph, and a right-axis series adds "(right)". A split combo's legend has two parts: the split's members as swatches, then the measures as glyphs in `text-secondary`. Hovering a series or its legend entry emphasises its axis.
+121. While a combo draws two value axes that aren't synchronized, the editor and the tile's edit mode show a `status-warning` row naming both measures and their units, offering One axis, Synchronize, Small multiples and Table; when both share a format the row says so and offers Synchronize first. A combo with one axis, or two synchronized, shows no warning, and viewers never see it. *(AC-218 as amended)*
+122. A combo splits by at most one dimension, across every measure; series are measure × member. Colour follows the member, as in every tile (rule 7), so while split each measure has its own mark, a mark another measure uses being disabled with the reason. Every member of a measure sits on that measure's axis.
+123. Each value axis offers log scale. While two axes are drawn, both use the same scale type and change together. Log scale is unavailable while either axis carries bars, with the reason. Values at or below zero on a log axis aren't drawn, and their count is shown.
+124. Reference lines and bands are horizontal (reading one value axis) or vertical (reading the category axis, at a member or a date). Each has a required label drawn beside it in the chart, never in the legend. A fixed line is dashed `text-secondary`; a line computed from a series (average, median, minimum, maximum) is dashed in that series' colour; a band fills `bg-subtle` behind the marks. One outside its axis's range isn't drawn, and its row says so with the warning icon.
+125. A combo's text alternative and table view name each series' mark, axis and unit, and each reference line.
+126. Stacking is chart-wide: bars side by side or stacked, areas overlapping or stacked. Stacks never cross axes.
+
+*The Text tile and dashboard parameters (design 21)*
+
+127. The dashboard has one Text element, which replaces Markdown in place. Every existing markdown tile opens in it unchanged, its tokens as live elements. It never stores or renders raw HTML and never runs a script.
+128. In edit mode a Text tile is edited in place on the canvas, reached by double-click or by "Edit text on the canvas", Properties' first control. Its toolbar offers block style, bold, italic, bulleted and numbered lists, link and Insert, and counts elements. Block styles map to §3's tokens only (Paragraph, three headings, Large value at `text-kpi`), and there's no free colour, font or size. Markdown shortcuts convert as typed. Esc or Tab leaves the text.
+129. `/` at a line's start or after a space, the toolbar's Insert, and `{{` open the insert menu: a combobox with a listbox (↑ ↓, →, Enter, Esc) listing the element kinds in groups (Live values, Controls, Copilot), then, as the author types, measures grouped by cube.
+130. The live elements are Value, Change, Sparkline, Icon, Bullet graph, Marking, Filter value and As of. Each follows the filters that reach its tile, the tile's cross-filter setting (Filter or None; Highlight disabled with the reason) and any marking it names; its own filter is listed in its tooltip. In edit mode an element is an atom on `bg-subtle` with a `border-subtle` outline; selecting it opens its settings in Properties, where every element is listed.
+131. A Text tile holds at most 10 elements (live elements, controls and buttons). The toolbar shows "n / 10 elements"; at 10, Insert and the menu's rows are disabled with the reason.
+132. In view mode a value reads as text in the sentence's own type and weight, with tabular numerals and its member's model format. It's focusable; hover or focus shows what it is, the filters in effect, its marking and the data's age, which is also its accessible description.
+133. A Change shows ▲ or ▼ and its sign, coloured by its direction (Higher is better, Lower is better, Neutral). An Icon always shows an icon and its word, and "No rule matched" when no rule applies. A sparkline (64 × 16) and a bullet graph (96 × 16) have no axes and carry a text alternative naming their measure and values.
+134. A loading element shows a skeleton the width of its last value; no data shows "—" with "No data for these filters"; an error shows the warning icon and "Unavailable", with Details on focus; a value the viewer may not query shows "Unavailable" and never names the member; a removed member adds "n element needs fixing" in edit mode. An empty tile shows a placeholder in edit mode and nothing in view mode.
+135. A filter control in a Text tile is one of the dashboard's filters, not a copy: the same widget, scope tag, value and state as the filter bar, so a change in either shows in both and in the header's count. A list control shows up to 1,000 values, says when there are more, and searches every value through Cube.
+136. An action button uses the Link/button tile's styles and runs an ordered list of declared actions: go to a page tab, apply a bookmark, reset filters, export. Nothing runs that isn't one of these.
+137. A dashboard parameter is defined in Dashboard settings › Parameters: a name, the role it switches (Measure or Dimension), ordered choices of model members with labels (up to 1,000), a default, and a list of what uses it. A parameter control in a Text tile sets it; a dashboard-local chart's well binds it from the picker's Parameters group, and in view mode such a chart says "set by ‹parameter›". Every choice must be queryable by every bound chart, or settings can't be saved. Bookmarks and copied links carry each parameter's value.
+
+*AI summaries (design 21)*
+
+138. "Summarize…" appears in the insert menu only while a Super-Admin has AI on and the author may use it (Super-Admins see it disabled, with a link, when it's off). A summary is drafted only at the author's request, from facts wechart computed through Cube as the author, which are shown with the draft. Every number in a draft is a live element; a draft holding a number outside one is rejected before the author sees it.
+139. A draft appears as a card in the tile, headed as not yet in the tile, with Insert, Regenerate and Discard. Nothing lands until Insert; once inserted it is ordinary editable text and its elements count toward 10.
+140. Text inserted from a draft carries "Written with Copilot · reviewed by ‹name›, ‹date›" as an icon and a label in `text-secondary`, in view and edit mode, with no AI colour.
+141. AI wording is never regenerated by a refresh, a filter or a viewer. When a fact it cites changes sign or rank, authors see "Written for earlier data" with what changed, Review and Keep as written; viewers see "wording as of ‹date›" in the label.
+
+*The AI provider (design 22)*
+
+142. Security › AI is shown to Super-Admins only; anyone else gets Not found. It sets AI on or off, who may use it, the provider, endpoint and model, and the API key, which is write-only: once stored it reads "Stored · encrypted" with Replace…, and it is never shown, sent to a browser or written to the audit trail.
+143. A change to the provider, endpoint, model or key can't be saved until Test connection passes with it. The test shows each check (reachable, key accepted, model answers, a test summary keeping every number live) with an icon and a label; later checks after a failure show "not run". Save counts pending changes, and leaving with unsaved changes asks first.
+144. Usage limits (per person per day, for everyone per month) and the message shown at a limit (at most 280 characters, counted) are set here. An author at a limit sees the Super-Admin's message instead of Summarize. Every AI failure shows an icon, one sentence, Details and Retry, and never a key or a stack trace.
+145. The page states what is sent to the provider (computed facts, tile titles, member names) and what never is (rows, SQL, model code, credentials). Settings changes, key replacements and inserted summaries are recorded in the audit trail.
+
+*For all of R80*
+
+146. Designs 20–22 add no colour, type size or weight and keep the 12 px floor. They add no keyboard shortcut beyond the insert menu's combobox keys and markdown's typing patterns (the editor's standard text keys wait on 21-Q11), and every panel, dialog and popover follows rule 85.

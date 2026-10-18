@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 22 · AI provider settings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  /* tokens: docs/design/direction.md §3–§5, §7d, §7e (light theme); no new colour, size or weight */
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  b, strong, th, h1, h2, h3 { font-weight: 600; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head ul { margin: 0 0 6px; padding-left: 20px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .doc-head code { color: #f2f2f0; background: #333; padding: 0 4px; border-radius: 3px; font: 400 12px var(--font-code); }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .screen-label { background: #2b2b29; color: #e8e7e2; padding: 10px 32px; font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2, .states h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; }
+  .notes > p, .states > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .notes code, .states code, .decision code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .stategrid { display: grid; grid-template-columns: repeat(2, 676px); gap: 32px 24px; align-items: start; }
+  .state { display: grid; gap: 8px; align-content: start; }
+  .state.wide { grid-column: 1 / -1; }
+  .state > h3 { margin: 0; font-size: 14px; line-height: 20px; }
+  .state > p { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); max-width: 1180px; }
+  .row2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; align-items: start; }
+  .frame { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg-surface); box-shadow: 0 1px 2px rgba(0,0,0,.06); position: relative; }
+  .cap { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0 0 6px; }
+  .said { margin: 6px 0 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .said b { color: var(--text-primary); }
+  .decision { margin: 22px 0 0; padding: 16px 20px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-page); max-width: 1376px; }
+  .decision h3 { margin: 0 0 8px; font-size: 16px; line-height: 22px; }
+  .decision > p { margin: 0 0 10px; color: var(--text-secondary); font-size: 13px; line-height: 18px; }
+  .decision table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 18px; }
+  .decision th, .decision td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); }
+  .decision th { font-size: 12px; color: var(--text-secondary); background: var(--bg-subtle); }
+  .decision td.w { white-space: nowrap; font: 600 12px/18px var(--font-code); color: var(--note); }
+
+  svg.i { width: 16px; height: 16px; flex: none; }
+  svg.s { width: 14px; height: 14px; flex: none; }
+  svg.xs { width: 10px; height: 10px; flex: none; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; white-space: nowrap; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 240px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .reviews { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary); }
+  .count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--text-on-accent); font: 600 12px/18px var(--font-ui); text-align: center; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .acct { display: inline-flex; align-items: center; gap: 8px; font: 600 12px/16px var(--font-ui); }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); flex: none; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.md { height: 28px; padding: 0 10px; font-size: 12px; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.dis { opacity: .45; }
+  .btn.danger { color: var(--err); }
+  .ring { box-shadow: 0 0 0 3px var(--accent-ring); }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  kbd.k { font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--bg-surface); color: var(--text-primary); white-space: nowrap; }
+  .legend6 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 24px; }
+  .legend6 div { display: flex; gap: 10px; align-items: center; min-height: 34px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; }
+  .legend6 div > span:last-child { margin-left: auto; color: var(--text-secondary); text-align: right; }
+
+  .head { display: flex; align-items: center; gap: 12px; }
+  .head h1 { margin: 0; font-size: 20px; line-height: 26px; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border-subtle); }
+  .tabs span { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+  .tabs span.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; }
+  .card > h3 { margin: 0; font-size: 14px; line-height: 20px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; gap: 8px; align-items: center; }
+  .card > h3 .r { margin-left: auto; font-weight: 400; font-size: 12px; color: var(--text-muted); }
+  .cb { padding: 12px 16px; display: grid; gap: 12px; }
+  .field { display: grid; gap: 4px; }
+  .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); display: flex; gap: 6px; align-items: baseline; }
+  .lbl .opt { font-weight: 400; color: var(--text-muted); }
+  .help { font-size: 12px; line-height: 16px; color: var(--text-muted); margin: 0; }
+  .select, .input { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 10px; display: flex; align-items: center; gap: 6px; font-size: 14px; min-width: 0; }
+  .select::after { content: ''; margin-left: auto; width: 7px; height: 7px; border-right: 1.5px solid var(--text-secondary); border-bottom: 1.5px solid var(--text-secondary); transform: rotate(45deg) translate(-2px, -2px); flex: none; }
+  .input.ph { color: var(--text-muted); }
+  .input.foc { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .input.bad { border-color: var(--err-icon); }
+  .ta { min-height: 72px; border: 1px solid var(--border-strong); border-radius: 4px; padding: 6px 10px; font-size: 14px; line-height: 20px; }
+  .ctr { font-size: 12px; line-height: 16px; color: var(--text-muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .r2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .tog { display: inline-block; width: 32px; height: 18px; border-radius: 999px; background: var(--border-strong); position: relative; flex: none; }
+  .tog::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+  .tog.on { background: var(--accent); }
+  .tog.on::after { left: 16px; }
+  .swrow { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 20px; }
+  .radio { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-grid; place-items: center; flex: none; margin-top: 2px; }
+  .radio.on { border-color: var(--accent); }
+  .radio.on::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .rrow { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 20px; }
+  .gchip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 4px 0 8px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--bg-surface); font: 400 12px/16px var(--font-code); }
+  .stored { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 4px; background: var(--bg-subtle); font-size: 14px; color: var(--text-secondary); }
+  .chk { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: start; font-size: 12px; line-height: 16px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
+  .chk:last-child { border-bottom: 0; }
+  .chk .r { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--bg-subtle); font-size: 12px; line-height: 16px; white-space: nowrap; }
+  .chip.ok { color: var(--ok); } .chip.wn { color: var(--warn); } .chip.er { color: var(--err); } .chip.nt { color: var(--text-secondary); }
+  .sent { display: grid; grid-template-columns: 16px 1fr; gap: 8px; font-size: 12px; line-height: 16px; padding: 3px 0; }
+  .grid-table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; width: 100%; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; height: 28px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; color: var(--text-secondary); }
+  .grid-table td { height: 34px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table .num { text-align: right; }
+  .warnline { display: grid; grid-template-columns: 16px 1fr; gap: 6px; font-size: 12px; line-height: 16px; padding: 8px; border-radius: 6px; background: color-mix(in srgb, var(--warn-icon) 16%, var(--bg-surface)); }
+  .errline { display: grid; grid-template-columns: 16px 1fr; gap: 6px; font-size: 12px; line-height: 16px; padding: 8px; border-radius: 6px; background: color-mix(in srgb, var(--err-icon) 10%, var(--bg-surface)); }
+  .infoline { display: grid; grid-template-columns: 16px 1fr; gap: 6px; font-size: 12px; line-height: 16px; padding: 8px; border-radius: 6px; background: var(--bg-subtle); color: var(--text-secondary); }
+  .scrim { position: absolute; inset: 0; background: rgba(20,20,18,.32); z-index: 80; }
+  .dialog { position: absolute; z-index: 90; background: var(--bg-raised); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 20px; display: grid; gap: 12px; }
+  .dialog h2 { margin: 0; font-size: 16px; line-height: 22px; }
+  .dialog .acts { display: flex; gap: 8px; justify-content: flex-end; }
+  .skel { height: 12px; border-radius: 3px; background: var(--bg-subtle); }
+  .menu { position: absolute; z-index: 70; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 4px; }
+  .mi { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 4px; font-size: 14px; white-space: nowrap; }
+  .mi.hl { background: var(--bg-hover); }
+  .mi .r { margin-left: auto; color: var(--text-muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M2 9.5l1.6-5.2A1 1 0 0 1 4.6 3.6h6.8a1 1 0 0 1 1 .7L14 9.5v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z M2 9.5h3.5l1 1.5h3l1-1.5H14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-key" viewBox="0 0 16 16"><circle cx="5" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 8h6.5M12 8v2.5M14 8v2" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-ai" viewBox="0 0 16 16"><path d="M3 3.5h10M3 7h10M3 10.5h6" stroke="currentColor" stroke-width="1.5"/><path d="M12 9.5v4M10 11.5h4" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="s-err" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="#fff" stroke-width="1.8"/></symbol>
+  <symbol id="s-warn" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" style="fill:var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></symbol>
+  <symbol id="s-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2M8 4.6v.4" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="s-skip" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 8h6" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-run" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="22 10"/></symbol>
+  <symbol id="s-off" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 12L12 4" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-never" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI design 2026-10-18 · Design 22 · for approval</div>
+    <h1>Security › AI: the Super-Admin's provider settings for Copilot, built now for the Text tile's summaries</h1>
+    <p>R80: "AI-written narrative in rich tiles? A: 'Now, with LLM settings'. The Super-Admin provider, model and key settings (from the parked copilot) are built in this round." This page is that part of <code>references-copilot.md</code> §9, adapted to what summaries need now and kept ready for the copilot chat when it's taken up: the same provider, key and limits.</p>
+    <p>This design draws:</p>
+    <ul>
+      <li><b>The page:</b> AI on or off; who may use it; the provider, endpoint and model; the API key, stored and never shown; usage limits and the message people see at one; what is sent to the provider; Test connection; usage this month.</li>
+      <li><b>Where it lives:</b> a fifth tab in Security, after Access tokens, for Super-Admins only.</li>
+      <li><b>States:</b> first setup with a failing test; replacing the key; each test result; turning AI off; groups; limits as people meet them; unsaved changes; the audit trail; narrow windows; usage empty and loading.</li>
+    </ul>
+    <p><b>Screens</b> are Ada Admin, a Super-Admin. Screen 1 is the page set up and working, with one change unsaved; screen 2 is the first setup, with the key refused.</p>
+    <p><b>What doesn't change:</b> Security's other tabs (designs 08 and 18); the account menu; how data-source credentials are kept (sealed to xcube, R27), which this key isn't part of (Q3); the audit trail's table, which gains events (state H).</p>
+    <div class="ids">R80 · references-copilot.md §9, §10, open questions 7–9, 11–13 · design 21 (its Summarize and states J) · new: no AC yet · holds AC-001, AC-294 … AC-296, AC-470, AC-251, AC-304 · rules 3, 23, 35, 67, 82, 83, 85 · names, endpoints and counts are illustrative; no provider's fields are claimed here until research covers them</div>
+  </header>
+
+  <!-- ======================= SCREEN 1 ======================= -->
+  <div class="screen-label">Screen 1 · Security › AI, set up and working, with one change waiting to be saved (1,440 × 900)</div>
+  <div class="screen" id="s1">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span><span class="on">Security</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">5</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">AA</span>Ada Admin</span>
+    </div>
+    <main style="padding:14px 24px 0;display:flex;flex-direction:column;gap:12px;height:852px">
+      <div class="head"><h1>Security</h1></div>
+      <div class="tabs"><span>Policies</span><span>Preview as groups</span><span>Audit trail</span><span><svg class="s"><use href="#i-key"/></svg>Access tokens</span><span class="on"><svg class="s"><use href="#i-ai"/></svg>AI</span></div>
+      <div class="head">
+        <h2 style="margin:0;font-size:16px;line-height:22px">AI provider</h2>
+        <span class="chip ok"><svg class="s"><use href="#s-ok"/></svg>On · tested 18 Oct 2026, 09:12</span>
+        <span class="spacer"></span>
+        <span class="btn">Discard</span>
+        <span class="btn primary">Save 1 change</span>
+      </div>
+      <div style="display:grid;grid-template-columns:820px 1fr;gap:16px;align-items:start">
+        <div style="display:grid;gap:12px">
+          <section class="card"><h3>General</h3><div class="cb">
+            <div class="swrow"><span class="tog on"></span><span><b>AI is on</b><br><span class="xs sec">People below can draft summaries in Text tiles. When Copilot chat comes, it uses these settings too.</span></span></div>
+            <div class="field"><span class="lbl">Who may use AI</span>
+              <div class="rrow"><span class="radio"></span><span>Everyone who can edit dashboards <span class="sec">· read-write members and Super-Admins</span></span></div>
+              <div class="rrow"><span class="radio on"></span><span>Only these AD groups, and Super-Admins</span></div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;padding-left:26px"><span class="gchip">sg-bi-authors<svg class="xs muted"><use href="#i-x"/></svg></span><span class="gchip">sg-finance-analysts<svg class="xs muted"><use href="#i-x"/></svg></span><span class="btn sm"><svg class="xs"><use href="#i-plus"/></svg>AD group</span></div>
+            </div>
+          </div></section>
+          <section class="card"><h3>Provider</h3><div class="cb">
+            <div class="r2">
+              <div class="field"><span class="lbl">Provider</span><div class="select">Azure OpenAI</div></div>
+              <div class="field"><span class="lbl">Model or deployment</span><div class="input mono" style="font-size:13px">wechart-narrative</div></div>
+            </div>
+            <div class="field"><span class="lbl">Endpoint</span><div class="input mono" style="font-size:13px">https://acme-ai.openai.azure.com</div></div>
+            <div class="field"><span class="lbl">API key</span>
+              <div style="display:flex;gap:8px"><div class="stored" style="flex:1"><svg class="s"><use href="#i-lock"/></svg>Stored · encrypted <span class="muted">· set 2 Oct 2026 by Ada Admin</span></div><span class="btn">Replace…</span></div>
+              <p class="help">The key is never shown again, never sent to a browser, and never written to the audit trail.</p></div>
+          </div></section>
+          <section class="card"><h3>Limits</h3><div class="cb">
+            <div class="r2">
+              <div class="field"><span class="lbl">Summaries per person per day</span><div class="input foc tnum">20</div><span class="help">Was 10 · unsaved</span></div>
+              <div class="field"><span class="lbl">Summaries for everyone per month</span><div class="input tnum">2,000</div></div>
+            </div>
+            <div class="field"><span class="lbl">Message people see at a limit</span><div class="ta">Summaries reset at midnight UTC. Ask the BI team if you need more.</div><span class="ctr">71 / 280</span></div>
+          </div></section>
+        </div>
+        <div style="display:grid;gap:12px">
+          <section class="card"><h3>Test connection<span class="r">passed · 18 Oct, 09:12 · Ada Admin</span></h3><div class="cb" style="gap:0">
+            <div class="chk"><svg class="s"><use href="#s-ok"/></svg><span>Reachable</span><span class="r">180 ms</span></div>
+            <div class="chk"><svg class="s"><use href="#s-ok"/></svg><span>Key accepted</span><span class="r"></span></div>
+            <div class="chk"><svg class="s"><use href="#s-ok"/></svg><span>Model or deployment answers</span><span class="r">wechart-narrative</span></div>
+            <div class="chk"><svg class="s"><use href="#s-ok"/></svg><span>Wrote a test summary from sample facts, every number kept live</span><span class="r">2.1 s</span></div>
+            <div style="padding-top:10px"><span class="btn md">Test connection</span></div>
+          </div></section>
+          <section class="card"><h3>What the provider is sent</h3><div class="cb" style="gap:2px">
+            <div class="sent"><svg class="s"><use href="#s-ok"/></svg><span>The facts wechart computed for a summary: values, periods and changes</span></div>
+            <div class="sent"><svg class="s"><use href="#s-ok"/></svg><span>The titles of the tiles covered and the names of members in those facts</span></div>
+            <div class="sent"><svg class="s sec"><use href="#s-never"/></svg><span>Never: rows, SQL, the model's code, credentials, or anything the author may not see</span></div>
+          </div></section>
+          <section class="card"><h3>This month<span class="r tnum">1,284 of 2,000</span></h3>
+            <table class="grid-table">
+              <thead><tr><th>Person</th><th class="num">Drafted</th><th class="num">Inserted</th><th>Last used</th></tr></thead>
+              <tbody>
+                <tr><td>Wren Writer</td><td class="num">142</td><td class="num">61</td><td>Today 14:05</td></tr>
+                <tr><td>Finn Writer</td><td class="num">96</td><td class="num">40</td><td>Today 11:20</td></tr>
+                <tr><td>Mo Modeller</td><td class="num">51</td><td class="num">12</td><td>Yesterday</td></tr>
+                <tr><td colspan="4" class="sec">14 more people</td></tr>
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </div>
+    </main>
+    <span class="pin" style="left:388px;top:115px">1</span>
+    <span class="pin" style="left:150px;top:160px">2</span>
+    <span class="pin" style="left:1410px;top:150px">3</span>
+    <span class="pin" style="left:4px;top:240px">4</span>
+    <span class="pin" style="left:4px;top:300px">5</span>
+    <span class="pin" style="left:4px;top:420px">6</span>
+    <span class="pin" style="left:4px;top:520px">7</span>
+    <span class="pin" style="left:4px;top:640px">8</span>
+    <span class="pin" style="left:4px;top:735px">9</span>
+    <span class="pin" style="left:1410px;top:230px">10</span>
+    <span class="pin" style="left:1410px;top:420px">11</span>
+    <span class="pin" style="left:1410px;top:530px">12</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 1: what's on the page, and why</h2>
+    <p>One page holds every decision a Super-Admin makes about AI: whether it's on, for whom, through which provider, how much, and what leaves wechart. The key is handled like every other secret in wechart: typed once, tested, stored, never shown (rule 83).</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Security › AI, a fifth tab</b><span class="t">After Access tokens, at <code>/security/ai</code>. Security is already the Super-Admin's place (AC-001), with the audit trail these changes go to. Anyone else opening the address gets Not found (rule 67). Q1 asks about a separate Admin workspace instead.</span><span class="fix">AC-001 · rule 67 · rule 142 (new) · Q1</span></div></li>
+      <li><span class="n">2</span><div><b>The state, as an icon and a label</b><span class="t">On · tested ‹when›; Off; Not set up; Test failing (state C). It's the one line a Super-Admin reads to know whether authors can draft.</span><span class="fix">rule 3</span></div></li>
+      <li><span class="n">3</span><div><b>Save n changes</b><span class="t">Nothing applies until Save, which counts pending changes (the Access panel's pattern, rule 65). A change to the provider, endpoint, model or key can't be saved until Test connection passes with it (state C); a change to limits or who may use AI can (Q6).</span><span class="fix">rules 23, 35, 65 · rule 143 (new)</span></div></li>
+      <li><span class="n">4</span><div><b>AI on or off</b><span class="t">A switch. Off, no one sees "Summarize…" or the Copilot group in the insert menu, except Super-Admins, who see it disabled with a link here (design 21 J5). Summaries already inserted stay, labelled (state D).</span><span class="fix">rule 138 (new)</span></div></li>
+      <li><span class="n">5</span><div><b>Who may use AI</b><span class="t">Everyone who can edit dashboards (read-only users have nothing to draft into), or only chosen AD groups plus Super-Admins. Groups are shown exactly as the token carries them, in the code face, and picked with the existing "AD group" combobox (§7e).</span><span class="fix">§7e group identifiers · rule 64 · Q4</span></div></li>
+      <li><span class="n">6</span><div><b>Provider, model, endpoint</b><span class="t">A provider list (Q2), then the fields that provider needs. Drawn for an Azure-style provider: an endpoint and a model or deployment name. Each provider's exact fields come from a research doc before build; nothing here claims them.</span><span class="fix">references-copilot Q7 · CLAUDE.md "research first"</span></div></li>
+      <li><span class="n">7</span><div><b>The API key: stored, never shown</b><span class="t">"Stored · encrypted", who set it and when, and Replace… (state B). The same words as every stored credential (rule 83). Where and how it's kept is Q3.</span><span class="fix">rule 83 · rule 142 (new) · Q3</span></div></li>
+      <li><span class="n">8</span><div><b>Limits</b><span class="t">Summaries per person per day, and for everyone per month (Q5). An unsaved change shows its old value under the field. Leaving either empty means no limit, and the field says so.</span><span class="fix">rule 144 (new)</span></div></li>
+      <li><span class="n">9</span><div><b>The message at a limit</b><span class="t">What an author sees instead of Summarize when a limit is reached (design 21 J3), with a "n / 280" counter that blocks Save above 280, as the copilot study proposed.</span><span class="fix">rule 144 (new) · references-copilot Q11</span></div></li>
+      <li><span class="n">10</span><div><b>Test connection, each check shown</b><span class="t">Reachable; key accepted; the model or deployment answers; and a test summary written from sample facts with every number kept live, the same check drafts must pass. Each with an icon and a label, as a data source's test (rule 23). The last result, its time and who ran it stay on the card.</span><span class="fix">rule 23 · rule 143 (new)</span></div></li>
+      <li><span class="n">11</span><div><b>What leaves wechart</b><span class="t">A statement, not switches: for summaries, only computed facts, tile titles and member names are sent; never rows, SQL, model code or credentials. When Copilot chat comes, its own switches join this card (references-copilot §9).</span><span class="fix">rule 145 (new)</span></div></li>
+      <li><span class="n">12</span><div><b>Usage this month</b><span class="t">34 px rows, newest use first: person, drafted, inserted, last used, against the monthly limit. It names people only to Super-Admins, who already see the audit trail.</span><span class="fix">§4 table rows · references-copilot §9 Usage</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= SCREEN 2 ======================= -->
+  <div class="screen-label">Screen 2 · First setup: the key typed, the test run, the key refused, and Save held</div>
+  <div class="screen" id="s2">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>SQL runner</span><span class="on">Security</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<span style="margin-left:auto"><kbd class="k">⌘K</kbd></span></div>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">AA</span>Ada Admin</span>
+    </div>
+    <main style="padding:14px 24px 0;display:flex;flex-direction:column;gap:12px;height:852px">
+      <div class="head"><h1>Security</h1></div>
+      <div class="tabs"><span>Policies</span><span>Preview as groups</span><span>Audit trail</span><span><svg class="s"><use href="#i-key"/></svg>Access tokens</span><span class="on"><svg class="s"><use href="#i-ai"/></svg>AI</span></div>
+      <div class="head">
+        <h2 style="margin:0;font-size:16px;line-height:22px">AI provider</h2>
+        <span class="chip er"><svg class="s"><use href="#s-err"/></svg>Test failing · not saved</span>
+        <span class="spacer"></span>
+        <span class="xs sec">Save is held until Test connection passes</span>
+        <span class="btn">Discard</span>
+        <span class="btn primary dis">Save 5 changes</span>
+      </div>
+      <div style="display:grid;grid-template-columns:820px 1fr;gap:16px;align-items:start">
+        <div style="display:grid;gap:12px">
+          <section class="card"><h3>General</h3><div class="cb">
+            <div class="swrow"><span class="tog on"></span><span><b>AI is on</b> <span class="xs sec">· once saved</span></span></div>
+            <div class="field"><span class="lbl">Who may use AI</span>
+              <div class="rrow"><span class="radio on"></span><span>Everyone who can edit dashboards <span class="sec">· read-write members and Super-Admins</span></span></div>
+              <div class="rrow"><span class="radio"></span><span>Only these AD groups, and Super-Admins</span></div>
+            </div>
+          </div></section>
+          <section class="card"><h3>Provider</h3><div class="cb">
+            <div class="r2">
+              <div class="field"><span class="lbl">Provider</span><div class="select">Azure OpenAI</div></div>
+              <div class="field"><span class="lbl">Model or deployment</span><div class="input mono" style="font-size:13px">wechart-narrative</div></div>
+            </div>
+            <div class="field"><span class="lbl">Endpoint</span><div class="input mono" style="font-size:13px">https://acme-ai.openai.azure.com</div></div>
+            <div class="field"><span class="lbl">API key</span><div class="input bad mono" style="font-size:13px;letter-spacing:.1em">••••••••••••••••••••••••••••••••</div>
+              <p class="help">Typed once. It's sent only to test and, once saved, stored encrypted; it's never shown again.</p></div>
+          </div></section>
+          <section class="card"><h3>Limits</h3><div class="cb">
+            <div class="r2"><div class="field"><span class="lbl">Summaries per person per day</span><div class="input ph">No limit</div></div><div class="field"><span class="lbl">Summaries for everyone per month</span><div class="input ph">No limit</div></div></div>
+          </div></section>
+        </div>
+        <div style="display:grid;gap:12px">
+          <section class="card"><h3>Test connection<span class="r">just now</span></h3><div class="cb" style="gap:0">
+            <div class="chk"><svg class="s"><use href="#s-ok"/></svg><span>Reachable</span><span class="r">212 ms</span></div>
+            <div class="chk"><svg class="s"><use href="#s-err"/></svg><span><b>Key refused.</b> The provider answered "401 Unauthorized". Check the key, and that it belongs to this endpoint.<br><span style="color:var(--accent);font-weight:600">Details</span></span><span class="r"></span></div>
+            <div class="chk"><svg class="s muted"><use href="#s-skip"/></svg><span class="muted">Model or deployment answers · not run</span><span class="r"></span></div>
+            <div class="chk"><svg class="s muted"><use href="#s-skip"/></svg><span class="muted">Test summary · not run</span><span class="r"></span></div>
+            <div style="padding-top:10px;display:flex;gap:8px"><span class="btn md ring">Test again</span></div>
+          </div></section>
+          <section class="card"><h3>This month</h3><div class="cb"><span class="xs sec">No summaries drafted yet.</span></div></section>
+        </div>
+      </div>
+    </main>
+    <span class="pin" style="left:150px;top:160px">1</span>
+    <span class="pin" style="left:1100px;top:150px">2</span>
+    <span class="pin" style="left:4px;top:510px">3</span>
+    <span class="pin" style="left:1410px;top:262px">4</span>
+    <span class="pin" style="left:1410px;top:318px">5</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 2: setting it up the first time</h2>
+    <p>A first setup is a data-source connection by another name: fields, a secret, a test that must pass. It works the same way, so a Super-Admin who has added a data source already knows it.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>"Test failing · not saved"</b><span class="t">Before anything is saved, the chip reads "Not set up", with the off icon (state A). After a failing test, it says so. Authors see no Copilot until a setup is saved.</span><span class="fix">rule 3</span></div></li>
+      <li><span class="n">2</span><div><b>Save held, and why</b><span class="t">The reason sits beside the button, not in a tooltip. Discard throws away every unsaved field, the typed key included, and asks first (rule 85).</span><span class="fix">rules 23, 35 · rule 143 (new)</span></div></li>
+      <li><span class="n">3</span><div><b>The key, typed once</b><span class="t">A password field: its characters never show, no "show" toggle, no paste-back. It goes to wechart's API only to test and to save. The field is outlined in <code>status-error</code> because its check failed.</span><span class="fix">rule 83 · rule 142 (new)</span></div></li>
+      <li><span class="n">4</span><div><b>A failed check says what failed</b><span class="t">One sentence, the provider's status, what to check, and Details (the provider's error text, never the key, no stack trace). Later checks show "not run" with their own icon, not as failures.</span><span class="fix">rule 104's pattern · rule 144 (new)</span></div></li>
+      <li><span class="n">5</span><div><b>Test again</b><span class="t">Runs every check in order, each showing Running as it goes (state C). Focus stays on the button; the result is announced politely.</span><span class="fix">rule 85</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= STATES ======================= -->
+  <section class="states">
+    <h2>States A–J</h2>
+    <p>Unless a frame says otherwise, it's screen 1's page and Super-Admin.</p>
+    <div class="stategrid">
+
+      <!-- A -->
+      <div class="state">
+        <h3>A · Where it lives, for each person (AC-001, rule 67)</h3>
+        <p>Super-Admins see Security with five tabs. Anyone else has no Security in the switcher, and <code>/security/ai</code> renders the same Not found as a missing item. Before setup, the tab reads as below.</p>
+        <div class="frame" style="padding:12px;display:grid;gap:10px">
+          <div class="tabs"><span>Policies</span><span>Preview as groups</span><span>Audit trail</span><span>Access tokens</span><span class="on">AI</span></div>
+          <div style="display:flex;gap:8px;align-items:center"><span class="chip nt"><svg class="s"><use href="#s-off"/></svg>Not set up</span><span class="xs sec">Authors can't draft summaries until a provider is set up and tested.</span></div>
+          <div class="infoline"><svg class="s"><use href="#s-info"/></svg><span>With sign-in off (single-user mode), the one user sees Security as a Super-Admin does today, this tab included (Q11).</span></div>
+        </div>
+      </div>
+
+      <!-- B -->
+      <div class="state">
+        <h3>B · Replacing the key (rule 83)</h3>
+        <p>A 520 px dialog. The stored key stays in use until a test with the new one passes and the dialog's own button is pressed; Cancel changes nothing.</p>
+        <div class="frame" style="height:300px">
+          <div class="scrim"></div>
+          <div class="dialog" role="dialog" aria-labelledby="b-h" style="left:60px;top:24px;width:520px">
+            <h2 id="b-h">Replace the API key</h2>
+            <div class="field"><span class="lbl">New key</span><div class="input foc mono" style="letter-spacing:.1em">••••••••••••••••••••••</div></div>
+            <div class="chk" style="border:0"><svg class="s"><use href="#s-ok"/></svg><span>Tested with the new key: all 4 checks passed</span><span class="r">just now</span></div>
+            <p class="help">The old key stops being used as soon as you replace it. The audit trail records "API key replaced", never either key.</p>
+            <div class="acts"><span class="btn">Cancel</span><span class="btn primary">Replace key</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- C -->
+      <div class="state wide">
+        <h3>C · Test connection: running, passing, and each way it fails (rules 3, 23)</h3>
+        <div class="row2" style="grid-template-columns:repeat(3,1fr)">
+          <div><p class="cap">C1 · Running</p><div class="frame"><div class="cb" style="gap:0">
+            <div class="chk"><svg class="s"><use href="#s-ok"/></svg><span>Reachable</span><span class="r">180 ms</span></div>
+            <div class="chk"><svg class="s sec"><use href="#s-run"/></svg><span>Key accepted · running</span><span class="r"></span></div>
+            <div class="chk"><svg class="s muted"><use href="#s-skip"/></svg><span class="muted">Model or deployment answers · waiting</span><span class="r"></span></div>
+            <div class="chk"><svg class="s muted"><use href="#s-skip"/></svg><span class="muted">Test summary · waiting</span><span class="r"></span></div>
+          </div></div><p class="said">Stop is offered after 10 s; a check stops by itself after 30 s with "Timed out".</p></div>
+          <div><p class="cap">C2 · Can't reach, or the model isn't there</p><div class="frame"><div class="cb" style="gap:0">
+            <div class="chk"><svg class="s"><use href="#s-err"/></svg><span><b>Can't reach the endpoint.</b> No answer in 30 s. Check the address, and that wechart's servers may reach it.</span><span class="r"></span></div>
+            <div class="chk"><svg class="s"><use href="#s-err"/></svg><span><b>The model or deployment wasn't found.</b> "wechart-narative" doesn't exist at this endpoint.</span><span class="r"></span></div>
+          </div></div></div>
+          <div><p class="cap">C3 · The test summary failed the live-number check</p><div class="frame"><div class="cb" style="gap:0">
+            <div class="chk"><svg class="s"><use href="#s-warn"/></svg><span><b>The model wrote numbers outside the live values</b> in 2 of 2 tries. Authors' drafts would be rejected. Try another model.</span><span class="r"></span></div>
+          </div></div><p class="said">A warning, not an error, but Save is still held: drafts would fail for every author.</p></div>
+        </div>
+      </div>
+
+      <!-- D -->
+      <div class="state">
+        <h3>D · Turning AI off</h3>
+        <p>An unsaved switch; the line under it says what Save will do. No confirmation dialog: it's a reversible setting, saved with the rest.</p>
+        <div class="frame"><div class="cb">
+          <div class="swrow"><span class="tog"></span><span><b>AI is off</b> <span class="xs sec">· once saved</span></span></div>
+          <div class="infoline"><svg class="s"><use href="#s-info"/></svg><span>When saved: no one can draft summaries. The 38 summaries already in Text tiles stay, with their labels; their "Review" is unavailable until AI is back on. Settings, key and limits are kept.</span></div>
+        </div></div>
+      </div>
+
+      <!-- E -->
+      <div class="state">
+        <h3>E · Choosing AD groups (rule 64)</h3>
+        <p>The existing "AD group" combobox: it suggests the Super-Admin's own groups and groups already set on folders, in the code face, and never a person.</p>
+        <div class="frame" style="height:220px"><div class="cb" style="position:relative">
+          <div class="rrow"><span class="radio on"></span><span>Only these AD groups, and Super-Admins</span></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;padding-left:26px"><span class="gchip">sg-bi-authors<svg class="xs muted"><use href="#i-x"/></svg></span><div class="input foc mono" style="height:24px;width:220px;font-size:12px">sg-fin</div></div>
+          <div class="menu" style="left:150px;top:76px;width:280px">
+            <div class="mi hl mono" style="font-size:12px">sg-finance-analysts<span class="r">on 3 folders</span></div>
+            <div class="mi mono" style="font-size:12px">sg-finance-readers<span class="r">on 5 folders</span></div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- F -->
+      <div class="state">
+        <h3>F · Limits, as authors meet them (rule 144)</h3>
+        <p>Per person per day, then for everyone per month. The second shows the same message to every author until the month turns.</p>
+        <div class="frame"><div class="cb">
+          <div class="infoline"><svg class="s"><use href="#s-info"/></svg><span><b>You've used today's 20 summaries.</b> "Summaries reset at midnight UTC. Ask the BI team if you need more."</span></div>
+          <div class="infoline"><svg class="s"><use href="#s-info"/></svg><span><b>wechart has used this month's 2,000 summaries.</b> "Summaries reset at midnight UTC. Ask the BI team if you need more."</span></div>
+          <div class="warnline"><svg class="s"><use href="#s-warn"/></svg><span>On this page, at 90%: "1,812 of 2,000 summaries used this month."</span></div>
+        </div></div>
+      </div>
+
+      <!-- G -->
+      <div class="state">
+        <h3>G · Leaving with unsaved changes (rule 85)</h3>
+        <p>Switching tab, leaving Security, or Esc with focus on the page asks first.</p>
+        <div class="frame" style="height:200px">
+          <div class="scrim"></div>
+          <div class="dialog" role="alertdialog" aria-labelledby="g-h" style="left:60px;top:28px;width:520px">
+            <h2 id="g-h">Leave without saving 2 changes?</h2>
+            <p class="help" style="font-size:14px;line-height:20px;color:var(--text-secondary)">Summaries per person per day (10 → 20) and the limit message.</p>
+            <div class="acts"><span class="btn ring">Keep editing</span><span class="btn danger">Leave without saving</span></div>
+          </div>
+        </div>
+        <p class="said">Focus starts on Keep editing, the safe choice.</p>
+      </div>
+
+      <!-- H -->
+      <div class="state wide">
+        <h3>H · The audit trail's new events (AC-294 … AC-296; rule 82)</h3>
+        <p>Settings changes are recorded with the fields changed and their old and new values, never a key. Inserting an AI summary is recorded with its tile (Q7).</p>
+        <div class="frame">
+          <table class="grid-table">
+            <thead><tr><th>Time</th><th>User</th><th>Event</th><th>Folder</th><th>Item</th><th>Details</th></tr></thead>
+            <tbody>
+              <tr><td>18 Oct 2026 14:21</td><td>Ada Admin</td><td><span style="display:inline-flex;gap:6px;align-items:center"><svg class="s"><use href="#i-ai"/></svg>AI settings changed</span></td><td class="sec">—</td><td class="sec">—</td><td>Summaries per person per day: 10 → 20; limit message changed</td></tr>
+              <tr><td>18 Oct 2026 09:12</td><td>Ada Admin</td><td><span style="display:inline-flex;gap:6px;align-items:center"><svg class="s"><use href="#i-key"/></svg>AI key replaced</span></td><td class="sec">—</td><td class="sec">—</td><td>Tested: 4 of 4 checks passed</td></tr>
+              <tr><td>17 Oct 2026 16:40</td><td>Wren Writer</td><td><span style="display:inline-flex;gap:6px;align-items:center"><svg class="s"><use href="#i-ai"/></svg>AI summary inserted</span></td><td>My workspace</td><td>Revenue overview › EMEA summary</td><td>5 live values · 4 facts</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- I -->
+      <div class="state">
+        <h3>I · Below 1,024 px (direction §2; AC-304)</h3>
+        <p>The app is view-only below 1,024 px. The page shows its state and settings read-only, with no Save, Replace… or Test.</p>
+        <div class="frame" style="width:392px"><div class="cb">
+          <span class="chip ok" style="justify-self:start"><svg class="s"><use href="#s-ok"/></svg>On · tested 18 Oct, 09:12</span>
+          <div class="infoline"><svg class="s"><use href="#s-info"/></svg><span>Changing AI settings needs a window at least 1,024 px wide.</span></div>
+          <div class="xs" style="display:grid;gap:4px"><span><b>Provider</b> · Azure OpenAI</span><span><b>Model</b> · <span class="mono">wechart-narrative</span></span><span><b>API key</b> · Stored · encrypted</span><span><b>Who</b> · 2 AD groups and Super-Admins</span></div>
+        </div></div>
+      </div>
+
+      <!-- J -->
+      <div class="state">
+        <h3>J · Usage: loading and empty (rule 18)</h3>
+        <div class="row2">
+          <div class="frame"><div class="cb" style="gap:10px"><div class="skel" style="width:80%"></div><div class="skel" style="width:60%"></div><div class="skel" style="width:70%"></div></div></div>
+          <div class="frame"><div class="cb"><span class="xs sec">No summaries drafted yet. Authors find Summarize… in a Text tile's insert menu.</span></div></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= KEYBOARD ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Keyboard and accessibility</h2>
+    <p>No new shortcut. A form of native controls; Security's tabs keep their keys (one Tab stop, ← → along them).</p>
+    <div class="decision" style="margin-top:0">
+      <table>
+        <thead><tr><th style="width:220px">Control</th><th style="width:200px">Keys</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>AI on, Who may use AI</td><td><kbd class="k">Space</kbd> · <kbd class="k">↑</kbd> <kbd class="k">↓</kbd></td><td>A <code>switch</code>, then a <code>radiogroup</code>. The groups' combobox is the existing one.</td></tr>
+          <tr><td>API key</td><td>—</td><td>A password input with <code>autocomplete="off"</code>; once stored, a read-only line and the Replace… button.</td></tr>
+          <tr><td>Test connection</td><td><kbd class="k">Enter</kbd></td><td>Results are a list; each check's state is in its text, and the outcome ("4 of 4 checks passed", or the first failure) is announced politely.</td></tr>
+          <tr><td>Save n changes</td><td><kbd class="k">Enter</kbd></td><td>When held, it's disabled with its reason as its description. No single key saves (rule 85).</td></tr>
+          <tr><td>Dialogs</td><td><kbd class="k">Esc</kbd></td><td>Replace the key and Leave without saving take focus on open, close on Esc, and return focus to their opener (rule 85).</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Every state as an icon and a label</h3>
+      <div class="legend6">
+        <div><span class="chip ok"><svg class="s"><use href="#s-ok"/></svg>On · tested</span><span>set up, working</span></div>
+        <div><span class="chip nt"><svg class="s"><use href="#s-off"/></svg>Off</span><span>switched off; kept</span></div>
+        <div><span class="chip nt"><svg class="s"><use href="#s-off"/></svg>Not set up</span><span>never saved</span></div>
+        <div><span class="chip er"><svg class="s"><use href="#s-err"/></svg>Test failing</span><span>Save held</span></div>
+        <div><span class="xs"><svg class="s sec"><use href="#s-run"/></svg> Running</span><span>a check in progress</span></div>
+        <div><span class="xs muted"><svg class="s"><use href="#s-skip"/></svg> not run</span><span>after an earlier failure</span></div>
+        <div><span class="xs"><svg class="s"><use href="#i-lock"/></svg> Stored · encrypted</span><span>the key</span></div>
+        <div><span class="xs"><svg class="s"><use href="#s-warn"/></svg> 1,812 of 2,000</span><span>near the monthly limit</span></div>
+        <div><span class="xs"><svg class="s sec"><use href="#s-never"/></svg> Never sent</span><span>what stays in wechart</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= QUESTIONS ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Questions for you</h2>
+    <p>No AC covers this page yet; write-spec follows approval. Several questions are the copilot study's, asked now because R80 builds these settings this round. Each is drawn one way, the recommended one, listed first.</p>
+    <div class="decision" style="margin-top:0">
+      <table>
+        <thead><tr><th style="width:40px">#</th><th style="width:280px">Question</th><th>Drawn as (recommended), and the alternatives</th><th style="width:120px">Where</th></tr></thead>
+        <tbody>
+          <tr><td>Q1</td><td>Where the settings live.</td><td><b>Drawn (a):</b> Security › AI, a fifth tab for Super-Admins. (b) A new Admin workspace in the switcher (AC-001 amended), as references-copilot §9 named "Admin › Copilot". (c) The account menu's "Instance settings…".</td><td class="w">S1 pin 1</td></tr>
+          <tr><td>Q2</td><td>Which providers.</td><td><b>(a)</b> Anthropic, OpenAI, Azure OpenAI, Amazon Bedrock and Google, plus an endpoint compatible with OpenAI's API, each researched before build (references-copilot Q7). (b) Anthropic only. (c) One provider you name.</td><td class="w">S1 pin 6</td></tr>
+          <tr><td>Q3</td><td>Where the key is kept.</td><td><b>(a)</b> wechart's API encrypts it at rest with a server-held key, decrypts it only to call the provider, and never returns it. (b) Sealed to xcube, with calls going through xcube, as data-source secrets are. (c) Only from a deployment secret; the page shows "Set by the deployment" and no key field.</td><td class="w">S1 pin 7</td></tr>
+          <tr><td>Q4</td><td>Who may use AI, by default.</td><td><b>(a)</b> Everyone who can edit dashboards (read-write members and Super-Admins). (b) No one until groups are chosen.</td><td class="w">S1 pin 5</td></tr>
+          <tr><td>Q5</td><td>How limits are counted.</td><td><b>Drawn (a):</b> summaries, per person per day and for everyone per month. (b) Provider tokens per month. (c) No limits.</td><td class="w">S1 pin 8</td></tr>
+          <tr><td>Q6</td><td>When Save needs a passing test.</td><td><b>Drawn (a):</b> when the provider, endpoint, model or key changes. (b) On every save. (c) Never; a failing test only warns.</td><td class="w">S1 pin 3 · S2</td></tr>
+          <tr><td>Q7</td><td>What the audit trail records.</td><td><b>Drawn (a):</b> settings changes (never the key), key replacements, and each inserted summary with its tile. (b) Settings and keys only. (c) Also every draft request.</td><td class="w">H</td></tr>
+          <tr><td>Q8</td><td>Drafts and prompts after the fact.</td><td><b>(a)</b> wechart keeps no draft once it's inserted or discarded; only the inserted text and its label. (b) Keep the last drafts per tile for 28 days, for review.</td><td class="w">—</td></tr>
+          <tr><td>Q9</td><td>One model, or two.</td><td><b>Drawn (a):</b> one model now; the copilot's "fast model" joins when the chat is taken up. (b) Default and Fast models now.</td><td class="w">S1 pin 6</td></tr>
+          <tr><td>Q10</td><td>The limit message's length.</td><td><b>Drawn (a):</b> 280 characters, with a counter. (b) 500.</td><td class="w">S1 pin 9</td></tr>
+          <tr><td>Q11</td><td>Sign-in off (single-user mode).</td><td><b>Drawn (a):</b> the one user manages AI as Super-Admins do. (b) AI is unavailable while sign-in is off.</td><td class="w">A</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+</body>
+</html>
