@@ -58,5 +58,54 @@ spec:
       backendRefs:
         - name: {{ include "wechart.component" (list $ "api") }}
           port: {{ int $.Values.api.port }}
+---
+# Only the listed sources reach /mcp (AC-476): everything is denied but one
+# Allow rule, the first match winning; a denied request answers 403
+# "RBAC: access denied" and never reaches the API (gateway-api.md, "Envoy
+# Gateway SecurityPolicy"). Anthropic's range only when asked for.
+{{- $sources := concat (.allowedSourceRanges | default list) (ternary (list "160.79.104.0/21") (list) (.allowAnthropicEgress | default false)) }}
+{{- if not $sources }}
+{{- fail "mcp.allowedSourceRanges is required with mcp.host: the enterprise network's CIDR ranges let in to /mcp" }}
+{{- end }}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list $ "mcp") | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ $name }}
+  authorization:
+    defaultAction: Deny
+    rules:
+      - name: allowed-sources
+        action: Allow
+        principal:
+          clientCIDRs:
+            {{- toYaml $sources | nindent 12 }}
+{{- with .clientIPDetection }}
+{{- if not $.Values.mcp.gateway.create }}
+{{- fail "mcp.clientIPDetection is mode A's alone: in mode B the Gateway's owner sets it" }}
+{{- end }}
+---
+# How the chart's Gateway finds the client's address (AC-474; gateway-api.md,
+# "How the client IP reaches the API"), for the allow-list and the API.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "wechart.labels" (list $ "mcp") | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ $name }}
+  clientIPDetection:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
 {{- end }}
 {{- end }}

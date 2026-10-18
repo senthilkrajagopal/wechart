@@ -1649,11 +1649,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T792 [P] (AC-476) Render the MCP host's HTTPRoute, routing only `/mcp` to the API Service, on the chart's own Gateway (mode A) or on a named one (mode B)
 
-- [ ] T793 (AC-476, AC-474) Let in only the listed source addresses with an Envoy Gateway SecurityPolicy, Anthropic's range a value off by default, and pass the client's address to the API
-  - Lane: MCP
-  - Files: `deploy/helm/wechart/templates/mcp-gateway.yaml`, `deploy/helm/wechart/values.yaml` (`mcp.allowedSourceRanges`, `mcp.allowAnthropicEgress: false`, documented with `160.79.104.0/21`, and `mcp.clientIPDetection`), `packages/api/src/deploy/mcp-gateway.test.ts`.
-  - Failing test: `mcp-gateway.test.ts`: the render has a SecurityPolicy on the HTTPRoute with `defaultAction: Deny` and one Allow rule whose `clientCIDRs` are exactly `mcp.allowedSourceRanges`; `160.79.104.0/21` appears only with `allowAnthropicEgress: true`; in mode A a ClientTrafficPolicy on the Gateway sets the client-IP detection from the values (AC-476, AC-474); the values file documents each.
-  - Depends on: T792, T773
+- [x] T793 (AC-476, AC-474) Let in only the listed source addresses with an Envoy Gateway SecurityPolicy, Anthropic's range a value off by default, and pass the client's address to the API
 
 - [ ] T794 (AC-476) Give the MCP route 130 s timeouts, tell the API its host, answer `/mcp` on the web app's host with 404, and render nothing for MCP when no host is named
   - Lane: MCP

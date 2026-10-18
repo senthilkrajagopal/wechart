@@ -224,3 +224,25 @@ mcp:
     # Mode B: the Gateway (and listener) the route attaches to. Required.
     # e.g. [{name: shared, namespace: infra, sectionName: https-mcp}]
     parentRefs: []
+  # The source addresses let in to /mcp, as CIDR ranges: the enterprise
+  # network's, e.g. [10.20.0.0/16, 192.0.2.7/32]. Everything else is denied
+  # with 403 by an Envoy Gateway SecurityPolicy on the route, before the API
+  # (AC-476). Required with a host, unless allowAnthropicEgress alone.
+  allowedSourceRanges: []
+  # Anthropic's outbound range, 160.79.104.0/21, which Claude.ai's and Claude
+  # Desktop's connectors call from (mcp-deployment-and-tokens.md), added to
+  # the ranges above when true. Off: only the enterprise's own clients, such
+  # as Claude Code on its machines, reach /mcp.
+  allowAnthropicEgress: false
+  # Mode A: how the chart's Gateway finds the client's address, which the
+  # allow-list checks and which reaches the API in X-Forwarded-For for its
+  # per-address limits (AC-474): Envoy Gateway's ClientTrafficPolicy
+  # `clientIPDetection`, exactly one of
+  #   xForwardedFor: {numTrustedHops: 1} or {trustedCIDRs: [<the L7 load balancer's ranges>]}
+  #   customHeader: {name: X-Real-IP}
+  #   directSourceIP: {enabled: true}
+  # (gateway-api.md, "How the client IP reaches the API"). Empty: none is
+  # rendered, and Envoy takes the address of the connection to it. In mode B
+  # it is the Gateway owner's, and the chart refuses it. Set api.trustProxy
+  # to the Envoy pods' range so the API believes the address Envoy appends.
+  clientIPDetection: {}

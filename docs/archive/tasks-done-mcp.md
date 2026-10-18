@@ -527,6 +527,18 @@
     - **Tests** (3), `helm template` with docker-desktop's values, parsed with `yaml`: mode A's Gateway and route, field for field; mode B's route with exactly the given parent and no Gateway; the three refusals by their words. Red first: no Gateway or route rendered, and no refusal.
     - `helm lint` with mode A's values: 0 failed.
 
+- [x] T793 (AC-476, AC-474) Let in only the listed source addresses with an Envoy Gateway SecurityPolicy, Anthropic's range a value off by default, and pass the client's address to the API
+  - Lane: MCP
+  - Files: `deploy/helm/wechart/templates/mcp-gateway.yaml`, `deploy/helm/wechart/values.yaml` (`mcp.allowedSourceRanges`, `mcp.allowAnthropicEgress: false`, documented with `160.79.104.0/21`, and `mcp.clientIPDetection`), `packages/api/src/deploy/mcp-gateway.test.ts`.
+  - Failing test: `mcp-gateway.test.ts`: the render has a SecurityPolicy on the HTTPRoute with `defaultAction: Deny` and one Allow rule whose `clientCIDRs` are exactly `mcp.allowedSourceRanges`; `160.79.104.0/21` appears only with `allowAnthropicEgress: true`; in mode A a ClientTrafficPolicy on the Gateway sets the client-IP detection from the values (AC-476, AC-474); the values file documents each.
+  - Depends on: T792, T773
+  - **Built 2026-10-18** (lane MCP, batch 7). No AC ticked: AC-476 waits on T795, and AC-474 was ticked at T780.
+    - **Chart:** with a host, the SecurityPolicy `‹release›-wechart-mcp` (`gateway.envoyproxy.io/v1alpha1`) targets the HTTPRoute: `defaultAction: Deny`, one rule `allowed-sources`, `Allow`, `principal.clientCIDRs` = `mcp.allowedSourceRanges`, then `160.79.104.0/21` where `mcp.allowAnthropicEgress` (false by default). In mode A, a non-empty `mcp.clientIPDetection` renders a ClientTrafficPolicy on the chart's Gateway with it as `clientIPDetection`. Each value is documented in `values.yaml`, with the three detection shapes and the note to set `api.trustProxy` to the Envoy pods' range.
+    - **Refusals** (T793-1, T793-2): a host with no range to let in (the policy needs at least one), and `mcp.clientIPDetection` in mode B.
+    - **Tests** (5 more, 8 in the file): the exact ranges in both modes, the policy's target, `Deny` and one `Allow` with `clientCIDRs` alone; Anthropic's range nowhere in the render by default, last with the switch, alone with the switch and no ranges; the refusal with no range; mode A's ClientTrafficPolicy from `xForwardedFor.trustedCIDRs`, field for field, and none unset; mode B's refusal. Red first: no policy rendered, no refusal. T792's tests now name ranges, which a host requires.
+    - The `helm template` tests take 1–2 s each, so the file's suites run with a 60 s timeout.
+    - `helm lint` with mode A's values, ranges and detection: 0 failed.
+
 ## Security specs failing alone: xcube's folder tree stuck (lane MCP, batch 7, at the coordinator's request)
 
 - **Asked:** why `calc-request-resolve.spec.ts:200`, `reviews.spec.ts:168` and `export-import.spec.ts:393` (422, "No folder on the path holds ‹run›_margin") fail when run alone on feat/xcube.
