@@ -19,6 +19,7 @@ import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 import { workspaceOverlayIdOf } from '../xcube/overlays';
 import { xcubeSqlRunner } from '../xcube/sql-runner';
 import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
+import { auditSqlOf } from './sql-runner';
 import { copyRepointed } from './sql-runner-switch';
 
 /**
@@ -308,7 +309,7 @@ describe('parameters on Dremio (T810, AC-482)', () => {
     }
   });
 
-  it('runs a {{ name }} on other drivers as sent, its value never written in (until T811 binds it)', async () => {
+  it('runs a {{ name }} on other drivers as sent, its value never written in (bound by T811, sql-runner-history.test.ts)', async () => {
     await turnOn(source);
     const before = stub.sqlAsked().length;
     try {
@@ -683,5 +684,39 @@ describe('a copy pointed elsewhere than its original (T532, design 15’s Q8)', 
       copyRepointed('postgres', original, { ...original, fields: { ...FIELDS, host: 'b' } }),
     ).toBe(false);
     expect(copyRepointed('postgres', original, { ...original, fields: { ...FIELDS } })).toBe(false);
+  });
+});
+
+/**
+ * T811, AC-454: a bound run's SQL in the audit trail, xcube's placeholders
+ * named again, as xcube writes them per driver (research
+ * xcube-bb188d8ada.md, "The checks", 4).
+ */
+describe('a bound run’s SQL as the audit keeps it (T811, AC-454)', () => {
+  it('names PostgreSQL’s and Redshift’s placeholders again, casts and the spaces xcube wrote gone', () => {
+    for (const driver of ['postgres', 'redshift'])
+      expect(
+        auditSqlOf(
+          'SELECT  $1::text  AS a,  $2::numeric\nFROM t WHERE d >  $3::date  AND  $1::text  <> ?',
+          driver,
+          ['c', 'n', 'd'],
+        ),
+        driver,
+      ).toBe('SELECT {{c}} AS a, {{n}}\nFROM t WHERE d > {{d}} AND {{c}} <> ?');
+  });
+
+  it('names SQL Server’s and BigQuery’s @p1 and Oracle’s :p1, inside xcube’s casts', () => {
+    expect(auditSqlOf('SELECT  CAST(@p1 AS DECIMAL(?, ?))  , @@VERSION', 'mssql', ['n'])).toBe(
+      'SELECT  CAST({{n}} AS DECIMAL(?, ?))  , @@VERSION',
+    );
+    expect(auditSqlOf('SELECT  @p1  ,  @p2', 'bigquery', ['a', 'b'])).toBe('SELECT  {{a}}  ,  {{b}}');
+    expect(auditSqlOf("SELECT  TO_DATE(:p1, ?)  FROM dual", 'oracle', ['d'])).toBe(
+      'SELECT  TO_DATE({{d}}, ?)  FROM dual',
+    );
+  });
+
+  it('leaves MySQL’s and Snowflake’s ?, which a redacted literal can’t be told from', () => {
+    for (const driver of ['mysql', 'snowflake'])
+      expect(auditSqlOf('SELECT  ?  , ?', driver, ['a'])).toBe('SELECT  ?  , ?');
   });
 });

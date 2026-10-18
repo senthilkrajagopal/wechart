@@ -390,6 +390,8 @@ export interface SqlRunTable {
    * it (T548, T549).
    */
   ends_by: Generated<Date | null>;
+  /** Its `{{name}}`s' values, for its owner's History alone (T811, AC-454). */
+  parameters: JSONColumnType<SavedParameter[], string | undefined, string>;
 }
 
 /** A version of a shared item wechart landed (T352, AC-288), a copy it holds. */

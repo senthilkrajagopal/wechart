@@ -1,6 +1,6 @@
 import { sql, type Kysely } from 'kysely';
 
-import type { Database } from '../db/schema';
+import type { Database, SavedParameter } from '../db/schema';
 
 /**
  * A user's SQL runs (T533, AC-379; R50-9): one going at a time per user,
@@ -49,6 +49,8 @@ export function sqlRuns(db: Kysely<Database>) {
       readonly sql?: string;
       /** Its data source's name now, kept should it go (T534). */
       readonly dataSourceName?: string | null;
+      /** Its `{{name}}`s' values, for their owner's History alone (T811, AC-454). */
+      readonly parameters?: readonly SavedParameter[];
     },
     tries = 2,
   ): Promise<StartAnswer> => {
@@ -68,6 +70,7 @@ export function sqlRuns(db: Kysely<Database>) {
         data_source_id: run.dataSourceId,
         sql: run.sql ?? '',
         data_source_name: run.dataSourceName ?? null,
+        parameters: JSON.stringify(run.parameters ?? []),
       })
       .onConflict((conflict) =>
         conflict.column('user_key').where('finished_at', 'is', null).doNothing(),
@@ -212,6 +215,7 @@ export function sqlRuns(db: Kysely<Database>) {
         durationMs: row.duration_ms,
         truncated: row.truncated === 'rows' || row.truncated === 'bytes' ? row.truncated : null,
         statement: row.statement,
+        parameters: row.parameters,
       }));
       return rows.length > limit ? { runs: page, next: page.at(-1)!.id } : { runs: page };
     },
@@ -280,6 +284,8 @@ export interface PastRun {
   readonly durationMs: number | null;
   readonly truncated: 'rows' | 'bytes' | null;
   readonly statement: string | null;
+  /** Its `{{name}}`s' values, as its user gave them (T811, AC-454). */
+  readonly parameters: readonly SavedParameter[];
 }
 
 export type SqlRunStore = ReturnType<typeof sqlRuns>;

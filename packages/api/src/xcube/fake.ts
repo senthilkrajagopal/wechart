@@ -108,6 +108,29 @@ export interface FakeSqlAsk {
   readonly maxRows?: number;
   readonly timeoutMs?: number;
   readonly maxBytes?: number;
+  /** Its `{{name}}`s' values, bound (T811; xcube bb188d8ada). */
+  readonly parameters?: Readonly<Record<string, { type: string; value: string | boolean }>>;
+}
+
+/** PostgreSQL's cast for each type of value xcube binds (research `xcube-bb188d8ada.md`). */
+const PG_CASTS: Record<string, string> = {
+  text: 'text',
+  number: 'numeric',
+  date: 'date',
+  boolean: 'boolean',
+};
+
+/**
+ * The statement as xcube runs it with `parameters` (T811): each `{{name}}`
+ * its PostgreSQL placeholder, numbered by its first place, typed, and written
+ * between spaces, as xcube's `bindParameters` writes it.
+ */
+function boundOf(sql: string, parameters: NonNullable<FakeSqlAsk['parameters']>): string {
+  const slots = new Map<string, number>();
+  return sql.replace(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g, (_, name: string) => {
+    if (!slots.has(name)) slots.set(name, slots.size + 1);
+    return ` $${String(slots.get(name))}::${PG_CASTS[parameters[name]?.type ?? 'text'] ?? 'text'} `;
+  });
 }
 
 /** A folder and each one above it in a tree, to `froot` (T712, T713). */
@@ -122,9 +145,16 @@ function folderPathOf(tree: readonly TreeFolder[], folderId: string): Set<string
   return path;
 }
 
-/** Every literal as `?`, as xcube's `redactedSql` has it: strings and numbers. */
+/**
+ * Every literal as `?`, as xcube's `redactedSql` has it: strings and numbers,
+ * but not a bound parameter's place (`$1`); trailing spaces trimmed.
+ */
 const redactedOf = (sql: string) =>
-  sql.replace(/'(?:[^']|'')*'/g, '?').replace(/\b\d+(?:\.\d+)?\b/g, '?');
+  sql
+    .replace(/'(?:[^']|'')*'/g, '?')
+    .replace(/(?<!\$)\b\d+(?:\.\d+)?\b/g, '?')
+    .replace(/[ \t]+$/gm, '')
+    .trim();
 
 export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly string[] } = {}) {
   let generation = randomUUID();
@@ -710,7 +740,10 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
         target: connection === undefined ? { cubeStore: true } : { connection, overlay },
       };
       sqlAsked.push(ask);
-      const redactedSql = redactedOf(ask.sql);
+      // The statement as it runs: with `parameters`, xcube's placeholders in their places (T811).
+      const redactedSql = redactedOf(
+        ask.parameters === undefined ? ask.sql : boundOf(ask.sql, ask.parameters),
+      );
       const statement = /^\s*explain\b/i.test(ask.sql) ? 'explain' : 'select';
       if (holdingSql)
         return new Promise<Response>((resolve, reject) => {

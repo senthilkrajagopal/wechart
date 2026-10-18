@@ -264,12 +264,19 @@ export function QueryTab({
     const at = Date.now();
     dispatch({ kind: 'run-start', id: tab.id, sql, at });
     setSaid('Running');
+    // Its values beside it, for xcube to bind, never written in; only those of
+    // what runs, since xcube refuses a value used nowhere (T811, AC-454).
+    const parameters = parameterNames(sql, dialect).map((name) => ({
+      name,
+      type: tab.paramTypes?.[name] ?? 'text',
+      value: tab.params[name] ?? '',
+    }));
     let outcome: SqlOutcome;
     try {
       const response = await fetch(routeOf(source, 'sql'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sql }),
+        body: JSON.stringify(parameters.length > 0 ? { sql, parameters } : { sql }),
       });
       outcome = outcomeOf(response.status, await response.json().catch(() => null));
     } catch {

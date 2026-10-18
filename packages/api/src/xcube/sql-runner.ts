@@ -22,6 +22,15 @@ import { XcubeError } from './client';
 export type SqlTarget =
   { readonly connection: string; readonly overlay?: string } | { readonly cubeStore: true };
 
+/**
+ * A `{{name}}`'s value, bound by xcube, never written into the SQL (T811,
+ * AC-454; xcube bb188d8ada, research `xcube-bb188d8ada.md`): a number as a
+ * decimal string, a date as `YYYY-MM-DD`, a Boolean as itself.
+ */
+export type SqlParameter =
+  | { readonly type: 'text' | 'number' | 'date'; readonly value: string }
+  | { readonly type: 'boolean'; readonly value: boolean };
+
 /** One run: its SQL, its id (wechart's, one per run) and its caps. */
 export interface SqlAsk {
   readonly sql: string;
@@ -29,6 +38,8 @@ export interface SqlAsk {
   readonly maxRows: number;
   readonly timeoutMs: number;
   readonly maxBytes: number;
+  /** Its `{{name}}`s' values, by name; none sent where the SQL has none (T811). */
+  readonly parameters?: Readonly<Record<string, SqlParameter>>;
 }
 
 /** A column: its name and its type as the database names it; `null` on Cube Store. */
@@ -67,6 +78,13 @@ export type SqlAnswer =
        * `error`'s text.
        */
       readonly routerJoin?: true;
+      /**
+       * Its parameters refused (T811; xcube bb188d8ada): a value missing,
+       * unused or not of its type, a malformed `{{…}}`, a placeholder written
+       * by hand, or a database that binds none. `reason` is xcube's words,
+       * which name a parameter, never its value.
+       */
+      readonly parameters?: true;
     }
   /**
    * Stopped at its time cap, or cancelled, with the rows it read before the
@@ -146,6 +164,8 @@ const CANCEL_TIMEOUT_MS = 15_000;
 const MISSING = new Set(['unknown_connection', 'unknown_overlay', 'unknown_model']);
 /** A 400 of xcube's check: the SQL is no one SELECT or EXPLAIN. */
 const SQL_REFUSALS = new Set(['not_read_only', 'several_statements']);
+/** A 400 refusing a run's bound parameters (T811; research `xcube-bb188d8ada.md`). */
+const PARAMETER_REFUSALS = new Set(['invalid_parameters', 'parameters_unsupported']);
 
 const text = (value: unknown): string | null => (typeof value === 'string' ? value : null);
 const count = (value: unknown): number | null => (typeof value === 'number' ? value : null);
@@ -224,6 +244,8 @@ export function xcubeSqlRunner({
           redactedSql,
           ...(answer['reason'] === 'cubestore_router_join' ? { routerJoin: true as const } : {}),
         };
+      if (status === 400 && code !== null && PARAMETER_REFUSALS.has(code))
+        return { kind: 'refused', code, reason: error, statement, redactedSql, parameters: true };
       if (status === 422 && (code === 'timeout' || code === 'cancelled'))
         return {
           kind: 'stopped',

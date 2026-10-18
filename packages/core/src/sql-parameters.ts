@@ -1,4 +1,4 @@
-import { StandardSQL, type SQLDialect } from '@codemirror/lang-sql';
+import { MSSQL, PostgreSQL, StandardSQL, type SQLDialect } from '@codemirror/lang-sql';
 
 /**
  * The parameters in a SQL runner tab's SQL (T809, AC-453; design 17, pin 13
@@ -37,4 +37,17 @@ export function parameterNames(sql: string, dialect: SQLDialect = StandardSQL): 
     if (!skipped.some(([from, to]) => at >= from && at < to)) names.add(found[1]!);
   }
   return [...names];
+}
+
+/**
+ * The parameters as a data source's driver reads its SQL (T811's review), in
+ * the order xcube numbers its placeholders: PostgreSQL and Redshift as
+ * PostgreSQL, SQL Server as SQL Server, as the browser reads them
+ * (`dialectFor`); any other as standard SQL. The API names a bound run's
+ * placeholders again by it, for the audit.
+ */
+export function parameterNamesOn(sql: string, driver: string | null): string[] {
+  const dialect =
+    driver === 'postgres' || driver === 'redshift' ? PostgreSQL : driver === 'mssql' ? MSSQL : StandardSQL;
+  return parameterNames(sql, dialect);
 }

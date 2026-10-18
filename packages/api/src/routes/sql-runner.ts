@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { parameterNames } from '@wechart/core/sql-parameters';
+import { parameterNames, parameterNamesOn } from '@wechart/core/sql-parameters';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { actorOf, recordIn } from '../audit/record';
@@ -15,7 +15,14 @@ import {
 } from '../repos/sql-runner-switches';
 import type { GoingRun, LostRun, SqlRunStore, StoppingRun } from '../repos/sql-runs';
 import { XcubeError } from '../xcube/client';
-import type { SqlAnswer, SqlRunState, SqlTarget, XcubeSqlRunner } from '../xcube/sql-runner';
+import type { SavedParameter } from '../db/schema';
+import type {
+  SqlAnswer,
+  SqlParameter,
+  SqlRunState,
+  SqlTarget,
+  XcubeSqlRunner,
+} from '../xcube/sql-runner';
 import { queryOf, tablesOf, type Catalog } from '../model/introspection';
 import type { DataSourceAccess } from './data-sources';
 import { copyRepointed } from './sql-runner-switch';
@@ -42,6 +49,92 @@ import { copyRepointed } from './sql-runner-switch';
 export const SQL_CAPS = { maxRows: 10_000, timeoutMs: 30_000, maxBytes: 10 * 1024 * 1024 } as const;
 /** xcube's own limit on a run's SQL (research `xcube-sql-runner.md`). */
 const MAX_SQL = 100_000;
+
+/**
+ * A run's parameters as xcube takes them (T811, AC-454; research
+ * `xcube-bb188d8ada.md`, "The request"): at most 100, each named by the
+ * parameter grammar, at most 64 characters, its value text of at most
+ * 100,000; a Boolean's `true` or `false`, sent as itself.
+ */
+const MAX_PARAMETERS = 100;
+const PARAMETER_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+const PARAMETER_TYPES: ReadonlySet<unknown> = new Set(['text', 'number', 'date', 'boolean']);
+const MAX_VALUE = 100_000;
+const BAD_PARAMETERS =
+  'Each parameter is { name, type, value }, named once: a name of letters, digits and underscores, Text, Number, Date or Boolean, and its value as text (a Boolean’s true or false).';
+
+/** The body's parameters, checked; `undefined` where they aren't any. */
+export function runParametersOf(body: unknown): SavedParameter[] | undefined {
+  const given = (body as { parameters?: unknown } | undefined)?.parameters ?? [];
+  if (!Array.isArray(given) || given.length > MAX_PARAMETERS) return undefined;
+  const names = new Set<string>();
+  const out: SavedParameter[] = [];
+  for (const each of given as unknown[]) {
+    if (typeof each !== 'object' || each === null) return undefined;
+    const { name, type, value } = each as Record<string, unknown>;
+    if (
+      typeof name !== 'string' ||
+      !PARAMETER_NAME.test(name) ||
+      names.has(name) ||
+      !PARAMETER_TYPES.has(type) ||
+      typeof value !== 'string' ||
+      value.length > MAX_VALUE ||
+      (type === 'boolean' && value !== 'true' && value !== 'false')
+    )
+      return undefined;
+    names.add(name);
+    out.push({ name, type: type as SavedParameter['type'], value });
+  }
+  return out;
+}
+
+/** Them as xcube's `parameters`, by name: a Boolean as itself. */
+function boundOf(parameters: readonly SavedParameter[]): Record<string, SqlParameter> {
+  return Object.fromEntries(
+    parameters.map(({ name, type, value }): [string, SqlParameter] => [
+      name,
+      type === 'boolean' ? { type, value: value === 'true' } : { type, value },
+    ]),
+  );
+}
+
+/**
+ * The SQL of a bound run as the audit trail keeps it (T811, AC-454): xcube's
+ * `redactedSql`, the statement as it ran with its placeholders and no
+ * literal, each placeholder its `{{name}}` again. xcube numbers them by each
+ * name's first place in the statement, as `parameterNamesOn` lists them
+ * (research `xcube-bb188d8ada.md`, "The checks", 4):
+ *
+ * - PostgreSQL and Redshift: ` $1::text `, its cast and the spaces xcube
+ *   wrote around it gone;
+ * - SQL Server and BigQuery: `@p1`; Oracle: `:p1`, inside any cast xcube
+ *   wrote, whose literals it redacted.
+ *
+ * A hand-written one of these can't be there: xcube refuses it while
+ * `parameters` is sent. MySQL's and Snowflake's `?` can't be told from a
+ * redacted literal, so they stay `?`: no value either way (decision T811-2).
+ */
+export function auditSqlOf(redactedSql: string, driver: string | null, names: readonly string[]): string {
+  const named = (n: string) => {
+    const name = names[Number(n) - 1];
+    return name === undefined ? null : `{{${name}}}`;
+  };
+  switch (driver) {
+    case 'postgres':
+    case 'redshift':
+      return redactedSql.replace(
+        /(?:^| )\$(\d+)::(?:text|numeric|date|boolean)(?: |(?=\r?\n)|$)/gm,
+        (whole, n: string) => named(n) ?? whole,
+      );
+    case 'mssql':
+    case 'bigquery':
+      return redactedSql.replace(/(?<![\w@$])@p(\d+)\b/g, (whole, n: string) => named(n) ?? whole);
+    case 'oracle':
+      return redactedSql.replace(/(?<![\w:$]):p(\d+)\b/g, (whole, n: string) => named(n) ?? whole);
+    default:
+      return redactedSql;
+  }
+}
 
 const OFF = 'The SQL runner is off for this data source: a Super-Admin turns it on.';
 const NOT_YOURS = 'Only Super-Admins and read-write members of its own folder run SQL on it.';
@@ -156,6 +249,10 @@ interface RunAt {
   readonly folderId: string | null;
   readonly item: { readonly kind: string; readonly id: string; readonly title: string };
   readonly inWorkspace: boolean;
+  /** Its driver, whose placeholders the audit's SQL names again (T811); none for Cube Store. */
+  readonly driver: string | null;
+  /** Its `{{name}}`s' values, bound (T811, AC-454); none on Cube Store or Dremio. */
+  readonly parameters: readonly SavedParameter[];
 }
 
 /**
@@ -241,7 +338,10 @@ function replyOf(answer: SqlAnswer, onCubeStore = false): RunReply {
           error:
             answer.routerJoin === true
               ? CUBE_STORE_ROUTER_JOIN
-              : onCubeStore
+              : // xcube's words, naming a parameter, never its value (T811).
+                answer.parameters === true
+                ? answer.reason
+                : onCubeStore
                 ? CUBE_STORE_ONLY_READS
                 : ONLY_READS,
           reason: answer.reason,
@@ -469,7 +569,9 @@ export function registerSqlRunner(
 
     const sql = await sqlOf(request, reply);
     if (sql === undefined) return reply;
-    if (source.driver === 'dremio' && parameterNames(sql).length > 0)
+    const parameters = runParametersOf(request.body);
+    if (parameters === undefined) return reply.status(400).send({ error: BAD_PARAMETERS });
+    if (source.driver === 'dremio' && (parameterNames(sql).length > 0 || parameters.length > 0))
       return reply.status(400).send(unbound('Dremio'));
     if (runner === undefined)
       return reply.status(503).send({
@@ -489,6 +591,8 @@ export function registerSqlRunner(
           : (source.origin?.folderId ?? source.targetFolderId ?? source.folderId),
       item: { kind: 'data-source', id: source.id, title: source.name },
       inWorkspace: workspace !== null,
+      driver: source.driver,
+      parameters,
     });
   });
 
@@ -516,6 +620,7 @@ export function registerSqlRunner(
         dataSourceId: at.dataSourceId,
         sql,
         dataSourceName: at.dataSourceName,
+        parameters: at.parameters,
       });
       if (!started.started) {
         const going = await goingView(started.going);
@@ -551,7 +656,13 @@ export function registerSqlRunner(
     /** Why there is no answer of xcube's: it refused the request, didn't answer in time, or wasn't reached. */
     let unanswered: 'refused' | 'late' | 'away' | undefined;
     try {
-      answer = await options.xcube.run(at.target, { sql, runId, ...SQL_CAPS });
+      // Its values bound, never written into the SQL (T811, AC-454).
+      answer = await options.xcube.run(at.target, {
+        sql,
+        runId,
+        ...SQL_CAPS,
+        ...(at.parameters.length > 0 ? { parameters: boundOf(at.parameters) } : {}),
+      });
       said = replyOf(answer, onCubeStore);
     } catch (error) {
       unanswered =
@@ -627,7 +738,15 @@ export function registerSqlRunner(
         summary: summaryOf(answer, done, unanswered),
         details: {
           ...done,
-          sql: answer !== undefined && 'redactedSql' in answer ? answer.redactedSql : null,
+          sql:
+            answer === undefined || !('redactedSql' in answer) || answer.redactedSql === null
+              ? null
+              : // A bound run's placeholders as its `{{name}}`s, never a value
+                // (T811, AC-454), a write refused once bound included; a run
+                // whose parameters were refused is said as sent already.
+                at.parameters.length > 0 && !(answer.kind === 'refused' && answer.parameters === true)
+                ? auditSqlOf(answer.redactedSql, at.driver, parameterNamesOn(sql, at.driver))
+                : answer.redactedSql,
           inWorkspace: at.inWorkspace,
         },
       },
@@ -696,6 +815,8 @@ export function registerSqlRunner(
         durationMs: run.durationMs,
         truncated: run.truncated,
         statement: run.statement,
+        // Its values, to its owner alone: the list is theirs (T811, AC-454).
+        parameters: run.parameters,
       });
     }
     return page.next === undefined ? { runs: out } : { runs: out, next: page.next };
@@ -807,7 +928,10 @@ export function registerSqlRunner(
     if (!seen.runs) return reply.status(403).send({ error: CUBE_STORE_OFF });
     const sql = await sqlOf(request, reply);
     if (sql === undefined || runner === undefined) return reply;
-    if (parameterNames(sql).length > 0) return reply.status(400).send(unbound('Cube Store'));
+    const parameters = runParametersOf(request.body);
+    if (parameters === undefined) return reply.status(400).send({ error: BAD_PARAMETERS });
+    if (parameterNames(sql).length > 0 || parameters.length > 0)
+      return reply.status(400).send(unbound('Cube Store'));
     return runOn(request, reply, runner, sql, {
       target: { cubeStore: true },
       dataSourceId: null,
@@ -815,6 +939,8 @@ export function registerSqlRunner(
       folderId: ROOT_FOLDER_ID,
       item: CUBE_STORE_ITEM,
       inWorkspace: false,
+      driver: null,
+      parameters: [],
     });
   });
 
@@ -1041,6 +1167,7 @@ function summaryOf(
     }
     case 'refused': {
       if (answer.routerJoin === true) return 'Not run · a join Cube Store’s router would run';
+      if (answer.parameters === true) return 'Not run · its parameters were refused';
       const kind = answer.statement;
       if (kind === null)
         return answer.code === 'several_statements'

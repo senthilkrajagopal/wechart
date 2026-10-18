@@ -1736,12 +1736,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T810 (AC-482) Hold Run on Dremio and on Cube Store while the SQL holds a parameter, saying parameters aren't available on that source
 
-- [ ] T811 (AC-454, AC-465) Send each parameter's value bound through xcube, keep `{{name}}` without values in the audit, and keep the values in History and saved queries for their owner alone
-  - Lane: SQL
-  - Waits on: xcube's image that takes bound values on its run routes (`~/Work/xcube-exchange/to-xcube/2026-10-17-1900-sql-run-bound-parameters.md`), published and pinned by digest in compose and Helm.
-  - Files: `packages/api/src/xcube/sql-runner.ts` (+ test; the `parameters` field), `packages/api/src/routes/sql-runner.ts` (+ test), `packages/api/src/repos/sql-runs.ts` (+ test; the values, owner only), `packages/web/src/workspaces/sql/QueryTab.tsx`, `e2e/security/sql-parameters.spec.ts`.
-  - Failing test: `sql-parameters.spec.ts`, on the development PostgreSQL: `SELECT * FROM customers WHERE country = {{c}}` with Text `x' OR '1'='1` returns no rows, as the literal string would; `SELECT * FROM {{t}}` fails at the database rather than being filled in; the run's audit event holds `{{c}}` and no value (AC-454). `sql-runner.test.ts`: the request to xcube holds `{{c}}` in `sql` and the value only in `parameters`; History and the saved query return the values to their owner, and to nobody else, a Super-Admin included (AC-454); choosing that History row puts its values back into the tab (AC-465).
-  - Depends on: T809, T810, T812, T818
+- [x] T811 (AC-454) Send each parameter's value bound through xcube, keep `{{name}}` without values in the audit, and keep the values in History and saved queries for their owner alone
 
 ### Lane SQL: saved queries
 
@@ -1783,7 +1778,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 - [ ] T818 (AC-465) Choosing a History row puts its SQL into the current tab with Undo when the sources match, or into a new tab on the row's source, and never runs it
   - Lane: SQL
   - Files: `packages/web/src/workspaces/sql/HistoryList.tsx` (+ test), `packages/web/src/workspaces/sql/tabs.ts` (+ test).
-  - Failing test: `HistoryList.test.tsx`: a row of the open tab's source replaces the tab's text, and Undo brings the old text back; a row of another source opens a new tab on it and leaves the current tab's text; a row of an unavailable source opens a tab with no source; no choice sends a run (AC-465). The values half of AC-465 waits on T811.
+  - Failing test: `HistoryList.test.tsx`: a row of the open tab's source replaces the tab's text, and Undo brings the old text back; a row of another source opens a new tab on it and leaves the current tab's text; a row of an unavailable source opens a tab with no source; no choice sends a run (AC-465). Also, moved from T811 (decision T811-1): choosing a row with parameters puts its values back into the tab with its SQL, from the `parameters` each run in `GET /api/sql-runs` carries since T811 (AC-465's values).
   - Depends on: T817, T800
 
 ### Lane SQL: Make a cube and Make a chart
@@ -2005,10 +2000,10 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 | ~~AC-445~~ | retired 2026-10-17, `[R78]` ("Defer Claude.ai") | AC-446 | T796, T801 | AC-447 | T798 |
 | AC-448 | T806 | AC-449 | T807 | AC-450 | T800 |
 | AC-451 | T801 | AC-452 | T804 | AC-453 | T809 |
-| AC-454 | T811 (waits on xcube's image) | AC-455 | T816 | AC-456 | T808 |
+| AC-454 | T811 | AC-455 | T816 | AC-456 | T808 |
 | AC-457 | T812 | AC-458 | T813 | AC-459 | T814 |
 | AC-460 | T815 | AC-461 | T819 | AC-462 | T820, T822 (waits on xcube's image) |
-| AC-463 | T821 | AC-464 | T823 | AC-465 | T818, T811 |
+| AC-463 | T821 | AC-464 | T823 | AC-465 | T818 (its values half moved from T811, decision T811-1) |
 | AC-466 | T799, T824 | AC-467 | T825 | AC-468 | T767, T769 |
 | AC-469 | T767, T769, T782, T785, T787, T788 | AC-470 | T772 | AC-471 | T777 |
 | AC-472 | T779 | AC-473 | T779, T780 | AC-474 | T773, T780, T793, T795 |

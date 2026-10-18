@@ -262,6 +262,51 @@ describe('a run asked of xcube (T532)', () => {
   });
 });
 
+/**
+ * T811, AC-454: a run's `{{name}}` values go to xcube bound, as `parameters`,
+ * never written into its SQL; xcube's refusals of them are said in its own
+ * words, which name a parameter, never its value (research
+ * xcube-bb188d8ada.md, "The refusals").
+ */
+describe('bound parameters asked of xcube (T811; xcube bb188d8ada)', () => {
+  it('keeps {{name}} in the SQL and sends each value only in `parameters`', async () => {
+    const stub = fakeXcube();
+    const sql = 'SELECT * FROM customers WHERE country = {{c}} AND since > {{ d }}';
+    const parameters = {
+      c: { type: 'text', value: "x' OR '1'='1" },
+      d: { type: 'date', value: '2026-01-01' },
+    } as const;
+    await runnerOn(stub).run({ connection: 'warehouse' }, { ...ASK, sql, parameters });
+    expect(stub.calls[0]?.body).toEqual({ ...ASK, sql, parameters });
+    // None sent where none is given: `{{…}}` is then the SQL's own text.
+    await runnerOn(stub).run({ connection: 'warehouse' }, ASK);
+    expect(stub.calls[1]?.body).not.toHaveProperty('parameters');
+  });
+
+  it('reads xcube’s parameter refusals as refused runs, in xcube’s words', async () => {
+    const stub = fakeXcube();
+    const refusals = [
+      ['invalid_parameters', 'missing_value', '{{b}} has no value'],
+      ['invalid_parameters', 'invalid_value', '"n" is a Number: its value is a decimal string, such as "-12.5"'],
+      ['parameters_unsupported', 'dremio', 'Dremio takes no bound values: run the statement without parameters'],
+    ] as const;
+    for (const [code, reason, error] of refusals) {
+      stub.answerSql(() => ({
+        status: 400,
+        body: { error, code, reason, statement: null, redactedSql: 'SELECT {{b}}' },
+      }));
+      expect(await runnerOn(stub).run({ connection: 'c' }, ASK), reason).toEqual({
+        kind: 'refused',
+        code,
+        reason: error,
+        statement: null,
+        redactedSql: 'SELECT {{b}}',
+        parameters: true,
+      });
+    }
+  });
+});
+
 describe('a Cube Store run stopped, and a run’s state (T548; xcube 2099b13f2d)', () => {
   it('reads a stop Cube Store runs on: still running, until when at the latest', async () => {
     const stub = fakeXcube();

@@ -183,6 +183,8 @@ describe('a user’s own runs (T534, AC-381)', () => {
         durationMs: 1,
         truncated: null,
         statement: 'select',
+        // Its parameters' values, its owner's alone (T811): none here.
+        parameters: [],
       },
       expect.objectContaining({ sql: `SELECT 'first ${MARK}'`, outcome: 'finished' }),
     ]);
@@ -404,5 +406,130 @@ describe('a run on a data source one no longer sees (T534’s review)', () => {
         .execute();
       await docs().remove('folder', elsewhere);
     }
+  });
+});
+
+/**
+ * T811, AC-454: a run's `{{name}}` values go to xcube bound, never written
+ * into its SQL; the audit keeps `{{name}}` and no value; History keeps the
+ * values for the run's owner alone (research xcube-bb188d8ada.md). The stub
+ * xcube writes PostgreSQL's placeholders (`$1::text`) in their places, as
+ * xcube does, and redacts the statement as it runs.
+ */
+describe('bound parameters (T811, AC-454)', () => {
+  const runWith = (who: string, id: string, sql: string, parameters: unknown) =>
+    as(who, { method: 'POST', url: `/api/data-sources/${id}/sql`, payload: { sql, parameters } });
+  const injection = `x' OR '1'='1 ${MARK}`;
+  const sql = `SELECT * FROM customers WHERE country = {{c}} AND credit > {{n}} AND active = {{ b }} AND {{c}} <> 'z${MARK}'`;
+  const parameters = [
+    { name: 'c', type: 'text', value: injection },
+    { name: 'n', type: 'number', value: '41.5' },
+    { name: 'b', type: 'boolean', value: 'true' },
+  ];
+
+  it('sends the SQL with its {{name}}s and each value only in `parameters`, a Boolean as itself', async () => {
+    const before = stub.sqlAsked().length;
+    expect((await runWith('writer', sourceIds[0]!, sql, parameters)).statusCode).toBe(200);
+    const [asked] = stub.sqlAsked().slice(before);
+    expect(asked?.sql).toBe(sql);
+    expect(asked?.parameters).toEqual({
+      c: { type: 'text', value: injection },
+      n: { type: 'number', value: '41.5' },
+      b: { type: 'boolean', value: true },
+    });
+    // A run with none sends none: `{{…}}` is then the SQL's own text.
+    expect((await run('writer', sourceIds[0]!, `SELECT 'none ${MARK}'`)).statusCode).toBe(200);
+    expect(stub.sqlAsked().at(-1)).not.toHaveProperty('parameters');
+  });
+
+  it('keeps {{name}} in the audit event, and no value', async () => {
+    expect((await runWith('writer', sourceIds[0]!, sql, parameters)).statusCode).toBe(200);
+    const [event] = await events();
+    expect(event?.details).toMatchObject({
+      outcome: 'finished',
+      sql: 'SELECT * FROM customers WHERE country = {{c}} AND credit > {{n}} AND active = {{b}} AND {{c}} <> ?',
+    });
+    expect(JSON.stringify(event)).not.toContain(injection);
+    expect(JSON.stringify(event)).not.toContain('41.5');
+    expect(JSON.stringify(event)).not.toContain(`z${MARK}`);
+  });
+
+  it('keeps the values in History for the run’s owner, and for nobody else, a Super-Admin included', async () => {
+    expect((await runWith('writer', sourceIds[1]!, sql, parameters)).statusCode).toBe(200);
+    const mine = (await listOf('writer', `?dataSource=${sourceIds[1]!}`)).runs as unknown as {
+      sql: string;
+      parameters: unknown;
+    }[];
+    expect(mine[0]).toMatchObject({ sql, parameters });
+    const supers = await as('super', { method: 'GET', url: '/api/sql-runs' });
+    expect(supers.statusCode).toBe(200);
+    expect(supers.body).not.toContain(injection);
+  });
+
+  it('says xcube’s refusal of a parameter in its words, and records it as not run, without a value', async () => {
+    stub.answerSql(() => ({
+      status: 400,
+      body: {
+        error: '"n" is a Number: its value is a decimal string, such as "-12.5"',
+        code: 'invalid_parameters',
+        reason: 'invalid_value',
+        statement: null,
+        redactedSql: 'SELECT {{n}}',
+      },
+    }));
+    const answer = await runWith('writer', sourceIds[0]!, 'SELECT {{n}}', [
+      { name: 'n', type: 'number', value: `twelve ${MARK}` },
+    ]);
+    expect(answer.statusCode).toBe(400);
+    expect(answer.json()).toMatchObject({
+      outcome: 'refused',
+      error: '"n" is a Number: its value is a decimal string, such as "-12.5"',
+    });
+    const [event] = await events();
+    expect(event).toMatchObject({
+      summary: 'Not run · its parameters were refused',
+      details: { outcome: 'refused', sql: 'SELECT {{n}}' },
+    });
+    expect(JSON.stringify(event)).not.toContain(`twelve ${MARK}`);
+  });
+
+  it('keeps {{name}} in the audit of a write refused once bound, which xcube says as it would run (T811’s review)', async () => {
+    stub.answerSql(() => ({
+      status: 400,
+      body: {
+        error: 'Only a SELECT or an EXPLAIN runs here: this is a DELETE statement',
+        code: 'not_read_only',
+        statement: 'delete',
+        redactedSql: 'DELETE FROM t WHERE a =  $1::text',
+      },
+    }));
+    const answer = await runWith('writer', sourceIds[0]!, 'DELETE FROM t WHERE a = {{a}}', [
+      { name: 'a', type: 'text', value: `kept ${MARK}` },
+    ]);
+    expect(answer.statusCode).toBe(400);
+    const [event] = await events();
+    expect(event).toMatchObject({
+      summary: 'Not run · a DELETE',
+      details: { outcome: 'refused', sql: 'DELETE FROM t WHERE a = {{a}}' },
+    });
+  });
+
+  it('refuses parameters not of { name, type, value } before xcube is asked', async () => {
+    const before = stub.sqlAsked().length;
+    for (const bad of [
+      { c: 'x' },
+      [{ name: 'c', type: 'json', value: 'x' }],
+      [{ name: '1c', type: 'text', value: 'x' }],
+      [{ name: 'c', type: 'text', value: 1 }],
+      [{ name: 'b', type: 'boolean', value: 'yes' }],
+      [
+        { name: 'c', type: 'text', value: 'x' },
+        { name: 'c', type: 'text', value: 'y' },
+      ],
+    ]) {
+      const answer = await runWith('writer', sourceIds[0]!, 'SELECT {{c}}', bad);
+      expect(answer.statusCode, JSON.stringify(bad)).toBe(400);
+    }
+    expect(stub.sqlAsked().slice(before)).toEqual([]);
   });
 });

@@ -348,6 +348,49 @@ describe('parameters under the editor (T809, AC-453)', () => {
 });
 
 /**
+ * T811 (AC-454): a run sends its SQL with its `{{ name }}`s as written, and
+ * each value beside it, with its type, for the API to have xcube bind; only
+ * the parameters of what runs, since xcube refuses a value used nowhere.
+ * Fails when: a value is written into the SQL sent.
+ */
+describe('parameter values sent beside the SQL (T811, AC-454)', () => {
+  it('sends the SQL as written and each of its parameters’ name, type and value', async () => {
+    const sql = "SELECT * FROM customers WHERE country = {{c}} AND n > {{ n }}";
+    open(
+      tab({
+        sql,
+        params: { c: "x' OR '1'='1", n: '41.5', stale: 'gone' },
+        paramTypes: { n: 'number' },
+      }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await vi.waitFor(() => {
+      expect(posts).toHaveLength(1);
+    });
+    expect(posts[0]!.body).toEqual({
+      sql,
+      parameters: [
+        { name: 'c', type: 'text', value: "x' OR '1'='1" },
+        { name: 'n', type: 'number', value: '41.5' },
+      ],
+    });
+  });
+
+  it('sends only the parameters of the statement that runs', async () => {
+    const sql = 'SELECT {{a}} AS x; SELECT {{b}} AS y';
+    open(tab({ sql, params: { a: 'one', b: 'two' }, paramTypes: { b: 'boolean' } }));
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await vi.waitFor(() => {
+      expect(posts).toHaveLength(1);
+    });
+    expect(posts[0]!.body).toEqual({
+      sql: 'SELECT {{a}} AS x',
+      parameters: [{ name: 'a', type: 'text', value: 'one' }],
+    });
+  });
+});
+
+/**
  * T810 (AC-482): on Dremio and on Cube Store, which bind no parameter
  * values, Run is held while the SQL holds a `{{ name }}`, saying why, with
  * no strip to type values into (design 17, F4 and F5).

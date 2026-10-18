@@ -187,3 +187,30 @@
       - A tab keeps its `saved` (id, name, description) in this browser, and a duplicated tab drops it.
       - A failed Save is said beside the buttons.
     - Decision T812-1 is in `docs/design/decisions-sql.md`.
+
+- [x] T811 (AC-454) Send each parameter's value bound through xcube, keep `{{name}}` without values in the audit, and keep the values in History and saved queries for their owner alone
+  - Lane: SQL
+  - Waits on: xcube's image that takes bound values on its run routes (`~/Work/xcube-exchange/to-xcube/2026-10-17-1900-sql-run-bound-parameters.md`), published and pinned by digest in compose and Helm.
+  - Files: `packages/api/src/xcube/sql-runner.ts` (+ test; the `parameters` field), `packages/api/src/routes/sql-runner.ts` (+ test), `packages/api/src/repos/sql-runs.ts` (+ test; the values, owner only), `packages/web/src/workspaces/sql/QueryTab.tsx`, `e2e/security/sql-parameters.spec.ts`.
+  - Failing test: `sql-parameters.spec.ts`, on the development PostgreSQL: `SELECT * FROM customers WHERE country = {{c}}` with Text `x' OR '1'='1` returns no rows, as the literal string would; `SELECT * FROM {{t}}` fails at the database rather than being filled in; the run's audit event holds `{{c}}` and no value (AC-454). `sql-runner.test.ts`: the request to xcube holds `{{c}}` in `sql` and the value only in `parameters`; History and the saved query return the values to their owner, and to nobody else, a Super-Admin included (AC-454). The clause "choosing that History row puts its values back into the tab (AC-465)" moved to T818 (decision T811-1).
+  - Depends on: T809, T810, T812, T818 (T818's half moved to it, so T811 no longer waits on it)
+  - **Built 2026-10-18** (lane SQL, batch 5), on xcube `bb188d8ada`, pinned in bc27454c (research `xcube-bb188d8ada.md`).
+    - **AC-454 is ticked** on the e2e "bound parameter values (T811, AC-454)" (`e2e/security/sql-parameters.spec.ts`), against the real PostgreSQL:
+      - `France` gives 1 row, and `x' OR '1'='1` "Finished no rows";
+      - the body sent holds `{{c}}` in `sql` and the value only in `parameters`;
+      - `SELECT * FROM {{t}}` ends in "Database error";
+      - the audit events read `SELECT * FROM customers WHERE country = {{c}}` and `SELECT * FROM {{t}}`, with no value;
+      - History gives the values to their owner, and a Super-Admin's `/api/sql-runs` doesn't hold them.
+    - **The browser** sends `parameters: [{ name, type, value }]` for the statement that runs, never for names it doesn't hold.
+    - **The API:**
+      - `runParametersOf` checks the list: names of the grammar, at most 64 characters, once each; the four types; a value as text, a Boolean's "true" or "false"; at most 100. Anything else is a 400 before xcube is asked.
+      - xcube is sent `parameters` by name, a Boolean as itself, and none for a run without any. Dremio and Cube Store still refuse any (T810).
+      - xcube's `invalid_parameters` and `parameters_unsupported` are refused runs, said in xcube's words. Their audit line is "Not run · its parameters were refused".
+    - **The audit's SQL:** `auditSqlOf` names xcube's placeholders again as `{{name}}`, per driver (decision T811-2). MySQL's and Snowflake's `?` stay `?`. The names are read in the driver's dialect with `@wechart/core`'s new `parameterNamesOn`, from the review.
+    - **History:** migration 1758680001000 (cd396f3a) adds `sql_runs.parameters`, jsonb, `'[]'` by default. `GET /api/sql-runs` answers each run's `parameters` to its owner, whose list it already was.
+    - **Saved queries** have kept their values for their owner alone since T812.
+    - The stub xcube (`fake.ts`) writes PostgreSQL's placeholders for a run with `parameters`, as xcube does, and leaves `$n` out of its redaction.
+    - **Review:** one cold review passed. Its two real points are fixed, each with a test:
+      - names read in the driver's dialect;
+      - a write refused once bound is audited with its `{{name}}`s.
+    - Decisions T811-1 and T811-2 are in `docs/design/decisions-sql.md`.

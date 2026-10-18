@@ -4,6 +4,7 @@ import { sql } from 'kysely';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getDb } from '../db/client';
+import type { SavedParameter } from '../db/schema';
 import { sqlRuns } from './sql-runs';
 
 /**
@@ -32,6 +33,7 @@ async function ran(
   sqlText: string,
   secondsAgo: number,
   done: Parameters<ReturnType<typeof sqlRuns>['finish']>[1] = { outcome: 'finished', rowCount: 1 },
+  parameters: readonly SavedParameter[] = [],
 ) {
   const runId = randomUUID();
   await runs().start({
@@ -40,6 +42,7 @@ async function ran(
     dataSourceId,
     dataSourceName: dataSourceId ?? 'Cube Store',
     sql: sqlText,
+    parameters,
   });
   await runs().finish(runId, done);
   await getDb()
@@ -60,10 +63,15 @@ describe('a user’s run history (T534, AC-381)', () => {
       truncated: null,
       statement: 'select',
     });
-    const newer = await ran(me, 'ds-b', 'DELETE FROM t', 10, {
-      outcome: 'refused',
-      statement: 'delete',
-    });
+    const newer = await ran(
+      me,
+      'ds-b',
+      'DELETE FROM t WHERE a = {{a}}',
+      10,
+      { outcome: 'refused', statement: 'delete' },
+      // Its values, kept for its owner's History (T811, AC-454).
+      [{ name: 'a', type: 'number', value: '41.5' }],
+    );
     await ran(other, 'ds-a', 'SELECT 2', 5);
 
     const page = await runs().list({ userKey: me });
@@ -71,7 +79,7 @@ describe('a user’s run history (T534, AC-381)', () => {
     expect(page.runs).toEqual([
       {
         id: newer,
-        sql: 'DELETE FROM t',
+        sql: 'DELETE FROM t WHERE a = {{a}}',
         dataSourceId: 'ds-b',
         dataSourceName: 'ds-b',
         startedAt: expect.any(Date),
@@ -80,6 +88,7 @@ describe('a user’s run history (T534, AC-381)', () => {
         durationMs: null,
         truncated: null,
         statement: 'delete',
+        parameters: [{ name: 'a', type: 'number', value: '41.5' }],
       },
       {
         id: older,
@@ -92,6 +101,7 @@ describe('a user’s run history (T534, AC-381)', () => {
         durationMs: 840,
         truncated: null,
         statement: 'select',
+        parameters: [],
       },
     ]);
   });
