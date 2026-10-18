@@ -115,14 +115,17 @@ test('a combo titles its two axes with their glyphs, says "(right)", and a hover
     );
   expect(new Set((await rightTicks()).map((one) => one.fill))).toEqual(new Set([TEXT_SECONDARY]));
 
-  // The left axis's bars: tall filled shapes, each at its drawn strength.
+  // The left axis's bars: tall shapes with a bar's 4 px data-end corners
+  // (not the pointer's 3 px labels), each at its drawn strength. A hovered
+  // bar takes ECharts' emphasis colour, so its fill isn't matched.
   const bars = () =>
     page.locator('[data-tile="tile-combo"] svg path').evaluateAll((nodes) =>
       nodes
-        .filter((node) => {
-          const fill = node.getAttribute('fill') ?? 'none';
-          return fill.startsWith('#') && node.getBoundingClientRect().height > 20;
-        })
+        .filter(
+          (node) =>
+            (node.getAttribute('d') ?? '').includes('A4 4 0 0 1') &&
+            node.getBoundingClientRect().height > 20,
+        )
         .map(
           (node) =>
             Number(node.getAttribute('opacity') ?? 1) *
