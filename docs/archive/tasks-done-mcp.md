@@ -425,6 +425,11 @@
       - **The refusals' reasons:** the shared dashboard's change and delete now check they were refused as outside the workspace. The route alone would let `writer` rename or delete it. Another's workspace's dashboard reads as not there, as in the web app.
       - **A real bug the new test found:** `create_item` at `folderId: "mine"` was refused. The web app's hook names `mine` as `ws:‹key›` in every request's `folderId` and `targetFolderId`, the `/mcp` POST's arguments included, so the tool never saw `mine`. `inMyWorkspace` now takes the caller's own `ws:‹key›` as their workspace's root too.
       - **Left as is:** the process gap (T786's test wasn't run before its code) is recorded above. The time between the check and the route is only the owner's own writes or a proposal landing, which never moves a workspace's document out.
+    - **Batch run, at 148fe173** (the lane's last commit with code):
+      - **Unit suite:** all green: api 2,040, web 3,117, core 550, charts 556, recommender 133, ui 47.
+      - **Main, real Chrome** (`--project=chrome`): 840 passed, 2 failed: `chart-page.spec.ts:145` and `model-design.spec.ts:855` (a known flake). Both pass rerun alone (2/2).
+      - **Security, real Chrome** (`--project=chrome`, which leaves out `xcube-unreachable` and `cube-store-long-run`): 403 passed.
+      - No fix needed, so no follow-up commit of code.
 
 ## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
 
