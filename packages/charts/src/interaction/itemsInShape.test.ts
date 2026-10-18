@@ -175,6 +175,41 @@ describe('what a shape touches on a chart', () => {
     expect(itemsInShape(converter, option, inTheGap)).toEqual([]);
   });
 
+  /**
+   * T846's review: a combo's bars on two value axes still share one band,
+   * side by side, as ECharts lays out bars by their category axis
+   * (`barGrid.js`, `createLayoutInfoListOnAxis(baseAxis…)`).
+   */
+  it('takes a combo’s bars on two value axes by their slots in one band', () => {
+    const option: EChartsOption = {
+      xAxis: { type: 'category', data: ['a', 'b'] },
+      yAxis: [{ type: 'value' }, { type: 'value' }],
+      series: [
+        { type: 'bar', name: 'North', data: [50, 50] },
+        { type: 'bar', name: 'South', yAxisIndex: 1, data: [50, 50] },
+      ],
+    };
+    const overSouth = { kind: 'rect', x0: 60, y0: 280, x1: 80, y1: 299 } as const;
+    const inTheGap = { kind: 'rect', x0: 49, y0: 280, x1: 51, y1: 299 } as const;
+
+    expect(itemsInShape(converter, option, overSouth)).toEqual([
+      { name: 'a', seriesName: 'South' },
+    ]);
+    expect(itemsInShape(converter, option, inTheGap)).toEqual([]);
+  });
+
+  it('takes a combo’s point, one value at its category, where it is drawn', () => {
+    const option: EChartsOption = {
+      xAxis: { type: 'category', data: ['a', 'b'] },
+      yAxis: { type: 'value' },
+      series: [{ type: 'scatter', name: 'Margin', data: [20, { value: 40 }] }],
+    };
+    // "b" at x 150, 40 at y 260.
+    const shape = { kind: 'rect', x0: 140, y0: 250, x1: 160, y1: 270 } as const;
+
+    expect(itemsInShape(converter, option, shape)).toEqual([{ name: 'b', seriesName: 'Margin' }]);
+  });
+
   it('stacks a negative segment below the baseline, as ECharts does by sign', () => {
     const option: EChartsOption = {
       xAxis: { type: 'category', data: ['a'] },

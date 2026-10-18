@@ -56,40 +56,49 @@ const AXIS_INDEX: Record<ComboAxis, number> = { left: 0, right: 1 };
  * so the right's ticks fall on the left's gridlines and, where both reach
  * zero, the zero lines meet; both reach zero while any bars are drawn, the
  * include zero each axis was given notwithstanding; and the right draws no
- * gridlines of its own.
+ * gridlines of its own. An axis no series is on keeps its gridlines, which
+ * the other's ticks sit on, but writes no numbers (T846's review).
  */
 function valueAxes(
   spec: RenderSpec,
-  measures: readonly { measure: string; mark: ComboMark; axis: ComboAxis }[],
-  series: readonly { name: string; values: readonly (number | null)[] }[],
+  drawn: readonly {
+    measure: string;
+    mark: ComboMark;
+    axis: ComboAxis;
+    values: readonly (number | null)[];
+  }[],
 ): EChartsOption['yAxis'] {
-  if (!measures.some((one) => one.axis === 'right')) return { type: 'value' };
+  if (!drawn.some((one) => one.axis === 'right')) return { type: 'value' };
   const axes = axesOf(spec);
-  const bars = measures.some((one) => one.mark === 'bar');
+  const bars = drawn.some((one) => one.mark === 'bar');
+  const measuresOn = (side: ComboAxis) => [
+    ...new Set(drawn.filter((one) => one.axis === side).map((one) => one.measure)),
+  ];
   const rangeOf = (side: ComboAxis): AxisRange => {
-    const on = new Set(measures.filter((one) => one.axis === side).map((one) => one.measure));
-    const values = series
-      .filter((one) => on.has(one.name))
+    const values = drawn
+      .filter((one) => one.axis === side)
       .flatMap((one) => one.values.filter((value): value is number => value !== null));
     const settings = side === 'left' ? axes.y : axes.right;
     return {
       min: values.length === 0 ? 0 : Math.min(...values),
       max: values.length === 0 ? 0 : Math.max(...values),
       includeZero: bars || settings?.includeZero !== false,
-      wholeNumbers: allCounts(spec, [...on]),
+      wholeNumbers: allCounts(spec, measuresOn(side)),
     };
   };
   const aligned = alignedAxes(rangeOf('left'), rangeOf('right'));
 
   return (['left', 'right'] as const).map((side) => {
-    const on = measures.filter((one) => one.axis === side).map((one) => one.measure);
-    const [first] = on;
+    const [first] = measuresOn(side);
     const write = first === undefined ? undefined : formatterFor(first, spec.formats ?? {});
     return {
       type: 'value',
       position: side,
       ...aligned[side],
       ...(side === 'right' ? { splitLine: { show: false } } : {}),
+      ...(first === undefined
+        ? { axisLabel: { show: false }, axisLine: { show: false }, splitLine: { show: true } }
+        : {}),
       ...(write === undefined
         ? {}
         : {
@@ -116,8 +125,9 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
    * measure is T852's.)
    */
   const split = memberOn(spec.encoding, 'color') !== undefined;
-  const drawAs = (name: string): { mark: ComboMark; axis: ComboAxis } =>
+  const drawAs = (name: string): { measure: string; mark: ComboMark; axis: ComboAxis } =>
     (split ? resolved[0] : resolved.find((one) => one.measure === name)) ?? {
+      measure: name,
       mark: 'line',
       axis: 'left',
     };
@@ -145,7 +155,10 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
     // The grid its bars' widths are estimated against (T254).
     grid: { ...PROTOTYPE_GRID },
     xAxis: { type: 'category', data: categories },
-    yAxis: valueAxes(spec, split ? [] : resolved, series),
+    yAxis: valueAxes(
+      spec,
+      series.map((one) => ({ ...drawAs(one.name), values: one.values })),
+    ),
     series: series.map((one, index) => {
       const colour = colourFor(spec, one.name, index);
       const { mark, axis } = drawAs(one.name);
@@ -226,8 +239,11 @@ export function withLineHalos(option: EChartsOption, spec: RenderSpec): EChartsO
   const series = option['series'] as Series[];
   const seen = new Set<unknown>();
   const halos = series.flatMap((one) => {
-    if (one.type !== 'line' || one.areaStyle !== undefined || seen.has(one.name)) return [];
+    // The first series of a name says what it is: an area's marked share,
+    // drawn as a line over it, is no line of its own (T846's review).
+    if (one.type !== 'line' || seen.has(one.name)) return [];
     seen.add(one.name);
+    if (one.areaStyle !== undefined) return [];
     return [
       {
         type: 'line',

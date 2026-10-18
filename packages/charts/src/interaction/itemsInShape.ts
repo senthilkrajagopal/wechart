@@ -95,9 +95,18 @@ export function itemsInShape(
    * (`barGap: '-100%'`) share one.
    */
   const columnsOf = new Map<string, string[]>();
+  /**
+   * Bars share a band by their category axis, whichever value axis each
+   * reads (ECharts' `barGrid.js` lays them out on the base axis): a combo's
+   * bars on two value axes stand side by side (T846's review).
+   */
+  const bandOf = (series: Series) => {
+    const yi = series.yAxisIndex ?? 0;
+    return yAxes[yi]?.type === 'category' ? `y${String(yi)}` : `x${String(series.xAxisIndex ?? 0)}`;
+  };
   allSeries.forEach((series, seriesIndex) => {
     if (series.type !== 'bar') return;
-    const axes = `${String(series.xAxisIndex ?? 0)}|${String(series.yAxisIndex ?? 0)}`;
+    const axes = bandOf(series);
     const columns = columnsOf.get(axes) ?? [];
     const overlaid = (series as { barGap?: unknown }).barGap === '-100%';
     const column = overlaid
@@ -124,7 +133,10 @@ export function itemsInShape(
           ? (item as { category?: unknown }).category
           : undefined;
 
-      if (series.type === 'scatter' || series.type === 'heatmap') {
+      // A combo's points are one value each, at their category, as a line's
+      // are (T846's review); a scatter's or a heatmap's are pairs.
+      const pointAtCategory = series.type === 'scatter' && !Array.isArray(value);
+      if ((series.type === 'scatter' || series.type === 'heatmap') && !pointAtCategory) {
         if (!Array.isArray(value)) return;
         const [x, y] = value as [number | string, number | string];
         if (!insideShape(shape, px(x), py(y))) return;
@@ -136,7 +148,7 @@ export function itemsInShape(
         take(name, seriesName);
         return;
       }
-      if (series.type !== 'bar' && series.type !== 'line') return;
+      if (series.type !== 'bar' && series.type !== 'line' && !pointAtCategory) return;
 
       const horizontal = yAxis.type === 'category';
       const categories = (horizontal ? yAxis : xAxis).data ?? [];
@@ -160,7 +172,7 @@ export function itemsInShape(
       const [from, to] = [onValue(base), onValue(top)];
       if (!Number.isFinite(from) || !Number.isFinite(to)) return;
 
-      if (series.type === 'line') {
+      if (series.type === 'line' || pointAtCategory) {
         const centre = onCategory(index);
         const [x, y] = horizontal ? [to, centre] : [centre, to];
         if (Number.isFinite(centre) && insideShape(shape, x, y)) take(name, seriesName);
@@ -172,7 +184,7 @@ export function itemsInShape(
         categories.length > 1
           ? Math.abs(onCategory(1) - onCategory(0))
           : (horizontal ? (chart.getHeight?.() ?? 0) : (chart.getWidth?.() ?? 0)) * 0.8;
-      const columns = columnsOf.get(`${String(xi)}|${String(yi)}`) ?? [];
+      const columns = columnsOf.get(bandOf(series)) ?? [];
       const overlaid = (series as { barGap?: unknown }).barGap === '-100%';
       const column = Math.max(
         0,

@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from '@wechart/core';
 
-import { comboOption } from './combo';
+import { comboOption, withLineHalos } from './combo';
 import { optionFor } from '../optionFor';
 import { marksOf, renderToSvg, strokesOf } from '../testing/renderToSvg';
 
@@ -264,6 +264,57 @@ describe('each measure with its own mark, on its own axis (AC-497)', () => {
 
     expect(axes[0]?.axisLabel?.formatter?.(1500)).toMatch(/^\$1,500/);
     expect(axes[1]?.axisLabel?.formatter?.(0.25)).toMatch(/^25/);
+  });
+
+  /** T846's review: split by colour, every series is the first measure's. */
+  it('draws a split combo whose first measure is on the right', () => {
+    const REGION = 'orders.region';
+    const split: RenderSpec = {
+      chartType: 'combo',
+      encoding: { x: [MONTH], y: [REVENUE], color: [REGION] },
+      rows: [
+        { [MONTH]: 'Jan', [REGION]: 'East', [REVENUE]: 120 },
+        { [MONTH]: 'Jan', [REGION]: 'West', [REVENUE]: 90 },
+      ],
+      options: { series: { [REVENUE]: { axis: 'right' } } },
+    };
+    const option = optionFor(split);
+    const axes = option['yAxis'] as Record<string, unknown>[];
+
+    expect(() => renderToSvg(option)).not.toThrow();
+    expect(seriesOf(option).every((one) => one.yAxisIndex === 1)).toBe(true);
+    expect(axes).toHaveLength(2);
+  });
+
+  /** T846's review: an axis no measure is on draws its gridlines, not numbers. */
+  it('leaves the left axis unlabelled while every measure is on the right', () => {
+    const right: RenderSpec = {
+      ...mixed,
+      encoding: { x: [MONTH], y: [MARGIN] },
+      options: { series: { [MARGIN]: { mark: 'point', axis: 'right' } } },
+    };
+    const [left] = comboOption(right)['yAxis'] as {
+      axisLabel?: { show?: boolean };
+      splitLine?: { show?: boolean };
+    }[];
+
+    expect(left?.axisLabel?.show).toBe(false);
+    expect(left?.splitLine?.show).toBe(true);
+  });
+
+  it('gives an area’s marked share no halo, as it gives the area none', () => {
+    const option = withLineHalos(
+      {
+        series: [
+          { type: 'line', name: COST, data: [80, 90], areaStyle: { opacity: 0.24 } },
+          // A marked share drawn over the area, as `withMarkedShareLines` does.
+          { type: 'line', name: COST, data: [10, null], areaStyle: undefined },
+        ],
+      },
+      mixed,
+    );
+
+    expect(seriesOf(option)).toHaveLength(2);
   });
 
   it('draws the right axis’s measure though it is on another scale than the first', () => {
