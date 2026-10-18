@@ -15,7 +15,7 @@ import { optionFor } from '../optionFor';
 import { barOption } from './bar';
 import { comboOption } from './combo';
 import { trellisOption } from '../layout/trellis';
-import { categoryLabelsOf, marksOf, renderToSvg, type Box } from '../testing/renderToSvg';
+import { categoryLabelsOf, marksOf, renderToSvg, untitled, type Box } from '../testing/renderToSvg';
 
 /**
  * Deliberately NOT the default ramp. Using `DEFAULT_PALETTE[0]` and `[1]` here
@@ -412,7 +412,8 @@ describe('a dense bar chart (AC-210)', () => {
   it('shows the colour of every bar of a dense combo and of a dense trellis', () => {
     const canvas = { width: 320, height: 320 };
     const combo: RenderSpec = { ...bars('bar', 120), chartType: 'combo' };
-    const comboMarks = marksOf(renderToSvg(comboOption(combo, canvas), canvas), [BLUE]);
+    // Its axis title's bar glyph (T848) is no bar.
+    const comboMarks = marksOf(renderToSvg(untitled(comboOption(combo, canvas)), canvas), [BLUE]);
     expect(comboMarks).toHaveLength(120);
     for (const mark of comboMarks) expect(colourShown(mark, 'width')).toBeGreaterThan(0);
 

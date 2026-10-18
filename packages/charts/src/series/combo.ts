@@ -25,9 +25,11 @@ import {
   type ComboMark,
   type RenderSpec,
 } from '@wechart/core';
+import { COLORS } from '@wechart/ui';
 
 import { allCounts, axesOf } from '../axis';
 import { alignedAxes, type AxisRange } from '../combo/alignedAxes';
+import { axisTitle } from '../combo/axisTitles';
 import { colourFor } from '../colours';
 import { plotEdgesOf } from '../customize';
 import { PROTOTYPE_GRID } from '../layout/grid';
@@ -65,11 +67,25 @@ function valueAxes(
     measure: string;
     mark: ComboMark;
     axis: ComboAxis;
+    colour: string;
     values: readonly (number | null)[];
   }[],
 ): EChartsOption['yAxis'] {
-  if (!drawn.some((one) => one.axis === 'right')) return { type: 'value' };
   const axes = axesOf(spec);
+  /**
+   * Each axis titled with its measures' glyphs and its unit (AC-500), each
+   * measure once, in its first series' colour. One axis keeps a title set in
+   * Customize instead (`applyAxes`).
+   */
+  const titleOf = (side: ComboAxis) => {
+    const seen = new Set<string>();
+    const measures = drawn.filter(
+      (one) => one.axis === side && !seen.has(one.measure) && seen.add(one.measure),
+    );
+    return measures.length === 0 ? {} : axisTitle(spec, measures, side);
+  };
+  if (!drawn.some((one) => one.axis === 'right'))
+    return { type: 'value', ...(axes.y?.title === undefined ? titleOf('left') : {}) };
   const bars = drawn.some((one) => one.mark === 'bar');
   const measuresOn = (side: ComboAxis) => [
     ...new Set(drawn.filter((one) => one.axis === side).map((one) => one.measure)),
@@ -95,6 +111,7 @@ function valueAxes(
     return {
       type: 'value',
       position: side,
+      ...titleOf(side),
       ...aligned[side],
       ...(side === 'right' ? { splitLine: { show: false } } : {}),
       ...(first === undefined
@@ -158,7 +175,13 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
     xAxis: { type: 'category', data: categories },
     yAxis: valueAxes(
       spec,
-      series.map((one) => ({ ...drawAs(one.name), values: one.values })),
+      series.map((one, index) => ({
+        ...drawAs(one.name),
+        // Split, a glyph stands for every member, so is drawn in the
+        // legend's own text colour (design 20 state D).
+        colour: split ? COLORS.light['text-secondary'] : colourFor(spec, one.name, index),
+        values: one.values,
+      })),
     ),
     series: series.map((one, index) => {
       const colour = colourFor(spec, one.name, index);

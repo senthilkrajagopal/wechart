@@ -74,6 +74,23 @@ export function renderToSvg(
   }
 }
 
+/**
+ * An option with its value axes' titles taken off. A combo titles each axis
+ * with its measures' mark glyphs, drawn in their series' colours (T848,
+ * AC-500), so a test that finds a series' marks by colour would count the
+ * glyph as a mark; the titles are tested on their own (`axisTitles.test.ts`).
+ */
+export function untitled(option: Record<string, unknown>): Record<string, unknown> {
+  const strip = (axis: unknown) => {
+    if (typeof axis !== 'object' || axis === null) return axis;
+    const rest = { ...(axis as Record<string, unknown>) };
+    delete rest['name'];
+    return rest;
+  };
+  const axes = option['yAxis'];
+  return { ...option, yAxis: Array.isArray(axes) ? axes.map(strip) : strip(axes) };
+}
+
 /** One rounded corner of a mark: where it is, and how big the radius is. */
 export interface Corner {
   readonly x: number;

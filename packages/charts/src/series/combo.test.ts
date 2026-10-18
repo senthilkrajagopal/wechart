@@ -16,7 +16,7 @@ import type { RenderSpec } from '@wechart/core';
 
 import { comboOption, withLineHalos } from './combo';
 import { optionFor } from '../optionFor';
-import { marksOf, renderToSvg, strokesOf } from '../testing/renderToSvg';
+import { marksOf, renderToSvg, strokesOf, untitled } from '../testing/renderToSvg';
 
 const BLUE = '#123456';
 const ORANGE = '#abcdef';
@@ -26,7 +26,8 @@ const STATUS = 'orders.status';
 const COUNT = 'orders.count';
 const AMOUNT = 'orders.amount';
 
-const draw = (spec: RenderSpec) => renderToSvg(comboOption(spec));
+// Its axis titles' glyphs (T848) are no marks of its series.
+const draw = (spec: RenderSpec) => renderToSvg(untitled(comboOption(spec)));
 
 /**
  * The second measure is ten times the first, which is what makes a shared

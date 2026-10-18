@@ -11,8 +11,19 @@
  * and it is the slices a legend names; a heatmap's colour is a *scale* rather
  * than a set, so naming its values would mean naming every cell.
  */
-import { distinctValues, memberOn, seriesOf, type ChartType, type RenderSpec } from '@wechart/core';
+import {
+  comboSeriesOf,
+  distinctValues,
+  memberOn,
+  membersOn,
+  seriesOf,
+  type ChartType,
+  type RenderSpec,
+} from '@wechart/core';
+import { COLORS } from '@wechart/ui';
 
+import { GLYPH_PATHS } from './combo/axisTitles';
+import { inSeriesOrder, seriesOrderOf, seriesSettingsOf } from './customize';
 import type { EChartsOption } from './theme';
 import { labelOf, modelWriter } from './modelWriter';
 import { slicesOf } from './series/pie';
@@ -62,6 +73,42 @@ export function seriesNameWriter(spec: RenderSpec): ((value: unknown) => string)
 }
 
 /**
+ * A combo's legend (AC-500, rule 120): each entry with its mark's glyph,
+ * a path scaled into a 12 × 8 item keeping its proportions (`GLYPH_PATHS`),
+ * and a right-axis series' name followed by "(right)" in `text-secondary`.
+ * Its entries listed, as the legend can't otherwise give each its own icon
+ * (an explicit `legend.icon` wins over a series' own; research/echarts-axis-
+ * legend-bars.md §2): the drawn series in the order Customize sets, none it
+ * hides. Split by colour, its entries are members and keep their swatches
+ * (the two-part legend is T852's).
+ */
+function comboLegendOf(
+  spec: RenderSpec,
+  write: ((value: unknown) => string) | undefined,
+): Record<string, unknown> {
+  if (spec.chartType !== 'combo' || memberOn(spec.encoding, 'color') !== undefined) return {};
+  const settings = seriesSettingsOf(spec);
+  const resolved = new Map(
+    comboSeriesOf(membersOn(spec.encoding, 'y'), spec.options).map((one) => [one.measure, one]),
+  );
+  const names = inSeriesOrder(
+    seriesOf(spec).series.filter((one) => settings[one.name]?.hidden !== true),
+    seriesOrderOf(spec),
+  ).map((one) => one.name);
+  const named = (name: string) => (write === undefined ? name : write(name));
+  return {
+    data: names.map((name) => ({ name, icon: GLYPH_PATHS[resolved.get(name)?.mark ?? 'line'] })),
+    itemWidth: 12,
+    itemHeight: 8,
+    formatter: (name: string) =>
+      resolved.get(name)?.axis === 'right'
+        ? `${named(name).replace(/[{}]/g, '')} {right|(right)}`
+        : named(name),
+    textStyle: { rich: { right: { color: COLORS.light['text-secondary'] } } },
+  };
+}
+
+/**
  * The legend for a chart, or nothing.
  *
  * Top by default, which direction.md sets and which keeps the legend out of
@@ -78,6 +125,7 @@ export function legendFor(spec: RenderSpec): EChartsOption {
    * series (research/echarts.md).
    */
   const write = seriesNameWriter(spec);
+  const combo = comboLegendOf(spec, write);
 
   return {
     legend: {
@@ -96,6 +144,7 @@ export function legendFor(spec: RenderSpec): EChartsOption {
       // of AC-070 and AC-071, not to drawing.
       selectedMode: false,
       ...(write === undefined ? {} : { formatter: (name: string) => write(name) }),
+      ...combo,
     },
     // Leave room for it, or it sits on top of the plot.
     grid: { top: 32 },

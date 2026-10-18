@@ -1840,10 +1840,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T847 (AC-499) Align a combo's two value axes: one zero height, the right axis's ticks on the left's gridlines, include zero forced while bars are drawn, and no right gridlines
 
-- [ ] T848 (AC-500) Title each value axis above itself with its measures' glyphs and its unit, keep ticks `text-secondary`, give legend entries their glyphs and "(right)", and emphasise a hovered series' axis
-  - Files: `packages/charts/src/combo/axisTitles.ts` (+ test), `packages/charts/src/legend.ts` (+ test), `packages/charts/src/series/combo.ts`, `packages/charts/src/interaction/axisEmphasis.ts` (+ test).
-  - Failing test: `axisTitles.test.ts`: the left axis's name is rich text with a bar glyph (8 × 8, radius 2) and a line glyph (12 × 2), each in its series' colour, then "Revenue · Target ($)", `nameRotate` 0, at the axis's top; tick labels take `text-secondary` in light and dark; `legend.test.ts`: Margin % on the right reads "Margin % (right)" with the point glyph; `axisEmphasis.test.ts`: hovering Margin % puts the right axis's name and labels in `text-primary` and the left axis's series at opacity 0.28 (AC-500).
-  - Depends on: T846
+- [x] T848 (AC-500) Title each value axis above itself with its measures' glyphs and its unit, keep ticks `text-secondary`, give legend entries their glyphs and "(right)", and emphasise a hovered series' axis
 
 - [ ] T849 (AC-501) Synchronize a combo's two axes into one scale, labelled on both sides, only while both share a format
   - Files: `packages/core/src/combo.ts` (`canSynchronize`), `packages/charts/src/combo/alignedAxes.ts`, their tests.

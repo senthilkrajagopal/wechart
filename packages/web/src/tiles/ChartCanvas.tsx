@@ -7,6 +7,7 @@ import {
   loadCountryMap,
   echarts,
   edgeBetween,
+  emphasisPatch,
   focusedItemOf,
   itemClicks,
   itemsInShape,
@@ -104,6 +105,9 @@ export function ChartCanvas({
   const instance = useRef<ReturnType<typeof echarts.init> | null>(null);
   /** Whether the tooltip up is the keyboard's (T306). */
   const tipShown = useRef(false);
+  /** The option last drawn, and the series whose axis is emphasised (T848, AC-500). */
+  const drawnOption = useRef<EChartsOption | null>(null);
+  const hovered = useRef<string | undefined>(undefined);
   const [canvas, setCanvas] = useState<Canvas | null>(null);
   /**
    * A map's boundaries, registered before its first option is set, which
@@ -484,6 +488,9 @@ export function ChartCanvas({
     // In the theme the page is in (AC-211), and again when it switches.
     const option = themed(optionFor(spec, canvas), theme);
     chart.setOption(option, true);
+    // Drawn afresh, nothing emphasised (T848).
+    drawnOption.current = option;
+    hovered.current = undefined;
 
     /**
      * The item the tile's keyboard is on, told as the prototype tells it: its
@@ -502,6 +509,56 @@ export function ChartCanvas({
       tipShown.current = false;
     }
   }, [spec, theme, canvas, isMap, mapReady]);
+
+  /**
+   * A combo's hovered series, or its hovered legend entry, emphasises its
+   * axis (T848, AC-500): merged into the drawn chart (`emphasisPatch`), so
+   * the chart keeps its elements and the pointer its hover, and put back as
+   * the pointer leaves. A series is the pointer's `mouseover`. A legend entry
+   * would be the `highlight` the legend dispatches with its series' name, but
+   * wechart's legend (`selectedMode: false`) is silent to the pointer
+   * (research/echarts-combo-layers.md; decision T848-2), so that path waits on
+   * an entry the pointer can reach. Anything without two value axes is left
+   * alone.
+   */
+  useEffect(() => {
+    const chart = instance.current;
+    if (chart === null || chart.isDisposed()) return undefined;
+    const emphasise = (name: string | undefined) => {
+      const option = drawnOption.current;
+      if (name === hovered.current || option === null || chart.isDisposed()) return;
+      const patch = emphasisPatch(option, name, theme);
+      if (patch === undefined) return;
+      hovered.current = name;
+      chart.setOption(patch);
+    };
+    type Hovered = { componentType?: unknown; seriesName?: unknown } | null | undefined;
+    const over = (params: unknown) => {
+      const { componentType, seriesName } = (params as Hovered) ?? {};
+      if (componentType === 'series' && typeof seriesName === 'string') emphasise(seriesName);
+    };
+    const out = (params: unknown) => {
+      if ((params as Hovered)?.componentType === 'series') emphasise(undefined);
+    };
+    const highlight = (params: unknown) => {
+      const { seriesName } = (params as Hovered) ?? {};
+      if (typeof seriesName === 'string') emphasise(seriesName);
+    };
+    const away = () => emphasise(undefined);
+    chart.on('mouseover', over);
+    chart.on('mouseout', out);
+    chart.on('highlight', highlight);
+    chart.on('downplay', away);
+    chart.on('globalout', away);
+    return () => {
+      if (chart.isDisposed()) return;
+      chart.off('mouseover', over);
+      chart.off('mouseout', out);
+      chart.off('highlight', highlight);
+      chart.off('downplay', away);
+      chart.off('globalout', away);
+    };
+  }, [theme]);
 
   /**
    * The marked ranges' stripes along the x axis (T386, AC-093; direction.md

@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from '@wechart/core';
+import { COLORS } from '@wechart/ui';
 
 import { seriesCount } from './legend';
 import { optionFor } from './optionFor';
@@ -186,5 +187,69 @@ describe('a one-source chart’s legend names its measures by their short titles
       ]) ?? '';
     expect(said).toContain('Orders Count');
     expect(said).toContain('Orders Amount');
+  });
+});
+
+/**
+ * T848 (AC-500, rule 120): a combo's legend entries each with their mark's
+ * glyph, a right-axis series' adding "(right)" in `text-secondary`.
+ */
+describe('a combo’s legend', () => {
+  const MARGIN = 'orders.margin_pct';
+  const combo: RenderSpec = {
+    chartType: 'combo',
+    encoding: { x: [STATUS], y: [AMOUNT, COUNT, MARGIN] },
+    rows: [
+      { [STATUS]: 'paid', [AMOUNT]: 100, [COUNT]: 90, [MARGIN]: 0.2 },
+      { [STATUS]: 'refunded', [AMOUNT]: 200, [COUNT]: 150, [MARGIN]: 0.3 },
+    ],
+    palette: PALETTE,
+    titles: { [MARGIN]: 'Margin %' },
+    options: {
+      series: { [COUNT]: { mark: 'area' }, [MARGIN]: { mark: 'point', axis: 'right' } },
+    },
+  };
+  type Legend = {
+    data?: { name: string; icon?: string }[];
+    itemWidth?: number;
+    itemHeight?: number;
+    formatter?: (name: string) => string;
+    textStyle?: { rich?: Record<string, { color?: string }> };
+  };
+  const legendOf = (spec: RenderSpec) => optionFor(spec)['legend'] as Legend;
+
+  it('gives each entry its mark’s glyph', () => {
+    const legend = legendOf(combo);
+    const iconOf = (name: string) => legend.data?.find((one) => one.name === name)?.icon;
+
+    expect(legend.data?.map((one) => one.name)).toEqual([AMOUNT, COUNT, MARGIN]);
+    // Bar 8 × 8 radius 2, area 12 × 8, point an 8 px dot: each a path.
+    expect(iconOf(AMOUNT)).toMatch(/^path:\/\//);
+    expect(new Set([iconOf(AMOUNT), iconOf(COUNT), iconOf(MARGIN)]).size).toBe(3);
+    // Room for the widest glyph, 12 × 8; a path keeps its own proportions.
+    expect([legend.itemWidth, legend.itemHeight]).toEqual([12, 8]);
+  });
+
+  it('says "(right)" after a right-axis series, in text-secondary', () => {
+    const legend = legendOf(combo);
+
+    expect(legend.formatter?.(MARGIN)).toBe('Margin % {right|(right)}');
+    expect(legend.formatter?.(AMOUNT)).toBe(AMOUNT);
+    expect(legend.textStyle?.rich?.['right']?.color).toBe(COLORS.light['text-secondary']);
+  });
+
+  it('draws "(right)" beside the entry', () => {
+    const labels = labelsOf(renderToSvg(optionFor(combo))).map((label) => label.text);
+
+    expect(labels).toContain('(right)');
+  });
+
+  it('gives a line its 12 × 2 rule', () => {
+    const line: RenderSpec = { ...combo, options: {} };
+    const icons = legendOf(line).data?.map((one) => one.icon);
+
+    // The first is bars, the rest lines (Auto): two kinds of glyph.
+    expect(new Set(icons).size).toBe(2);
+    expect(icons?.[1]).toBe(icons?.[2]);
   });
 });

@@ -11,6 +11,8 @@ sources:
     https://github.com/apache/echarts/blob/6.1.0/src/chart/scatter/ScatterSeries.ts,
     https://github.com/apache/echarts/blob/6.1.0/src/component/legend/LegendView.ts,
     https://github.com/apache/echarts/blob/6.1.0/src/component/axisPointer/modelHelper.ts,
+    https://github.com/apache/echarts/blob/6.1.0/src/component/axis/AxisBuilder.ts,
+    https://github.com/apache/echarts/blob/6.1.0/src/label/labelStyle.ts,
     https://github.com/apache/echarts-doc/blob/master/en/option/series/line.md,
     https://github.com/apache/echarts-doc/blob/master/en/option/component/y-axis.md,
   ]
@@ -30,6 +32,15 @@ An addendum to `rich-tiles-and-combo-tech.md` §2, for T846 (design 20's draw or
   - The axis-triggered tooltip skips a series whose `tooltip.show` is `false` (`collectSeriesInfo`, `EC/lib/component/axisPointer/modelHelper.js:192-202`).
   - `legendHoverLink: false` keeps it out of the legend's hover link (`LegendView.js:137-139`).
 - **Two value axes:** a series picks its axis with `yAxisIndex`; the second axis goes on the right by default ([y-axis.md](https://github.com/apache/echarts-doc/blob/master/en/option/component/y-axis.md); `rich-tiles-and-combo-tech.md` §2).
+
+## Axis titles and the legend (T848)
+
+- **An axis title above a vertical axis, upright.** `nameLocation: 'end'` places the name past the axis's end (`EC/lib/component/axis/AxisBuilder.js:501-503`), and a set `nameRotate` (degrees) replaces the axis's own rotation in `endTextLayout` (L512-523), so `nameRotate: 0` keeps it horizontal. `nameTextStyle.align` wins over the layout's own alignment (L547).
+- **Glyphs as rich-text boxes.** The name's style comes from `createTextStyle(nameTextStyle)` (L540), so `nameTextStyle.rich` applies. A rich token's box takes `width` and `height` (`TEXT_PROPS_SELF`) and `backgroundColor`, `borderRadius`, `borderColor` and `borderWidth` (`TEXT_PROPS_BOX`) (`EC/lib/label/labelStyle.js:339-340`). There is one border for every edge, so a box can't draw its top edge alone.
+- **A legend icon per entry.** Each entry reads `icon` from its own item in `legend.data`, falling back to `legend.icon` (`LegendView.js:290`), so a `path://` per entry gives each series its own glyph.
+- **The legend's formatter** is called with the entry's name and returns the text, which the entry's `textStyle` (and its `rich`) draws (`LegendView.js:321-340`).
+- **Legend hover.** Over an entry, the legend dispatches `highlight` with the series' name, and `downplay` as the pointer leaves (`LegendView.js:168, 517-535`). A dispatched action is triggered as an event of the same type, carrying its payload (`EC/lib/core/echarts.js:1506-1587`), so `chart.on('highlight', …)` receives `seriesName`. **But with `selectedMode: false`, every part of an entry is silent** (`LegendView.js:359-362`), so no hover reaches it. wechart's legend has `selectedMode: false` (`legend.ts`).
+- **Series hover** is the documented `mouseover` / `mouseout`, with `componentType: 'series'` and `seriesName` (`echarts.md`, "Events").
 
 ## Gotchas
 
