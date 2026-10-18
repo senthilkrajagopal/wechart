@@ -119,7 +119,8 @@ describe('a first visit (T799, AC-466)', () => {
         <SqlWorkspace />
       </QueryClientProvider>,
     );
-    expect(await screen.findByRole('tab', { name: 'Query 1' })).toBeTruthy();
+    // Its name carries its state since T800 (AC-450).
+    expect(await screen.findByRole('tab', { name: 'Query 1, Not run yet' })).toBeTruthy();
     expect(screen.queryByText(CHOOSE)).toBeNull();
     expect(screen.queryByText(NONE)).toBeNull();
   });

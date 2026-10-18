@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -175,5 +175,46 @@ describe('a menu button', () => {
     const { trigger } = show();
     await userEvent.click(trigger);
     expect(screen.getByRole('menu').style.width).toBe('');
+  });
+});
+
+/**
+ * T800: a menu whose button sits in a strip that scrolls sideways (the SQL
+ * runner's editor tabs, design 17's Q8) would be clipped at the strip's
+ * edge; `fixed` places it by its button's box instead, as a submenu is
+ * placed (T266's review).
+ */
+describe('a menu placed fixed by its button (T800)', () => {
+  it('opens below its button’s start, outside any scroller', async () => {
+    render(
+      <MenuButton label="Actions" items={items(() => undefined)} fixed align="start">
+        ⋯
+      </MenuButton>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Actions' });
+    trigger.getBoundingClientRect = () =>
+      ({ left: 120, right: 142, top: 40, bottom: 62, width: 22, height: 22 }) as DOMRect;
+
+    await userEvent.click(trigger);
+
+    const menu = screen.getByRole('menu');
+    expect(menu.style.position).toBe('fixed');
+    expect(menu.style.left).toBe('120px');
+    expect(menu.style.top).toBe('66px');
+  });
+
+  it('closes when what holds its button scrolls, rather than drifting from it (T800’s review)', async () => {
+    render(
+      <div data-testid="strip">
+        <MenuButton label="Actions" items={items(() => undefined)} fixed>
+          ⋯
+        </MenuButton>
+      </div>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions' }));
+
+    fireEvent.scroll(screen.getByTestId('strip'));
+
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 });

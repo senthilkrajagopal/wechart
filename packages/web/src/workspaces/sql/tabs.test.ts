@@ -1,0 +1,206 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  asksBeforeClosing,
+  firstTabs,
+  tabsReducer,
+  tabState,
+  type SqlTab,
+  type TabsState,
+} from './tabs';
+
+/**
+ * T800 (AC-450): WHILE the SQL runner workspace is open, THE SYSTEM SHALL
+ * bind each editor tab to one data source; open a new tab on the current
+ * data source from "+"; offer Rename…, Duplicate, Close and Close other
+ * tabs; keep a tab's SQL and clear its result when its data source changes;
+ * give each tab its state in its tooltip and accessible name; and ask before
+ * closing a tab whose text is neither saved nor the SQL of its last run.
+ */
+let next = 0;
+const ids = () => {
+  next += 1;
+  return `t${String(next)}`;
+};
+
+const tab = (over: Partial<SqlTab> & Pick<SqlTab, 'id' | 'name'>): SqlTab => ({
+  sourceId: 'emea',
+  sql: '',
+  params: {},
+  savedSql: null,
+  lastRunSql: null,
+  run: null,
+  ...over,
+});
+const finished = {
+  kind: 'done',
+  outcome: {
+    outcome: 'finished',
+    columns: [],
+    rows: [],
+    rowCount: 1284,
+    truncated: null,
+    durationMs: 840,
+    statement: 'select',
+  },
+} as const;
+
+describe('a tab, bound to one data source (T800, AC-450)', () => {
+  it('starts as one tab, “Query 1”, with no data source', () => {
+    const state = firstTabs(ids);
+
+    expect(state.tabs).toHaveLength(1);
+    expect(state.tabs[0]?.name).toBe('Query 1');
+    expect(state.tabs[0]?.sourceId).toBe('');
+    expect(state.active).toBe(state.tabs[0]?.id);
+  });
+
+  it('holds exactly one data source id, which choosing another replaces', () => {
+    const state: TabsState = { tabs: [tab({ id: 'a', name: 'Query 1' })], active: 'a' };
+
+    const changed = tabsReducer(state, { kind: 'source', id: 'a', sourceId: 'fx' }, ids);
+
+    expect(typeof changed.tabs[0]?.sourceId).toBe('string');
+    expect(changed.tabs[0]?.sourceId).toBe('fx');
+  });
+
+  it('keeps the SQL and clears the result when its data source changes (design 17’s Q5)', () => {
+    const state: TabsState = {
+      tabs: [tab({ id: 'a', name: 'Query 1', sql: 'SELECT 1', lastRunSql: 'SELECT 1', run: finished })],
+      active: 'a',
+    };
+
+    const changed = tabsReducer(state, { kind: 'source', id: 'a', sourceId: 'fx' }, ids);
+
+    expect(changed.tabs[0]?.sql).toBe('SELECT 1');
+    expect(changed.tabs[0]?.run).toBeNull();
+    // Its own source chosen again is no change: the result stays.
+    expect(tabsReducer(state, { kind: 'source', id: 'a', sourceId: 'emea' }, ids)).toBe(state);
+  });
+
+  it('opens a new tab from “+” on the current tab’s data source, after it, and selects it', () => {
+    const state: TabsState = {
+      tabs: [tab({ id: 'a', name: 'Query 1', sourceId: 'fx' }), tab({ id: 'b', name: 'Query 2' })],
+      active: 'a',
+    };
+
+    const added = tabsReducer(state, { kind: 'add' }, () => 'c');
+
+    expect(added.tabs.map((each) => each.id)).toEqual(['a', 'b', 'c']);
+    expect(added.tabs[2]).toMatchObject({ name: 'Query 3', sourceId: 'fx', sql: '', run: null });
+    expect(added.active).toBe('c');
+  });
+
+  it('names a new tab one past the highest “Query n”', () => {
+    const state: TabsState = {
+      tabs: [tab({ id: 'a', name: 'Query 4' }), tab({ id: 'b', name: 'orders check' })],
+      active: 'b',
+    };
+
+    expect(tabsReducer(state, { kind: 'add' }, () => 'c').tabs[2]?.name).toBe('Query 5');
+  });
+
+  it('renames a tab, trimmed, and keeps the old name for a blank one', () => {
+    const state: TabsState = { tabs: [tab({ id: 'a', name: 'Query 1' })], active: 'a' };
+
+    expect(tabsReducer(state, { kind: 'rename', id: 'a', name: '  orders check ' }, ids).tabs[0]?.name).toBe(
+      'orders check',
+    );
+    expect(tabsReducer(state, { kind: 'rename', id: 'a', name: '  ' }, ids).tabs[0]?.name).toBe('Query 1');
+  });
+
+  it('duplicates a tab after it, with its source, SQL and parameters, and no result', () => {
+    const state: TabsState = {
+      tabs: [
+        tab({ id: 'a', name: 'Query 1', sourceId: 'fx', sql: 'SELECT 2', params: { region: 'EMEA' }, run: finished }),
+        tab({ id: 'b', name: 'Query 2' }),
+      ],
+      active: 'b',
+    };
+
+    const copied = tabsReducer(state, { kind: 'duplicate', id: 'a' }, () => 'c');
+
+    expect(copied.tabs.map((each) => each.id)).toEqual(['a', 'c', 'b']);
+    expect(copied.tabs[1]).toMatchObject({
+      name: 'Query 1 (copy)',
+      sourceId: 'fx',
+      sql: 'SELECT 2',
+      params: { region: 'EMEA' },
+      run: null,
+    });
+    expect(copied.active).toBe('c');
+  });
+
+  it('closes a tab, selecting the one after it, or else the one before', () => {
+    const state: TabsState = {
+      tabs: [tab({ id: 'a', name: 'Q1' }), tab({ id: 'b', name: 'Q2' }), tab({ id: 'c', name: 'Q3' })],
+      active: 'b',
+    };
+
+    expect(tabsReducer(state, { kind: 'close', id: 'b' }, ids)).toMatchObject({ active: 'c' });
+    expect(tabsReducer({ ...state, active: 'c' }, { kind: 'close', id: 'c' }, ids).active).toBe('b');
+    expect(tabsReducer(state, { kind: 'close', id: 'a' }, ids).active).toBe('b');
+  });
+
+  it('closing the last tab leaves a fresh “Query 1” on its data source', () => {
+    const state: TabsState = { tabs: [tab({ id: 'a', name: 'orders', sourceId: 'fx', sql: 'x' })], active: 'a' };
+
+    const closed = tabsReducer(state, { kind: 'close', id: 'a' }, () => 'z');
+
+    expect(closed.tabs).toEqual([tab({ id: 'z', name: 'Query 1', sourceId: 'fx' })]);
+    expect(closed.active).toBe('z');
+  });
+
+  it('closes every other tab, selecting the one kept', () => {
+    const state: TabsState = {
+      tabs: [tab({ id: 'a', name: 'Q1' }), tab({ id: 'b', name: 'Q2' }), tab({ id: 'c', name: 'Q3' })],
+      active: 'a',
+    };
+
+    const kept = tabsReducer(state, { kind: 'close-others', id: 'b' }, ids);
+
+    expect(kept.tabs.map((each) => each.id)).toEqual(['b']);
+    expect(kept.active).toBe('b');
+  });
+});
+
+describe('asking before closing a tab (T800, AC-450)', () => {
+  it('asks for text that is neither saved nor the SQL of its last run', () => {
+    expect(asksBeforeClosing(tab({ id: 'a', name: 'Q', sql: 'SELECT 1' }))).toBe(true);
+    expect(
+      asksBeforeClosing(tab({ id: 'a', name: 'Q', sql: 'SELECT 2', lastRunSql: 'SELECT 1', savedSql: 'SELECT 3' })),
+    ).toBe(true);
+  });
+
+  it('doesn’t ask for text that is saved, or that it last ran, or for no text', () => {
+    expect(asksBeforeClosing(tab({ id: 'a', name: 'Q', sql: 'SELECT 1', savedSql: 'SELECT 1' }))).toBe(false);
+    expect(asksBeforeClosing(tab({ id: 'a', name: 'Q', sql: 'SELECT 1', lastRunSql: 'SELECT 1' }))).toBe(false);
+    expect(asksBeforeClosing(tab({ id: 'a', name: 'Q', sql: '  \n' }))).toBe(false);
+  });
+});
+
+describe('a tab’s state, as an icon and a label (T800, AC-450; design 17’s Q6)', () => {
+  it('reads “Not run yet” before its first run', () => {
+    expect(tabState(tab({ id: 'a', name: 'Q' }))).toEqual({ kind: 'idle', label: 'Not run yet' });
+  });
+
+  it('reads “Finished, 1,284 rows” after a run that finished', () => {
+    expect(tabState(tab({ id: 'a', name: 'Q', run: finished }))).toEqual({
+      kind: 'ok',
+      label: 'Finished, 1,284 rows',
+    });
+  });
+
+  it('reads each other outcome in the result head’s words', () => {
+    const done = (outcome: object) => tabState(tab({ id: 'a', name: 'Q', run: { kind: 'done', outcome } as SqlTab['run'] }));
+
+    expect(tabState(tab({ id: 'a', name: 'Q', run: { kind: 'running' } }))).toEqual({ kind: 'run', label: 'Running' });
+    expect(done({ ...finished.outcome, truncated: 'rows' })).toEqual({ kind: 'warn', label: 'Limited to 10,000 rows' });
+    expect(done({ ...finished.outcome, truncated: 'bytes' })).toEqual({ kind: 'warn', label: 'Limited to 10 MB' });
+    expect(done({ outcome: 'timeout', durationMs: 30000 })).toEqual({ kind: 'err', label: 'Stopped at 30 seconds' });
+    expect(done({ outcome: 'cancelled', durationMs: 1000 })).toEqual({ kind: 'cancel', label: 'Cancelled' });
+    expect(done({ outcome: 'refused', error: 'x', reason: 'x', statement: null })).toEqual({ kind: 'err', label: 'Not run' });
+    expect(done({ outcome: 'failed', error: 'x', durationMs: null })).toEqual({ kind: 'err', label: 'Database error' });
+    expect(done({ outcome: 'busy', error: 'x' })).toEqual({ kind: 'warn', label: 'Busy' });
+  });
+});

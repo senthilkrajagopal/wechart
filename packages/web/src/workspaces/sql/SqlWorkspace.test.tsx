@@ -233,3 +233,61 @@ describe('the workspace’s three panes (T797, rule 91)', () => {
     expect(rightPane().getAttribute('data-open')).toBe('false');
   });
 });
+
+/**
+ * T800 (AC-450): each editor tab is bound to one data source; the picker
+ * chooses the open tab's, and "+" opens a tab on it.
+ * Fails when: a run on a tab goes to a data source other than the tab's.
+ */
+describe('tabs bound to a data source in the workspace (T800, AC-450)', () => {
+  const listed = [
+    { id: 'emea', name: 'emea_replica' },
+    { id: 'fx', name: 'fx_warehouse' },
+  ].map((source) => ({
+    ...source,
+    driver: 'postgres',
+    cubeStore: false,
+    folderId: 'f-sales',
+    folderPath: [{ id: 'f-sales', title: 'Sales' }],
+    inWorkspace: false,
+    runner: 'on',
+  }));
+  const choose = async (name: string) => {
+    // The picker's button, not the left pane's rail ("Data source and schema").
+    await userEvent.click(screen.getByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: new RegExp(name) }));
+  };
+
+  it('binds the picker’s choice to the open tab only, and opens “+” on it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        Promise.resolve(
+          url === '/api/sql/sources'
+            ? new Response(JSON.stringify(listed), { status: 200 })
+            : new Response('{}', { status: 404 }),
+        ),
+      ),
+    );
+    renderAs(writer);
+    await screen.findByRole('button', { name: 'Data source Choose…' });
+
+    await choose('emea_replica');
+    expect(screen.getByRole('tab', { name: 'Query 1, Not run yet, on emea_replica' })).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New tab on emea_replica' }));
+    await choose('fx_warehouse');
+
+    expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('aria-label'))).toEqual([
+      'Query 1, Not run yet, on emea_replica',
+      'Query 2, Not run yet, on fx_warehouse',
+    ]);
+    // The picker shows the open tab's source, and follows the tab chosen.
+    await userEvent.click(screen.getByRole('tab', { name: /^Query 1/ }));
+    expect(screen.getByRole('button', { name: /^Data source emea_replica/ })).toBeTruthy();
+    // The panel is the open tab's.
+    expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(
+      screen.getByRole('tab', { name: /^Query 1/ }).id,
+    );
+  });
+});

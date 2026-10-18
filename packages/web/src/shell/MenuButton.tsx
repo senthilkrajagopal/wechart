@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 /**
  * A button that opens a menu of actions — the prototype's "＋ New ▾", a row's
@@ -59,6 +59,11 @@ export interface MenuButtonProps {
    * New at 250, design 14's folder row at 196. Otherwise the stylesheet's.
    */
   readonly menuWidth?: number;
+  /**
+   * Placed `fixed`, by the button's box, for a button in a strip that
+   * scrolls sideways and would clip it (T800: the SQL runner's tabs).
+   */
+  readonly fixed?: boolean;
 }
 
 export function MenuButton({
@@ -72,6 +77,7 @@ export function MenuButton({
   describedBy,
   heading,
   menuWidth,
+  fixed = false,
 }: MenuButtonProps) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -88,6 +94,31 @@ export function MenuButton({
     setOpen(false);
     if (returnFocus) trigger.current?.focus();
   };
+
+  // Placed by the button's box, before it paints (T800): below it, lined up
+  // with its start or end, and kept inside the window.
+  useLayoutEffect(() => {
+    if (!open || !fixed) return;
+    const menu = document.getElementById(menuId);
+    const from = trigger.current?.getBoundingClientRect();
+    if (menu === null || from === undefined) return;
+    const width = menu.getBoundingClientRect().width;
+    const left = align === 'start' ? from.left : from.right - width;
+    menu.style.position = 'fixed';
+    menu.style.left = `${String(Math.max(0, Math.min(left, window.innerWidth - width)))}px`;
+    menu.style.right = 'auto';
+    menu.style.top = `${String(from.bottom + 4)}px`;
+    menu.style.marginTop = '0';
+    // Placed once, so closed when anything but the menu scrolls under it,
+    // rather than left drifting from its button (T800's review).
+    const onScroll = (event: Event) => {
+      if (!menu.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, fixed, align, menuId]);
 
   // Opening moves focus into the menu, which is an effect of the user's own
   // action — not `autoFocus` on load.

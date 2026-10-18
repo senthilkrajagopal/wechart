@@ -76,10 +76,16 @@ main:has(.sql-workspace) {
   color: var(--wc-text-secondary);
 }
 /* The editor tabs, in the page-tab style, 13 px (direction §7f, §7d). */
-.sql-tabs { display: flex; align-items: flex-end; gap: 2px; height: 100%; padding: 0 8px; }
+/* T800 (design 17, pin 7): each tab its state's icon and name, then its ⋯
+   and × as buttons after it; "+" after the list. The strip scrolls (Q8). */
+.sql-tabstrip { display: flex; align-items: stretch; height: 36px; flex: none; }
+.sql-tabs { display: flex; align-items: stretch; height: 100%; }
 .sql-tabs__tab {
-  height: 34px;
-  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 4px 0 10px;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
@@ -88,11 +94,36 @@ main:has(.sql-workspace) {
   color: var(--wc-text-secondary);
   white-space: nowrap;
 }
+.sql-tabs > .menu-button { align-items: center; border-bottom: 2px solid transparent; }
+.sql-tabs__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--wc-text-secondary);
+}
+/* A tab's ×, the end of the tab: a rule after it, as design 17 draws. */
+.sql-tabs > .sql-tabs__icon { align-self: center; margin-right: 4px; }
+.sql-tabs > .sql-tabs__icon + .sql-tabs__tab { border-left: 1px solid var(--wc-border-subtle); }
+.sql-tabs__add { align-self: center; margin-left: 6px; }
+/* The ⋯ of a tab not open shows on hover or focus only, keeping tabs short. */
+.sql-tabs .sql-tabs__icon--quiet:not(:focus-visible):not([aria-expanded='true']) { width: 0; overflow: hidden; }
+.sql-tabs__tab:hover + .menu-button .sql-tabs__icon--quiet,
+.sql-tabs > .menu-button:hover .sql-tabs__icon--quiet { width: 22px; }
 .sql-tabs__tab[aria-selected='true'] {
   border-bottom-color: var(--wc-accent);
   color: var(--wc-text-primary);
   font-weight: var(--wc-text-sm-strong-weight);
 }
+.sql-tabs__tab[aria-selected='true'] + .menu-button { border-bottom-color: var(--wc-accent); }
+.sql-tabs__tab svg[data-icon] { flex: none; }
+.sql-rename { display: grid; gap: 12px; min-width: 300px; }
+.sql-rename__name { display: grid; gap: 4px; }
 /* An empty state: an icon and one sentence, and an action where there is
    one (design 17, state H; rule 104). */
 .sql-empty {

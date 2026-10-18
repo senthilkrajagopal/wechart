@@ -1743,11 +1743,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T799 (AC-466) A first visit: one tab, "Query 1", no data source, focus on the picker, and the sentences for no source and for none available, as design 17 state H draws them
 
-- [ ] T800 (AC-450) Editor tabs, each bound to one data source: "+", the tab's ⋯ with Rename…, Duplicate, Close and Close other tabs, a changed source keeping the SQL and clearing the result, the state in the tooltip and accessible name, and asking before closing unsaved text
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/tabs.ts` (+ test), `packages/web/src/workspaces/sql/TabStrip.tsx` (+ test), `packages/web/src/workspaces/sql/CloseTabDialog.tsx`.
-  - Failing test: `TabStrip.test.tsx`: "+" opens a tab on the current tab's data source; the ⋯ offers Rename…, Duplicate, Close and Close other tabs, each doing so; changing a tab's source keeps its SQL and clears its result at once (design 17's Q5); a finished tab's accessible name and tooltip read "Query 1, Finished, 1,284 rows", with an icon and no colour alone (design 17's Q6); closing a tab whose text is neither saved nor its last run's SQL asks first, focus on the safe choice, and closing any other doesn't ask (AC-450). `tabs.test.ts`: a tab holds exactly one source id.
-  - Depends on: T798
+- [x] T800 (AC-450) Editor tabs, each bound to one data source: "+", the tab's ⋯ with Rename…, Duplicate, Close and Close other tabs, a changed source keeping the SQL and clearing the result, the state in the tooltip and accessible name, and asking before closing unsaved text
 
 - [ ] T801 (AC-451, AC-446) Keep open tabs in this browser only, for the signed-in user, restore them on reload, and name the open tab in the address
   - Lane: SQL

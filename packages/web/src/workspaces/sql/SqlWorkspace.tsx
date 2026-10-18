@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   useEffect,
   useId,
+  useReducer,
   useRef,
   useState,
   type CSSProperties,
@@ -18,6 +19,8 @@ import { ChooseASource, NoSourceToRun } from './EmptyStates';
 import { OffPanel } from './OffPanel';
 import { SQL_SOURCES_QUERY } from './sources';
 import { SourcePicker } from './SourcePicker';
+import { firstTabs, tabsReducer, type TabsAction, type TabsState } from './tabs';
+import { TabStrip } from './TabStrip';
 import {
   editorShare,
   LEFT_PANE,
@@ -94,8 +97,15 @@ type Side = 'left' | 'right';
  */
 function Workbench({ superAdmin }: { readonly superAdmin: boolean }) {
   const sources = useQuery({ ...SQL_SOURCES_QUERY, retry: false });
-  /** The data source chosen in the picker; tabs hold it from T800. */
-  const [chosen, setChosen] = useState('');
+  /** The editor tabs, each bound to one data source (T800, AC-450). */
+  const [tabs, dispatch] = useReducer(
+    (state: TabsState, action: TabsAction) => tabsReducer(state, action),
+    undefined,
+    () => firstTabs(),
+  );
+  const openTab = tabs.tabs.find((tab) => tab.id === tabs.active) ?? tabs.tabs[0];
+  /** The open tab's data source, which the picker shows and chooses. */
+  const chosen = openTab?.sourceId ?? '';
   const chosenRow = sources.data?.find((row) => row.id === chosen);
   /**
    * Whether to ask them to choose one (AC-466, H1) rather than say none runs
@@ -182,7 +192,9 @@ function Workbench({ superAdmin }: { readonly superAdmin: boolean }) {
             <SourcePicker
               rows={sources.data ?? []}
               value={chosen}
-              onChoose={setChosen}
+              onChoose={(sourceId) => {
+                dispatch({ kind: 'source', id: tabs.active, sourceId });
+              }}
               buttonRef={picker}
             />
           )}
@@ -195,27 +207,21 @@ function Workbench({ superAdmin }: { readonly superAdmin: boolean }) {
         style={{ '--sql-editor': `${String(Math.round(share * 1000) / 10)}%` } as CSSProperties}
       >
         <div className="sql-centre__tabs" data-testid="sql-tabs-area">
-          {/* A first visit's one tab (AC-466; design 17, H1); more come with T800. */}
-          <div role="tablist" aria-label="SQL tabs" className="sql-tabs">
-            <button
-              type="button"
-              role="tab"
-              id={`${ids}-tab-1`}
-              aria-selected="true"
-              aria-controls={`${ids}-panel-1`}
-              className="sql-tabs__tab"
-            >
-              Query 1
-            </button>
-          </div>
+          <TabStrip
+            state={tabs}
+            dispatch={dispatch}
+            sourceName={(id) => sources.data?.find((row) => row.id === id)?.name}
+            tabId={(id) => `${ids}-tab-${id}`}
+            panelId={(id) => `${ids}-panel-${id}`}
+          />
         </div>
-        {/* The split is of what lies below the tabs (T797's review). */}
+        {/* The split is of what lies below the tabs (T797's review): the open tab's panel. */}
         <div
           ref={below}
           className="sql-centre__split"
           role="tabpanel"
-          id={`${ids}-panel-1`}
-          aria-labelledby={`${ids}-tab-1`}
+          id={`${ids}-panel-${tabs.active}`}
+          aria-labelledby={`${ids}-tab-${tabs.active}`}
         >
           {chosenRow?.runner === 'off' ? (
             // In the editor's place: nothing here runs (design 17, B2).
