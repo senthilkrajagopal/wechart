@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { routesOf } from '../auth/guard';
+import { pgSessionStore } from '../auth/session-store';
 import { closeDb, getDb } from '../db/client';
 import { accessTokenStore } from '../repos/access-tokens';
 import { buildServer } from '../server';
@@ -41,6 +42,41 @@ describe('/mcp with no MCP host (T774, AC-476)', () => {
         expect(answer.statusCode).toBe(404);
         expect(answer.json<{ message: string }>().message).toBe(`Route ${method}:/mcp not found`);
       }
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('with sign-in on, answers /mcp as any unknown path, reaching no MCP code', async () => {
+    const app = buildServer({
+      config: {
+        ...base,
+        security: 'oidc',
+        publicUrl: 'http://localhost:5373',
+        sessionSecret: 'a-test-session-secret-at-least-32-characters',
+        superAdminGroup: 'wechart-super-admins',
+        oidc: {
+          issuer: 'http://localhost:5556/dex',
+          clientId: 'wechart',
+          clientSecret: 'secret',
+          groupsClaim: 'groups',
+          scopes: 'openid profile email groups',
+          allowHttp: true,
+        },
+      },
+      sessions: pgSessionStore(getDb()),
+    });
+    try {
+      await app.ready();
+      expect(mcpRoutes(app)).toEqual([]);
+      const unknown = await app.inject({ method: 'POST', url: '/no-such-path', payload: {} });
+      const mcp = await app.inject({ method: 'POST', url: '/mcp', payload: {} });
+      expect({ status: mcp.statusCode, body: mcp.json<unknown>() }).toEqual({
+        status: unknown.statusCode,
+        body: unknown.json<unknown>(),
+      });
+      // No 401 of MCP's own: no WWW-Authenticate: Bearer.
+      expect(mcp.headers['www-authenticate']).toBeUndefined();
     } finally {
       await app.close();
     }

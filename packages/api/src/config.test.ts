@@ -92,6 +92,9 @@ describe('WECHART_MCP_HOST (T774, AC-476)', () => {
       'mcp.example.com/mcp',
       'mcp.example.com:443',
       'mcp example',
+      // An address, or a single label, is no host a TLS certificate is made for (T774's review).
+      '10.0.0.1',
+      'localhost',
     ])
       expect(() => loadConfig({ CUBE_API_SECRET: 's', WECHART_MCP_HOST: value })).toThrow(
         /WECHART_MCP_HOST/,

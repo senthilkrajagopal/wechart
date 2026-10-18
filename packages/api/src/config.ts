@@ -354,7 +354,8 @@ const HOST_NAME =
 function mcpHostOf(env: NodeJS.ProcessEnv): string | undefined {
   const host = (env['WECHART_MCP_HOST'] ?? '').trim().toLowerCase();
   if (host === '') return undefined;
-  if (!HOST_NAME.test(host))
+  // A name with a dot, not an address: what a TLS certificate is made for (T774's review).
+  if (!HOST_NAME.test(host) || !host.includes('.') || isIP(host) !== 0)
     throw new ConfigError(
       `WECHART_MCP_HOST is a host name alone, such as mcp.wechart.example.com: “${host}” isn’t ` +
         '(no scheme, path or port; MCP is served at https://‹host›/mcp).',

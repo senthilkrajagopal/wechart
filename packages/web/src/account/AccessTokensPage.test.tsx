@@ -441,6 +441,20 @@ describe('where MCP is served, or isn’t (T774, AC-476; design 18, pin 9 and G3
     );
   });
 
+  it('says so when the server URL can’t be copied here', async () => {
+    serve([{ tokens: [], mcpUrl: MCP_URL }]);
+    const writeText = vi.fn(async () => {
+      throw new Error('denied');
+    });
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    open();
+    await userEvent.click(await screen.findByRole('button', { name: 'Copy the server URL' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'It couldn’t be copied here: select it and copy it yourself.',
+    );
+    expect(writeText).toHaveBeenCalledWith(MCP_URL);
+  });
+
   it('says MCP isn’t set up where no host is named, with no server URL or command', async () => {
     const MADE = { ...READING, id: 'pat-3', name: 'Claude Code · desktop' };
     serve(

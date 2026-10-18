@@ -353,7 +353,7 @@ function TokenCells({ token, now }: { readonly token: AccessToken; readonly now:
  */
 export function McpServerUrl({ url }: { readonly url: string | null }) {
   const ids = useId();
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'yes' | 'no' | null>(null);
   if (url === null)
     return (
       <StateLine kind="warn" role="status" className="mcp-off">
@@ -381,15 +381,33 @@ export function McpServerUrl({ url }: { readonly url: string | null }) {
           className="btn"
           aria-label="Copy the server URL"
           onClick={() => {
+            // As the shown-once dialog copies: said when it can't be (T774's review).
             const clipboard = 'clipboard' in navigator ? navigator.clipboard : undefined;
-            void clipboard?.writeText(url).then(() => {
-              setCopied(true);
-            });
+            if (clipboard === undefined) {
+              setCopied('no');
+              return;
+            }
+            clipboard.writeText(url).then(
+              () => {
+                setCopied('yes');
+              },
+              () => {
+                setCopied('no');
+              },
+            );
           }}
         >
-          {copied ? 'Copied' : 'Copy'}
+          {copied === 'yes' ? 'Copied' : 'Copy'}
         </button>
       </div>
+      <span role="status" aria-live="polite" className="visually-hidden">
+        {copied === 'yes' ? 'Copied' : ''}
+      </span>
+      {copied === 'no' ? (
+        <p role="alert" className="propose-dialog__refused">
+          It couldn’t be copied here: select it and copy it yourself.
+        </p>
+      ) : null}
       <p className="account-page__once">
         Your deployment’s MCP address. It serves only <code>/mcp</code>, over TLS.
       </p>

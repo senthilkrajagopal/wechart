@@ -161,3 +161,10 @@
       - T769's page test checks the text in "Your token", not the dialog's text content: with no `mcpUrl` the command textarea isn't there.
       - The security e2e checks there's no command, since the e2e stack names no host.
     - **Tests:** `plugin.test.ts` (4, new), `config.test.ts` (3 new), `AccessTokensPage.test.tsx` (2 new), `AccessTokensTab.test.tsx` (2 new), and `e2e/access-tokens-single-user.spec.ts` (1 new).
+    - **After the cold review (follow-up commit):**
+      - `guard.test.ts`'s sweep now builds with `mcpHost` and the token store. Its list of open routes names `public POST/GET/DELETE /mcp` on purpose, and it checks they answer 401 and 405. The token routes join the 401 sweep.
+      - With sign-in on and no host, `POST /mcp` is shown to answer exactly as an unknown path does, which is the guard's 401 `unauthenticated`, not a 404. There is no `WWW-Authenticate: Bearer` and no MCP route. The commit message's "plain 404" holds with sign-in off only.
+      - `WECHART_MCP_HOST` refuses an IP address and a single label such as `localhost`. It needs a dotted name, the kind a TLS certificate is made for.
+      - The page's Copy for the server URL says when it can't copy, as the shown-once dialog does, and announces "Copied" politely.
+      - **Left for T776:** the token check must run before the body is parsed (`onRequest` or `preParsing`). Today Fastify parses a JSON POST, and answers 415 for another content type, before the 401.
+      - **Left as is:** the "MCP isn't set up" line has no "Server URL" heading over it, unlike G3. While the list is loading, or fails to load, neither state shows.

@@ -2,6 +2,7 @@ import type { FastifyInstance, InjectOptions } from 'fastify';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getDb } from '../db/client';
+import { accessTokenStore } from '../repos/access-tokens';
 import { auditStore } from '../repos/audit';
 import { dataSourceStore } from '../repos/data-sources';
 import { documents } from '../repos/documents';
@@ -70,7 +71,8 @@ const errorOf = (body: string): unknown => {
 function everyRoute(): FastifyInstance {
   const app = buildServer({
     // The data sources' routes, and the install Job's seeding route (T443).
-    config: { ...secured, seedToken: 'a-seed-token-for-the-sweep' },
+    // MCP on (T774): its routes are in the sweep, so none is open by being forgotten.
+    config: { ...secured, seedToken: 'a-seed-token-for-the-sweep', mcpHost: 'mcp.example.com' },
     sessions: pgSessionStore(getDb()),
     folderAccess: folderAccessStore(getDb()),
     dataSources: dataSourceStore(getDb()),
@@ -78,6 +80,8 @@ function everyRoute(): FastifyInstance {
     documents: documents(getDb()),
     audit: auditStore(getDb()),
     proposals: proposalStore(getDb()),
+    // The personal access tokens' routes (T767 on).
+    accessTokens: accessTokenStore(getDb()),
   });
   servers.push(app);
   return app;
@@ -132,18 +136,28 @@ describe('with security on and no session (T318, AC-251)', () => {
     expect(open).toEqual([
       // The install Job's, answering only its token (T443; AC-251 amended).
       'install POST /api/data-sources/root-default',
+      // MCP, where a host is named (T774): a client signs in with its token,
+      // never the session; until T776 checks it, every POST is 401 and the
+      // rest 405, with nothing run.
+      'public DELETE /mcp',
       'public GET /api/auth/callback',
       // Whether anyone is signed in, for the web server's page gate (T321).
       'public GET /api/auth/check',
       'public GET /api/auth/login',
       'public GET /api/cube-health',
       'public GET /api/health',
+      'public GET /mcp',
       // Sign-in's own pages for its end (design 09, states C and D; T697): the
       // product mark and one sentence, no wechart content (AC-251's exemption).
       'public GET /sign-in-failed',
       'public GET /signed-out',
       'public POST /api/auth/logout',
+      'public POST /mcp',
     ]);
+    for (const method of ['POST', 'GET', 'DELETE'] as const) {
+      const mcp = await app.inject({ method, url: '/mcp' });
+      expect(mcp.statusCode, method).toBe(method === 'POST' ? 401 : 405);
+    }
     const health = await app.inject({ method: 'GET', url: '/api/health' });
     expect(health.statusCode).toBe(200);
   });
