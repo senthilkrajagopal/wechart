@@ -136,6 +136,11 @@ describe('the MCP host’s HTTPRoute (T792, AC-476)', SLOW, () => {
       [without(MODE_A, 'mcp.tlsSecretName'), /mcp\.tlsSecretName is required/],
       [without(MODE_A, 'mcp.gateway.className'), /mcp\.gateway\.className is required/],
       [without(MODE_B, 'mcp.gateway.parentRefs'), /mcp\.gateway\.parentRefs is required/],
+      // A parent with no listener named attaches to every one, a plain-HTTP one included.
+      [
+        without(MODE_B, 'mcp.gateway.parentRefs[0].sectionName'),
+        /each of mcp\.gateway\.parentRefs names its HTTPS listener in sectionName/,
+      ],
     ] as const) {
       const refused = helm([...values, ...RANGES]);
       expect(refused.status, values.join(' ')).not.toBe(0);

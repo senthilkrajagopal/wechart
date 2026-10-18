@@ -46,6 +46,12 @@ spec:
     {{- if not .gateway.parentRefs }}
     {{- fail "mcp.gateway.parentRefs is required without mcp.gateway.create: the Gateway the MCP route attaches to" }}
     {{- end }}
+    {{- /* With no sectionName a route attaches to every listener, a plain-HTTP one included: /mcp without TLS (AC-476). */ -}}
+    {{- range .gateway.parentRefs }}
+    {{- if not .sectionName }}
+    {{- fail "each of mcp.gateway.parentRefs names its HTTPS listener in sectionName: with none, the route would attach to every listener of the Gateway, a plain-HTTP one included" }}
+    {{- end }}
+    {{- end }}
     {{- toYaml .gateway.parentRefs | nindent 4 }}
     {{- end }}
   hostnames:

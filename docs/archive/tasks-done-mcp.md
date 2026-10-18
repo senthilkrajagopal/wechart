@@ -548,6 +548,11 @@
     - **Chart:** the route's one rule has `timeouts: {request: 130s, backendRequest: 130s}`; `api.yaml` sets `WECHART_MCP_HOST` from `mcp.host` where one is named; `web-config.yaml` answers `location = /mcp` with `return 404`, whatever the MCP values (T794-1).
     - **Tests** (4 more, 12 in the file): the timeouts in both modes; the API's `WECHART_MCP_HOST`; nginx's 404 with and without a host; with every other MCP value set but the host, no Gateway, HTTPRoute, SecurityPolicy or ClientTrafficPolicy, and no `WECHART_MCP_HOST`. Red first for the first three. The last passed at once: T792's and T793's templates already rendered nothing without a host, and `api.yaml` had no such variable; it stays as the guard AC-476's "no host" half asks for.
     - Deploy tests: 38/38 (`cube-image`, `credential-key-job`, `trust-proxy`, `mcp-gateway`).
+    - **Cold review of T792–T794 and the catch-up fix (one, over `10d68478..59fd46a9`): PASS**, no real bug; four low findings.
+      - **Fixed in a follow-up:** in mode B a parent with no `sectionName` attaches the route to every listener of the Gateway, a plain-HTTP one included, so `/mcp` could be served without TLS (AC-476). The chart now refuses it, naming the value; a new case in T792's refusal test, seen red first. The values file now also says that the route's SecurityPolicy takes the place of a Gateway-wide allow-list for `/mcp` rather than narrowing it (`gateway-api.md`, Gotcha 3).
+      - **Left:** `/mcp/` on the web host still falls to the app's `index.html` (AC-476 names `/mcp`, and nothing reaches the API); the no-host guard test, never red, as said above.
+      - **Also in the follow-up:** `trust-proxy.test.ts` (T773) timed out at 5 s in the full unit run, its `helm template` slowed by the load. Its suite now has the 60 s timeout the new file has; no assertion changed.
+    - **Unit suite at T794:** web 3,179, core 594, charts 556, recommender 133, ui 47 green; api 2,092 passed, 1 failed, the `trust-proxy` timeout above, which passes alone and with the follow-up.
 
 ## Security specs failing alone: xcube's folder tree stuck (lane MCP, batch 7, at the coordinator's request)
 

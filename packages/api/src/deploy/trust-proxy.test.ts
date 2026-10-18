@@ -41,7 +41,8 @@ function apiEnv(manifests: string): Map<string, string | undefined> {
   return env;
 }
 
-describe('the chart’s WECHART_TRUST_PROXY (T773, AC-474, AC-479)', () => {
+// Each `helm template` takes a second or two, and past 5 s under a full run's load.
+describe('the chart’s WECHART_TRUST_PROXY (T773, AC-474, AC-479)', { timeout: 60_000 }, () => {
   it('renders api.trustProxy as WECHART_TRUST_PROXY on the API container', () => {
     const env = apiEnv(render(['api.trustProxy=10.1.0.0/16']));
     expect(env.get('WECHART_TRUST_PROXY')).toBe('10.1.0.0/16');

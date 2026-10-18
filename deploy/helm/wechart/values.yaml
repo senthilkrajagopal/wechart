@@ -221,8 +221,13 @@ mcp:
     className: ''
     # Mode A: the listener's port.
     port: 443
-    # Mode B: the Gateway (and listener) the route attaches to. Required.
+    # Mode B: the Gateway and its HTTPS listener for the host, which the route
+    # attaches to. Required, each with sectionName: with none, the route
+    # would attach to every listener, a plain-HTTP one included.
     # e.g. [{name: shared, namespace: infra, sectionName: https-mcp}]
+    # The allow-list below is a SecurityPolicy on the route, which takes the
+    # place of a Gateway-wide one for /mcp rather than narrowing it
+    # (gateway-api.md, Gotcha 3): list here every range /mcp may take.
     parentRefs: []
   # The source addresses let in to /mcp, as CIDR ranges: the enterprise
   # network's, e.g. [10.20.0.0/16, 192.0.2.7/32]. Everything else is denied
