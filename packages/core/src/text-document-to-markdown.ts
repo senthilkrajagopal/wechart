@@ -83,10 +83,25 @@ function lineEscaped(line: string): string {
   return line.replace(/^(\d{1,9})([.)])(?=\s)/, '$1\\$2');
 }
 
+/**
+ * A line break as markdown's own: a backslash ending the line, which T869
+ * reads (exported) as a break within the block, so a break in a heading or a
+ * list item, or two in a row, keeps the block's shape (T870's review).
+ */
+const BREAK = '\\\n';
+
 function leafOf(node: TextNode): string {
   if (node.type === 'text') return escaped(node.text ?? '');
-  if (node.type === 'hardBreak') return '\n';
+  if (node.type === 'hardBreak') return BREAK;
   return tokenOf(node);
+}
+
+/** The character a node starts or ends with, as written: for choosing italic's marker. */
+function edgeOf(node: TextNode | undefined, end: 'first' | 'last'): string {
+  if (node === undefined) return '';
+  if (node.type !== 'text') return node.type === 'hardBreak' ? '\n' : '{';
+  const text = node.text ?? '';
+  return (end === 'first' ? text[0] : text[text.length - 1]) ?? '';
 }
 
 /** Bold outermost, then italic, then a link: the order T869 reads them. */
@@ -94,24 +109,36 @@ const LEVELS = ['bold', 'italic', 'link'] as const;
 
 const markAt = (node: TextNode, level: (typeof LEVELS)[number]): TextMark | undefined =>
   node.marks?.find((mark) => mark.type === level);
+/** A line break is never inside a marker pair: each side of it is marked apart. */
 const keyAt = (node: TextNode, level: (typeof LEVELS)[number]) => {
-  const mark = markAt(node, level);
+  const mark = node.type === 'hardBreak' ? undefined : markAt(node, level);
   if (mark === undefined) return '';
   return level === 'link' ? `link:${String(mark.attrs?.href)}` : level;
 };
 
 /**
- * An href as a markdown link holds it: parentheses and whitespace, which
- * would end it, percent-encoded as the same address.
+ * An href as a markdown link holds it: whatever would end it, mark it, or
+ * read as an escape — whitespace, parentheses, brackets, braces, a
+ * backslash, a star, a backtick, angle brackets — percent-encoded, the same
+ * address (T870's review).
  */
 const hrefOf = (href: string) =>
   href.replace(
-    /[()\s]/g,
+    /[\s()[\]{}\\*`<>]/g,
     (one) => `%${one.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`,
   );
 
-/** Runs grouped by one mark at a time, each run's own spaces kept outside its markers. */
-function inlineAt(nodes: readonly TextNode[], depth: number): string {
+const WORDY = /[A-Za-z0-9]/;
+
+/**
+ * Runs grouped by one mark at a time, each run's own spaces kept outside its
+ * markers. `before` and `after` are the characters just outside the nodes.
+ *
+ * Italic is `_…_`, which can sit against bold's `**` on either side and
+ * still read back (T870's review: `**a *b***` closed bold early); `*…*` only
+ * inside a word, where `_` would read as text.
+ */
+function inlineAt(nodes: readonly TextNode[], depth: number, before = '', after = ''): string {
   const level = LEVELS[depth];
   if (level === undefined) return nodes.map(leafOf).join('');
   let out = '';
@@ -122,15 +149,22 @@ function inlineAt(nodes: readonly TextNode[], depth: number): string {
     const key = keyAt(first, level);
     let end = at + 1;
     while (end < nodes.length && keyAt(nodes[end] as TextNode, level) === key) end += 1;
-    const inner = inlineAt(nodes.slice(at, end), depth + 1);
-    if (key === '') out += inner;
+    // A neighbour marked at this level is written inside its own markers.
+    const neighbour = (node: TextNode | undefined, edge: 'first' | 'last') =>
+      node !== undefined && keyAt(node, level) !== '' ? '*' : edgeOf(node, edge);
+    const prior = at === 0 ? before : neighbour(nodes[at - 1], 'last');
+    const next = end === nodes.length ? after : neighbour(nodes[end], 'first');
+    const slice = nodes.slice(at, end);
+    if (key === '') out += inlineAt(slice, depth + 1, prior, next);
     else {
+      const inner = inlineAt(slice, depth + 1, '*', '*');
       const [, lead = '', core = '', trail = ''] = /^(\s*)([\s\S]*?)(\s*)$/.exec(inner) ?? [];
       if (core === '') out += inner;
       else if (level === 'link')
         out += `${lead}[${core}](${hrefOf(String(markAt(first, 'link')?.attrs?.href ?? ''))})${trail}`;
       else {
-        const marker = level === 'bold' ? '**' : '*';
+        const inWord = (lead === '' && WORDY.test(prior)) || (trail === '' && WORDY.test(next));
+        const marker = level === 'bold' ? '**' : inWord ? '*' : '_';
         out += `${lead}${marker}${core}${marker}${trail}`;
       }
     }
@@ -139,8 +173,28 @@ function inlineAt(nodes: readonly TextNode[], depth: number): string {
   return out;
 }
 
+const sameMarks = (a: TextNode, b: TextNode) =>
+  JSON.stringify(a.marks ?? []) === JSON.stringify(b.marks ?? []);
+
+/**
+ * Adjacent text under the same marks as one run, so it's escaped as one: a
+ * `{` and a `{measure:…}}` in two nodes never write a token (T870's review).
+ * A line break ending the block has no markdown form, and is left out.
+ */
+function runsOf(nodes: readonly TextNode[]): TextNode[] {
+  const out: TextNode[] = [];
+  for (const node of nodes) {
+    const last = out[out.length - 1];
+    if (last?.type === 'text' && node.type === 'text' && sameMarks(last, node))
+      out[out.length - 1] = { ...last, text: `${last.text ?? ''}${node.text ?? ''}` };
+    else out.push(node);
+  }
+  while (out[out.length - 1]?.type === 'hardBreak') out.pop();
+  return out;
+}
+
 function inlineOf(nodes: readonly TextNode[] | undefined): string {
-  return inlineAt(nodes ?? [], 0)
+  return inlineAt(runsOf(nodes ?? []), 0)
     .split('\n')
     .map(lineEscaped)
     .join('\n');

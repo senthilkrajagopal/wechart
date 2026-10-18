@@ -16,8 +16,9 @@ import { textDocumentToMarkdown } from './text-document-to-markdown';
  * `{{…}}` token naming its kind and source …; and WHEN an MCP client writes a
  * dashboard with a Text tile given as markdown, THE SYSTEM SHALL store it
  * converted as AC-512 converts.
- * `Fails when: … an element is missing from the markdown or its token names
- * no kind or source, or markdown written back reads differently …`
+ * `Fails when: an MCP read returns a Text tile's stored document or HTML, or
+ * an element without its token, kind or source; …` (the MCP read and write
+ * themselves are T891's).
  */
 
 const doc = (...content: TextNode[]): TextDocument => ({
@@ -107,7 +108,7 @@ describe('a Text document written as markdown (T870, AC-527)', () => {
     ]);
     expect(textDocumentToMarkdown(everything)).toBe(
       [
-        '# Revenue *overview*',
+        '# Revenue _overview_',
         '',
         '## This quarter',
         '',
@@ -115,7 +116,7 @@ describe('a Text document written as markdown (T870, AC-527)', () => {
         '',
         '{{measure:orders.revenue}}',
         '',
-        'Revenue is {{change:orders.revenue | vs:previous_period}} on last quarter, {{sparkline:orders.revenue}} and {{icon:orders.revenue}} against plan.',
+        'Revenue is {{change:orders.revenue | vs:previous_period}} on last quarter, {{sparkline:orders.revenue}} and {{icon:orders.revenue}} against plan.\\',
         'Margin sits at {{bullet-graph:orders.margin}}, as of {{as-of:orders.revenue}}.',
         '',
         'Showing {{filter-value:country}} for {{measure:orders.revenue | marking:Marking}}',
@@ -206,7 +207,7 @@ describe('a Text document written as markdown (T870, AC-527)', () => {
     const spaced = doc(
       p(text('a'), text(' bold ', bold), text('b'), text(' it ', italic), text('c')),
     );
-    expect(textDocumentToMarkdown(spaced)).toBe('a **bold** b *it* c');
+    expect(textDocumentToMarkdown(spaced)).toBe('a **bold** b _it_ c');
     expect(roundTrip(spaced)).toEqual(
       doc(p(text('a '), text('bold', bold), text(' b '), text('it', italic), text(' c'))),
     );
@@ -217,6 +218,55 @@ describe('a Text document written as markdown (T870, AC-527)', () => {
     expect(roundTrip(nested)).toEqual(nested);
     const both = doc(p(text('both', bold, italic)));
     expect(roundTrip(both)).toEqual(both);
+  });
+
+  // T870's review: italic at a bold run's edge, or beside bold, closed the
+  // wrong marker on reading.
+  it('writes italic beside or at the edge of bold so both read back', () => {
+    for (const marked of [
+      doc(p(text('Revenue ', bold), text('up', bold, italic))),
+      doc(p(text('up', bold, italic), text(' Revenue', bold))),
+      doc(p(text('a', italic), text('b', bold, italic))),
+      doc(p(text('a', italic), text('b', bold))),
+      doc(p(text('a', bold), text('b', italic))),
+      doc(p(text('un'), text('believ', italic), text('able'))),
+      doc(p(text('x ', bold), el('value', { measure: 'orders.revenue' }, bold, italic))),
+    ])
+      expect(roundTrip(marked)).toEqual(marked);
+  });
+
+  // T870's review: a line break in a list item or a heading, or two in a
+  // row, changed the blocks on reading.
+  it('writes line breaks so blocks keep their shape', () => {
+    const broken = doc(
+      h(2, text('a'), br, text('b')),
+      p(text('one'), br, br, text('two')),
+      { type: 'bulletList', content: [li(text('first'), br, text('second')), li(text('next'))] },
+      p(text('after')),
+    );
+    expect(roundTrip(broken)).toEqual(broken);
+  });
+
+  // T870's review: an address the schema allows, holding a brace, a
+  // backslash or a star, broke the link or changed it.
+  it('writes a link’s address so it reads back as a link to the same place', () => {
+    for (const href of [
+      'https://x.example/?q={a}',
+      'https://x.example/a\\.b',
+      'https://x.example/a*b',
+      'https://x.example/[x]',
+    ]) {
+      const back = roundTrip(doc(p(text('t', italic, link(href)))));
+      const mark = back.doc.content?.[0]?.content?.[0]?.marks?.find((one) => one.type === 'link');
+      expect(back.doc.content?.[0]?.content?.[0]?.text).toBe('t');
+      expect(decodeURI(String(mark?.attrs?.href))).toBe(decodeURI(href));
+    }
+  });
+
+  // T870's review: text split across nodes is escaped as one run.
+  it('escapes text split across nodes as one run', () => {
+    const split = doc(p(text('{'), text('{measure:orders.revenue}} typed')));
+    expect(roundTrip(split)).toEqual(doc(p(text('{{measure:orders.revenue}} typed'))));
   });
 
   it('writes an empty document as no text', () => {

@@ -37,10 +37,12 @@ import {
 } from './text-document';
 import { elementOfToken, firstTokenIn, textPartsOf } from './text-tokens';
 
-const HEADING = /^(#{1,6})\s+(.*)$/;
-const BULLET = /^[-*]\s+(.*)$/;
+// A block's content runs to the line's end, or, in exported markdown, past a
+// line break joined into it (`joinedAtBreaks`).
+const HEADING = /^(#{1,6})[^\S\n]+([\s\S]*)$/;
+const BULLET = /^[-*][^\S\n]+([\s\S]*)$/;
 /** Up to nine digits, so a list's start is always a whole number the schema holds. */
-const NUMBERED = /^(\d{1,9})[.)]\s+(.*)$/;
+const NUMBERED = /^(\d{1,9})[.)][^\S\n]+([\s\S]*)$/;
 
 type Kind = 'both' | 'strong' | 'em' | 'code' | 'link';
 
@@ -205,6 +207,28 @@ const withContent = (node: TextNode, content: readonly TextNode[]): TextNode =>
   content.length === 0 ? node : { ...node, content: [...content] };
 
 /**
+ * Exported markdown's lines with each one ending in a line break — a
+ * backslash, not itself escaped — joined to the next, the break kept as a
+ * newline within the block (T870 writes a break so). A heading or a list
+ * item so keeps its break, and two breaks in a row stay in one paragraph.
+ */
+function joinedAtBreaks(lines: readonly string[]): string[] {
+  const out: string[] = [];
+  let open: string | undefined;
+  for (const line of lines) {
+    const whole = open === undefined ? line : `${open}\n${line}`;
+    const backslashes = /\\*$/.exec(whole)?.[0].length ?? 0;
+    if (backslashes % 2 === 1) open = whole.slice(0, -1);
+    else {
+      out.push(whole);
+      open = undefined;
+    }
+  }
+  if (open !== undefined) out.push(open);
+  return out;
+}
+
+/**
  * A markdown tile's text as a Text tile's document, read as that tile drew it
  * (AC-512); or, `exported`, markdown as T870 writes it (AC-527), with its
  * backslash escapes and each heading's style named by its marks.
@@ -222,7 +246,8 @@ export function textDocumentFromMarkdown(
 ): TextDocument {
   const inline = (text: string) =>
     joined(inlineOf(exported ? hidden(cleaned(text)) : cleaned(text), []));
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
+  const split = markdown.replace(/\r\n?/g, '\n').split('\n');
+  const lines = exported ? joinedAtBreaks(split) : split;
   const ranks = [
     ...new Set(
       lines.flatMap((line) => {
