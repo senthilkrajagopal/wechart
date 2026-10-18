@@ -455,9 +455,13 @@ export function DashboardPage({
             onClose={() => {
               setViewing(undefined);
               onPanel?.(undefined);
-              // Focus back to History, where it was opened from (pin 2, rule 85).
+              // Focus back to History, where it was opened from (pin 2, rule 85),
+              // or below 1,024 px to ⋯, which holds it there (T842's review).
               requestAnimationFrame(() => {
-                window.document.querySelector<HTMLElement>('[data-history-button]')?.focus();
+                (
+                  window.document.querySelector<HTMLElement>('[data-history-button]') ??
+                  window.document.querySelector<HTMLElement>('[data-testid="dashboard-more"]')
+                )?.focus();
               });
             }}
           />

@@ -1032,7 +1032,8 @@ for (const width of [390, 900]) {
     await expect(heading).toHaveCSS('line-height', '22px');
     const toggle = row(page).locator('button.header-toggle');
     const more = row(page).getByRole('button', { name: 'More', exact: true });
-    await expect(toggle).toBeVisible();
+    // Named for its filters once the model's titles have come.
+    await expect(toggle).toHaveAccessibleName('Filters, none set');
     await expect(more).toBeVisible();
     await expect(row(page).locator('.header-back')).toBeVisible();
     expect(
@@ -1057,8 +1058,19 @@ for (const width of [390, 900]) {
     const bookmarks = page.getByRole('dialog', { name: 'Bookmarks' });
     await expect(bookmarks).toBeVisible();
     await expect(bookmarks).toBeInViewport({ ratio: 1 });
+    // Focus in it as it opens (rule 85), then back on ⋯ (T842's review).
+    await expect(bookmarks).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(bookmarks).toHaveCount(0);
+    await expect(more).toBeFocused();
+
+    // History from ⋯: its panel, and focus back on ⋯ as it closes.
+    await more.click();
+    await menu.getByRole('menuitem', { name: 'History' }).click();
+    const close = page.getByRole('button', { name: 'Close History' });
+    await expect(close).toBeVisible();
+    await close.click();
+    await expect(close).toHaveCount(0);
     await expect(more).toBeFocused();
 
     // The pages: "Page: Overview ▾" on a 40 px row, the open one checked.

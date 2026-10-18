@@ -1650,8 +1650,9 @@ test.describe('T246: the dashboard header and the filter band', () => {
     await page.setViewportSize({ width: 900, height: 700 });
     await page.goto(`/explore/dashboards/${id}`);
     // Below 1,024 px the pages are a "Page: ‹name› ▾" menu since T842
-    // (AC-495; design 19 D2), not a strip; a strip wider than the window, in
-    // edit mode, is dashboard-edit.spec's (T836).
+    // (AC-495; design 19 D2), not a strip. Edit mode's scrolling strip is
+    // dashboard-edit.spec's, at 1,152 px (T836); below 1,024 px there's no
+    // way into edit mode (T250).
     const pages = page.getByRole('button', { name: 'Page: Quarterly page 1' });
     await expect(pages).toBeVisible();
     await expect(page.getByRole('tablist', { name: 'Pages' })).toHaveCount(0);
