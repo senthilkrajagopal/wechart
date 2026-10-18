@@ -32,6 +32,19 @@ export function missingValues(
   return names.filter((name) => (values[name] ?? '') === '');
 }
 
+/**
+ * Why a source can't take parameters, or null where it can (T810, AC-482;
+ * design 17, F4): Dremio's driver and Cube Store write values into the SQL
+ * text rather than binding them (research/sql-parameter-binding.md §1–2),
+ * so there a run holding one is held, and the API refuses it too.
+ */
+export function unboundOn(source: { readonly driver?: string; readonly cubeStore?: boolean }): string | null {
+  const where = source.cubeStore === true ? 'Cube Store' : source.driver === 'dremio' ? 'Dremio' : null;
+  return where === null
+    ? null
+    : `Parameters aren’t available on ${where}. Write the value into the SQL to run it here.`;
+}
+
 /** "a", "a and b", "a, b and c". */
 const listOf = (names: readonly string[]) =>
   names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)!}`;

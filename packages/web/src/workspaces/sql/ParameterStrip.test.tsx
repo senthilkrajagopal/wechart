@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { heldFor, missingValues, ParameterStrip, type ParamType } from './ParameterStrip';
+import { heldFor, missingValues, ParameterStrip, unboundOn, type ParamType } from './ParameterStrip';
 
 /**
  * T809 (AC-453): each parameter in the strip under the editor has a type,
@@ -33,6 +33,24 @@ function Harness({ names }: { readonly names: readonly string[] }) {
     </>
   );
 }
+
+/**
+ * T810 (AC-482): Dremio and Cube Store bind no parameter values, so a run
+ * holding one is held there, saying why.
+ * Fails when: Run is held without saying why.
+ */
+describe('a source that can’t bind parameters (T810, AC-482)', () => {
+  it('names Dremio and Cube Store, and no other source', () => {
+    expect(unboundOn({ driver: 'dremio' })).toBe(
+      'Parameters aren’t available on Dremio. Write the value into the SQL to run it here.',
+    );
+    expect(unboundOn({ cubeStore: true })).toBe(
+      'Parameters aren’t available on Cube Store. Write the value into the SQL to run it here.',
+    );
+    for (const driver of ['postgres', 'mysql', 'mssql', 'oracle', 'bigquery', 'snowflake', 'redshift', 'clickhouse'])
+      expect(unboundOn({ driver }), driver).toBeNull();
+  });
+});
 
 describe('the parameters strip (T809, AC-453)', () => {
   it('is a group named Parameters, each name with a type, Text first, of the four, and a value', () => {

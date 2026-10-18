@@ -143,3 +143,18 @@
     - **Also changed:** `QueryTab.tsx` (the strip, and the hold on Run and on ⌘/Ctrl+Enter), `tabs.ts` (`paramTypes` and the `param-value` and `param-type` actions), `tabStore.ts` (the types kept with the tab, any but the four dropped), and `sqlStyles.ts`.
     - **Until T811,** a run sends the SQL with its `{{name}}`s and no values, so the database refuses it. No value is ever written into the SQL text.
     - Decision T809-1 is in `docs/design/decisions-sql.md`.
+
+- [x] T810 (AC-482) Hold Run on Dremio and on Cube Store while the SQL holds a parameter, saying parameters aren't available on that source
+  - Lane: SQL
+  - Files: `packages/web/src/workspaces/sql/ParameterStrip.tsx` (+ test), `packages/api/src/routes/sql-runner.ts` (+ `sql-runner.test.ts`).
+  - Failing test: `ParameterStrip.test.tsx`: on a Dremio tab and a Cube Store tab with `{{x}}` in the SQL, Run is held, saying parameters aren't available on that source. `sql-runner.test.ts`: a run request to those sources holding a `{{ name }}` is refused before xcube is called, and no value is written into the SQL (AC-482).
+  - Depends on: T809
+  - **Built 2026-10-18** (lane SQL, batch 4).
+    - **AC-482 is NOT ticked.** Its "Cube" group half is T826's, which ticks it.
+    - **Tests:**
+      - `sql-runner.test.ts` (Dremio) and `sql-cube-store.test.ts` (Cube Store): a run holding `{{ name }}` gets a 400 with `outcome: 'refused'` and "Parameters aren’t available on ‹Dremio | Cube Store›. Write the value into the SQL to run it here." before xcube is asked. One in a string or a comment runs as written. On PostgreSQL a `{{name}}` is still sent as written until T811.
+      - `QueryTab.test.tsx`: on a Dremio tab and a Cube Store tab, Run and ⌘/Ctrl+Enter are held with that sentence, and there is no strip (design 17, F5).
+      - `ParameterStrip.test.tsx`: `unboundOn` names those two sources and no other.
+    - **One finder for both ends.** `parameterNames` moved to `@wechart/core`, under its own subpath, `@wechart/core/sql-parameters`, so lang-sql's parser stays out of the package's root. `@wechart/core` now depends on `@codemirror/lang-sql` 6.10.0, which `sql-parameter-binding.md` covers. The web's `parameterNames.ts` re-exports it. The API reads both sources' SQL as standard SQL.
+    - No e2e: the security stack has no Dremio source, and Cube Store's run is unit-tested on the route. The browser's hold is the same code as T809's, which the e2e covers.
+    - Decision T810-1 is in `docs/design/decisions-sql.md`.

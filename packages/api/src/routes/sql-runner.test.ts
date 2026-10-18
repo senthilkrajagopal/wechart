@@ -265,6 +265,62 @@ describe('SQL on a shared folder’s data source (T532, AC-373)', () => {
   });
 });
 
+/**
+ * T810 (AC-482): on Dremio, which binds no parameter values
+ * (research/sql-parameter-binding.md §1), a run whose SQL holds a
+ * `{{ name }}` outside strings and comments is refused before xcube is
+ * called, saying why; no value is ever written into its SQL.
+ * Fails when: a run with a `{{ name }}` on Dremio reaches the database.
+ */
+describe('parameters on Dremio (T810, AC-482)', () => {
+  it('refuses a run holding a {{ name }} before xcube is asked, saying parameters aren’t available there', async () => {
+    const dremio = (
+      await sources().create({
+        folderId: folders.sales,
+        name: `dremio_${MARK}`,
+        driver: 'dremio',
+        authMethod: 'token',
+        fields: { host: 'dremio', port: 9047, ssl: false },
+        sealed: { token: sealed('dremio') },
+      })
+    ).id;
+    await turnOn(dremio);
+    const before = stub.sqlAsked().length;
+    try {
+      for (const sql of ['SELECT * FROM t WHERE region = {{region}}', 'SELECT {{ x }}']) {
+        const answer = await run('writer', dremio, sql);
+        expect(answer.statusCode, answer.body).toBe(400);
+        expect(answer.json()).toEqual({
+          outcome: 'refused',
+          error:
+            'Parameters aren’t available on Dremio. Write the value into the SQL to run it here.',
+        });
+      }
+      expect(askedSince(before)).toEqual([]);
+
+      // One in a string or a comment isn't a parameter: that SQL runs, as written.
+      const plain = "SELECT '{{not_one}}' -- {{nor_this}}";
+      expect((await run('writer', dremio, plain)).statusCode).toBe(200);
+      expect(askedSince(before).map((ask) => ask.sql)).toEqual([plain]);
+    } finally {
+      await switches().off(dremio);
+      await sources().remove(dremio);
+    }
+  });
+
+  it('runs a {{ name }} on other drivers as sent, its value never written in (until T811 binds it)', async () => {
+    await turnOn(source);
+    const before = stub.sqlAsked().length;
+    try {
+      const sql = 'SELECT * FROM t WHERE region = {{region}}';
+      expect((await run('writer', source, sql)).statusCode).toBe(200);
+      expect(askedSince(before).map((ask) => ask.sql)).toEqual([sql]);
+    } finally {
+      await switches().off(source);
+    }
+  });
+});
+
 describe('what a run answers (T532, AC-375, AC-377, AC-378)', () => {
   beforeAll(async () => {
     await turnOn(source);

@@ -1742,11 +1742,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T809 (AC-453) List each `{{ name }}` outside strings and comments once, in a strip under the editor, typed Text, Number, Date or Boolean, and hold Run until each has a value
 
-- [ ] T810 (AC-482) Hold Run on Dremio and on Cube Store while the SQL holds a parameter, saying parameters aren't available on that source
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/ParameterStrip.tsx` (+ test), `packages/api/src/routes/sql-runner.ts` (+ `sql-runner.test.ts`).
-  - Failing test: `ParameterStrip.test.tsx`: on a Dremio tab and a Cube Store tab with `{{x}}` in the SQL, Run is held, saying parameters aren't available on that source. `sql-runner.test.ts`: a run request to those sources holding a `{{ name }}` is refused before xcube is called, and no value is written into the SQL (AC-482).
-  - Depends on: T809
+- [x] T810 (AC-482) Hold Run on Dremio and on Cube Store while the SQL holds a parameter, saying parameters aren't available on that source
 
 - [ ] T811 (AC-454, AC-465) Send each parameter's value bound through xcube, keep `{{name}}` without values in the audit, and keep the values in History and saved queries for their owner alone
   - Lane: SQL

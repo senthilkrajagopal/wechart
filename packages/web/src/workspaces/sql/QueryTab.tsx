@@ -9,7 +9,7 @@ import { SqlEditor } from '../data-sources/SqlEditor';
 import { ResultHead, seconds, SqlResult, type SqlOutcome } from '../data-sources/SqlResult';
 import { catalogRead, schemaCompletion } from './completion';
 import { parameterNames } from './parameterNames';
-import { heldFor, missingValues, ParameterStrip } from './ParameterStrip';
+import { heldFor, missingValues, ParameterStrip, unboundOn } from './ParameterStrip';
 import { cancelRun, GOING_QUERY, NO_CANCEL, type Going } from './going';
 import { RunLine } from './RunLine';
 import { runState, type RunState } from './runState';
@@ -245,11 +245,19 @@ export function QueryTab({
     void queryClient.invalidateQueries({ queryKey: GOING_QUERY.queryKey });
   };
 
+  /**
+   * What the tab's parameters hold Run for: on a source that can't bind them
+   * (T810, AC-482), any; elsewhere, those with no value (T809, AC-453).
+   */
+  const unbound = unboundOn(source);
+  const parametersHold = (names: readonly string[]) =>
+    names.length === 0 ? null : (unbound ?? heldFor(missingValues(names, tab.params)));
+
   const run = async (sql: string) => {
     // One run per person, across every tab: held while another goes (AC-452, AC-379).
     if (running || hold !== null || sending.current || sql.trim() === '') return;
-    // Held while a parameter has no value, ⌘/Ctrl+Enter included (T809, AC-453).
-    if (missingValues(parameterNames(tab.sql, dialect), tab.params).length > 0) return;
+    // Held while a parameter has no value, or can't be bound, ⌘/Ctrl+Enter included (T809, T810).
+    if (parametersHold(parameterNames(tab.sql, dialect)) !== null) return;
     sending.current = true;
     setCancelFailed(null);
     const at = Date.now();
@@ -323,9 +331,9 @@ export function QueryTab({
 
   const toRun = selected === '' ? statement : selected;
   const held = !running && hold !== null;
-  // Each `{{ name }}` in the tab's SQL, and those without a value, which hold Run (T809, AC-453).
+  // Each `{{ name }}` in the tab's SQL, and what of them holds Run (T809, AC-453; T810, AC-482).
   const names = parameterNames(tab.sql, dialect);
-  const wanting = heldFor(missingValues(names, tab.params));
+  const wanting = parametersHold(names);
   return (
     <>
       <div className="sql-centre__editor sql-query" data-testid="sql-editor-area">
@@ -349,17 +357,20 @@ export function QueryTab({
           insertion={toInsert}
           completion={completion}
         />
-        <ParameterStrip
-          names={names}
-          types={tab.paramTypes ?? {}}
-          values={tab.params}
-          onType={(name, type) => {
-            dispatch({ kind: 'param-type', id: tab.id, name, type });
-          }}
-          onValue={(name, value) => {
-            dispatch({ kind: 'param-value', id: tab.id, name, value });
-          }}
-        />
+        {/* No strip where values can't be bound: nothing could be typed into it (design 17, F5). */}
+        {unbound === null ? (
+          <ParameterStrip
+            names={names}
+            types={tab.paramTypes ?? {}}
+            values={tab.params}
+            onType={(name, type) => {
+              dispatch({ kind: 'param-type', id: tab.id, name, type });
+            }}
+            onValue={(name, value) => {
+              dispatch({ kind: 'param-value', id: tab.id, name, value });
+            }}
+          />
+        ) : null}
         <div className="sql-runner__bar" ref={bar}>
           <button
             type="button"

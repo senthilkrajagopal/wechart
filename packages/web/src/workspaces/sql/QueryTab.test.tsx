@@ -347,6 +347,57 @@ describe('parameters under the editor (T809, AC-453)', () => {
   });
 });
 
+/**
+ * T810 (AC-482): on Dremio and on Cube Store, which bind no parameter
+ * values, Run is held while the SQL holds a `{{ name }}`, saying why, with
+ * no strip to type values into (design 17, F4 and F5).
+ * Fails when: a run with a `{{ name }}` on either reaches the database; or
+ * Run is held without saying why.
+ */
+describe('parameters where none can be bound (T810, AC-482)', () => {
+  const DREMIO: SqlSource = {
+    ...EMEA,
+    id: 'lake',
+    name: 'lake',
+    driver: 'dremio',
+    fields: { host: 'dremio', port: 9047, ssl: false },
+  };
+  const modEnter = (container: HTMLElement) =>
+    act(() => {
+      runScopeHandlers(
+        EditorView.findFromDOM(container.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!,
+        new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }),
+        'editor',
+      );
+    });
+
+  for (const [source, where] of [
+    [DREMIO, 'Dremio'],
+    [CUBE_STORE, 'Cube Store'],
+  ] as const)
+    it(`on ${where}, holds Run, button and ⌘/Ctrl+Enter, saying why, with no strip`, async () => {
+      const { container } = open(tab({ sql: 'SELECT * FROM t WHERE r = {{x}}', sourceId: source.id }), source);
+
+      expect(screen.getByTestId('sql-params-held').textContent).toBe(
+        `Parameters aren’t available on ${where}. Write the value into the SQL to run it here.`,
+      );
+      expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.queryByRole('group', { name: 'Parameters' })).toBeNull();
+      modEnter(container);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(posts).toEqual([]);
+    });
+
+  it('on Dremio, runs SQL whose {{…}} is in a string or a comment', async () => {
+    open(tab({ sql: "SELECT '{{x}}' -- {{y}}", sourceId: 'lake' }), DREMIO);
+    expect(screen.queryByTestId('sql-params-held')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await vi.waitFor(() => {
+      expect(posts).toHaveLength(1);
+    });
+  });
+});
+
 describe('autocomplete in the editor (T808, AC-456)', () => {
   /** The schema browser's answers for EMEA, kept as it keeps them. */
   const readClient = () => {

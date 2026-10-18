@@ -5,7 +5,8 @@
   "type": "module",
   "main": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./sql-parameters": "./src/sql-parameters.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -19,6 +20,7 @@
     "vitest": "5.0.1"
   },
   "dependencies": {
+    "@codemirror/lang-sql": "6.10.0",
     "d3-format": "3.1.2",
     "d3-time-format": "4.1.0",
     "hpke": "1.1.7",

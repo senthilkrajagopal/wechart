@@ -316,6 +316,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@codemirror/lang-sql':
+        specifier: 6.10.0
+        version: 6.10.0
       d3-format:
         specifier: 3.1.2
         version: 3.1.2

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { parameterNames } from '@wechart/core/sql-parameters';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { actorOf, recordIn } from '../audit/record';
@@ -431,6 +432,18 @@ export function registerSqlRunner(
     );
   };
 
+  /**
+   * A run holding a `{{ name }}` where no value can be bound (T810, AC-482;
+   * research/sql-parameter-binding.md §1–2): Dremio's driver and Cube Store
+   * write values into the SQL text, so such a run is refused before xcube is
+   * asked, and no value is ever written in. Found as the browser finds them,
+   * outside strings and comments, read as standard SQL.
+   */
+  const unbound = (where: string) => ({
+    outcome: 'refused',
+    error: `Parameters aren’t available on ${where}. Write the value into the SQL to run it here.`,
+  });
+
   /** The SQL a run was asked for, or why it isn't one: said here. */
   const sqlOf = async (request: FastifyRequest, reply: FastifyReply) => {
     const sql = (request.body as { sql?: unknown } | undefined)?.sql;
@@ -456,6 +469,8 @@ export function registerSqlRunner(
 
     const sql = await sqlOf(request, reply);
     if (sql === undefined) return reply;
+    if (source.driver === 'dremio' && parameterNames(sql).length > 0)
+      return reply.status(400).send(unbound('Dremio'));
     if (runner === undefined)
       return reply.status(503).send({
         error: 'SQL runs on xcube, which this deployment doesn’t run.',
@@ -792,6 +807,7 @@ export function registerSqlRunner(
     if (!seen.runs) return reply.status(403).send({ error: CUBE_STORE_OFF });
     const sql = await sqlOf(request, reply);
     if (sql === undefined || runner === undefined) return reply;
+    if (parameterNames(sql).length > 0) return reply.status(400).send(unbound('Cube Store'));
     return runOn(request, reply, runner, sql, {
       target: { cubeStore: true },
       dataSourceId: null,

@@ -281,6 +281,27 @@ describe('Cube Store, listed and run (T536, AC-384; design 15’s state H and Q7
     }
   });
 
+  // T810 (AC-482): Cube Store binds no parameter values (research/sql-parameter-binding.md §2).
+  it('refuses a run holding a {{ name }} before xcube is asked, saying parameters aren’t available on Cube Store (T810, AC-482)', async () => {
+    await turnOn();
+    try {
+      const before = stub.sqlAsked().length;
+      const answer = await run('super', 'SELECT * FROM t WHERE region = {{ region }}');
+      expect(answer.statusCode, answer.body).toBe(400);
+      expect(answer.json()).toEqual({
+        outcome: 'refused',
+        error:
+          'Parameters aren’t available on Cube Store. Write the value into the SQL to run it here.',
+      });
+      expect(stub.sqlAsked().slice(before)).toEqual([]);
+      // One in a string isn't a parameter.
+      expect((await run('super', "SELECT '{{x}}'")).statusCode).toBe(200);
+      expect(stub.sqlAsked().slice(before).map((asked) => asked.sql)).toEqual(["SELECT '{{x}}'"]);
+    } finally {
+      await turn('super', { on: false });
+    }
+  });
+
   it('once on, isn’t for those allowed only on their own data source in My workspace (Q7), nor a reader', async () => {
     // The writer's copy of /Sales's data source, theirs to run SQL on with no switch (AC-383).
     const copy = await as('writer', {
