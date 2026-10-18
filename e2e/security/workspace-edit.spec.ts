@@ -6,6 +6,7 @@ import {
   signInThroughDex,
   test,
 } from './fixtures';
+import { headerSheet as sheet, openHeaderSheet } from '../dashboardHeader';
 
 /**
  * T348 (AC-278, AC-279; design 04, states D, E, F and G; rules 71–73): a
@@ -100,7 +101,9 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
       await page.goto(`/explore/dashboards/${made.board}`);
       await expect(page.getByRole('heading', { name: BOARD, exact: true })).toBeVisible();
       const header = page.locator('.dashboard__header');
-      await expect(header.getByText(`In ${FOLDER} · version 1`)).toBeVisible();
+      // The ownership line is in the header sheet since T828 (F43).
+      await openHeaderSheet(page);
+      await expect(sheet(page).getByText(`In ${FOLDER} · version 1`)).toBeVisible();
       // No edit in place (state E): no Edit, no settings, no way to start
       // editing from its empty page (T348's review).
       await expect(header.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
@@ -139,8 +142,10 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
       // Under the workspace's band (pin 2).
       await expect(page.getByRole('note')).toHaveText('My workspace · only you can see this');
       const copied = page.locator('.dashboard__header');
+      // Its ownership line, in the header sheet (T828).
+      await openHeaderSheet(page);
       await expect(
-        copied.getByText(`Copied from ${FOLDER} › ${BOARD} · version 1 · Target: ${FOLDER}`),
+        sheet(page).getByText(`Copied from ${FOLDER} › ${BOARD} · version 1 · Target: ${FOLDER}`),
       ).toBeVisible();
       await expect(copied.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Dashboard settings' })).toBeVisible();
@@ -367,7 +372,9 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
     test('reads it, and is offered no way to change it', async ({ page }) => {
       await page.goto(`/explore/dashboards/${made.board}`);
       const header = page.locator('.dashboard__header');
-      await expect(header.getByText(`In ${FOLDER} · version 1`)).toBeVisible();
+      // The ownership line is in the header sheet since T828 (F43).
+      await openHeaderSheet(page);
+      await expect(sheet(page).getByText(`In ${FOLDER} · version 1`)).toBeVisible();
       await expect(header.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
       await expect(
         header.getByRole('button', { name: /Edit in my workspace|Open my copy/ }),

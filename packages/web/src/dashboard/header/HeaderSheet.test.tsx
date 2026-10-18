@@ -117,8 +117,9 @@ describe('the header sheet', () => {
     expect(screen.queryByRole('region', { name: 'Filters' })).toBeNull();
     expect(isInaccessible(description())).toBe(true);
     expect(isInaccessible(ownership())).toBe(true);
-    for (const control of sheet().querySelectorAll<HTMLElement>('button, [tabindex]'))
-      expect(isInaccessible(control)).toBe(true);
+    const controls = sheet().querySelectorAll<HTMLElement>('button, [tabindex]');
+    expect(controls.length).toBeGreaterThan(0);
+    for (const control of controls) expect(isInaccessible(control)).toBe(true);
     // Not in the row either (AC-484's other half).
     const header = document.querySelector('.dashboard__header');
     expect(header?.contains(description())).toBe(false);
@@ -139,7 +140,12 @@ describe('the header sheet', () => {
     const bar = screen.getByRole('region', { name: 'Filters' });
     expect(sheet().contains(bar)).toBe(true);
     // Nothing set: the bar says how to mark or filter (AC-196).
-    expect(bar.querySelector('.filter-bar__hint')?.textContent).not.toBe('');
+    const hint = bar.querySelector('.filter-bar__hint');
+    expect(hint).not.toBeNull();
+    expect(hint?.textContent).toBe(
+      'Click, drag or Alt+drag to mark · Ctrl/⌘ adds or toggles · Esc unmarks',
+    );
+    expect(isInaccessible(hint as HTMLElement)).toBe(false);
     expect(within(bar).getByRole('button', { name: /Status/ })).toBeTruthy();
     // In order: the description, the ownership line, the bar.
     const parts = [description(), ownership(), bar];
@@ -204,5 +210,17 @@ describe('the header sheet', () => {
 
     expect(toggle().getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('region', { name: 'Filters' })).toBeNull();
+  });
+
+  it('comes back open after editing when the reader had left it open', async () => {
+    render(view());
+    await userEvent.click(toggle());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.queryByRole('button', { name: /^Filters\b/ })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /^Discard/ }));
+
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(isInaccessible(screen.getByRole('region', { name: 'Filters' }))).toBe(false);
   });
 });
