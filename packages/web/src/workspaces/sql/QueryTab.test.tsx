@@ -615,6 +615,24 @@ describe('Save and Find keys (T816, AC-455)', () => {
     expect(saves).toEqual([]);
   });
 
+  it('does nothing but keep the browser off while Save as new… is open: the original is not overwritten (T816’s review)', async () => {
+    open(tab({ sql: 'SELECT 2', saved: { id: 'q1', name: 'Big orders', description: '' }, savedSql: 'SELECT 1' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save as new…' }));
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    expect(fireEvent.keyDown(name, { key: 's', ctrlKey: true })).toBe(false);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(saves).toEqual([]);
+    expect(screen.getByRole('dialog', { name: 'Save query' })).toBeTruthy();
+  });
+
+  it('takes Ctrl+S on a layout whose S key types another letter, by the key’s place (research: `code`)', () => {
+    open(tab({ sql: 'SELECT 2' }));
+    expect(fireEvent.keyDown(screen.getByTestId('sql-warning'), { key: 'ы', code: 'KeyS', ctrlKey: true })).toBe(false);
+    expect(screen.getByRole('dialog', { name: 'Save query' })).toBeTruthy();
+  });
+
   it('leaves S with Shift or Alt, and S alone, to the page', () => {
     const { container } = open(tab({ sql: 'SELECT 2' }));
     expect(fireEvent.keyDown(editorOf(container), { key: 'S', ctrlKey: true, shiftKey: true })).toBe(true);

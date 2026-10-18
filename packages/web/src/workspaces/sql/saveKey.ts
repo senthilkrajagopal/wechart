@@ -13,13 +13,18 @@ import { createContext, useCallback, useRef, type MutableRefObject } from 'react
 export type SaveNow = () => void;
 export const SaveKeyContext = createContext<MutableRefObject<SaveNow | null> | null>(null);
 
-/** ⌘S on a Mac, Ctrl+S elsewhere: S with ⌘ or Ctrl, and neither Shift nor Alt, outside a composition. */
+/**
+ * ⌘S on a Mac, Ctrl+S elsewhere: S with ⌘ or Ctrl, and neither Shift nor
+ * Alt, outside a composition. By the letter; on a layout whose key there
+ * types no Latin letter (Cyrillic, Greek), by the key's place, `KeyS`, as
+ * research/keyboard-shortcuts-sql-runner.md has it for Ctrl+Q (T816's review).
+ */
 export const isSaveKey = (event: KeyboardEvent): boolean =>
   (event.metaKey || event.ctrlKey) &&
   !event.shiftKey &&
   !event.altKey &&
   !event.isComposing &&
-  event.key.toLowerCase() === 's';
+  (event.key.toLowerCase() === 's' || (!/^[a-z]$/i.test(event.key) && event.code === 'KeyS'));
 
 /**
  * The workspace's side: the slot the open tab fills, and the key handler for

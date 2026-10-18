@@ -400,11 +400,13 @@ export function QueryTab({
    */
   const saveKey = useContext(SaveKeyContext);
   const saveNow = () => {
+    // Save… or Save as new… open: its own Save is the way (T816's review).
+    if (asking !== null) return;
     const to = tab.saved;
     if (to !== undefined) {
       setSaveFailed(null);
       void saveOf(to, to.name, to.description).then(setSaveFailed);
-    } else if (asking === null) {
+    } else {
       setSaveFailed(null);
       setAsking({ name: '', description: '' });
     }
