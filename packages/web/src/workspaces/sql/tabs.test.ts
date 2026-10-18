@@ -248,7 +248,11 @@ describe('a tab’s state, as an icon and a label (T800, AC-450; design 17’s Q
   it('reads each other outcome in the result head’s words', () => {
     const done = (outcome: object) => tabState(tab({ id: 'a', name: 'Q', run: { kind: 'done', sql: 'SELECT 1', at: 0, outcome } as SqlTab['run'] }));
 
-    expect(tabState(tab({ id: 'a', name: 'Q', run: { kind: 'running', at: 1 } }))).toEqual({ kind: 'run', label: 'Running' });
+    // With its seconds since T804 (AC-452).
+    expect(tabState(tab({ id: 'a', name: 'Q', run: { kind: 'running', at: 1 } }), 12_001)).toEqual({
+      kind: 'run',
+      label: 'Running · 12 s of 30',
+    });
     expect(done({ ...finished.outcome, truncated: 'rows' })).toEqual({ kind: 'warn', label: 'Limited to 10,000 rows' });
     expect(done({ ...finished.outcome, truncated: 'bytes' })).toEqual({ kind: 'warn', label: 'Limited to 10 MB' });
     expect(done({ outcome: 'timeout', durationMs: 30000 })).toEqual({ kind: 'err', label: 'Stopped at 30 seconds' });

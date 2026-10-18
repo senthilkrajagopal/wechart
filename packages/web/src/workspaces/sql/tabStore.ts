@@ -5,7 +5,8 @@ import type { SqlTab, TabsState } from './tabs';
  * user (T801, AC-451; design 17, D5): each one's name, data source, SQL and
  * parameters, and which is open, under a key holding who is signed in, so
  * another user of the same browser sees none of them. A run's result isn't
- * kept, and nothing of a tab is ever sent to wechart's server.
+ * kept, only that one is going (T804), and nothing of a tab is ever sent to
+ * wechart's server.
  */
 export const tabsKeyOf = (user: string): string => `wechart.sql.tabs.${user}`;
 
@@ -38,8 +39,20 @@ function tabOf(value: unknown): SqlTab | null {
     params: params as Record<string, string>,
     savedSql: kept.savedSql,
     lastRunSql: kept.lastRunSql,
-    run: null,
+    run: runOf(kept.run),
   };
+}
+
+/**
+ * A kept run going, as one this page didn't start (T804, AC-452): leaving
+ * the workspace loads another page, and the run goes on. A result isn't kept.
+ */
+function runOf(value: unknown): SqlTab['run'] {
+  if (typeof value !== 'object' || value === null) return null;
+  const { kind, at } = value as Record<string, unknown>;
+  return kind === 'running' && typeof at === 'number' && Number.isFinite(at)
+    ? { kind: 'running', at, kept: Date.now() }
+    : null;
 }
 
 /** The user's kept tabs, or none: none kept, none readable, or no storage at all. */
@@ -77,6 +90,7 @@ export function keepTabs(storage: Storage | undefined, user: string, state: Tabs
     params: tab.params,
     savedSql: tab.savedSql,
     lastRunSql: tab.lastRunSql,
+    ...(tab.run?.kind === 'running' ? { run: { kind: 'running', at: tab.run.at } } : {}),
   }));
   try {
     storage?.setItem(tabsKeyOf(user), JSON.stringify({ tabs, active: state.active }));

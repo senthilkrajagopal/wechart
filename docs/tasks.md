@@ -1739,11 +1739,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T803 (AC-387) Run the selection, or with none the statement at the cursor, bounded by semicolons outside strings and comments
 
-- [ ] T804 (AC-452, AC-379) Show a run's state the same way on its tab, in its result head and in History; hold Run on every other tab with "Go to it · Cancel that run"; keep a run going while the user is away
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/runState.ts` (+ test), `packages/web/src/workspaces/sql/QueryTab.tsx`, `packages/web/src/workspaces/sql/TabStrip.tsx`, `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: `runState.test.ts`: each of Running · n s of 30, Finished, Limited to 10,000 rows, Limited to 10 MB, Stopped at 30 seconds, Cancelled, Not run, Database error, Busy and Cube Store still finishing maps to one icon and one label used by the tab, the result head and the History row. The e2e: while a `pg_sleep` run goes on tab 1, tab 2's Run is held with "You have a run going on ‹source›… Go to it · Cancel that run"; Go to it selects tab 1; Cancel that run cancels it (AC-379); leaving for Explore and coming back shows it still running, then Finished (AC-452).
-  - Depends on: T802
+- [x] T804 (AC-452, AC-379) Show a run's state the same way on its tab, in its result head and in History; hold Run on every other tab with "Go to it · Cancel that run"; keep a run going while the user is away
 
 - [ ] T805 (AC-386) The schema browser in the left pane: the tab's source's schemas, tables and columns with their types, read as they're opened, putting a chosen name into the editor
   - Lane: SQL
@@ -1824,8 +1820,9 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 ### Lane SQL: History
 
-- [ ] T817 (AC-381) History in the right pane: all of the user's runs by default, "This data source" to narrow, and a row whose source is no longer available reading so
+- [ ] T817 (AC-381, AC-452) History in the right pane: all of the user's runs by default, "This data source" to narrow, and a row whose source is no longer available reading so
   - Lane: SQL
+  - Also (added by T804): each row shows its state as `runState.ts` names it, the icon and label its tab and result head use. The e2e then checks one run's state in all three places, and ticks AC-452, which T804 left open for want of History.
   - Files: `packages/api/src/routes/sql-runner.ts` (+ `sql-runner-history.test.ts`), `packages/web/src/workspaces/sql/HistoryList.tsx` (+ test), `e2e/security/sql-workspace.spec.ts`.
   - Failing test: `sql-runner-history.test.ts`: `GET /api/sql-runs` with no source lists all the user's runs across sources, newest first, 50 at a time; a run on a source the user can no longer run SQL on comes back with neither its source nor its folder. `HistoryList.test.tsx`: History starts on All; each row has its SQL, source and folder, time, outcome and row count; "This data source" narrows to the open tab's; the unavailable row reads "A data source no longer available to you" (AC-381, as amended 2026-10-17).
   - Depends on: T797, T802

@@ -1,11 +1,12 @@
 import { EditorView } from '@codemirror/view';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Me } from '../../shell/AccountMenu';
 import { ME_QUERY } from '../../shell/me';
+import { forgetLiveTabs } from './liveTabs';
 import { editorShare, LEFT_PANE, paneWidth, RIGHT_PANE, roomFor, SPLIT } from './panes';
 import { SqlWorkspace } from './SqlWorkspace';
 
@@ -471,5 +472,464 @@ describe('tabs kept in this browser, the open one in the address (T801, AC-451, 
     expect(stored.tabs.map((tab) => tab.name)).toEqual(['Query 1', 'Query 2']);
     expect(stored.active).toBe(stored.tabs[1]?.id);
     expect(onOpenTab).toHaveBeenLastCalledWith(stored.tabs[1]?.id);
+  });
+});
+
+/**
+ * T804 (AC-452, AC-379): WHILE a user has a run going, THE SYSTEM SHALL show
+ * its state the same way on its tab and in its result head; hold Run on
+ * every other tab with "You have a run going on ‹source›… Go to it · Cancel
+ * that run", where Go to it selects that tab; and keep the run going if the
+ * user leaves the workspace, showing it on their return.
+ * Fails when: the places show different states for one run; another tab's
+ * Run starts a second run; Go to it doesn't select the running tab; or
+ * leaving the workspace stops the run.
+ */
+describe('a run going, across tabs and away (T804, AC-452, AC-379)', () => {
+  afterEach(() => {
+    // A run a test left going stays with its tabs, as on a page; each test is a page of its own.
+    cleanup();
+    forgetLiveTabs();
+  });
+  const page = {
+    id: 'emea',
+    folderId: 'f-sales',
+    name: 'emea_replica',
+    driver: 'postgres',
+    authMethod: 'password',
+    fields: { host: 'emea-host', port: 5432, database: 'sales', user: 'cube_reader', ssl: false },
+    secrets: {},
+    targetFolderId: null,
+    origin: null,
+    version: 1,
+    updatedAt: '2026-10-17T10:00:00Z',
+    folderPath: [{ id: 'f-sales', title: 'Sales' }],
+    canWrite: true,
+    inWorkspace: false,
+    description: null,
+    sqlRunner: { on: true },
+    sqlAccess: { tab: true, runs: true },
+  };
+  const listed = [
+    {
+      id: 'emea',
+      name: 'emea_replica',
+      driver: 'postgres',
+      cubeStore: false,
+      folderId: 'f-sales',
+      folderPath: [{ id: 'f-sales', title: 'Sales' }],
+      inWorkspace: false,
+      runner: 'on',
+    },
+  ];
+  const finished = {
+    outcome: 'finished',
+    columns: [{ name: 'one', type: 'int4' }],
+    rows: [[1]],
+    rowCount: 1,
+    truncated: null,
+    durationMs: 12,
+    statement: 'select',
+  };
+
+  /** The database's side: one run held open until it is answered. */
+  function server() {
+    const posts: string[] = [];
+    let answer: ((body: unknown) => void) | null = null;
+    const json = (body: unknown, status = 200) =>
+      Promise.resolve(new Response(JSON.stringify(body), { status }));
+    const startedAt = new Date().toISOString();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url === '/api/sql-runs/cancel' && init?.method === 'POST') {
+          posts.push(url);
+          answer?.({ outcome: 'cancelled', durationMs: 1200 });
+          return json({ cancelled: true });
+        }
+        if (init?.method === 'POST') {
+          posts.push(url);
+          return new Promise<Response>((resolve) => {
+            answer = (body) => {
+              answer = null;
+              resolve(new Response(JSON.stringify(body), { status: 200 }));
+            };
+          });
+        }
+        if (url === '/api/sql-runs/going')
+          return json({
+            going: answer === null ? null : { dataSource: { id: 'emea', name: 'emea_replica' }, startedAt },
+          });
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/data-sources/emea') return json(page);
+        return json([], 404);
+      }),
+    );
+    return {
+      posts,
+      finish: () => {
+        act(() => answer?.(finished));
+      },
+    };
+  }
+  const writer = signedIn({ name: 'Wren', identity: 'wren-t804@example.com', readWrite: true });
+  function open() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(ME_QUERY.queryKey, writer);
+    const at = (shown: boolean) => (
+      <QueryClientProvider client={client}>
+        {shown ? <SqlWorkspace /> : <p>Explore</p>}
+      </QueryClientProvider>
+    );
+    const { rerender } = render(at(true));
+    return {
+      leave: () => {
+        rerender(at(false));
+      },
+      back: () => {
+        rerender(at(true));
+      },
+    };
+  }
+  async function startRun(sql: string) {
+    await userEvent.click(await screen.findByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: /emea_replica/ }));
+    await screen.findByTestId('sql-warning');
+    const view = EditorView.findFromDOM(document.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+    act(() => {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: sql } });
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+  }
+  const stateOnTab = (name: RegExp) =>
+    /^Query \d+, (.*), on emea_replica$/.exec(screen.getByRole('tab', { name }).getAttribute('aria-label') ?? '')?.[1];
+
+  it('says Running · n s of 30 alike on its tab and in its result head, with Cancel', async () => {
+    const db = server();
+    open();
+    await startRun('SELECT pg_sleep(20)');
+
+    const head = await screen.findByTestId('sql-result-head');
+    expect(head.textContent).toMatch(/^Running · \d+ s of 30$/);
+    expect(stateOnTab(/^Query 1/)).toBe(head.textContent);
+    expect(screen.getByRole('button', { name: 'Running…' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
+
+    db.finish();
+    expect(await screen.findByRole('tab', { name: 'Query 1, Finished, 1 row, on emea_replica' })).toBeTruthy();
+    expect(screen.getByTestId('sql-result-head').textContent).toMatch(/^Finished/);
+  });
+
+  it('holds Run on every other tab, with Go to it selecting the running tab and Cancel that run cancelling it', async () => {
+    const db = server();
+    open();
+    await startRun('SELECT pg_sleep(20)');
+    await screen.findByRole('button', { name: 'Running…' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'New tab on emea_replica' }));
+    const held = await screen.findByTestId('sql-run-held');
+    expect(held.textContent).toMatch(
+      /^You have a run going on emea_replica, started at \d\d:\d\d:\d\d\. One run at a time\. Go to it · Cancel that run$/,
+    );
+    const view = EditorView.findFromDOM(document.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+    act(() => {
+      view.dispatch({ changes: { from: 0, to: 0, insert: 'SELECT 2' } });
+    });
+    expect(screen.getByRole('button', { name: 'Run' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText('held while your other run goes')).toBeTruthy();
+
+    await userEvent.click(within(held).getByRole('button', { name: 'Go to it' }));
+    expect(screen.getByRole('tab', { name: /^Query 1/ }).getAttribute('aria-selected')).toBe('true');
+
+    await userEvent.click(screen.getByRole('tab', { name: /^Query 2/ }));
+    await userEvent.click(within(await screen.findByTestId('sql-run-held')).getByRole('button', { name: 'Cancel that run' }));
+    expect(await screen.findByRole('tab', { name: 'Query 1, Cancelled, on emea_replica' })).toBeTruthy();
+    expect(db.posts).toEqual(['/api/data-sources/emea/sql', '/api/sql-runs/cancel']);
+  });
+
+  it('keeps the run going while the user is away, and shows it, then its end, on their return', async () => {
+    const db = server();
+    const app = open();
+    await startRun('SELECT pg_sleep(20)');
+    await screen.findByRole('button', { name: 'Running…' });
+
+    app.leave();
+    expect(screen.queryByRole('region', { name: 'SQL runner' })).toBeNull();
+    app.back();
+
+    expect(await screen.findByRole('button', { name: 'Running…' })).toBeTruthy();
+    expect(stateOnTab(/^Query 1/)).toMatch(/^Running · \d+ s of 30$/);
+    db.finish();
+    expect(await screen.findByRole('tab', { name: 'Query 1, Finished, 1 row, on emea_replica' })).toBeTruthy();
+    expect(await screen.findByRole('table', { name: 'Result: 1 row, 1 column' })).toBeTruthy();
+    expect(db.posts).toEqual(['/api/data-sources/emea/sql']);
+  });
+
+  it('keeps the run going in this browser when leaving the page drops its request', async () => {
+    let drop: ((error: Error) => void) | null = null;
+    const json = (body: unknown, status = 200) =>
+      Promise.resolve(new Response(JSON.stringify(body), { status }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (init?.method === 'POST')
+          return new Promise<Response>((_resolve, reject) => {
+            drop = reject;
+          });
+        if (url === '/api/sql-runs/going') return json({ going: null });
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/data-sources/emea') return json(page);
+        return json([], 404);
+      }),
+    );
+    open();
+    await startRun('SELECT pg_sleep(20)');
+    await screen.findByRole('button', { name: 'Running…' });
+
+    window.dispatchEvent(new Event('beforeunload'));
+    await act(async () => {
+      drop?.(new TypeError('Failed to fetch'));
+      await Promise.resolve();
+    });
+
+    const kept = JSON.parse(localStorage.getItem('wechart.sql.tabs.wren-t804@example.com') ?? '{}') as {
+      tabs: { run?: { kind: string } }[];
+    };
+    expect(kept.tabs[0]?.run?.kind).toBe('running');
+    expect(screen.queryByRole('tab', { name: /No answer/ })).toBeNull();
+    window.dispatchEvent(new Event('pageshow'));
+  });
+
+  /** A tab kept in this browser with its run going, as a page left mid-run keeps it. */
+  function keptMidRun(at: number) {
+    localStorage.setItem(
+      'wechart.sql.tabs.wren-t804@example.com',
+      JSON.stringify({
+        tabs: [
+          {
+            id: 'a1b2c3d4',
+            name: 'Query 1',
+            sourceId: 'emea',
+            sql: 'SELECT pg_sleep(6) AS away',
+            params: {},
+            savedSql: null,
+            lastRunSql: 'SELECT pg_sleep(6) AS away',
+            run: { kind: 'running', at },
+          },
+        ],
+        active: 'a1b2c3d4',
+      }),
+    );
+  }
+  /** wechart's server after a reload: the run going while `going()` says so, then History's row. */
+  function serverAfterReload(at: number, going: () => boolean, history: readonly object[]) {
+    const json = (body: unknown, status = 200) =>
+      Promise.resolve(new Response(JSON.stringify(body), { status }));
+    const asked: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        asked.push(url);
+        if (url === '/api/sql-runs/going')
+          return json({
+            going: going()
+              ? { dataSource: { id: 'emea', name: 'emea_replica' }, startedAt: new Date(at).toISOString() }
+              : null,
+          });
+        if (url === '/api/sql-runs?dataSource=emea') return json({ runs: history });
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/data-sources/emea') return json(page);
+        return json([], 404);
+      }),
+    );
+    return asked;
+  }
+  const row = (at: number, over: object = {}) => ({
+    id: 'r1',
+    sql: 'SELECT pg_sleep(6) AS away',
+    dataSource: { id: 'emea', name: 'emea_replica', folderPath: null, inWorkspace: false },
+    cubeStore: false,
+    startedAt: new Date(at + 40).toISOString(),
+    outcome: 'finished',
+    rowCount: 1,
+    durationMs: 6012,
+    truncated: null,
+    statement: 'select',
+    ...over,
+  });
+
+  it('after a reload, follows a run kept going: Running while the server says so, then its end as History has it', async () => {
+    const at = Date.now() - 2_000;
+    keptMidRun(at);
+    let going = true;
+    const asked = serverAfterReload(at, () => going, [row(at - 60_000, { id: 'r0', rowCount: 9 }), row(at)].reverse());
+    open();
+
+    expect(await screen.findByRole('tab', { name: /^Query 1, Running · \d+ s of 30, on emea_replica$/ })).toBeTruthy();
+    expect((await screen.findByTestId('sql-result-head')).textContent).toMatch(/^Running · \d+ s of 30$/);
+
+    going = false;
+    expect(
+      await screen.findByRole('tab', { name: 'Query 1, Finished, 1 row, on emea_replica' }, { timeout: 5_000 }),
+    ).toBeTruthy();
+    expect(screen.getByTestId('sql-result-head').textContent).toMatch(/^Finished 1 row · 6\.01 s · at \d\d:\d\d:\d\d$/);
+    expect(
+      screen.getByText('You were away when it ended, so its rows weren’t kept. Run it again to see them.'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(asked.filter((url) => url.endsWith('/sql'))).toEqual([]);
+  });
+
+  it('back on a page the browser kept (Back), follows the run whose request leaving dropped', async () => {
+    let drop: ((error: Error) => void) | null = null;
+    let going = false;
+    let at = 0;
+    const json = (body: unknown, status = 200) =>
+      Promise.resolve(new Response(JSON.stringify(body), { status }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          at = Date.now();
+          going = true;
+          return new Promise<Response>((_resolve, reject) => {
+            drop = reject;
+          });
+        }
+        if (url === '/api/sql-runs/going')
+          return json({
+            going: going ? { dataSource: { id: 'emea', name: 'emea_replica' }, startedAt: new Date(at).toISOString() } : null,
+          });
+        if (url === '/api/sql-runs?dataSource=emea') return json({ runs: [{ ...row(at), sql: 'SELECT pg_sleep(20)' }] });
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/data-sources/emea') return json(page);
+        return json([], 404);
+      }),
+    );
+    open();
+    await startRun('SELECT pg_sleep(20)');
+    await screen.findByRole('button', { name: 'Running…' });
+    window.dispatchEvent(new Event('beforeunload'));
+    await act(async () => {
+      drop?.(new TypeError('Failed to fetch'));
+      await Promise.resolve();
+    });
+
+    going = false;
+    act(() => {
+      window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }));
+    });
+
+    expect(
+      await screen.findByRole('tab', { name: 'Query 1, Finished, 1 row, on emea_replica' }, { timeout: 5_000 }),
+    ).toBeTruthy();
+  });
+
+  it('after a reload, follows a kept run on though the first word of the run going fails', async () => {
+    const at = Date.now() - 2_000;
+    keptMidRun(at);
+    let asks = 0;
+    const json = (body: unknown, status = 200) =>
+      Promise.resolve(new Response(JSON.stringify(body), { status }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/sql-runs/going') {
+          asks += 1;
+          return asks === 1 ? json({ error: 'down' }, 502) : json({ going: null });
+        }
+        if (url === '/api/sql-runs?dataSource=emea') return json({ runs: [row(at)] });
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/data-sources/emea') return json(page);
+        return json([], 404);
+      }),
+    );
+    open();
+
+    expect(
+      await screen.findByRole('tab', { name: 'Query 1, Finished, 1 row, on emea_replica' }, { timeout: 5_000 }),
+    ).toBeTruthy();
+  });
+
+  it('holds Run for a run on Cube Store from outside the tabs, with no Go to it and no Cancel, saying why', async () => {
+    const json = (body: unknown, status = 200) =>
+      Promise.resolve(new Response(JSON.stringify(body), { status }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/sql-runs/going')
+          return json({ going: { dataSource: null, cubeStore: true, startedAt: '2026-10-17T14:40:02Z' } });
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/data-sources/emea') return json(page);
+        return json([], 404);
+      }),
+    );
+    open();
+    await userEvent.click(await screen.findByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: /emea_replica/ }));
+
+    const held = await screen.findByTestId('sql-run-held');
+    expect(held.textContent).toMatch(
+      /^You have a run going on Cube Store, started at \d\d:\d\d:\d\d\. One run at a time\. Cube Store can’t stop a query, so there’s no Cancel\.$/,
+    );
+    expect(within(held).queryByRole('button')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Run' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('holds Run while Cube Store still finishes the last run, until when', async () => {
+    const json = (body: unknown, status = 200) =>
+      Promise.resolve(new Response(JSON.stringify(body), { status }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/sql-runs/going')
+          return json({
+            going: {
+              dataSource: null,
+              cubeStore: true,
+              startedAt: '2026-10-17T14:40:02Z',
+              stopping: true,
+              endsBy: '2026-10-17T14:41:20Z',
+            },
+          });
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/data-sources/emea') return json(page);
+        return json([], 404);
+      }),
+    );
+    open();
+    await userEvent.click(await screen.findByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: /emea_replica/ }));
+
+    expect((await screen.findByTestId('sql-run-held')).textContent).toMatch(
+      /^Cube Store is still finishing your last query, until \d\d:\d\d:\d\d at the latest\. One run at a time: your next one runs once it has ended\.$/,
+    );
+  });
+
+  it('after a reload, reads a kept run History has no row for as having no answer', async () => {
+    const at = Date.now() - 2_000;
+    keptMidRun(at);
+    serverAfterReload(at, () => false, [row(at - 600_000, { sql: 'SELECT 1' })]);
+    open();
+
+    expect(await screen.findByRole('tab', { name: 'Query 1, No answer, on emea_replica' })).toBeTruthy();
+    expect(screen.getByTestId('sql-result-head').textContent).toMatch(/^No answer/);
+  });
+
+  it('shows on return a run that ended while the user was away', async () => {
+    const db = server();
+    const app = open();
+    await startRun('SELECT pg_sleep(1)');
+    await screen.findByRole('button', { name: 'Running…' });
+
+    app.leave();
+    db.finish();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    app.back();
+
+    expect(await screen.findByRole('tab', { name: 'Query 1, Finished, 1 row, on emea_replica' })).toBeTruthy();
+    expect(await screen.findByRole('table', { name: 'Result: 1 row, 1 column' })).toBeTruthy();
   });
 });

@@ -712,3 +712,127 @@ test.describe('running a tab’s SQL in the workspace (T802)', () => {
     expect(dump.includes(marker)).toBe(false);
   });
 });
+
+/**
+ * T804 (AC-452, AC-379): one run per person across every tab, its state the
+ * same on its tab and in its result head; every other tab's Run held with
+ * Go to it and Cancel that run; and the run kept going while the user is in
+ * another workspace.
+ */
+test.describe('a run going, across tabs and away (T804, AC-452, AC-379)', () => {
+  const tabs = (page: Page) => page.getByRole('tablist', { name: 'SQL tabs' }).getByRole('tab');
+  const editor = (page: Page) => page.locator('.sql-editor .cm-content');
+  async function typeSql(page: Page, sql: string) {
+    await editor(page).click();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.press('Delete');
+    await page.keyboard.type(sql);
+  }
+  /** Whether the sample database is running a statement holding `marker`. */
+  const active = (marker: string) =>
+    execFileSync(
+      'docker',
+      [
+        'exec',
+        'wechart-sample-db',
+        'psql',
+        '-U',
+        'sample',
+        '-d',
+        'sample',
+        '-Atc',
+        `SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND query LIKE '%AS ${marker}%' AND pid <> pg_backend_pid()`,
+      ],
+      { encoding: 'utf8' },
+    ).trim();
+  /** The open tab's state on its tab and in its result head, read at one moment. */
+  const bothStates = (page: Page) =>
+    page.evaluate(() => ({
+      tab: document.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute('aria-label') ?? '',
+      head: document.querySelector('[data-testid="sql-result-head"]')?.textContent ?? '',
+    }));
+
+  test('holds Run on every other tab, Go to it selects the running one, and Cancel that run stops it on the database', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    const marker = `held_${RUN}`;
+    const posts: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/sql')) posts.push(request.url());
+    });
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.on) }).click();
+      await typeSql(page, `SELECT pg_sleep(25) AS ${marker}`);
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+
+      // Its tab and its result head say one thing, counting seconds (AC-452).
+      await expect(page.getByTestId('sql-result-head')).toHaveText(/^Running · \d+ s of 30$/);
+      const once = await bothStates(page);
+      expect(once.tab).toBe(`Query 1, ${once.head}, on ${SOURCES.on}`);
+      await expect(page.getByTestId('sql-result-head')).toHaveText(/^Running · [2-9] s of 30$/);
+      await expect.poll(() => active(marker), { timeout: 15_000 }).toBe('1');
+
+      // Another tab: Run held, with whose run it is (AC-452, AC-379).
+      await page.getByRole('button', { name: `New tab on ${SOURCES.on}` }).click();
+      const held = page.getByTestId('sql-run-held');
+      await expect(held).toHaveText(
+        new RegExp(
+          `^You have a run going on ${SOURCES.on}, started at \\d\\d:\\d\\d:\\d\\d\\. One run at a time\\. Go to it · Cancel that run$`,
+        ),
+      );
+      await typeSql(page, 'SELECT 2');
+      await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled();
+      await page.keyboard.press('ControlOrMeta+Enter');
+      await expect(page.getByText('held while your other run goes')).toBeVisible();
+      expect(posts).toHaveLength(1);
+
+      // Go to it selects the running tab.
+      await held.getByRole('button', { name: 'Go to it' }).click();
+      await expect(tabs(page).first()).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+
+      // From the other tab, Cancel that run stops it on the database.
+      await tabs(page).nth(1).click();
+      await held.getByRole('button', { name: 'Cancel that run' }).click();
+      await expect(tabs(page).first()).toHaveAttribute('aria-label', `Query 1, Cancelled, on ${SOURCES.on}`);
+      await expect.poll(() => active(marker), { timeout: 10_000 }).toBe('0');
+      await expect(held).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeEnabled();
+      expect(posts).toHaveLength(1);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('a run keeps going while the user is in Explore, and shows on their return, then Finished', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    const marker = `away_${RUN}`;
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.on) }).click();
+      await typeSql(page, `SELECT pg_sleep(6) AS ${marker}`);
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+      await expect(page.getByTestId('sql-result-head')).toHaveText(/^Running · \d+ s of 30$/);
+
+      await switcher(page).getByRole('link', { name: 'Explore' }).click();
+      await expect(workspace(page)).toHaveCount(0);
+      await expect.poll(() => active(marker), { timeout: 5_000 }).toBe('1');
+      await switcher(page).getByRole('link', { name: 'SQL runner' }).click();
+
+      await expect(page.getByTestId('sql-result-head')).toHaveText(/^Running · \d+ s of 30$/);
+      await expect(tabs(page).first()).toHaveAttribute('aria-label', /^Query 1, Running · \d+ s of 30, on /);
+      await expect(page.getByTestId('sql-result-head')).toHaveText(/^Finished 1 row · /, { timeout: 15_000 });
+      await expect(tabs(page).first()).toHaveAttribute('aria-label', `Query 1, Finished, 1 row, on ${SOURCES.on}`);
+    } finally {
+      await context.close();
+    }
+  });
+});

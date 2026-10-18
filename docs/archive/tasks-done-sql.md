@@ -50,3 +50,30 @@
   - Failing test: `statementAt.test.ts`: with the cursor in the second of `SELECT 1; SELECT ';' AS a; -- x;` the statement is `SELECT ';' AS a`, a semicolon in a string or comment bounding nothing. `QueryTab.test.tsx`: with text selected, Run reads "Run selection" and only the selection is sent, from Run and from ⌘/Ctrl+Enter; with none, the statement at the cursor is marked in the editor and only it is sent. The e2e: with two statements and the cursor in the second, only that one reaches the database, and the run isn't refused as two statements (AC-387).
   - Depends on: T802
   - **Built 2026-10-17** (lane SQL). AC-387 is ticked on the e2e "runs only the statement at the cursor, or only the selection…": the cursor in the second of two statements sends only it, by ⌘/Ctrl+Enter, and it runs; a selection reads "Run selection" and sends only itself. `statementAt.ts` parses with lang-sql and skips `String`, `LineComment`, `BlockComment` and `QuotedIdentifier` (research/sql-parameter-binding.md §4), in the source's dialect: PostgreSQL for postgres and redshift (`$$…$$`), MySQL with backslash escapes and backticks, MSSQL, and standard SQL for the rest, Cube Store's included (T803's review). `SqlEditor` takes an opt-in `atCursor` (with `dialect` and `onStatement`), which only the workspace sets; the data source page still runs the whole text. The statement is marked with a tint (`.cm-sql-statement`). A cursor just after a semicolon is in the statement it ends; one in a stretch of only space or comments is in the statement before; the text sent keeps its comments and loses its surrounding space. Not built: design 17's gutter mark (pin 11) and the "lines 2–8" note beside Run (pin 12), which no criterion holds. The only key is the approved ⌘/Ctrl+Enter, which the research finds reaches the page everywhere (`keyboard-shortcuts-sql-runner.md` §4).
+
+- [x] T804 (AC-452, AC-379) Show a run's state the same way on its tab, in its result head and in History; hold Run on every other tab with "Go to it · Cancel that run"; keep a run going while the user is away
+  - Lane: SQL
+  - Files: `packages/web/src/workspaces/sql/runState.ts` (+ test), `packages/web/src/workspaces/sql/QueryTab.tsx`, `packages/web/src/workspaces/sql/TabStrip.tsx`, `e2e/security/sql-workspace.spec.ts`.
+  - Failing test: `runState.test.ts`: each of Running · n s of 30, Finished, Limited to 10,000 rows, Limited to 10 MB, Stopped at 30 seconds, Cancelled, Not run, Database error, Busy and Cube Store still finishing maps to one icon and one label used by the tab, the result head and the History row. The e2e: while a `pg_sleep` run goes on tab 1, tab 2's Run is held with "You have a run going on ‹source›… Go to it · Cancel that run"; Go to it selects tab 1; Cancel that run cancels it (AC-379); leaving for Explore and coming back shows it still running, then Finished (AC-452).
+  - Depends on: T802
+  - **Built 2026-10-17** (lane SQL, batch 3).
+    - **What it adds.** `runState.ts` names each state with one icon and one label. The tab (with a finished run's rows), the result head and, from T817, History all ask it, on one clock the workspace ticks each second while a run goes.
+    - **What the e2e "a run going, across tabs and away (T804)" shows.**
+      - A `pg_sleep` run's tab and result head read the same "Running · n s of 30".
+      - Every other tab shows the hold note, and its Run, button and ⌘/Ctrl+Enter alike, sends nothing.
+      - Go to it selects the running tab.
+      - Cancel that run, from the other tab, ends it as Cancelled and stops it in `pg_stat_activity`.
+      - After leaving for Explore and coming back, the run is still going, then Finished.
+    - **AC-452 stays open:** History, its third place, is T817's, which now cites it.
+    - **AC-379** was already ticked; its Cube Store clause (no Cancel, saying so) is unit-tested in the workspace.
+    - **Leaving loads a new page,** because the switcher's links are plain anchors. So:
+      - a run going is kept in `localStorage` with its tab (`tabStore.ts`), its result still not;
+      - a request dropped while the page is being left (`beforeunload`/`pagehide`) ends nothing;
+      - on return, the run is followed through `GET /api/sql-runs/going`, asked every 3 seconds, a failed ask included. Once it stops, its end is read from History (`GET /api/sql-runs?dataSource=…`): the newest row of its SQL, started within 5 minutes of it.
+      - That end shows its label, rows counted, time and start, with "You were away when it ended, so its rows weren’t kept. Run it again to see them."; a run History has no row for reads "No answer".
+      - A page brought back by Back (`pageshow` with `persisted`) follows its runs the same way (T804's review).
+      - `liveTabs.ts` keeps the tabs, results and all, across a remount within one page.
+    - **Moved:** the run-going query and Cancel moved to `going.ts`, shared with the data source page's runner.
+    - **`SqlResult`:** it takes an optional `state` for its head, which only the workspace passes. "Finished" then says "no rows" in its detail.
+    - **"Unavailable" reads "No answer"**, outside AC-452's list, because whether such a run ran isn't known (lane SQL's call).
+    - **Go to it shows only where a tab holds the run.** A run started on the data source page, or before a reload with no tab kept, holds Run with Cancel that run only.

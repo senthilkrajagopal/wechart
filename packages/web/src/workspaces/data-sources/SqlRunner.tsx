@@ -10,6 +10,7 @@ import { csvFileName, csvOf } from './sqlCsv';
 import { SqlEditor } from './SqlEditor';
 import { CUBE_STORE_ID } from './cubeStore';
 import { refusalSentence, SqlResult, type SqlOutcome } from './SqlResult';
+import { cancelRun, GOING_QUERY, NO_CANCEL } from '../sql/going';
 import { OffPanel } from '../sql/OffPanel';
 import { loginFor, pageKeyOf, pathText, routeOf, type SqlSource } from '../sql/sqlSource';
 
@@ -151,25 +152,6 @@ interface Shown {
   readonly answeredAt: number;
 }
 
-interface Going {
-  readonly dataSource: { readonly id: string; readonly name: string } | null;
-  /** Cube Store's, which has no data source (T536). */
-  readonly cubeStore?: boolean;
-  readonly startedAt: string;
-  /**
-   * Their last run, stopped, which Cube Store runs on until `endsBy` at the
-   * latest: their next waits (T548, AC-378, AC-379; R62).
-   */
-  readonly stopping?: true;
-  /** None for one its router runs to its end (T549), or where xcube can't say. */
-  readonly endsBy?: string | null;
-  /** xcube can't be asked whether it has ended: held all the same (T549). */
-  readonly unconfirmed?: true;
-}
-
-/** AC-379, amended by R64: Cube Store offers no Cancel, and says so. */
-const NO_CANCEL = 'Cube Store can’t stop a query, so there’s no Cancel.';
-
 const clockWithSeconds = (iso: string) => clock(new Date(iso), { seconds: true });
 
 /** Once on (screen 1): where it runs, the warning, the editor, the result, and My runs. */
@@ -206,17 +188,7 @@ function Runner({
   const runner = source.sqlRunner;
   const onCubeStore = source.cubeStore === true;
 
-  const going = useQuery({
-    queryKey: ['sql-runs', 'going'],
-    queryFn: async (): Promise<Going | null> => {
-      const response = await fetch('/api/sql-runs/going');
-      // Not asked is not none going: what was heard last stands, so a run
-      // still finishing in Cube Store isn't said ended (T548's review).
-      if (!response.ok) throw new Error(`The run going wasn’t said (${String(response.status)}).`);
-      return ((await response.json()) as { going: Going | null }).going;
-    },
-    refetchInterval: (query) => (query.state.data == null ? false : 3_000),
-  });
+  const going = useQuery(GOING_QUERY);
   const elsewhere = running === null ? (going.data ?? null) : null;
 
   useEffect(() => {
@@ -277,13 +249,8 @@ function Runner({
 
   const cancel = async () => {
     setCancelFailed(null);
-    const response = await fetch('/api/sql-runs/cancel', { method: 'POST' }).catch(() => null);
-    // A 404 is a run that ended meanwhile: nothing to say.
-    if (response === null || (!response.ok && response.status !== 404)) {
-      const said = (await response?.json().catch(() => ({}))) as { error?: string } | undefined;
-      setCancelFailed(`It couldn’t be cancelled: ${said?.error ?? 'no answer came back.'}`);
-    }
-    void queryClient.invalidateQueries({ queryKey: ['sql-runs', 'going'] });
+    setCancelFailed(await cancelRun());
+    void queryClient.invalidateQueries({ queryKey: GOING_QUERY.queryKey });
   };
 
   const download = () => {

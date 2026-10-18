@@ -1,5 +1,6 @@
 import type { StateKind } from '../../shell/StatusIcon';
 import type { SqlOutcome } from '../data-sources/SqlResult';
+import { runState } from './runState';
 
 /**
  * The SQL runner workspace's editor tabs (T800, AC-450; design 17, pin 7 and
@@ -15,6 +16,12 @@ export type TabRun =
       readonly kind: 'running';
       /** When it started, in ms since the epoch: which run a result is of. */
       readonly at: number;
+      /**
+       * Kept from a page since left (a reload's, or this one's before Back
+       * brought it again), so no answer comes to it: since when, in ms since
+       * the epoch, it is followed through wechart's server (T804, AC-452).
+       */
+      readonly kept?: number;
     }
   | {
       readonly kind: 'done';
@@ -23,6 +30,10 @@ export type TabRun =
       readonly sql: string;
       /** When it started, in ms since the epoch. */
       readonly at: number;
+      /** When its answer came: what is heard of it after is news (T548, T804). */
+      readonly answeredAt?: number;
+      /** Ended while the user was away: how, from History, its rows not kept (T804). */
+      readonly away?: true;
     };
 
 export interface SqlTab {
@@ -56,6 +67,8 @@ export type TabsAction =
   | { readonly kind: 'source'; readonly id: string; readonly sourceId: string }
   | { readonly kind: 'sql'; readonly id: string; readonly sql: string }
   | { readonly kind: 'run-start'; readonly id: string; readonly sql: string; readonly at: number }
+  /** The page came back from the browser's cache: runs going lost their answer (T804). */
+  | { readonly kind: 'runs-kept'; readonly at: number }
   | {
       readonly kind: 'run-done';
       readonly id: string;
@@ -64,6 +77,8 @@ export type TabsAction =
       readonly sql: string;
       readonly at: number;
       readonly outcome: SqlOutcome;
+      readonly answeredAt?: number;
+      readonly away?: true;
     };
 
 /** A tab's id: short, for the address (`/sql?tab=7f3a9c01`, T801). */
@@ -165,6 +180,18 @@ export function tabsReducer(
       return change(state, target, { sql: action.sql });
     case 'run-start':
       return change(state, target, { run: { kind: 'running', at: action.at }, lastRunSql: action.sql });
+    case 'runs-kept': {
+      const going = state.tabs.filter((tab) => tab.run?.kind === 'running' && tab.run.kept === undefined);
+      if (going.length === 0) return state;
+      return {
+        ...state,
+        tabs: state.tabs.map((tab) =>
+          going.includes(tab) && tab.run?.kind === 'running'
+            ? { ...tab, run: { ...tab.run, kept: action.at } }
+            : tab,
+        ),
+      };
+    }
     case 'run-done':
       // Only the run going now ends: never one of before the tab moved,
       // nor an earlier run's late answer (T802's review).
@@ -173,7 +200,14 @@ export function tabsReducer(
         target.run.at !== action.at
         ? state
         : change(state, target, {
-            run: { kind: 'done', outcome: action.outcome, sql: action.sql, at: action.at },
+            run: {
+              kind: 'done',
+              outcome: action.outcome,
+              sql: action.sql,
+              at: action.at,
+              ...(action.answeredAt === undefined ? {} : { answeredAt: action.answeredAt }),
+              ...(action.away === true ? { away: true as const } : {}),
+            },
           });
   }
 }
@@ -188,37 +222,16 @@ const change = (state: TabsState, target: SqlTab | undefined, to: Partial<SqlTab
 export const asksBeforeClosing = (tab: SqlTab): boolean =>
   tab.sql.trim() !== '' && tab.sql !== tab.savedSql && tab.sql !== tab.lastRunSql;
 
-const count = (n: number) => n.toLocaleString('en');
-
 /**
  * A tab's state as its icon and label (design 17, "Every state as an icon
- * and a label"), in the result head's words. T804 adds the seconds of a run
- * going and Cube Store still finishing.
+ * and a label"): its run's, as the result head and History say it (T804,
+ * AC-452), with a finished run's rows ("Finished, 1,284 rows", AC-450).
  */
-export function tabState(tab: SqlTab): { readonly kind: StateKind; readonly label: string } {
-  const run = tab.run;
-  if (run === null) return { kind: 'idle', label: 'Not run yet' };
-  if (run.kind === 'running') return { kind: 'run', label: 'Running' };
-  const done = run.outcome;
-  switch (done.outcome) {
-    case 'finished':
-      return done.truncated === 'rows'
-        ? { kind: 'warn', label: 'Limited to 10,000 rows' }
-        : done.truncated === 'bytes'
-          ? { kind: 'warn', label: 'Limited to 10 MB' }
-          : {
-              kind: 'ok',
-              label: `Finished, ${count(done.rowCount)} ${done.rowCount === 1 ? 'row' : 'rows'}`,
-            };
-    case 'timeout':
-      return { kind: 'err', label: 'Stopped at 30 seconds' };
-    case 'cancelled':
-      return { kind: 'cancel', label: 'Cancelled' };
-    case 'failed':
-      return { kind: 'err', label: 'Database error' };
-    case 'busy':
-      return { kind: 'warn', label: 'Busy' };
-    default:
-      return { kind: 'err', label: 'Not run' };
-  }
+export function tabState(
+  tab: SqlTab,
+  now: number = Date.now(),
+  stillFinishing = false,
+): { readonly kind: StateKind; readonly label: string } {
+  const { kind, label, rows } = runState(tab.run, now, stillFinishing);
+  return { kind, label: rows === null ? label : `${label}, ${rows}` };
 }

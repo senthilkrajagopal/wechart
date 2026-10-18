@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type Dispatch } from 'react';
 
 import { MenuButton } from '../../shell/MenuButton';
-import { StatusIcon } from '../../shell/StatusIcon';
+import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { onTabKey } from '../../shell/tabKeys';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import { CloseTabDialog, useEscape } from './CloseTabDialog';
@@ -19,9 +19,12 @@ export function TabStrip({
   sourceName,
   tabId,
   panelId,
+  stateOf = (tab) => tabState(tab),
 }: {
   readonly state: TabsState;
   readonly dispatch: Dispatch<TabsAction>;
+  /** A tab's state, as its result head names it, on the workspace's one clock (T804, AC-452). */
+  readonly stateOf?: (tab: SqlTab) => { readonly kind: StateKind; readonly label: string };
   /** A data source's name, by id; none for one not (or no longer) listed. */
   readonly sourceName: (id: string) => string | undefined;
   readonly tabId: (id: string) => string;
@@ -71,7 +74,7 @@ export function TabStrip({
       <div role="tablist" aria-label="SQL tabs" className="sql-tabs">
         {state.tabs.map((tab) => {
           const selected = tab.id === state.active;
-          const { kind, label } = tabState(tab);
+          const { kind, label } = stateOf(tab);
           const on = sourceName(tab.sourceId);
           const named = [tab.name, label, ...(on === undefined ? [] : [`on ${on}`])].join(', ');
           return [

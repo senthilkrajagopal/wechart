@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 
 import { clockOf } from '../../shell/formatTime';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
@@ -59,7 +59,8 @@ export type SqlOutcome =
   | { readonly outcome: 'busy' | 'unavailable' | 'going' | 'error'; readonly error: string };
 
 const count = (n: number) => n.toLocaleString('en');
-const seconds = (ms: number) =>
+/** A run's time, "0.41 s", as its head says it. */
+export const seconds = (ms: number) =>
   ms < 10 ? 'under 0.01 s' : `${(ms / 1000).toFixed(2).replace(/0$/, '')} s`;
 /** A column of numbers, by its database type: right-aligned, in tabular figures (pin 9). */
 const NUMERIC =
@@ -110,7 +111,17 @@ export function refusalSentence(
   return `wechart couldn’t read it as a SELECT or EXPLAIN: ${reason.replace(/\.$/, '')}.`;
 }
 
-function Head({
+/**
+ * The run's state as the SQL runner workspace names it (T804, AC-452): where
+ * given, the head shows it in place of its own, so the tab, the head and
+ * History say one thing.
+ */
+const HeadState = createContext<{ readonly kind: StateKind; readonly label: string } | undefined>(
+  undefined,
+);
+
+/** A result's head: its state as an icon and a label, a detail, and its actions. */
+export function ResultHead({
   kind,
   label,
   detail,
@@ -118,14 +129,15 @@ function Head({
 }: {
   kind: StateKind;
   label: string;
-  detail?: string;
+  detail?: string | undefined;
   children?: ReactNode;
 }) {
+  const named = useContext(HeadState);
   return (
     <div className="sql-result__head" data-testid="sql-result-head">
-      <span className={`status status--${kind}`}>
-        <StatusIcon kind={kind} />
-        {label}
+      <span className={`status status--${named?.kind ?? kind}`}>
+        <StatusIcon kind={named?.kind ?? kind} />
+        {named?.label ?? label}
       </span>
       {detail === undefined ? null : (
         <>
@@ -138,6 +150,7 @@ function Head({
     </div>
   );
 }
+const Head = ResultHead;
 
 /**
  * A run's rows (AC-380): headed by each column's name and its type as the
@@ -221,6 +234,20 @@ const Note = ({ children }: { children: ReactNode }) => (
 );
 
 export function SqlResult({
+  state,
+  ...shown
+}: Parameters<typeof Result>[0] & {
+  /** The run's state as the workspace names it, for the head (T804, AC-452). */
+  state?: { readonly kind: StateKind; readonly label: string } | undefined;
+}) {
+  return (
+    <HeadState.Provider value={state}>
+      <Result {...shown} />
+    </HeadState.Provider>
+  );
+}
+
+function Result({
   result,
   sql,
   startedAt,
@@ -239,6 +266,7 @@ export function SqlResult({
   ended?: boolean;
 }) {
   const at = `at ${clock(startedAt)}`;
+  const named = useContext(HeadState);
   switch (result.outcome) {
     case 'finished': {
       const cut = result.truncated;
@@ -256,7 +284,8 @@ export function SqlResult({
           <Head
             kind={cut === null ? 'ok' : 'warn'}
             label={label}
-            detail={`${result.rowCount === 0 ? '' : `${rows} · `}${seconds(result.durationMs)} · ${at}`}
+            // Named from outside, "Finished" says no rows in its detail (T804).
+            detail={`${result.rowCount === 0 ? (named === undefined ? '' : 'no rows · ') : `${rows} · `}${seconds(result.durationMs)} · ${at}`}
           >
             <button type="button" className="btn btn-sm" onClick={onDownload}>
               {cut === null ? 'Download CSV' : `Download CSV · ${rows}`}

@@ -2,9 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import {
   useEffect,
   useId,
-  useReducer,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type Dispatch,
   type ReactNode,
@@ -21,10 +21,14 @@ import { OffPanel } from './OffPanel';
 import { SQL_SOURCES_QUERY } from './sources';
 import { SourcePicker } from './SourcePicker';
 import { CUBE_STORE_ID, CUBE_STORE_QUERY } from '../data-sources/cubeStore';
-import { QueryTab } from './QueryTab';
+import { endedAway } from './awayRun';
+import { GOING_QUERY } from './going';
+import { holdTabs, releaseTabs, tabsStoreFor } from './liveTabs';
+import { QueryTab, type RunHold } from './QueryTab';
+import { runState, type RunState } from './runState';
 import type { SqlSourceRow } from './sources';
 import type { SqlSource } from './sqlSource';
-import { firstTabs, tabsReducer, type SqlTab, type TabsAction, type TabsState } from './tabs';
+import { firstTabs, type SqlTab, type TabsAction, type TabsState } from './tabs';
 import { TabStrip } from './TabStrip';
 import { keepTabs, keptTabs } from './tabStore';
 import {
@@ -145,12 +149,19 @@ function ChosenOn({
   dispatch,
   grip,
   superAdmin,
+  run,
 }: {
   readonly row: SqlSourceRow;
   readonly tab: SqlTab;
   readonly dispatch: Dispatch<TabsAction>;
   readonly grip: ReactNode;
   readonly superAdmin: boolean;
+  /** Its run's state and clock, and what holds its Run (T804). */
+  readonly run: {
+    readonly state: RunState;
+    readonly hold: RunHold | null;
+    readonly onGoTo: (id: string) => void;
+  };
 }) {
   const page = useQuery({ ...sourceQuery(row.id), retry: false, enabled: !row.cubeStore });
   const store = useQuery({ ...CUBE_STORE_QUERY, retry: false, enabled: row.cubeStore });
@@ -186,7 +197,7 @@ function ChosenOn({
           sqlRunner: { on: false, tab: false, runs: false, ...page.data.sqlRunner, ...page.data.sqlAccess },
         };
   if (source !== undefined && source.sqlRunner.runs)
-    return <QueryTab tab={tab} source={source} dispatch={dispatch} grip={grip} />;
+    return <QueryTab tab={tab} source={source} dispatch={dispatch} grip={grip} {...run} />;
   if (source !== undefined)
     return (
       <div className="sql-centre__off">
@@ -227,11 +238,105 @@ function Workbench({
 }) {
   const sources = useQuery({ ...SQL_SOURCES_QUERY, retry: false });
   /** The editor tabs, each bound to one data source (T800, AC-450). */
-  const [tabs, dispatch] = useReducer(
-    (state: TabsState, action: TabsAction) => tabsReducer(state, action),
-    undefined,
-    () => openingTabs(user, tab),
-  );
+  // Held outside React, so a run going lands in its tab while the user is
+  // away, and shows on their return (T804, AC-452).
+  const [store] = useState(() => tabsStoreFor(user, () => openingTabs(user, tab)));
+  const tabs = useSyncExternalStore(store.subscribe, store.get);
+  const dispatch = store.dispatch;
+  useEffect(() => {
+    holdTabs(user, store);
+    return () => {
+      releaseTabs(user, store);
+    };
+  }, [user, store]);
+  // Kept from before, and the address names a tab: that one opens (AC-446).
+  useEffect(() => {
+    if (tab !== undefined) store.dispatch({ kind: 'select', id: tab });
+    // On opening only, as the address is read once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const runningTab = tabs.tabs.find((each) => each.run?.kind === 'running');
+  /**
+   * A run kept from a page since left (T804, AC-452): going while wechart's
+   * server says the user's run goes on its source; once not, ended, as
+   * History says. Its answer came to that page, so its rows aren't here.
+   */
+  const keptRun =
+    runningTab?.run?.kind === 'running' && runningTab.run.kept !== undefined ? runningTab : undefined;
+  const keptSince = keptRun?.run?.kind === 'running' ? keptRun.run.kept : undefined;
+  /**
+   * The user's run going outside these tabs, or their last still finishing
+   * in Cube Store; asked every 3 seconds while a kept run is followed, a
+   * failed ask included (T804's review).
+   */
+  const going = useQuery({
+    ...GOING_QUERY,
+    retry: false,
+    refetchInterval: (query) => (keptSince !== undefined ? 3_000 : GOING_QUERY.refetchInterval(query)),
+  });
+  // Asked at once for a run kept since what was last heard: Back to a kept page.
+  const askGoing = going.refetch;
+  useEffect(() => {
+    if (keptSince !== undefined) void askGoing();
+  }, [keptSince, askGoing]);
+  /** One clock for the tab and its result head, ticking while a run goes (AC-452). */
+  const [now, setNow] = useState(() => Date.now());
+  const ticking = runningTab !== undefined;
+  useEffect(() => {
+    // Until its first tick, a clock from before the run reads 0 s.
+    if (!ticking) return undefined;
+    const every = setInterval(() => {
+      setNow(Date.now());
+    }, 1_000);
+    return () => {
+      clearInterval(every);
+    };
+  }, [ticking]);
+  const goingOn =
+    going.data != null &&
+    going.data.stopping !== true &&
+    (keptRun?.sourceId === CUBE_STORE_ID
+      ? going.data.cubeStore === true
+      : going.data.dataSource?.id === keptRun?.sourceId);
+  // Heard since it was kept, and not going: it ended.
+  const keptEnded =
+    keptSince !== undefined && going.isSuccess && going.dataUpdatedAt > keptSince && !going.isFetching && !goingOn;
+  /** Cube Store runs a stopped query on: where xcube says so, the kept run's end says so too. */
+  const stillFinishing = going.data?.stopping === true ? { endsBy: going.data.endsBy ?? null } : null;
+  useEffect(() => {
+    if (!keptEnded || keptRun?.run?.kind !== 'running') return undefined;
+    const { id, sourceId, lastRunSql } = keptRun;
+    const at = keptRun.run.at;
+    let gone = false;
+    void endedAway(keptRun, at, stillFinishing).then((outcome) => {
+      if (gone) return;
+      dispatch({
+        kind: 'run-done',
+        id,
+        sourceId,
+        sql: lastRunSql ?? '',
+        at,
+        outcome,
+        answeredAt: Date.now(),
+        away: true,
+      });
+    });
+    return () => {
+      gone = true;
+    };
+    // Once per kept run, as it is found ended.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keptEnded, keptRun?.id]);
+  /** A tab's run's state, as its tab, its result head and History name it. */
+  const stateOf = (each: SqlTab) => {
+    const run = each.run;
+    // Heard since its answer: Cube Store's run on has ended (T548).
+    const ended =
+      run?.kind === 'done' &&
+      going.dataUpdatedAt > (run.answeredAt ?? 0) &&
+      going.data?.stopping !== true;
+    return runState(run, now, !ended);
+  };
   // Kept in this browser, for this user, as they change (T801, AC-451).
   useEffect(() => {
     keepTabs(browserStorage(), user, tabs);
@@ -248,6 +353,30 @@ function Workbench({
   /** The open tab's data source, which the picker shows and chooses. */
   const chosen = openTab?.sourceId ?? '';
   const chosenRow = sources.data?.find((row) => row.id === chosen);
+  /**
+   * What holds the open tab's Run (AC-452, AC-379): another tab's run; else
+   * one wechart's server says goes outside the tabs, or still finishes in
+   * Cube Store. A tab's own run, just ended, isn't one (lane SQL's call).
+   */
+  const runningRow = sources.data?.find((row) => row.id === runningTab?.sourceId);
+  const goingAfter = Math.max(
+    0,
+    ...tabs.tabs.map((each) => (each.run?.kind === 'done' ? (each.run.answeredAt ?? 0) : 0)),
+  );
+  const hold: RunHold | null =
+    runningTab !== undefined
+      ? runningTab.id === openTab?.id || runningTab.run?.kind !== 'running'
+        ? null
+        : {
+            kind: 'tab',
+            tabId: runningTab.id,
+            sourceName: runningRow?.name ?? 'a data source',
+            startedAt: runningTab.run.at,
+            cubeStore: runningRow?.cubeStore === true,
+          }
+      : going.data != null && going.dataUpdatedAt > goingAfter
+        ? { kind: 'elsewhere', going: going.data }
+        : null;
   /**
    * Whether to ask them to choose one (AC-466, H1) rather than say none runs
    * SQL for them (H2): a source listed on, or their own; and for a
@@ -376,6 +505,10 @@ function Workbench({
             state={tabs}
             dispatch={dispatch}
             sourceName={(id) => sources.data?.find((row) => row.id === id)?.name}
+            stateOf={(each) => {
+              const { kind, label, rows } = stateOf(each);
+              return { kind, label: rows === null ? label : `${label}, ${rows}` };
+            }}
             tabId={(id) => `${ids}-tab-${id}`}
             panelId={(id) => `${ids}-panel-${id}`}
           />
@@ -402,6 +535,13 @@ function Workbench({
               dispatch={dispatch}
               grip={grip}
               superAdmin={superAdmin}
+              run={{
+                state: stateOf(openTab),
+                hold,
+                onGoTo: (id) => {
+                  dispatch({ kind: 'select', id });
+                },
+              }}
             />
           ) : (
             <>

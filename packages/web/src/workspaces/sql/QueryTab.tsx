@@ -1,14 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState, type Dispatch, type ReactNode } from 'react';
 
+import { clockOf } from '../../shell/formatTime';
+import { StatusIcon } from '../../shell/StatusIcon';
 import { CUBE_STORE_ID } from '../data-sources/cubeStore';
 import { csvFileName, csvOf } from '../data-sources/sqlCsv';
 import { SqlEditor } from '../data-sources/SqlEditor';
-import { SqlResult, type SqlOutcome } from '../data-sources/SqlResult';
+import { ResultHead, seconds, SqlResult, type SqlOutcome } from '../data-sources/SqlResult';
+import { cancelRun, GOING_QUERY, NO_CANCEL, type Going } from './going';
 import { RunLine } from './RunLine';
+import { runState, type RunState } from './runState';
 import { dialectFor, statementAt } from './statementAt';
 import { routeOf, type SqlSource } from './sqlSource';
-import { tabState, type SqlTab, type TabsAction } from './tabs';
+import type { SqlTab, TabsAction } from './tabs';
 
 /**
  * One tab's editor and result in the workspace (T802, AC-373, AC-385,
@@ -54,17 +58,136 @@ function rowsOf(result: SqlOutcome) {
   return null;
 }
 
+/**
+ * What holds this tab's Run (T804, AC-452, AC-379; design 17, G2 and G8):
+ * another tab's run going, one going outside the tabs (the data source
+ * page's, or one from before a reload), or the last one, stopped, that Cube
+ * Store is still finishing. One run per person, across every tab.
+ */
+export type RunHold =
+  | {
+      readonly kind: 'tab';
+      readonly tabId: string;
+      readonly sourceName: string;
+      readonly startedAt: number;
+      readonly cubeStore: boolean;
+    }
+  | { readonly kind: 'elsewhere'; readonly going: Going };
+
+const clockWithSeconds = (at: Date) => clockOf(at, { seconds: true });
+
+/**
+ * Whether this page is being left: the workspace switcher's links load
+ * another page, which drops a run's request while the run goes on.
+ */
+let leaving = false;
+if (typeof window !== 'undefined') {
+  const left = () => {
+    leaving = true;
+  };
+  window.addEventListener('beforeunload', left);
+  window.addEventListener('pagehide', left);
+  window.addEventListener('pageshow', () => {
+    leaving = false;
+  });
+}
+
+/** A run ended while away: its rows counted, its time and its start, as History has them. */
+function awayDetail(run: Extract<NonNullable<SqlTab['run']>, { kind: 'done' }>, state: RunState): string {
+  const took = 'durationMs' in run.outcome ? run.outcome.durationMs : null;
+  return [state.rows, took === null ? null : seconds(took), `at ${clockWithSeconds(new Date(run.at))}`]
+    .filter((part): part is string => part !== null)
+    .join(' · ');
+}
+
+/** The note over a held tab's editor: whose run, and Go to it and Cancel that run where they can be. */
+function HeldNote({
+  hold,
+  onGoTo,
+  onCancel,
+}: {
+  readonly hold: RunHold;
+  readonly onGoTo: (tabId: string) => void;
+  readonly onCancel: () => void;
+}) {
+  if (hold.kind === 'elsewhere' && hold.going.stopping === true) {
+    const going = hold.going;
+    return (
+      <p className="notebar sql-runner__elsewhere" data-testid="sql-run-held">
+        <StatusIcon kind="run" />
+        <span>
+          {going.unconfirmed === true
+            ? 'xcube can’t say whether Cube Store has finished your last query.'
+            : going.endsBy == null
+              ? 'Cube Store is running your last query to its end; it can’t be stopped.'
+              : `Cube Store is still finishing your last query, until ${clockWithSeconds(new Date(going.endsBy))} at the latest.`}{' '}
+          One run at a time: your next one runs once it has ended.
+        </span>
+      </p>
+    );
+  }
+  const cubeStore = hold.kind === 'tab' ? hold.cubeStore : hold.going.cubeStore === true;
+  const name =
+    hold.kind === 'tab'
+      ? hold.sourceName
+      : (hold.going.dataSource?.name ?? (cubeStore ? 'Cube Store' : 'a data source'));
+  const startedAt = new Date(hold.kind === 'tab' ? hold.startedAt : hold.going.startedAt);
+  // Go to it only where a tab holds it: a run from elsewhere has none (lane SQL's call).
+  const goTo = hold.kind === 'tab' ? hold.tabId : null;
+  return (
+    <p className="notebar sql-runner__elsewhere" data-testid="sql-run-held">
+      <StatusIcon kind="run" />
+      <span>
+        You have a run going on <b>{name}</b>, started at {clockWithSeconds(startedAt)}. One run at a
+        time.
+        {goTo === null ? null : (
+          <>
+            {' '}
+            <button
+              type="button"
+              className="btn-link"
+              onClick={() => {
+                onGoTo(goTo);
+              }}
+            >
+              Go to it
+            </button>
+          </>
+        )}
+        {goTo !== null ? ' · ' : ' '}
+        {/* Cube Store's has no cancel, and says so: it can't stop a query (AC-379, R64). */}
+        {cubeStore ? (
+          <span data-testid="sql-no-cancel">{NO_CANCEL}</span>
+        ) : (
+          <button type="button" className="btn-link" onClick={onCancel}>
+            Cancel that run
+          </button>
+        )}
+      </span>
+    </p>
+  );
+}
+
 export function QueryTab({
   tab,
   source,
   dispatch,
   grip,
+  state = runState(tab.run, tab.run?.at ?? 0),
+  hold = null,
+  onGoTo = () => undefined,
 }: {
   readonly tab: SqlTab;
   readonly source: SqlSource;
   readonly dispatch: Dispatch<TabsAction>;
   /** The split's grip, between the editor and the result. */
   readonly grip: ReactNode;
+  /** Its run's state, as its tab names it, on the workspace's one clock (AC-452). */
+  readonly state?: RunState;
+  /** What holds its Run, where something does. */
+  readonly hold?: RunHold | null;
+  /** Selects the tab whose run is going. */
+  readonly onGoTo?: (tabId: string) => void;
 }) {
   const queryClient = useQueryClient();
   const warningId = useId();
@@ -82,9 +205,18 @@ export function QueryTab({
 
   /** Set as Run is pressed, before a render: two presses send one run (T802's review). */
   const sending = useRef(false);
+  const [cancelFailed, setCancelFailed] = useState<string | null>(null);
+  const cancel = async () => {
+    setCancelFailed(null);
+    setCancelFailed(await cancelRun());
+    void queryClient.invalidateQueries({ queryKey: GOING_QUERY.queryKey });
+  };
+
   const run = async (sql: string) => {
-    if (running || sending.current || sql.trim() === '') return;
+    // One run per person, across every tab: held while another goes (AC-452, AC-379).
+    if (running || hold !== null || sending.current || sql.trim() === '') return;
     sending.current = true;
+    setCancelFailed(null);
     const at = Date.now();
     dispatch({ kind: 'run-start', id: tab.id, sql, at });
     setSaid('Running');
@@ -97,6 +229,12 @@ export function QueryTab({
       });
       outcome = outcomeOf(response.status, await response.json().catch(() => null));
     } catch {
+      // The page is being left, which drops its request, not the run: the
+      // tab keeps it going, for the next page to follow (T804, AC-452).
+      if (leaving) {
+        sending.current = false;
+        return;
+      }
       // Sent or not, no answer came: it may have run (T535's review).
       outcome = {
         outcome: 'unavailable',
@@ -104,8 +242,11 @@ export function QueryTab({
       };
     }
     sending.current = false;
-    dispatch({ kind: 'run-done', id: tab.id, sourceId: source.id, sql, at, outcome });
-    setSaid(tabState({ ...tab, run: { kind: 'done', outcome, sql, at } }).label);
+    const answeredAt = Date.now();
+    // Into the workspace's tabs, which outlive this view: it may have closed meanwhile (AC-452).
+    dispatch({ kind: 'run-done', id: tab.id, sourceId: source.id, sql, at, outcome, answeredAt });
+    const ended = runState({ kind: 'done', outcome, sql, at }, answeredAt, true);
+    setSaid(ended.rows === null ? ended.label : `${ended.label}, ${ended.rows}`);
     // Back to the editor, unless the user has moved on meanwhile (design 15, keyboard).
     const active = document.activeElement;
     if (active === null || active === document.body || bar.current?.contains(active) === true)
@@ -130,10 +271,14 @@ export function QueryTab({
   };
 
   const toRun = selected === '' ? statement : selected;
+  const held = !running && hold !== null;
   return (
     <>
       <div className="sql-centre__editor sql-query" data-testid="sql-editor-area">
         <RunLine source={source} warningId={warningId} />
+        {hold !== null && held ? (
+          <HeldNote hold={hold} onGoTo={onGoTo} onCancel={() => void cancel()} />
+        ) : null}
         <SqlEditor
           value={tab.sql}
           onChange={(sql) => {
@@ -152,11 +297,24 @@ export function QueryTab({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={running || toRun.trim() === ''}
+            disabled={running || held || toRun.trim() === ''}
             onClick={() => void run(toRun)}
           >
             {running ? 'Running…' : selected === '' ? 'Run' : 'Run selection'}
           </button>
+          {held ? <span className="sql-runner__note">held while your other run goes</span> : null}
+          {running ? (
+            // Cube Store can't stop a query: no Cancel, said so (AC-379, R64).
+            onCubeStore ? (
+              <span className="sql-runner__note" data-testid="sql-no-cancel">
+                {NO_CANCEL}
+              </span>
+            ) : (
+              <button type="button" className="btn" onClick={() => void cancel()}>
+                Cancel
+              </button>
+            )
+          ) : null}
           <span className="sql-runner__spacer" />
           <span id={limitsId} className="sql-runner__limits">
             {LIMITS}
@@ -165,10 +323,28 @@ export function QueryTab({
       </div>
       {grip}
       <div className="sql-centre__results sql-query__results" data-testid="sql-results-area">
-        {shown === null ? (
-          running ? null : (
-            <p className="sql-runner__empty">Run a SELECT or EXPLAIN to see its rows here.</p>
-          )
+        {cancelFailed === null ? null : (
+          <p className="sql-runner__failed" role="alert" data-testid="sql-cancel-failed">
+            {cancelFailed}
+          </p>
+        )}
+        {running ? (
+          // Design 17, G1: its state as its tab names it, counting its seconds.
+          <div className="sql-result" data-testid="sql-result">
+            <ResultHead kind={state.kind} label={state.label} />
+          </div>
+        ) : shown === null ? (
+          <p className="sql-runner__empty">Run a SELECT or EXPLAIN to see its rows here.</p>
+        ) : shown.away === true ? (
+          // Ended while the user was away: how, from History, its rows not kept (T804, lane SQL's call).
+          <div className="sql-result" data-testid="sql-result">
+            <ResultHead kind={state.kind} label={state.label} detail={awayDetail(shown, state)} />
+            <p className="sql-result__note" data-testid="sql-result-note">
+              {shown.outcome.outcome === 'unavailable' && shown.outcome.error !== ''
+                ? shown.outcome.error
+                : 'You were away when it ended, so its rows weren’t kept. Run it again to see them.'}
+            </p>
+          </div>
         ) : (
           <SqlResult
             result={shown.outcome}
@@ -176,6 +352,9 @@ export function QueryTab({
             startedAt={new Date(shown.at)}
             onDownload={download}
             onCubeStore={onCubeStore}
+            state={state}
+            // Cube Store's run on has ended, as xcube says since its answer (T548).
+            ended={state.label !== 'Cube Store still finishing'}
           />
         )}
         <p className="visually-hidden" role="status" aria-live="polite">

@@ -78,13 +78,43 @@ describe('open tabs kept in this browser, for this user (T801, AC-451)', () => {
   it('keeps no result, which a reload reads as not run yet', () => {
     const browser = storage();
     const ran: TabsState = {
-      tabs: [tab({ id: 'qa', name: 'Q', sql: 'SELECT 1', lastRunSql: 'SELECT 1', run: { kind: 'running', at: 1 } })],
+      tabs: [
+        tab({
+          id: 'qa',
+          name: 'Q',
+          sql: 'SELECT 1',
+          lastRunSql: 'SELECT 1',
+          run: {
+            kind: 'done',
+            at: 1,
+            sql: 'SELECT 1',
+            outcome: { outcome: 'busy', error: 'xcube is busy.' },
+          },
+        }),
+      ],
       active: 'qa',
     };
 
     keepTabs(browser, 'wren', ran);
 
     expect(keptTabs(browser, 'wren')?.tabs[0]).toEqual({ ...ran.tabs[0], run: null });
+  });
+
+  // T804 (AC-452): leaving the workspace loads another page, and the run goes on.
+  it('keeps a run going, as one this page didn’t start, for the workspace to follow on return', () => {
+    const browser = storage();
+    const going: TabsState = {
+      tabs: [tab({ id: 'qa', name: 'Q', sql: 'SELECT 1', lastRunSql: 'SELECT 1', run: { kind: 'running', at: 1 } })],
+      active: 'qa',
+    };
+
+    keepTabs(browser, 'wren', going);
+
+    const before = Date.now();
+    const read = keptTabs(browser, 'wren')?.tabs[0];
+    expect(read).toEqual({ ...going.tabs[0], run: { kind: 'running', at: 1, kept: expect.any(Number) as number } });
+    // Followed from now on: what wechart's server says after this is news.
+    expect(read?.run?.kind === 'running' ? read.run.kept : 0).toBeGreaterThanOrEqual(before);
   });
 
   it('reads nothing kept from what isn’t its shape, never failing the page', () => {
