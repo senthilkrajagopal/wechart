@@ -23,9 +23,17 @@ const READ_ONLY: ToolAnnotations = {
   openWorldHint: false,
 };
 
+/**
+ * An id, one path segment that can't be `.` or `..` (T782's review): it
+ * begins with a letter or digit and holds no `/`, so no id lands on another
+ * route by dot segments. Every wechart id fits: uuids, "root", "mine",
+ * `ws:‹key›`.
+ */
+const ID = '^[A-Za-z0-9][A-Za-z0-9_.:@~+=-]*$';
+
 const BY_ID = fromJsonSchema<{ id: string }>({
   type: 'object',
-  properties: { id: { type: 'string', minLength: 1, description: 'The item’s id.' } },
+  properties: { id: { type: 'string', pattern: ID, description: 'The item’s id.' } },
   required: ['id'],
   additionalProperties: false,
 });
@@ -35,7 +43,7 @@ const IN_FOLDER = fromJsonSchema<{ folderId: string }>({
   properties: {
     folderId: {
       type: 'string',
-      minLength: 1,
+      pattern: ID,
       description:
         'The folder’s id, as list_folders gives it; "root" for the shared root, "mine" for My workspace.',
     },
@@ -50,7 +58,7 @@ const BY_NAME = fromJsonSchema<{ name: string; folderId?: string }>({
     name: { type: 'string', minLength: 1, description: 'Its name in the model.' },
     folderId: {
       type: 'string',
-      minLength: 1,
+      pattern: ID,
       description: 'Only the folder whose model defines it; every folder you may see otherwise.',
     },
   },
@@ -64,6 +72,8 @@ const answered = (data: Record<string, unknown>): CallToolResult => ({
   structuredContent: data,
 });
 
+const NOT_THERE = 'There’s no such item, or it isn’t yours to see.';
+
 /** The route's refusal, in its own words, as an error result; a fault of its own throws. */
 function refusedBy(answer: WebAnswer): CallToolResult {
   if (answer.status >= 500) throw new Error(`The web route answered ${answer.status}.`);
@@ -73,19 +83,26 @@ function refusedBy(answer: WebAnswer): CallToolResult {
     content: [
       {
         type: 'text',
-        text: typeof said === 'string' ? said : 'There’s no such item, or it isn’t yours to see.',
+        text: typeof said === 'string' ? said : NOT_THERE,
       },
     ],
   };
 }
 
-/** Asks `url`, answering with its body under `key`, or its refusal. */
-async function read(call: McpCall, url: string, key: string): Promise<CallToolResult> {
+/**
+ * Asks `url`, answering with its body under `key`, or its refusal. Where
+ * the item is named by `id`, an answer about another one, such as a static
+ * route's beside it (`/api/data-sources/sealing-key`), is none (T782's review).
+ */
+async function read(call: McpCall, url: string, key: string, id?: string): Promise<CallToolResult> {
   const answer = await call.ask(url);
-  return answer.status === 200 ? answered({ [key]: answer.body }) : refusedBy(answer);
+  if (answer.status !== 200) return refusedBy(answer);
+  if (id !== undefined && (answer.body as { id?: unknown } | null)?.id !== id)
+    return refusedBy({ status: 404, body: { error: NOT_THERE } });
+  return answered({ [key]: answer.body });
 }
 
-const id = (args: unknown) => encodeURIComponent((args as { id: string }).id);
+const idOf = (args: unknown) => (args as { id: string }).id;
 
 /** The model files that define a cube or view of this name, in the folders the caller sees. */
 async function definitions(
@@ -147,7 +164,13 @@ export const READ_TOOLS: readonly McpTool[] = [
     scope: 'read',
     inputSchema: BY_ID,
     annotations: READ_ONLY,
-    run: (args, call) => read(call, `/api/documents/dashboard/${id(args)}`, 'dashboard'),
+    run: (args, call) =>
+      read(
+        call,
+        `/api/documents/dashboard/${encodeURIComponent(idOf(args))}`,
+        'dashboard',
+        idOf(args),
+      ),
   },
   {
     name: 'read_chart',
@@ -155,7 +178,8 @@ export const READ_TOOLS: readonly McpTool[] = [
     scope: 'read',
     inputSchema: BY_ID,
     annotations: READ_ONLY,
-    run: (args, call) => read(call, `/api/documents/chart/${id(args)}`, 'chart'),
+    run: (args, call) =>
+      read(call, `/api/documents/chart/${encodeURIComponent(idOf(args))}`, 'chart', idOf(args)),
   },
   {
     name: 'read_cube',
@@ -182,6 +206,7 @@ export const READ_TOOLS: readonly McpTool[] = [
     scope: 'read',
     inputSchema: BY_ID,
     annotations: READ_ONLY,
-    run: (args, call) => read(call, `/api/data-sources/${id(args)}`, 'dataSource'),
+    run: (args, call) =>
+      read(call, `/api/data-sources/${encodeURIComponent(idOf(args))}`, 'dataSource', idOf(args)),
   },
 ];

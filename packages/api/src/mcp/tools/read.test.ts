@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { pgSessionStore } from '../../auth/session-store';
 import { PUBLIC_URL, signIn, USERS } from '../../auth/sign-in.fixture';
-import { ACT_AS_HEADER } from '../../auth/user';
+import { ACT_AS_HEADER, asUser } from '../../auth/user';
 import { closeDb, getDb } from '../../db/client';
 import { accessTokenStore, type TokenScope } from '../../repos/access-tokens';
 import { auditStore } from '../../repos/audit';
@@ -378,6 +378,42 @@ describe('the server’s asks as a caller (T782, AC-432)', () => {
       headers: { ...forged, cookie },
     });
     expect(signedIn.json()).toEqual((await web('/api/folders')).body);
+  });
+
+  it('takes a pass once, and never once its ask has ended', async () => {
+    const reader = { key: writerKey, name: 'Wren Writer', groups: ['sales-rw'], superAdmin: false };
+    const ask = (headers: Record<string, string>) =>
+      app.inject({ method: 'GET', url: '/api/folders', headers });
+    const kept = await asUser(reader, async (headers) => {
+      expect((await ask(headers)).statusCode).toBe(200);
+      // Taken by the first request: a second bearing it is no one.
+      expect((await ask(headers)).statusCode).toBe(401);
+      return headers;
+    });
+    const unused = await asUser(reader, async (headers) => headers);
+    expect((await ask(kept)).statusCode).toBe(401);
+    expect((await ask(unused)).statusCode).toBe(401);
+  });
+});
+
+describe('ids that would name another route (T782’s review)', () => {
+  it('refuses an id that isn’t one, and reads no route an id would land on instead', async () => {
+    await withClient(tokens.read!, async (client) => {
+      for (const [tool, args] of [
+        ['read_dashboard', { id: '..' }],
+        ['read_data_source', { id: '..' }],
+        ['list_folder_items', { folderId: '..' }],
+        ['read_chart', { id: 'a/../b' }],
+      ] as const) {
+        const refused = await call(client, tool, args);
+        expect(refused.isError, `${tool} ${JSON.stringify(args)}`).toBe(true);
+        expect(JSON.stringify(refused.content)).toContain('don’t fit');
+      }
+      // A static route beside the data source's: not a data source.
+      const sibling = await call(client, 'read_data_source', { id: 'sealing-key' });
+      expect(sibling.isError).toBe(true);
+      expect(sibling.structuredContent).toBeUndefined();
+    });
   });
 });
 

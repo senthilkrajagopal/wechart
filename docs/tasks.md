@@ -1632,7 +1632,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
   - Failing test: `query.test.ts`: a query returns the same rows the same query does in the web app for the same user, with folder access and Cube's access policies applying (AC-437). `paging.test.ts`: a result of 2,500 rows comes back as 1,000, saying it was cut and how many were left out, with a cursor; following the cursors returns every row once; a result of rows under 1,000 but over 50,000 characters is cut under 50,000 the same way; a folder listing longer than 1,000 items pages too (AC-475).
   - Depends on: T783
 
-- [ ] T785 (AC-438, AC-433, AC-469) Edit in my workspace through MCP: copy a shared dashboard, chart or model into its project folder in the owner's workspace; refuse with 403 `insufficient_scope` without workspace-edit
+- [ ] T785 (AC-438, AC-433, AC-469, AC-432) Edit in my workspace through MCP: copy a shared dashboard, chart or model into its project folder in the owner's workspace; refuse with 403 `insufficient_scope` without workspace-edit
   - Lane: MCP
   - Files: `packages/api/src/mcp/tools/workspace.ts` (+ `workspace.test.ts`), `packages/api/src/mcp/scopes.ts` (+ test; `scopeChallenge`).
   - Failing test: `workspace.test.ts`: copying a shared dashboard puts it, with its project folder, in the owner's My workspace, as the web app's Edit in my workspace does (`[R48-5]`), and leaves the shared one unchanged (AC-438); a token without workspace-edit gets 403 with `insufficient_scope` and nothing changes (AC-433, AC-469).
@@ -2011,7 +2011,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 | AC-001 (again, SQL runner after Schedules, `[R78]`) | T796 | AC-373 (again, the workspace) | T798, T802, T823, T824 | AC-381 (again, the workspace; 17-Q4) | T797, T817 |
 | AC-385 (again, every tab) | T802 | AC-386 (again, the left pane) | T797, T805 | AC-387 (again, the statement at the cursor) | T803 |
 | AC-304 (again, the workspace's rails) | T797 | AC-379, AC-380 (again, in a tab) | T804, T802 | AC-383, AC-384 (again, the picker) | T798 |
-| AC-430 | T767, T769, T770, T776 | AC-431 | T768, T771, T776 | AC-432 | T777, T782 |
+| AC-430 | T767, T769, T770, T776 | AC-431 | T768, T771, T776 | AC-432 | T777, T782, T785 |
 | AC-433 | T785 | AC-434 | T778 | AC-435 | T776 |
 | AC-436 | T775 | AC-437 | T782, T784 | AC-438 | T785, T786 |
 | AC-439 | T787 | AC-440 | T789 | AC-441 | T789 |
