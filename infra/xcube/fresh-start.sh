@@ -48,9 +48,11 @@ set -euo pipefail
 # (docs/research/xcube-2e611eae61.md). T765: `c2602ac72a`, the same with its
 # folder tree to read, for a start's catch-up (docs/research/xcube-c2602ac72a.md).
 # T690: `407622a6b8`, the same with `rollupOnly` on GET …/revision
-# (docs/research/xcube-407622a6b8.md).
-R71_IMAGE='ghcr.io/senthilkrajagopal/xcube:v1.7.45-407622a6b8@sha256:3e329db5926c6fa93e9ba5cda838dbabc4de41ddc24b28c92674220d5dd35061'
-REVISION='407622a6b8f2099263aeeff4766e5e2b1bc2520e'
+# (docs/research/xcube-407622a6b8.md). T811, T806: `bb188d8ada`, the same with
+# the SQL runner's bound values and the catalog's foreign keys
+# (docs/research/xcube-bb188d8ada.md).
+R71_IMAGE='ghcr.io/senthilkrajagopal/xcube:v1.7.45-bb188d8ada@sha256:96024be5ca88d227ff456a0d832642e9a42a27c6a7d55187520a00d84389f63f'
+REVISION='bb188d8ada78264145ff3e018bc2f9b043554721'
 
 if [[ "${1:-}" != '--yes' ]]; then
   sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'

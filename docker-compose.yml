@@ -185,14 +185,18 @@ services:
   # 14, which refuses a folder-prefixed schema: dropped and seeded again (T701,
   # T702, R71, R72; xcube-256d632371.md); from 407622a6b8, `rollupOnly` on
   # GET …/revision, whether the answering instance runs the model in
-  # rollup-only mode (T690, AC-147; xcube-407622a6b8.md). The stored root `default` matches
-  # CUBEJS_DB_* above exactly, so the root's cubes keep their names. The fork's CI publishes the image for amd64 and
-  # arm64, pulled here by digest: its moving tag isn't a version.
+  # rollup-only mode (T690, AC-147; xcube-407622a6b8.md); from bb188d8ada, the
+  # SQL runner's `{{name}}` values bound (`parameters`), and the catalog's
+  # foreign keys through a stored connection (T811, T806; xcube-bb188d8ada.md).
+  # The stored root `default` matches
+  # CUBEJS_DB_* above exactly, so the root's cubes keep their names. The image
+  # is published for amd64 and arm64 (bb188d8ada from xcube's machine, CI's
+  # Actions being off), pulled here by digest: its moving tag isn't a version.
   # The image's own CMD starts the package's server: give neither service a
   # `command`, or Cube starts without the routes. Cube and its refresh worker
   # run the same image.
   cube:
-    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-407622a6b8@sha256:3e329db5926c6fa93e9ba5cda838dbabc4de41ddc24b28c92674220d5dd35061}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-bb188d8ada@sha256:96024be5ca88d227ff456a0d832642e9a42a27c6a7d55187520a00d84389f63f}
     container_name: wechart-cube
     depends_on: &cube-depends-on
       sample-db:
@@ -227,7 +231,7 @@ services:
   # "Topology"; pre-aggregations.md, "Observed locally"). A build asked for
   # through the jobs API runs in the API instance, though (upgrade-1.7.43.md).
   cube-refresh-worker:
-    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-407622a6b8@sha256:3e329db5926c6fa93e9ba5cda838dbabc4de41ddc24b28c92674220d5dd35061}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-bb188d8ada@sha256:96024be5ca88d227ff456a0d832642e9a42a27c6a7d55187520a00d84389f63f}
     container_name: wechart-cube-refresh-worker
     depends_on: *cube-depends-on
     environment:

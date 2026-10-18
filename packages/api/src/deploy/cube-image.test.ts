@@ -81,9 +81,14 @@ import { describe, expect, it } from 'vitest';
  * T690, AC-147: `407622a6b8` says on `GET …/revision` whether the answering
  * instance runs the model in rollup-only mode (`rollupOnly`); schema 14
  * still, no reset (research xcube-407622a6b8.md).
+ *
+ * T811, T806: `bb188d8ada` binds the SQL runner's `{{name}}` values
+ * (`parameters`, AC-454) and reports the catalog's foreign keys through a
+ * stored connection (AC-448); schema 14 still, no reset (research
+ * xcube-bb188d8ada.md).
  */
 const IMAGE =
-  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-407622a6b8@sha256:3e329db5926c6fa93e9ba5cda838dbabc4de41ddc24b28c92674220d5dd35061';
+  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-bb188d8ada@sha256:96024be5ca88d227ff456a0d832642e9a42a27c6a7d55187520a00d84389f63f';
 /** Slice 2's image, built locally: only the way back names it. */
 const SLICE_2_IMAGE = 'xcube:v1.7.45-83cb9f0888';
 
@@ -113,7 +118,7 @@ describe('docs/deploy.md pulls the fork’s published image by digest (T449, AC-
 
   it('names the image the release runs, and slice 2’s only for the way back, with how to build it', () => {
     // No other xcube tag, and no build of the package under its old name.
-    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!407622a6b8@|83cb9f0888|feat-xcube|\$|<)/);
+    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!bb188d8ada@|83cb9f0888|feat-xcube|\$|<)/);
     expect(deploy).not.toContain('cube:v1.7.45-introspection-');
     // Slice 2's image was built locally and never published: the way back says how.
     const back = deploy.slice(deploy.indexOf('### Items mode, and the way back'));

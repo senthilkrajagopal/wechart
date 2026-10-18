@@ -26,11 +26,12 @@ cube:
   # kept, from 74c933bdb8 (T554), and one name per item model-wide, every
   # reference up its folder path and bare names from 256d632371 (T701, R71,
   # R72), whose schema 14 refuses a folder-prefixed one: installed fresh
-  # (T702). The
-  # fork's CI publishes it for amd64 and arm64, pinned here by digest
-  # (docs/deploy.md). Cube and its refresh worker both run it, with the
-  # image's own command.
-  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-407622a6b8@sha256:3e329db5926c6fa93e9ba5cda838dbabc4de41ddc24b28c92674220d5dd35061
+  # (T702), and the SQL runner's `{{name}}` values bound and the catalog's
+  # foreign keys through a stored connection from bb188d8ada (T811, T806). It
+  # is published for amd64 and arm64 (bb188d8ada from xcube's machine, CI's
+  # Actions being off), pinned here by digest (docs/deploy.md). Cube and its
+  # refresh worker both run it, with the image's own command.
+  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-bb188d8ada@sha256:96024be5ca88d227ff456a0d832642e9a42a27c6a7d55187520a00d84389f63f
   dataSource:
     type: postgres
     host: superset-postgresql.superset.svc.cluster.local
