@@ -88,12 +88,34 @@ const answerOf = (query: Awaited<ReturnType<SavedQueryStore['get']>> & object) =
 });
 
 export function registerSavedQueries(app: FastifyInstance, { store }: { readonly store: SavedQueryStore }) {
+  /**
+   * A new saved query; with `id`, one just deleted brought back under its own
+   * id, by Delete's Undo (T813, AC-458). An id anyone holds is refused alike,
+   * saying nothing of whose it is.
+   */
   app.post('/api/sql/saved', USER, async (request, reply) => {
     const input = inputOf(request.body);
     if ('error' in input) return reply.status(400).send({ error: input.error });
-    const result = await store.create(ownerOf(request), input);
+    const id = (request.body as { id?: unknown } | undefined)?.id;
+    if (id !== undefined && (typeof id !== 'string' || !UUID.test(id)))
+      return reply.status(400).send({ error: 'A saved query’s id is a UUID.' });
+    const result = await store.create(ownerOf(request), input, id?.toLowerCase());
+    if ('held' in result) return reply.status(409).send({ error: 'That saved query can’t be brought back.' });
     if ('taken' in result) return reply.status(409).send({ error: taken(input.name) });
     return reply.status(201).send(answerOf(result.saved));
+  });
+
+  /** The owner's saved queries, by name, for the Saved tab (T813, AC-458): nobody else's. */
+  app.get('/api/sql/saved', USER, async (request) => ({
+    queries: (await store.list(ownerOf(request))).map(answerOf),
+  }));
+
+  /** Deleted by its owner alone, answered whole so Undo can bring it back (T813, AC-458). */
+  app.delete('/api/sql/saved/:id', USER, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const removed = UUID.test(id) ? await store.remove(ownerOf(request), id) : undefined;
+    if (removed === undefined) return reply.status(404).send({ error: NOT_FOUND });
+    return reply.send(answerOf(removed));
   });
 
   app.put('/api/sql/saved/:id', USER, async (request, reply) => {

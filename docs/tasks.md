@@ -1732,11 +1732,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T812 (AC-457, AC-483) Save… a query, with its name and description rules, keeping its SQL, data source and parameters; Save updates it, Save as new… makes another; no proposal and no audit event
 
-- [ ] T813 (AC-458) The Saved tab: the owner's saved queries by name with their source and "Only me", Open, Rename…, Duplicate and Delete with Undo; nobody else, a Super-Admin included, reaches one
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/SavedList.tsx` (+ test), `packages/api/src/routes/sql-saved.ts` (+ test), `e2e/security/sql-saved.spec.ts`.
-  - Failing test: `sql-saved.test.ts`: another user's, and a Super-Admin's, list, get, rename, delete and search of someone's saved query all answer as if it didn't exist; no saved query appears in folder listings, proposals or bookmarks. `SavedList.test.tsx`: each row shows its name, its source and "Only me" as an icon and a label, with Open, Rename…, Duplicate and Delete on its ⋯; Delete shows a toast whose Undo brings it back (AC-458).
-  - Depends on: T812
+- [x] T813 (AC-458) The Saved tab: the owner's saved queries by name with their source and "Only me", Open, Rename…, Duplicate and Delete with Undo; nobody else, a Super-Admin included, reaches one
 
 - [ ] T814 (AC-459) Open a saved query whose data source the user can no longer run SQL on with no source chosen, never naming it
   - Lane: SQL

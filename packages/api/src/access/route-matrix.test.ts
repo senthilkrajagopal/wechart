@@ -2162,6 +2162,27 @@ const CASES: Record<string, Case> = {
       );
     answered(await ask('writer', { method: 'PUT', url: `/api/sql/saved/${mine}`, payload }), 'writer updating theirs');
   },
+  // The Saved tab (T813, AC-458): each lists their own alone; only the owner deletes one.
+  'GET /api/sql/saved': async () => {
+    await savedBy('writer', 'listed');
+    for (const who of WHO) {
+      const answer = await ask(who, { method: 'GET', url: '/api/sql/saved' });
+      answered(answer, `${who} listing their saved queries`);
+      expect(
+        answer.json<{ queries: { name: string }[] }>().queries.some((each) => each.name === `${MARK} listed`),
+        `${who}'s list holding writer's`,
+      ).toBe(who === 'writer');
+    }
+  },
+  'DELETE /api/sql/saved/:id': async () => {
+    const mine = await savedBy('writer', 'deleted');
+    for (const who of WHO.filter((each) => each !== 'writer'))
+      refused(
+        await ask(who, { method: 'DELETE', url: `/api/sql/saved/${mine}` }),
+        `${who} deleting writer's saved query`,
+      );
+    answered(await ask('writer', { method: 'DELETE', url: `/api/sql/saved/${mine}` }), 'writer deleting theirs');
+  },
   'POST /api/sql-runs/cancel': async () => {
     for (const who of WHO)
       refused(

@@ -314,4 +314,27 @@ main:has(.sql-workspace) {
 .sql-save__refused { margin: 0; color: var(--wc-status-error); font-size: 12px; }
 .sql-save__count, .sql-save__keeps { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
 .sql-save__count { text-align: right; }
+/* The Saved tab (T813; I1): rows of a name over its source and "Only me",
+   design 15's two-line rows, the ⋯ after each. */
+.sql-saved { padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.sql-saved__note { margin: 0; font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); color: var(--wc-text-secondary); }
+.sql-saved__failed { color: var(--wc-status-error); }
+.sql-saved__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.sql-saved__row { display: flex; align-items: flex-start; gap: 4px; padding: 6px 0; border-bottom: 1px solid var(--wc-border-subtle); }
+.sql-saved__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sql-saved__name {
+  align-self: flex-start; max-width: 100%; margin: 0; padding: 0; border: 0; background: none;
+  color: var(--wc-text-primary); font: inherit; font-size: var(--wc-text-sm-size); font-weight: 600;
+  text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sql-saved__name:hover { text-decoration: underline; }
+.sql-saved__name:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
+.sql-saved__source, .sql-saved__meta {
+  font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); color: var(--wc-text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sql-saved__only { display: inline-flex; align-items: center; gap: 4px; }
+.sql-saved__more { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--wc-text-secondary); cursor: pointer; }
+.sql-saved__more:hover { background: var(--wc-bg-hover); }
+.sql-saved__more:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
 `;

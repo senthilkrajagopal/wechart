@@ -231,3 +231,36 @@
       - `orders.customer_id`'s **FK**, with the tooltip "References public.customers (id)";
       - every primary- and foreign-key column of the development database's own tables, as `pg_constraint` lists them, with its tag and, for a foreign key, its tooltip: `customers.id`, `orders.id` and `products.id` show **PK**, and `orders.customer_id` and `orders.product_id` show **FK**.
     - No code changed: the tags were built in batch 3.
+
+- [x] T813 (AC-458) The Saved tab: the owner's saved queries by name with their source and "Only me", Open, Rename…, Duplicate and Delete with Undo; nobody else, a Super-Admin included, reaches one
+  - Lane: SQL
+  - Files: `packages/web/src/workspaces/sql/SavedList.tsx` (+ test), `packages/api/src/routes/sql-saved.ts` (+ test), `e2e/security/sql-saved.spec.ts`.
+  - Failing test: `sql-saved.test.ts`: another user's, and a Super-Admin's, list, get, rename, delete and search of someone's saved query all answer as if it didn't exist; no saved query appears in folder listings, proposals or bookmarks. `SavedList.test.tsx`: each row shows its name, its source and "Only me" as an icon and a label, with Open, Rename…, Duplicate and Delete on its ⋯; Delete shows a toast whose Undo brings it back (AC-458).
+  - Depends on: T812
+  - **Built 2026-10-18** (lane SQL, batch 5).
+    - **AC-458 is ticked** on the e2e "the Saved tab (T813, AC-458)" (`e2e/security/sql-saved.spec.ts`). It covers:
+      - the row's source and folder, "Only me" with its icon, and "1 parameter";
+      - the ⋯'s four items;
+      - Open into a tab with the SQL, the value and "Saved query · Only me";
+      - Rename…, in the list and in the open tab;
+      - Duplicate's "(copy)";
+      - Delete and the toast's Undo, back under its own id.
+      
+      Then, as a Super-Admin: their list, and GET, PUT and DELETE by id, all answer as if it didn't exist; search and proposals hold none of it, for them or the owner; and their own Saved tab lists none of it.
+    - **The API:**
+      - `GET /api/sql/saved` lists the owner's queries by name, ignoring case.
+      - `DELETE /api/sql/saved/:id` answers the query whole.
+      - `POST` takes an optional `id` (a UUID) for Undo. An id anyone holds gets 409 "That saved query can’t be brought back."
+      - Both new routes join the route matrix.
+    - **The web:**
+      - `SavedList.tsx` is the list, with Rename… as its own dialog and Delete's toast as `UndoToast`.
+      - The right pane shows it under its head.
+      - `tabs.ts` gains `open-saved` (a tab already holding the query is selected instead) and `saved-renamed`.
+      - A Save in a tab refreshes the list.
+      - Open uses no source where the user has lost the saved one; T814 adds the words.
+    - **Folders and bookmarks** hold none by construction: saved queries live in `saved_queries` only, which no folder, search or bookmark route reads. The e2e checks search and proposals.
+    - **Review:** one cold review passed. Its low notes are left as they are (decision T813-1, and "breadth over save edge cases"):
+      - **The restore path:** `POST` with an `id` says whether anyone holds that UUID, and could take a free one. It needs the id, which only the owner sees.
+      - **An open tab whose saved query was deleted** still offers Save, which answers "No saved query of yours has that id." Undo, or Save as new…, recovers it.
+      - **The toast holds one deleted query at a time.**
+    - Decision T813-1 is in `docs/design/decisions-sql.md`.

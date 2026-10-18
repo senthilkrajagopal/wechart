@@ -16,6 +16,7 @@ import { runState, type RunState } from './runState';
 import { dialectFor, statementAt } from './statementAt';
 import { routeOf, type SqlSource } from './sqlSource';
 import { SaveDialog } from './SaveDialog';
+import { SAVED_QUERIES } from './SavedList';
 import type { SavedAs, SqlTab, TabsAction } from './tabs';
 
 /**
@@ -380,6 +381,8 @@ export function QueryTab({
       return typeof said?.error === 'string' ? said.error : `It couldn’t be saved (${String(response.status)}).`;
     // Its name as the API keeps it, trimmed (T812's review).
     dispatch({ kind: 'saved', id: tab.id, saved: { id: said.id, name: name.trim(), description }, sql: tab.sql });
+    // The Saved tab lists it (T813).
+    void queryClient.invalidateQueries({ queryKey: SAVED_QUERIES.queryKey });
     return null;
   };
   /** Save…'s dialog, open with where it starts; null while closed. */

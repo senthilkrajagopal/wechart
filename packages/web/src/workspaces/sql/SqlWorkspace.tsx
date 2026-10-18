@@ -27,6 +27,7 @@ import { holdTabs, releaseTabs, tabsStoreFor } from './liveTabs';
 import { QueryTab, type Insertion, type RunHold, type RunOnOpen } from './QueryTab';
 import { SchemaTree } from './SchemaTree';
 import { runState, type RunState } from './runState';
+import { SavedList } from './SavedList';
 import type { SqlSourceRow } from './sources';
 import type { SqlSource } from './sqlSource';
 import { firstTabs, newTabId, type SqlTab, type TabsAction, type TabsState } from './tabs';
@@ -593,6 +594,19 @@ function Workbench({
         }}
       >
         <h2 className="sql-pane__head">Saved and History</h2>
+        {/* The Saved tab (T813, AC-458); History joins it with T817. */}
+        <SavedList
+          sourceOf={(id) => sources.data?.find((row) => row.id === id)}
+          onOpen={(query) => {
+            // On its own source where the user still has it; else none, never named (AC-459).
+            const has = sources.data?.some((row) => row.id === query.sourceId) === true;
+            dispatch({ kind: 'open-saved', query, sourceId: has ? query.sourceId : '' });
+            setOpen(null);
+          }}
+          onRenamed={(savedId, name) => {
+            dispatch({ kind: 'saved-renamed', savedId, name });
+          }}
+        />
       </SidePane>
     </section>
   );

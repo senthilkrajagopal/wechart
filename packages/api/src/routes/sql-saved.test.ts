@@ -200,3 +200,61 @@ describe('a saved query’s name and description (T812, AC-483)', () => {
     }
   });
 });
+
+/**
+ * T813 (AC-458): the Saved tab lists its owner's saved queries by name, and
+ * Delete answers the query whole so Undo can bring it back under its own id.
+ * Nobody else, a Super-Admin included, lists, deletes or brings one back:
+ * each answers as if it didn't exist.
+ */
+describe('the owner’s saved queries, listed and deleted (T813, AC-458)', () => {
+  const list = async (who: string) => {
+    const answer = await as(who, { method: 'GET', url: '/api/sql/saved' });
+    expect(answer.statusCode, answer.body).toBe(200);
+    return answer.json<{ queries: Saved[] }>().queries.filter((each) => each.name.includes(MARK));
+  };
+  const remove = (who: string, id: string) => as(who, { method: 'DELETE', url: `/api/sql/saved/${id}` });
+
+  it('lists the owner’s alone, by name, each whole; nobody else’s, a Super-Admin’s included', async () => {
+    const names = [`b list ${MARK}`, `A list ${MARK}`, `c list ${MARK}`];
+    for (const name of names) expect((await save('writer', { ...QUERY, name })).statusCode).toBe(201);
+    await save('super', { ...QUERY, name: `Supers list ${MARK}` });
+
+    const mine = (await list('writer')).filter((each) => each.name.includes(' list '));
+    expect(mine.map((each) => each.name)).toEqual([`A list ${MARK}`, `b list ${MARK}`, `c list ${MARK}`]);
+    expect(mine[0]).toMatchObject({ ...QUERY, id: expect.any(String) });
+    expect((await list('super')).map((each) => each.name)).not.toContain(`b list ${MARK}`);
+  });
+
+  it('deletes one for its owner alone, answering it whole, and Undo brings it back under its id', async () => {
+    const saved = (await save('writer', { ...QUERY, name: `Gone ${MARK}` })).json<Saved>();
+    // Nobody else, a Super-Admin included: as if it didn't exist.
+    const theirs = await remove('super', saved.id);
+    expect(theirs.statusCode).toBe(404);
+    expect(theirs.json<{ error: string }>().error).toBe('No saved query of yours has that id.');
+    expect((await reopen('writer', saved.id)).statusCode).toBe(200);
+
+    const gone = await remove('writer', saved.id);
+    expect(gone.statusCode).toBe(200);
+    expect(gone.json<Saved>()).toMatchObject({ ...QUERY, id: saved.id, name: `Gone ${MARK}` });
+    expect((await reopen('writer', saved.id)).statusCode).toBe(404);
+    expect((await list('writer')).map((each) => each.name)).not.toContain(`Gone ${MARK}`);
+    expect((await remove('writer', saved.id)).statusCode).toBe(404);
+
+    // Undo: saved again under its own id, with all it held.
+    const back = await save('writer', { ...QUERY, name: `Gone ${MARK}`, id: saved.id });
+    expect(back.statusCode, back.body).toBe(201);
+    expect(back.json<Saved>().id).toBe(saved.id);
+    expect((await reopen('writer', saved.id)).json<Saved>()).toMatchObject({ ...QUERY, name: `Gone ${MARK}` });
+  });
+
+  it('brings back no id another holds, saying nothing of it', async () => {
+    const supers = (await save('super', { ...QUERY, name: `Held ${MARK}` })).json<Saved>();
+    const answer = await save('writer', { ...QUERY, name: `Thief ${MARK}`, id: supers.id });
+    expect(answer.statusCode).toBe(409);
+    expect(answer.json<{ error: string }>().error).toBe('That saved query can’t be brought back.');
+    expect((await reopen('super', supers.id)).json<Saved>().name).toBe(`Held ${MARK}`);
+    // An id not of the uuid form is refused as one.
+    expect((await save('writer', { ...QUERY, name: `Odd ${MARK}`, id: 'x' })).statusCode).toBe(400);
+  });
+});

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 
 import type { Database, SavedParameter } from '../db/schema';
 
@@ -52,6 +52,9 @@ const queryOf = (row: {
 
 /** PostgreSQL's unique violation: the owner's name clash (`saved_queries_owner_name`). */
 const isTaken = (error: unknown) => (error as { code?: unknown } | null)?.code === '23505';
+/** The same, on the primary key: an id brought back that another holds (T813). */
+const isIdTaken = (error: unknown) =>
+  isTaken(error) && (error as { constraint?: unknown }).constraint === 'saved_queries_pkey';
 
 /**
  * Each user's saved queries (T812, AC-457, AC-483; R78 "saved queries (no
@@ -60,12 +63,24 @@ const isTaken = (error: unknown) => (error as { code?: unknown } | null)?.code =
  */
 export function savedQueryStore(db: Kysely<Database>) {
   return {
-    async create(ownerKey: string, input: SavedQueryInput): Promise<SaveResult> {
+    /**
+     * A new saved query; with `id`, one deleted brought back under its own id
+     * (T813, Undo). `{ held: true }` where that id is held, by anyone.
+     */
+    async create(
+      ownerKey: string,
+      input: SavedQueryInput,
+      id?: string,
+    ): Promise<SaveResult | { readonly held: true }> {
+      if (id !== undefined) {
+        const held = await db.selectFrom('saved_queries').select('id').where('id', '=', id).executeTakeFirst();
+        if (held !== undefined) return { held: true };
+      }
       try {
         const row = await db
           .insertInto('saved_queries')
           .values({
-            id: randomUUID(),
+            id: id ?? randomUUID(),
             owner_key: ownerKey,
             name: input.name,
             description: input.description,
@@ -77,9 +92,34 @@ export function savedQueryStore(db: Kysely<Database>) {
           .executeTakeFirstOrThrow();
         return { saved: queryOf(row) };
       } catch (error) {
+        // Its id taken meanwhile: held, as above.
+        if (isIdTaken(error)) return { held: true };
         if (isTaken(error)) return { taken: true };
         throw error;
       }
+    },
+
+    /** The owner's, by name, as the Saved tab lists them (T813, AC-458). */
+    async list(ownerKey: string): Promise<SavedQuery[]> {
+      const rows = await db
+        .selectFrom('saved_queries')
+        .selectAll()
+        .where('owner_key', '=', ownerKey)
+        .orderBy(sql`lower(name)`)
+        .orderBy('name')
+        .execute();
+      return rows.map(queryOf);
+    },
+
+    /** Deleted, and answered whole for Undo: undefined where the owner has none by that id. */
+    async remove(ownerKey: string, id: string): Promise<SavedQuery | undefined> {
+      const row = await db
+        .deleteFrom('saved_queries')
+        .where('id', '=', id)
+        .where('owner_key', '=', ownerKey)
+        .returningAll()
+        .executeTakeFirst();
+      return row === undefined ? undefined : queryOf(row);
     },
 
     /** Replaced in place: undefined where the owner has none by that id. */

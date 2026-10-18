@@ -92,6 +92,25 @@ export type TabsAction =
   | { readonly kind: 'param-type'; readonly id: string; readonly name: string; readonly type: ParamType }
   /** Saved as this query, holding this SQL (T812). */
   | { readonly kind: 'saved'; readonly id: string; readonly saved: SavedAs; readonly sql: string }
+  /**
+   * A saved query opened from the Saved tab (T813): in a tab of its own, on
+   * `sourceId` ('' where its own isn't available to the user, T814); the
+   * tab already holding it is selected instead.
+   */
+  | {
+      readonly kind: 'open-saved';
+      readonly query: SavedAs & {
+        readonly sql: string;
+        readonly parameters: readonly {
+          readonly name: string;
+          readonly type: ParamType;
+          readonly value: string;
+        }[];
+      };
+      readonly sourceId: string;
+    }
+  /** A saved query renamed in the Saved tab: the tabs holding it take the name (T813). */
+  | { readonly kind: 'saved-renamed'; readonly savedId: string; readonly name: string }
   | { readonly kind: 'run-start'; readonly id: string; readonly sql: string; readonly at: number }
   /** The page came back from the browser's cache: runs going lost their answer (T804). */
   | { readonly kind: 'runs-kept'; readonly at: number }
@@ -219,6 +238,40 @@ export function tabsReducer(
         : change(state, target, { params: { ...target.params, [action.name]: action.value } });
     case 'saved':
       return change(state, target, { saved: action.saved, savedSql: action.sql });
+    case 'open-saved': {
+      const { query } = action;
+      const holding = state.tabs.find((tab) => tab.saved?.id === query.id);
+      if (holding !== undefined) return { ...state, active: holding.id };
+      const id = makeId();
+      const types = query.parameters.filter((each) => each.type !== 'text');
+      const opened: SqlTab = {
+        ...blank(id, query.name, action.sourceId),
+        sql: query.sql,
+        params: Object.fromEntries(query.parameters.map((each) => [each.name, each.value])),
+        ...(types.length === 0
+          ? {}
+          : { paramTypes: Object.fromEntries(types.map((each) => [each.name, each.type])) }),
+        saved: { id: query.id, name: query.name, description: query.description },
+        savedSql: query.sql,
+      };
+      return { tabs: [...state.tabs, opened], active: id };
+    }
+    case 'saved-renamed': {
+      if (!state.tabs.some((tab) => tab.saved?.id === action.savedId)) return state;
+      return {
+        ...state,
+        tabs: state.tabs.map((tab) =>
+          tab.saved?.id !== action.savedId
+            ? tab
+            : {
+                ...tab,
+                // A tab named after it takes its new name; one renamed by hand keeps its own.
+                name: tab.name === tab.saved.name ? action.name : tab.name,
+                saved: { ...tab.saved, name: action.name },
+              },
+        ),
+      };
+    }
     case 'param-type':
       return target === undefined
         ? state

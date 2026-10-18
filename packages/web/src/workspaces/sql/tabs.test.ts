@@ -285,3 +285,77 @@ describe('a tab’s state, as an icon and a label (T800, AC-450; design 17’s Q
     expect(done({ outcome: 'busy', error: 'x' })).toEqual({ kind: 'warn', label: 'Busy' });
   });
 });
+
+/**
+ * T813 (AC-458): Open on a saved query opens it in a tab of its own, named
+ * after it and holding its SQL, source, parameters and their types; one
+ * already open is selected, not opened twice. Rename… in the Saved tab
+ * renames the saved query its tabs hold, so their Save keeps the new name.
+ */
+describe('a saved query opened and renamed (T813, AC-458)', () => {
+  const saved = {
+    id: 'q-top',
+    name: 'Top EMEA orders',
+    description: 'Month end',
+    sourceId: 'emea',
+    sql: 'SELECT * FROM orders WHERE region = {{region}} AND n > {{n}}',
+    parameters: [
+      { name: 'region', type: 'text', value: 'EMEA' },
+      { name: 'n', type: 'number', value: '7' },
+    ],
+  } as const;
+
+  it('opens in a new tab holding all it keeps, as saved', () => {
+    const start: TabsState = { tabs: [tab({ id: 'a', name: 'Query 1' })], active: 'a' };
+    const opened = tabsReducer(start, { kind: 'open-saved', query: saved, sourceId: 'emea' }, () => 'b');
+    expect(opened.active).toBe('b');
+    expect(opened.tabs[1]).toEqual(
+      tab({
+        id: 'b',
+        name: 'Top EMEA orders',
+        sourceId: 'emea',
+        sql: saved.sql,
+        params: { region: 'EMEA', n: '7' },
+        paramTypes: { n: 'number' },
+        saved: { id: 'q-top', name: 'Top EMEA orders', description: 'Month end' },
+        savedSql: saved.sql,
+      }),
+    );
+    // Its text is saved: closing it asks nothing.
+    expect(asksBeforeClosing(opened.tabs[1]!)).toBe(false);
+  });
+
+  it('opens on the source given: none where its own isn’t available', () => {
+    const start: TabsState = { tabs: [tab({ id: 'a', name: 'Query 1' })], active: 'a' };
+    expect(tabsReducer(start, { kind: 'open-saved', query: saved, sourceId: '' }, () => 'b').tabs[1]?.sourceId).toBe('');
+  });
+
+  it('selects the tab already holding it rather than opening another', () => {
+    const start: TabsState = {
+      tabs: [
+        tab({ id: 'a', name: 'Query 1' }),
+        tab({ id: 'b', name: 'Top EMEA orders', saved: { id: 'q-top', name: 'Top EMEA orders', description: '' } }),
+      ],
+      active: 'a',
+    };
+    const opened = tabsReducer(start, { kind: 'open-saved', query: saved, sourceId: 'emea' }, () => 'c');
+    expect(opened).toEqual({ ...start, active: 'b' });
+  });
+
+  it('renames the saved query its tabs hold, and the tab named after it', () => {
+    const start: TabsState = {
+      tabs: [
+        tab({ id: 'a', name: 'Top EMEA orders', saved: { id: 'q-top', name: 'Top EMEA orders', description: 'd' } }),
+        tab({ id: 'b', name: 'Mine', saved: { id: 'q-top', name: 'Top EMEA orders', description: 'd' } }),
+        tab({ id: 'c', name: 'Top EMEA orders' }),
+      ],
+      active: 'a',
+    };
+    const renamed = tabsReducer(start, { kind: 'saved-renamed', savedId: 'q-top', name: 'EMEA month end' });
+    expect(renamed.tabs.map((each) => [each.name, each.saved?.name])).toEqual([
+      ['EMEA month end', 'EMEA month end'],
+      ['Mine', 'EMEA month end'],
+      ['Top EMEA orders', undefined],
+    ]);
+  });
+});
