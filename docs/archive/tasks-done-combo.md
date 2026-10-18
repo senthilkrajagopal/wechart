@@ -11,3 +11,8 @@ Lane COMBO's ticked tasks from `docs/tasks.md` §P2.26 (F44), their sub-lines wo
   - Files: `packages/charts/src/series/combo.ts` (+ test), `packages/charts/src/theme.ts`, `packages/charts/src/optionFor.ts`.
   - Failing test: `combo.test.ts`: Revenue bar/left, Target line/left, Margin % point/right and Cost area/left give ECharts series of type bar, line, scatter, and line with `areaStyle` at 0.24 opacity; Margin %'s `yAxisIndex` is 1 and the others' 0; `z` orders area < bar < line < point; a line has a 5 px `bg-surface` halo under its 2 px stroke; a point has an 8 px marker with a 1.5 px surface ring (AC-497, AC-037).
   - Depends on: T845
+
+- [x] T847 (AC-499) Align a combo's two value axes: one zero height, the right axis's ticks on the left's gridlines, include zero forced while bars are drawn, and no right gridlines
+  - Files: `packages/charts/src/combo/alignedAxes.ts` (+ test), `packages/charts/src/series/combo.ts`.
+  - Failing test: `alignedAxes.test.ts`: left data −38K…155K and right −4 %…38 % give extents with the same negative share and five ticks each; with bars on either axis both ranges include zero; lines only with the right axis's include zero off keeps 20 %…40 %; the right axis's `splitLine.show` is false; over 500 random pairs whose ranges include zero, zero's fraction of each axis agrees within 1e-9 and the tick counts are equal (wechart's own algorithm: `alignTicks` doesn't align zero, research §2) (AC-499).
+  - Depends on: T846

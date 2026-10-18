@@ -1854,10 +1854,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T846 (AC-497, AC-037) Draw each combo series with its own mark on its own value axis, in §7h's draw order, a line over bars on its surface halo
 
-- [ ] T847 (AC-499) Align a combo's two value axes: one zero height, the right axis's ticks on the left's gridlines, include zero forced while bars are drawn, and no right gridlines
-  - Files: `packages/charts/src/combo/alignedAxes.ts` (+ test), `packages/charts/src/series/combo.ts`.
-  - Failing test: `alignedAxes.test.ts`: left data −38K…155K and right −4 %…38 % give extents with the same negative share and five ticks each; with bars on either axis both ranges include zero; lines only with the right axis's include zero off keeps 20 %…40 %; the right axis's `splitLine.show` is false; over 500 random pairs whose ranges include zero, zero's fraction of each axis agrees within 1e-9 and the tick counts are equal (wechart's own algorithm: `alignTicks` doesn't align zero, research §2) (AC-499).
-  - Depends on: T846
+- [x] T847 (AC-499) Align a combo's two value axes: one zero height, the right axis's ticks on the left's gridlines, include zero forced while bars are drawn, and no right gridlines
 
 - [ ] T848 (AC-500) Title each value axis above itself with its measures' glyphs and its unit, keep ticks `text-secondary`, give legend entries their glyphs and "(right)", and emphasise a hovered series' axis
   - Files: `packages/charts/src/combo/axisTitles.ts` (+ test), `packages/charts/src/legend.ts` (+ test), `packages/charts/src/series/combo.ts`, `packages/charts/src/interaction/axisEmphasis.ts` (+ test).

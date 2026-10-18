@@ -31,7 +31,10 @@ export interface AxisSettings {
 
 export interface AxesSettings {
   readonly x?: AxisSettings;
+  /** The value axis; a combo's left one. */
   readonly y?: AxisSettings;
+  /** A combo's right value axis, while a series is drawn there (AC-499, T847). */
+  readonly right?: AxisSettings;
 }
 
 /** direction.md §5 uses a muted border for chart furniture. */

@@ -26,7 +26,8 @@ import {
   type RenderSpec,
 } from '@wechart/core';
 
-import { allCounts } from '../axis';
+import { allCounts, axesOf } from '../axis';
+import { alignedAxes, type AxisRange } from '../combo/alignedAxes';
 import { colourFor } from '../colours';
 import { plotEdgesOf } from '../customize';
 import { PROTOTYPE_GRID } from '../layout/grid';
@@ -50,12 +51,36 @@ const AXIS_INDEX: Record<ComboAxis, number> = { left: 0, right: 1 };
  * The value axes: one while every series is on the left; with a series on
  * the right, two, each written in the format of its own first measure. The
  * axis settings (`applyAxes`) format a single axis; two are formatted here.
+ *
+ * Two are aligned (AC-499, `alignedAxes`): their extents and intervals fixed
+ * so the right's ticks fall on the left's gridlines and, where both reach
+ * zero, the zero lines meet; both reach zero while any bars are drawn, the
+ * include zero each axis was given notwithstanding; and the right draws no
+ * gridlines of its own.
  */
 function valueAxes(
   spec: RenderSpec,
-  measures: readonly { measure: string; axis: ComboAxis }[],
+  measures: readonly { measure: string; mark: ComboMark; axis: ComboAxis }[],
+  series: readonly { name: string; values: readonly (number | null)[] }[],
 ): EChartsOption['yAxis'] {
   if (!measures.some((one) => one.axis === 'right')) return { type: 'value' };
+  const axes = axesOf(spec);
+  const bars = measures.some((one) => one.mark === 'bar');
+  const rangeOf = (side: ComboAxis): AxisRange => {
+    const on = new Set(measures.filter((one) => one.axis === side).map((one) => one.measure));
+    const values = series
+      .filter((one) => on.has(one.name))
+      .flatMap((one) => one.values.filter((value): value is number => value !== null));
+    const settings = side === 'left' ? axes.y : axes.right;
+    return {
+      min: values.length === 0 ? 0 : Math.min(...values),
+      max: values.length === 0 ? 0 : Math.max(...values),
+      includeZero: bars || settings?.includeZero !== false,
+      wholeNumbers: allCounts(spec, [...on]),
+    };
+  };
+  const aligned = alignedAxes(rangeOf('left'), rangeOf('right'));
+
   return (['left', 'right'] as const).map((side) => {
     const on = measures.filter((one) => one.axis === side).map((one) => one.measure);
     const [first] = on;
@@ -63,8 +88,8 @@ function valueAxes(
     return {
       type: 'value',
       position: side,
-      // Whole-number ticks for an axis of counts alone (T683).
-      ...(allCounts(spec, on) ? { minInterval: 1 } : {}),
+      ...aligned[side],
+      ...(side === 'right' ? { splitLine: { show: false } } : {}),
       ...(write === undefined
         ? {}
         : {
@@ -120,7 +145,7 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
     // The grid its bars' widths are estimated against (T254).
     grid: { ...PROTOTYPE_GRID },
     xAxis: { type: 'category', data: categories },
-    yAxis: valueAxes(spec, split ? [] : resolved),
+    yAxis: valueAxes(spec, split ? [] : resolved, series),
     series: series.map((one, index) => {
       const colour = colourFor(spec, one.name, index);
       const { mark, axis } = drawAs(one.name);
