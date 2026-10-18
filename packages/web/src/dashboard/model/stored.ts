@@ -1,5 +1,13 @@
+import { textDocumentFromMarkdown } from '@wechart/core';
+
 import { withoutDrafts } from '../edit/chartDrafts';
-import { DEFAULT_SETTINGS, type DashboardDocument } from './document';
+import {
+  DEFAULT_SETTINGS,
+  isSection,
+  isTabGroup,
+  type DashboardDocument,
+  type Element_,
+} from './document';
 
 /**
  * A dashboard as the API stores it, and the document it is read as. Here
@@ -74,9 +82,38 @@ export function dashboardOf(stored: StoredDocument): DashboardDocument {
     title: typeof body.title === 'string' ? body.title : 'Dashboard',
     // At least one page: with none, there is nowhere for anything added to
     // go — a new dashboard (created with `pages: []`) took no tile at all.
-    pages: body.pages !== undefined && body.pages.length > 0 ? body.pages : [FIRST_PAGE],
+    pages:
+      body.pages !== undefined && body.pages.length > 0
+        ? body.pages.map((page) => ({ ...page, items: page.items.map(readAsText) }))
+        : [FIRST_PAGE],
     settings: body.settings ?? DEFAULT_SETTINGS,
   });
+}
+
+/**
+ * A markdown tile saved before R80 as the Text tile it now is (T875, AC-512;
+ * rule 127): its text converted once, by T869's reading of the markdown
+ * subset the tile drew, into the Text tile's document, and its markdown
+ * dropped — so the next save writes the document, and no later open reads
+ * markdown again. Everything else on the tile, its size and markings
+ * included, comes through as it was. Sections and tab groups are read into.
+ */
+export function readAsText(element: Element_): Element_ {
+  if (isSection(element)) return { ...element, items: element.items.map(readAsText) };
+  if (isTabGroup(element))
+    return {
+      ...element,
+      tabs: element.tabs.map((tab) => ({ ...tab, items: tab.items.map(readAsText) })),
+    };
+  if (element.kind !== 'markdown') return element;
+  const { text, ...rest } = element;
+  // A stored body is checked, not trusted: text that isn't text reads as none.
+  const markdown: unknown = text;
+  return {
+    ...rest,
+    kind: 'text',
+    document: textDocumentFromMarkdown(typeof markdown === 'string' ? markdown : ''),
+  };
 }
 
 /** The page a dashboard with none opens with, empty; saved with it once anything is added. */

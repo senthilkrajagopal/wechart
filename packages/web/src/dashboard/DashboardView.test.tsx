@@ -314,7 +314,8 @@ describe('moving a tile without dragging it (AC-056)', () => {
 
     // And it is named for what it is, not for its id.
     // As the Outline names it (AC-209): its kind, then its text.
-    expect(grip.getAttribute('aria-label')).toBe('Move Markdown: Notes for the quarter');
+    // A markdown tile reads as the Text tile it now is (T875).
+    expect(grip.getAttribute('aria-label')).toBe('Move Text: Notes for the quarter');
   });
 
   it('acts on a key only when the tile itself has focus', async () => {

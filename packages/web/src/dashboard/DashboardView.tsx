@@ -44,6 +44,7 @@ import {
   CHART_TYPE_NAMES,
   withMemberLabels,
   withoutCalculations,
+  TEXT_ELEMENT_LIMIT,
 } from '@wechart/core';
 import {
   useCallback,
@@ -109,11 +110,17 @@ import { SettingsPage, type SettingsSection } from './settings/SettingsPage';
 import { createDetailsTile } from './tiles/createDetails';
 import { placeInGrammar } from './model/grammar';
 import { insertElement, insertionPoint, newElement } from './model/insert';
+import { readAsText } from './model/stored';
 import { activeFilters, withFilters, withLimit, type ActiveFilter } from '../filters/apply';
 import { GeneratedSql } from '../workspaces/security/GeneratedSql';
 import { ViewQuery } from './ViewQuery';
-import { Markdown, type TokenRender } from '../tiles/Markdown';
-import { emptyTextDocument, isEmptyTextDocument, tokenOfElement } from '../tiles/text/documents';
+import {
+  emptyTextDocument,
+  isEmptyTextDocument,
+  tokenOfElement,
+  type TokenRender,
+} from '../tiles/text/documents';
+import { elementCountOf, whyTextUnsaveable } from '../tiles/text/elementLimit';
 import { TextTile } from '../tiles/text/TextTile';
 import { MarkingToken, MeasureToken, UnknownMarkingToken } from './tiles/LiveToken';
 import { measureQueryOf } from './tiles/TextTokens';
@@ -502,10 +509,11 @@ function TileMissing() {
  * row the grip sits at the start of, so the grip never lies on the content
  * (T253's review, finding 7). View mode has none: the content is the tile.
  */
-function KindHead({ kind }: { kind: string }) {
+function KindHead({ kind, children }: { kind: string; children?: ReactNode }) {
   return (
     <div className="tile-head tile-head--kind">
       <span className="tile-head__kind">{kind}</span>
+      {children}
     </div>
   );
 }
@@ -830,26 +838,37 @@ function TileBody({
         />
       );
     case 'markdown':
-      // Its subset of markdown, as elements — never as HTML (AC-208).
-      return (
-        <>
-          {editing ? <KindHead kind="Markdown" /> : null}
-          {/* Its tokens as live values: the markings and measures (T389, AC-116). */}
-          <Markdown text={tile.text ?? ''} tokens={tokens} />
-        </>
-      );
-    case 'text':
+    case 'text': {
       // The Text tile (F45): its document through the static renderer, never
       // as HTML (AC-208, AC-513); empty, a placeholder in edit mode and
-      // nothing in view mode (design 21 G6).
+      // nothing in view mode (design 21 G6). A markdown tile is read as the
+      // Text tile it now is (T875, AC-512): `dashboardOf` converts each one
+      // on open, so this reads only one that never went through it.
+      const document = (tile.kind === 'text' ? tile : (readAsText(tile) as Tile)).document;
+      const count = elementCountOf(document);
       return (
         <>
-          {editing ? <KindHead kind="Text" /> : null}
-          {editing && isEmptyTextDocument(tile.document) ? (
+          {editing ? (
+            <KindHead kind="Text">
+              {count > 0 ? (
+                // Over the limit, a converted tile says so (decision T875-1).
+                <span
+                  className="text-tile__count"
+                  data-testid="text-element-count"
+                  data-state={count > TEXT_ELEMENT_LIMIT ? 'warning' : 'normal'}
+                >
+                  {`${String(count)} / ${String(TEXT_ELEMENT_LIMIT)} elements`}
+                </span>
+              ) : null}
+            </KindHead>
+          ) : null}
+          {editing && isEmptyTextDocument(document) ? (
             <p className="text-tile text-tile--empty">Type, or press / to insert a live value</p>
           ) : (
             <TextTile
-              document={tile.document ?? emptyTextDocument()}
+              document={document ?? emptyTextDocument()}
+              // Its Value and Marking elements as the markdown tile's tokens
+              // were drawn: the markings and measures (T389, AC-116).
               renderElement={(node, key) => {
                 const token = tokenOfElement(node);
                 return token === undefined ? null : tokens?.(token, key);
@@ -858,6 +877,7 @@ function TileBody({
           )}
         </>
       );
+    }
     case 'header':
       return <h3 className="dashboard-heading">{tile.text}</h3>;
     case 'divider':
@@ -5485,7 +5505,11 @@ export function DashboardView({
          * on the tile — AC-034's failing state, reached through Save. See
          * `whyUnsaveable` for the wording and why it names Undo, not Discard.
          */
-        saveBlocked={(shown) => whyUnsaveable(shown, dashboardId)}
+        saveBlocked={(shown) =>
+          // A Text tile over its 10 elements, as a converted markdown tile
+          // may be, is held too (decision T875-1).
+          whyUnsaveable(shown, dashboardId) ?? whyTextUnsaveable(shown)
+        }
         // A shared one is edited in a copy, never in place (AC-278).
         readOnly={preview !== undefined || readOnly || narrow || editsElsewhere}
         subtitle={place?.line}

@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { Markdown } from '../../tiles/Markdown';
+import { textDocumentFromMarkdown } from '@wechart/core';
+
+import { TextTile } from '../../tiles/text/TextTile';
 import { elementAt, type DashboardDocument, type Tile } from '../model/document';
 import { TileProperties } from './TileProperties';
 
@@ -50,7 +52,8 @@ function Editing() {
         }}
       />
       <div data-testid="tile">
-        <Markdown text={tile.text ?? ''} />
+        {/* Drawn as the dashboard now draws a markdown tile: a Text tile (T875). */}
+        <TextTile document={textDocumentFromMarkdown(tile.text ?? '')} />
       </div>
     </>
   );

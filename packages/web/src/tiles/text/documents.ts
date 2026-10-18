@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import {
   elementsOf,
   TEXT_DOCUMENT_VERSION,
@@ -5,6 +7,12 @@ import {
   type TextNode,
   type TextToken,
 } from '@wechart/core';
+
+/**
+ * Draws a token's live value in place (T389, AC-116): a dashboard's markings
+ * and measures. A Text tile's Value and Marking elements are drawn through it.
+ */
+export type TokenRender = (token: TextToken, key: string) => ReactNode;
 
 /**
  * A new Text tile's document: one empty paragraph, where the cursor goes

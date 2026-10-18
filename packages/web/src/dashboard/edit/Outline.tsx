@@ -1,5 +1,5 @@
-import { firstReadingOf } from '../../tiles/Markdown';
 import { firstReadingOfDocument, isEmptyTextDocument } from '../../tiles/text/documents';
+import { readAsText } from '../model/stored';
 import { KIND_ICON } from './kindIcon';
 import { elementAt, placeOf, type DashboardDocument, type Element_ } from '../model/document';
 
@@ -32,7 +32,6 @@ export interface OutlineProps {
 const KIND_LABEL: Record<string, string> = {
   chart: 'Chart',
   text: 'Text',
-  markdown: 'Markdown',
   header: 'Header',
   divider: 'Divider',
   image: 'Image',
@@ -47,6 +46,8 @@ export function outlineNameOf(
   element: Element_,
   chartTitleOf: OutlineProps['chartTitleOf'],
 ): string {
+  // A markdown tile is the Text tile it now is (T875, AC-512).
+  if (element.kind === 'markdown') return outlineNameOf(readAsText(element), chartTitleOf);
   const kind = KIND_LABEL[element.kind] ?? element.kind;
   if (element.kind === 'text') {
     // By its first line; "Empty text" only for a tile holding nothing at
@@ -64,14 +65,10 @@ export function outlineNameOf(
         ? chartTitleOf(element.chartId)
         : element.kind === 'image'
           ? element.alt
-          : element.kind === 'markdown'
-            ? // Its first line as the tile reads it, by the rules that draw it
-              // (T247, recheck-dashboard N9; its review).
-              firstReadingOf(element.text ?? '')
-            : element.text;
+          : element.text;
   const trimmed = own?.trim() ?? '';
   if (trimmed === '') return kind;
-  // A long markdown paragraph is not a name; its opening words are enough.
+  // A long text is not a name; its opening words are enough.
   return `${kind}: ${trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed}`;
 }
 

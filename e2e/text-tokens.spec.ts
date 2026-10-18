@@ -110,16 +110,18 @@ test('a text tile’s tokens show the marking and the measure over what it marks
   const { id, title } = await tokenDashboard(request);
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
-  const text = page.locator('[data-tile="tile-text"] .markdown');
+  // The markdown tile, read as the Text tile it now is (T875, AC-512).
+  const text = page.locator('[data-tile="tile-text"] .text-tile');
   const lines = text.locator('p');
 
   // Nothing marked: a count of none, and the measure over all data.
   await expect(lines.nth(0)).toHaveText('Marked: 0');
   await expect(lines.nth(1)).toHaveText('Which: nothing marked');
   await expect(lines.nth(2)).toHaveText('Orders: 240 of 240');
-  // A code span, and braces that are no token, stay the text they are.
+  // A code span, and braces that are no token, stay the text they are: the
+  // Text tile has no code mark, so the span keeps its backticks (T869-1).
   await expect(lines.nth(3)).toHaveText(
-    'Kept as it is: {{measure:orders.count}} and {{not a token}}',
+    'Kept as it is: `{{measure:orders.count}}` and {{not a token}}',
   );
 
   await clickBar(page, 'shipped');
@@ -128,8 +130,11 @@ test('a text tile’s tokens show the marking and the measure over what it marks
   await expect(lines.nth(0)).toHaveText('Marked: 1');
   await expect(lines.nth(1)).toHaveText('Which: Orders Status: shipped');
   await expect(lines.nth(2)).toHaveText('Orders: 80 of 240');
-  // Braces left only where the text asked for them: in its code span.
-  await expect(text.locator('code')).toHaveText('{{measure:orders.count}}');
+  // Braces left only where the text asked for them: in its code span, which
+  // marking leaves as it was.
+  await expect(lines.nth(3)).toHaveText(
+    'Kept as it is: `{{measure:orders.count}}` and {{not a token}}',
+  );
 
   // Under the dashboard's filters, as its tiles are (T389's review): Filter
   // to marked clears the marking, and every tile — and every token — shows

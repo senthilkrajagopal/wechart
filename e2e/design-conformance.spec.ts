@@ -2033,12 +2033,14 @@ test.describe('T247: the tab group, the Header, Markdown and the section band', 
     });
   });
 
-  test('Markdown: headings sized by their marks and levelled in the tile, the shallowest at h3', async ({
+  test('Text: a markdown tile’s headings levelled in the tile, the shallowest at h3, each in its style', async ({
     page,
   }) => {
-    // "#" at text-xl, "###" at text-md; the shallowest a tile has is h3 and
-    // the next one down h4, so the outline agrees with what is drawn (T247's
-    // review: "#" and "##" were both h3 at different sizes).
+    // Since T875 a markdown tile is a Text tile (AC-512): its headings keep
+    // their places by rank — the shallowest h3, the next h4, so the outline
+    // agrees with what is drawn (T247's review) — and each is drawn in its
+    // block style, Heading large text-xl, medium text-lg (decision T869-1:
+    // sizes follow the three styles, not the marks' count).
     const levels = element(page, 'el-levels');
     expect(
       await style(
@@ -2053,28 +2055,30 @@ test.describe('T247: the tab group, the Header, Markdown and the section band', 
         'font-size',
         'line-height',
       ),
-    ).toEqual({ 'font-size': '16px', 'line-height': '22px' });
+    ).toEqual({ 'font-size': '20px', 'line-height': '26px' });
     await expect(
       element(page, 'el-notes').getByRole('heading', { name: 'Quarter notes', level: 3 }),
     ).toBeVisible();
   });
 
-  test('Markdown: “##” at 20/26 over a 14/22 secondary body, and each tile named by its text', async ({
+  test('Text: a lone “##” is Heading large over a 14/24 secondary body, and each tile named by its text', async ({
     page,
   }) => {
     const notes = element(page, 'el-notes');
-    // .md h2 { 20px/26px 600, text-primary } and .md { 14px/22px, text-secondary } (N6, mismatch 16)
+    // A lone "##" is the tile's shallowest heading: Heading large, text-xl
+    // 24/32 600 in text-primary (decision T869-1); the body text-sm on §7h's
+    // 24 px line in tiles, in the markdown tile's secondary ink (T873-1).
     expect(
       await style(
-        notes.getByRole('heading', { name: 'Quarter notes' }),
+        notes.getByRole('heading', { name: 'Quarter notes', level: 3 }),
         'font-size',
         'line-height',
         'font-weight',
         'color',
       ),
     ).toEqual({
-      'font-size': '20px',
-      'line-height': '26px',
+      'font-size': '24px',
+      'line-height': '32px',
       'font-weight': '600',
       color: await token(page, 'text-primary'),
     });
@@ -2087,15 +2091,15 @@ test.describe('T247: the tab group, the Header, Markdown and the section band', 
       ),
     ).toEqual({
       'font-size': '14px',
-      'line-height': '22px',
+      'line-height': '24px',
       color: await token(page, 'text-secondary'),
     });
     // Named by what it says, not its markup, and one full stop (N9).
     const name = (await notes.getAttribute('aria-label')) ?? '';
-    expect(name).toMatch(/^Markdown: Quarter notes/);
+    expect(name).toMatch(/^Text: Quarter notes/);
     expect(name).not.toContain('#');
     const count = (await element(page, 'el-count').getAttribute('aria-label')) ?? '';
-    expect(count).toMatch(/^Markdown: Count is the number of orders\./);
+    expect(count).toMatch(/^Text: Count is the number of orders\./);
     expect(count).not.toContain('..');
   });
 
@@ -2655,17 +2659,18 @@ test.describe('T253’s review: menus, the grip and the bands', () => {
     }
   });
 
-  test('Markdown and Image take the prototype’s head row while editing, with the grip in it', async ({
+  test('Text and Image take the prototype’s head row while editing, with the grip in it', async ({
     page,
   }) => {
     // Finding 7: dashboard.js:319 and :322 give each a tile-head while
-    // editing (the grip, then "Markdown" or "Image" in xs muted), so the grip
-    // never sits on the content's corner. View mode has no such row.
+    // editing (the grip, then the kind in xs muted), so the grip never sits
+    // on the content's corner. View mode has no such row. The markdown tile
+    // is a Text tile since T875.
     await expect(page.locator('[data-tile="el-notes"]')).toBeVisible();
     await expect(page.locator('[data-tile="el-notes"] .tile-head')).toHaveCount(0);
     await edit(page);
     for (const [id, kind] of [
-      ['el-notes', 'Markdown'],
+      ['el-notes', 'Text'],
       ['el-image', 'Image'],
     ] as const) {
       const tile = page.locator(`[data-tile="${id}"]`);
@@ -2681,7 +2686,7 @@ test.describe('T253’s review: menus, the grip and the bands', () => {
       expect(middle).toBeGreaterThanOrEqual(row?.y ?? 0);
       expect(middle).toBeLessThanOrEqual((row?.y ?? 0) + (row?.height ?? 0));
       // The content starts below the row.
-      const content = tile.locator(id === 'el-notes' ? '.markdown' : '.image-tile');
+      const content = tile.locator(id === 'el-notes' ? '.text-tile' : '.image-tile');
       expect((await content.boundingBox())?.y).toBeGreaterThanOrEqual(
         (row?.y ?? 0) + (row?.height ?? 0),
       );

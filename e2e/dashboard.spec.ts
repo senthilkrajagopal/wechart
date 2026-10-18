@@ -420,13 +420,14 @@ test('the Outline shows the dashboard as a tree, and a row selects its element',
   // chart's title, its text — and never by an id.
   await expect(outline.getByRole('button')).toHaveText([
     /Chart: Orders by category and status$/,
-    /Markdown: Orders by status, this quarter\.$/,
+    // The seed's markdown tiles, read as Text tiles (T875).
+    /Text: Orders by status, this quarter\.$/,
     /Section: Detail$/,
     /Chart: Orders over time by status$/,
     /Header: Definitions$/,
     /Section: Terms$/,
     /Tab group: Measures, Dimensions$/,
-    /Markdown: Count is the number of orders\.$/,
+    /Text: Count is the number of orders\.$/,
   ]);
   await expect(outline).toContainText('Page: Overview');
   await expect(outline).toContainText('Page: Appendix');
@@ -457,7 +458,7 @@ test('the Outline shows the dashboard as a tree, and a row selects its element',
   await group.getByRole('tab', { name: 'Dimensions' }).click();
   // A row chosen shows that element's Properties (AC-203): back to the Outline.
   await sidebar.getByRole('tab', { name: 'Outline' }).click();
-  await outline.getByRole('button', { name: /Markdown: Count is the number/ }).click();
+  await outline.getByRole('button', { name: /Text: Count is the number/ }).click();
   await expect(group.getByRole('tab', { name: 'Measures' })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -1946,7 +1947,7 @@ test('every tile and its menu are named by what the reader sees, never by an id'
   expect(editing.length).toBeGreaterThan(reading.length - 1);
   for (const name of editing) expect(name).not.toMatch(ids);
   expect(editing.some((name) => name.startsWith('Section: Detail.'))).toBe(true);
-  expect(editing.some((name) => name.startsWith('Markdown: Orders by status, this quarter.'))).toBe(
+  expect(editing.some((name) => name.startsWith('Text: Orders by status, this quarter.'))).toBe(
     true,
   );
   const menus = await page

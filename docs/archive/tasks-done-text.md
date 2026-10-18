@@ -31,3 +31,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/dashboard/model/document.ts` (+ test), `packages/web/src/dashboard/edit/AddPanel.tsx`, `packages/web/src/dashboard/edit/templates.ts` (+ test), `packages/web/src/dashboard/model/insert.ts`, `packages/web/src/dashboard/edit/Outline.tsx`.
   - Failing test: `templates.test.ts`: Add's elements are chart, chart from folders, section, tab group, text, header, divider, image, link and filter, with no markdown; inserting Text after the selection adds a `text` tile with an empty document; `document.test.ts`: `TILE_KINDS` holds `text` and a new dashboard's tiles are never `markdown` (AC-058).
   - Depends on: T873
+
+- [x] T875 (AC-512) A markdown tile shown as a Text tile, converted on open, and stored as a document on the next save
+  - Files: `packages/web/src/dashboard/model/document.ts`, `packages/web/src/dashboard/model/stored.ts` (+ test), `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/Markdown.tsx` (removed with its test, whose cases move to T869's), `e2e/text-tile.spec.ts`.
+  - Failing test: `stored.test.ts`: a stored `markdown` tile reads as a `text` tile whose document equals T869's conversion; saving writes `kind: "text"` and the document; the e2e: a seeded markdown tile with "## Marked share" and two tokens shows the same heading, text and values before and after a save, and the saved body holds no markdown (AC-512); a tile of 12 tokens converts with all 12 live, and in edit mode shows "12 / 10 elements" in the warning state with Save held, "Remove 2 live values to save" (decision T875-1).
+  - Depends on: T869, T874

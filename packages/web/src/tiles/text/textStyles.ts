@@ -39,6 +39,15 @@ export const TEXT_CSS = `
 .text-tile a { color: var(--wc-accent); text-decoration: underline; }
 .text-tile > :first-child { margin-top: 0; }
 .text-tile > :last-child { margin-bottom: 0; }
+/* The tile's element count in edit mode, in its head; past 10, the warning
+   state (decision T875-1). */
+.text-tile__count {
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.text-tile__count[data-state='warning'] { color: var(--wc-status-warning); font-weight: 600; }
 /* An empty tile's placeholder, in edit mode only (design 21 G6). */
 .text-tile--empty { margin: 0; color: var(--wc-text-muted); }
 /* Under its kind head in edit mode, the text fills the rest, as the markdown
