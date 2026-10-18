@@ -338,4 +338,23 @@ describe('a box plot’s whiskers (AC-306)', () => {
     tab();
     expect(screen.queryByRole('radiogroup', { name: 'Whiskers' })).toBeNull();
   });
+
+  /** T990 (AC-591): Distribution sits beside the whiskers, a box plot's alone. */
+  it('offers a box plot its Distribution, its points needing Each point is', () => {
+    boxplotTab();
+    expect(screen.getByRole('heading', { name: 'Distribution' })).toBeTruthy();
+    const points = screen.getByRole('radiogroup', { name: 'Points' });
+    expect(
+      (within(points).getByRole('radio', { name: 'Outliers' }) as HTMLInputElement).checked,
+    ).toBe(true);
+    // Not told Each point is is set, the editor's box plot hasn't one.
+    expect(
+      (within(points).getByRole('radio', { name: 'Beeswarm' }) as HTMLInputElement).disabled,
+    ).toBe(true);
+  });
+
+  it('offers no Distribution to any other chart', () => {
+    tab();
+    expect(screen.queryByRole('heading', { name: 'Distribution' })).toBeNull();
+  });
 });

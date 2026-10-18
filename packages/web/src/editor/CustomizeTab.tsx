@@ -8,6 +8,7 @@ import {
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { AxisPanel } from './AxisPanel';
+import { BoxplotDistribution } from './wells/boxplotDistribution';
 
 /**
  * The chart editor's Customize tab (AC-219; the prototype's customizeTab):
@@ -37,6 +38,8 @@ export interface CustomizeTabProps {
   readonly colourOf: (name: string) => string;
   /** A box plot: its whiskers are a chart option (T399, AC-306). */
   readonly whiskers?: boolean;
+  /** A box plot's Each point is is set: its Distribution's points need it (T990, AC-591). */
+  readonly eachPointIs?: boolean;
 }
 
 const POSITIONS: readonly [LegendPosition, string][] = [
@@ -76,6 +79,7 @@ export function CustomizeTab({
   series,
   colourOf,
   whiskers = false,
+  eachPointIs = false,
 }: CustomizeTabProps) {
   const ids = useId();
   const axes = record(options['axes']) as AxesSettings;
@@ -356,6 +360,9 @@ export function CustomizeTab({
             </label>
           </div>
         </section>
+      ) : null}
+      {whiskers ? (
+        <BoxplotDistribution options={options} onOptions={onOptions} eachPointIs={eachPointIs} />
       ) : null}
     </div>
   );

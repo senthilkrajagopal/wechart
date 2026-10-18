@@ -1233,6 +1233,7 @@ function EditorBody({
                 return DEFAULT_PALETTE[Math.max(0, at) % DEFAULT_PALETTE.length] ?? '#000000';
               }}
               whiskers={shownType === 'boxplot'}
+              eachPointIs={spec.eachPointIs !== undefined}
             />
           )}
         </div>

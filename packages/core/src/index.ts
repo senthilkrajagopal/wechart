@@ -323,4 +323,15 @@ export {
 } from './data-sources/validate';
 export { INFO_V1, isSealedDriver, padV1, secretAadV1 } from './data-sources/aad';
 export { periodOf, periodsOf } from './periods';
+export {
+  BOXPLOT_POINTS,
+  boxplotDistributionOf,
+  DEFAULT_DISTRIBUTION,
+  distributionPatch,
+  drawnDistribution,
+  needsEachPointIs,
+  POINTS_NEED_EACH_POINT_IS,
+  type BoxplotDistribution,
+  type BoxplotPoints,
+} from './chart-types/boxplotDistribution';
 export { sealSecretV1, type XcubeKey } from './data-sources/seal';

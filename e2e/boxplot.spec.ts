@@ -364,3 +364,68 @@ test('a box plot past Cube’s row limit says it was computed from 50,000 of 50,
   await onPage.locator('svg path[fill="#fff"]').first().hover();
   await expect(onPage).toContainText(/n: 16,66[67]/);
 });
+
+/**
+ * T990 / AC-591: THE SYSTEM SHALL offer on a box plot Customize ›
+ * Distribution: Points, one of None, Outliers (the default, as drawn today),
+ * All or Beeswarm, and Violin, on or off; WHILE Each point is is empty, All,
+ * Beeswarm and Violin SHALL be disabled, each with "Points need Each point is:
+ * choose what one point is, such as an Order."
+ * `Fails when: a choice is missing or another is offered; the default isn't
+ * Outliers; or All, Beeswarm or Violin can be chosen without Each point is, or
+ * is disabled without the reason.`
+ *
+ * The real surface: the chart editor's Customize tab on a saved box plot. How
+ * All, Beeswarm and Violin draw is T991's and T992's.
+ */
+test('a box plot’s Distribution offers its points and violin once Each point is is set', async ({
+  page,
+  request,
+}) => {
+  const reason = 'Points need Each point is: choose what one point is, such as an Order.';
+  const id = await boxPlot(request, []);
+  await page.goto(`/explore/charts/${id}/edit`);
+  await expectChartType(page, 'boxplot');
+
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  await expect(page.getByRole('heading', { name: 'Distribution' })).toBeVisible();
+  const points = page.getByRole('radiogroup', { name: 'Points' });
+  await expect(points.getByRole('radio')).toHaveCount(4);
+  const radio = (name: string) => points.getByRole('radio', { name, exact: true });
+  const violin = page.getByRole('checkbox', { name: /^Violin/ });
+  // Outliers by default, as a box plot saved before R81 draws.
+  await expect(radio('Outliers')).toBeChecked();
+  await expect(radio('None')).toBeEnabled();
+
+  // Each point is empty: All, Beeswarm and Violin are disabled, each with why.
+  for (const control of [radio('All'), radio('Beeswarm'), violin]) {
+    await expect(control).toBeDisabled();
+    await expect(control).toHaveAccessibleDescription(reason);
+  }
+  await expect(page.getByText(reason)).toHaveCount(1);
+
+  // Each point an order: every choice is open, with no reason left.
+  await page.getByRole('tab', { name: 'Data' }).click();
+  await wellPicker(page, 'eachPointIs').selectOption('orders.id');
+  await expect(
+    page.getByTestId('well-eachPointIs').getByTestId('in-eachPointIs-orders.id'),
+  ).toBeVisible();
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  for (const control of [radio('All'), radio('Beeswarm'), violin])
+    await expect(control).toBeEnabled();
+  await expect(page.getByText(reason)).toHaveCount(0);
+  await radio('Beeswarm').check();
+  await violin.check();
+
+  // Saved with the chart, and read back as chosen.
+  await page.getByTestId('editor-bar').getByRole('button', { name: 'Save chart' }).click();
+  await expect(page).toHaveURL(new RegExp(`/explore/charts/${id}$`));
+  const stored = (await (await request.get(`${API}/api/documents/chart/${id}`)).json()) as {
+    body: { chart: { options?: Record<string, unknown> } };
+  };
+  expect(stored.body.chart.options?.['distribution']).toEqual({ points: 'beeswarm', violin: true });
+  await page.goto(`/explore/charts/${id}/edit`);
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  await expect(radio('Beeswarm')).toBeChecked();
+  await expect(violin).toBeChecked();
+});
