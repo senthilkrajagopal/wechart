@@ -2061,7 +2061,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [ ] T891 (AC-527) Return Text tiles through MCP as markdown with tokens, and store a Text tile an MCP client writes in markdown as a checked document
   - Files: `packages/api/src/mcp/tools/read.ts`, `packages/api/src/mcp/tools/workspace.ts`, `packages/api/src/mcp/tools/text-tiles.test.ts`.
-  - Failing test: `text-tiles.test.ts`: reading a dashboard returns its Text tile's content as T870's markdown inside the marked data field (AC-443); writing a dashboard with a markdown Text tile stores a document equal to T869's conversion; one holding `<script>` stores it as literal text; one of 11 tokens is refused (AC-527).
+  - Failing test: `text-tiles.test.ts`: reading a dashboard returns its Text tile's content as T870's markdown inside the marked data field (AC-443); writing a dashboard with a markdown Text tile stores a document equal to T869's conversion (`exported`, every element kind's token read back as its element); one holding `<script>` stores it as literal text; one of 11 tokens is refused; re-writing a tile with a Button on "Go to Detail" (two actions), a Change (Lower is better) and a Value (its own filter), read and sent back with its tokens unchanged, keeps every stored setting, matched by kind and source in order, and a new token takes the defaults (AC-527, decision T891-1).
   - Depends on: T870, T871
 
 ### Lane TEXT: controls and dashboard parameters
