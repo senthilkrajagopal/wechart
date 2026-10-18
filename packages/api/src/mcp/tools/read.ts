@@ -4,6 +4,7 @@ import {
   type ToolAnnotations,
 } from '@modelcontextprotocol/server';
 
+import { dataResult, refusal, routeRefusal } from '../result';
 import type { McpCall, McpTool, WebAnswer } from '../server';
 
 /**
@@ -13,7 +14,8 @@ import type { McpCall, McpTool, WebAnswer } from '../server';
  * A folder or item they can't reach reads as not found, as the route says.
  * A data source's definition is the route's, which holds no secret: each
  * stored one is only `{ stored: true }` (AC-298). Every tool needs the read
- * scope. Names and descriptions are fixed text (AC-443).
+ * scope. Names and descriptions are fixed text, and every answer is under
+ * the result's marked field (AC-443, `result.ts`).
  */
 
 const READ_ONLY: ToolAnnotations = {
@@ -66,40 +68,30 @@ const BY_NAME = fromJsonSchema<{ name: string; folderId?: string }>({
   additionalProperties: false,
 });
 
-/** A result whose data is `data`, as text and as structured content. */
-const answered = (data: Record<string, unknown>): CallToolResult => ({
-  content: [{ type: 'text', text: JSON.stringify(data) }],
-  structuredContent: data,
-});
-
 const NOT_THERE = 'There’s no such item, or it isn’t yours to see.';
 
-/** The route's refusal, in its own words, as an error result; a fault of its own throws. */
+/**
+ * The route's refusal, in its own words, under the marked field (T783-2),
+ * or wechart's fixed "no such item"; a fault of its own throws.
+ */
 function refusedBy(answer: WebAnswer): CallToolResult {
   if (answer.status >= 500) throw new Error(`The web route answered ${answer.status}.`);
   const said = (answer.body as { error?: unknown } | null)?.error;
-  return {
-    isError: true,
-    content: [
-      {
-        type: 'text',
-        text: typeof said === 'string' ? said : NOT_THERE,
-      },
-    ],
-  };
+  return typeof said === 'string' ? routeRefusal(said) : refusal(NOT_THERE);
 }
 
 /**
- * Asks `url`, answering with its body under `key`, or its refusal. Where
- * the item is named by `id`, an answer about another one, such as a static
- * route's beside it (`/api/data-sources/sealing-key`), is none (T782's review).
+ * Asks `url`, answering with its body under `key`, in the marked field
+ * (AC-443), or its refusal. Where the item is named by `id`, an answer
+ * about another one, such as a static route's beside it
+ * (`/api/data-sources/sealing-key`), is none (T782's review).
  */
 async function read(call: McpCall, url: string, key: string, id?: string): Promise<CallToolResult> {
   const answer = await call.ask(url);
   if (answer.status !== 200) return refusedBy(answer);
   if (id !== undefined && (answer.body as { id?: unknown } | null)?.id !== id)
-    return refusedBy({ status: 404, body: { error: NOT_THERE } });
-  return answered({ [key]: answer.body });
+    return refusal(NOT_THERE);
+  return dataResult({ [key]: answer.body });
 }
 
 const idOf = (args: unknown) => (args as { id: string }).id;
@@ -121,12 +113,8 @@ async function definitions(
   const defining = files.filter((file) =>
     (file.objects ?? []).some((object) => object.kind === kind && object.name === name),
   );
-  if (defining.length === 0)
-    return refusedBy({
-      status: 404,
-      body: { error: `There’s no such ${kind}, or it isn’t yours to see.` },
-    });
-  return answered({ definitions: defining });
+  if (defining.length === 0) return refusal(`There’s no such ${kind}, or it isn’t yours to see.`);
+  return dataResult({ definitions: defining });
 }
 
 export const READ_TOOLS: readonly McpTool[] = [
@@ -141,7 +129,7 @@ export const READ_TOOLS: readonly McpTool[] = [
       if (roots.status !== 200) return refusedBy(roots);
       const folders = await call.ask('/api/folders');
       if (folders.status !== 200) return refusedBy(folders);
-      return answered({ roots: roots.body, folders: folders.body });
+      return dataResult({ roots: roots.body, folders: folders.body });
     },
   },
   {

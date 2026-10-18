@@ -21,6 +21,7 @@ import { signInStore } from '../../repos/sign-ins';
 import { buildServer } from '../../server';
 import { mcpClient } from '../client.fixture';
 import { forgetTestCounts, testCounter } from '../counter.fixture';
+import { USER_DATA, USER_DATA_NOTICE } from '../result';
 import { mintToken } from '../tokenText';
 
 /**
@@ -258,6 +259,13 @@ async function withClient<T>(token: string, work: (client: Client) => Promise<T>
 const call = (client: Client, name: string, args: Record<string, unknown> = {}) =>
   client.callTool({ name, arguments: args });
 
+/** What a read answered: its marked field, beside the fixed notice (T783, AC-443). */
+function data(result: Awaited<ReturnType<typeof call>>): unknown {
+  const answer = result.structuredContent as Record<string, unknown>;
+  expect(answer['notice']).toBe(USER_DATA_NOTICE);
+  return answer[USER_DATA];
+}
+
 const READS = [
   ['list_folders', {}],
   ['list_folder_items', { folderId: 'root' }],
@@ -273,11 +281,11 @@ describe('reading and exploring through MCP, as the owner (T782, AC-437, AC-432)
     await withClient(tokens.read!, async (client) => {
       const listed = await call(client, 'list_folders');
       expect(listed.isError ?? false).toBe(false);
-      expect(listed.structuredContent).toEqual({
+      expect(data(listed)).toEqual({
         roots: (await web('/api/folder-roots')).body,
         folders: (await web('/api/folders')).body,
       });
-      const folderIds = (listed.structuredContent as { folders: { id: string }[] }).folders.map(
+      const folderIds = (data(listed) as { folders: { id: string }[] }).folders.map(
         (folder) => folder.id,
       );
       expect(folderIds).toContain(at.reached.folder);
@@ -285,12 +293,10 @@ describe('reading and exploring through MCP, as the owner (T782, AC-437, AC-432)
       expect(folderIds).not.toContain(workspaceIdOf(OTHER));
 
       const items = await call(client, 'list_folder_items', { folderId: at.reached.folder });
-      expect(items.structuredContent).toEqual({
+      expect(data(items)).toEqual({
         items: (await web(`/api/folders/${at.reached.folder}/contents`)).body,
       });
-      const ids = (items.structuredContent as { items: { id: string }[] }).items.map(
-        (item) => item.id,
-      );
+      const ids = (data(items) as { items: { id: string }[] }).items.map((item) => item.id);
       expect(ids).toEqual(expect.arrayContaining([at.reached.dashboard, at.reached.chart]));
 
       for (const folderId of [at.hidden.folder, workspaceIdOf(OTHER)]) {
@@ -305,12 +311,10 @@ describe('reading and exploring through MCP, as the owner (T782, AC-437, AC-432)
   it('reads a dashboard’s, chart’s, cube’s, view’s and data source’s definition as the web app’s routes give them', async () => {
     await withClient(tokens.read!, async (client) => {
       const reached = at.reached;
-      expect(
-        (await call(client, 'read_dashboard', { id: reached.dashboard })).structuredContent,
-      ).toEqual({
+      expect(data(await call(client, 'read_dashboard', { id: reached.dashboard }))).toEqual({
         dashboard: (await web(`/api/documents/dashboard/${reached.dashboard}`)).body,
       });
-      expect((await call(client, 'read_chart', { id: reached.chart })).structuredContent).toEqual({
+      expect(data(await call(client, 'read_chart', { id: reached.chart }))).toEqual({
         chart: (await web(`/api/documents/chart/${reached.chart}`)).body,
       });
       const files = (
@@ -323,14 +327,14 @@ describe('reading and exploring through MCP, as the owner (T782, AC-437, AC-432)
           file.objects.some((each) => each.kind === kind && each.name === name),
         );
       expect(defining('cube', reached.cube)).toHaveLength(1);
-      expect((await call(client, 'read_cube', { name: reached.cube })).structuredContent).toEqual({
+      expect(data(await call(client, 'read_cube', { name: reached.cube }))).toEqual({
         definitions: defining('cube', reached.cube),
       });
-      expect((await call(client, 'read_view', { name: reached.view })).structuredContent).toEqual({
+      expect(data(await call(client, 'read_view', { name: reached.view }))).toEqual({
         definitions: defining('view', reached.view),
       });
       const source = await call(client, 'read_data_source', { id: reached.source });
-      expect(source.structuredContent).toEqual({
+      expect(data(source)).toEqual({
         dataSource: (await web(`/api/data-sources/${reached.source}`)).body,
       });
     });

@@ -12,6 +12,7 @@ import { Forbidden, Unauthenticated, type WechartUser } from '../auth/user';
 import type { TokenScope } from '../repos/access-tokens';
 import type { AuditStore } from '../repos/audit';
 import type { McpAuth } from './auth';
+import { refusal } from './result';
 
 /**
  * The server's instructions: fixed text, holding nothing a user wrote
@@ -80,11 +81,6 @@ export interface McpServices {
   /** Asks the web app's route at `url` as `user` (T782; the plugin's, by `inject`). */
   readonly ask: (user: WechartUser, url: string) => Promise<WebAnswer>;
 }
-
-const refusal = (text: string): CallToolResult => ({
-  isError: true,
-  content: [{ type: 'text', text }],
-});
 
 /** What doesn't fit the tool's schema in `args`, by its issues' messages; none where all fits. */
 async function unfitIn(tool: McpTool, args: unknown): Promise<string | undefined> {
