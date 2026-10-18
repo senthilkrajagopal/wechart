@@ -27,7 +27,7 @@ import { holdTabs, releaseTabs, tabsStoreFor } from './liveTabs';
 import { QueryTab, type Insertion, type RunHold, type RunOnOpen } from './QueryTab';
 import { SchemaTree } from './SchemaTree';
 import { runState, type RunState } from './runState';
-import { SavedList } from './SavedList';
+import { SavedList, type SavedQuery } from './SavedList';
 import type { SqlSourceRow } from './sources';
 import type { SqlSource } from './sqlSource';
 import { firstTabs, newTabId, type SqlTab, type TabsAction, type TabsState } from './tabs';
@@ -389,6 +389,20 @@ function Workbench({
    */
   const runsAny =
     sources.data?.some((row) => row.runner !== 'off' || superAdmin) === true;
+  /**
+   * A saved query opened (T813, T814): on its own source where the user
+   * still has it; else none, never named (AC-459), the API saying none where
+   * they may not run SQL on it. A tab already holding it is selected, and
+   * loses its source if the user may no longer run SQL there (T814's review).
+   */
+  const openSaved = (query: SavedQuery) => {
+    const own = query.sourceId;
+    const runs = (id: string) => sources.data?.some((row) => row.id === id && row.runner !== 'off') === true;
+    const has = own !== null && sources.data?.some((row) => row.id === own) === true;
+    const holding = tabs.tabs.find((each) => each.saved?.id === query.id);
+    const lose = !has && holding !== undefined && holding.sourceId !== '' && !runs(holding.sourceId);
+    dispatch({ kind: 'open-saved', query, sourceId: has ? own : '', ...(lose ? { lose: true as const } : {}) });
+  };
   const ids = useId();
   const picker = useRef<HTMLButtonElement>(null);
   const leftRail = useRef<HTMLButtonElement>(null);
@@ -604,11 +618,7 @@ function Workbench({
         <SavedList
           sourceOf={(id) => sources.data?.find((row) => row.id === id)}
           onOpen={(query) => {
-            // On its own source where the user still has it; else none, never
-            // named (AC-459): the API says none where they may not run SQL on it.
-            const own = query.sourceId;
-            const has = own !== null && sources.data?.some((row) => row.id === own) === true;
-            dispatch({ kind: 'open-saved', query, sourceId: has ? own : '' });
+            openSaved(query);
             setOpen(null);
           }}
           onRenamed={(savedId, name) => {

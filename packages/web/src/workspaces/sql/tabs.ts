@@ -113,6 +113,12 @@ export type TabsAction =
         }[];
       };
       readonly sourceId: string;
+      /**
+       * The tab already holding it is on a source the user may no longer
+       * run SQL on: it loses that source as it is selected, never opening
+       * there or naming it (T814's review, AC-459).
+       */
+      readonly lose?: true;
     }
   /** A saved query renamed in the Saved tab: the tabs holding it take the name (T813). */
   | { readonly kind: 'saved-renamed'; readonly savedId: string; readonly name: string }
@@ -250,7 +256,13 @@ export function tabsReducer(
     case 'open-saved': {
       const { query } = action;
       const holding = state.tabs.find((tab) => tab.saved?.id === query.id);
-      if (holding !== undefined) return { ...state, active: holding.id };
+      if (holding !== undefined)
+        return action.lose === true
+          ? {
+              ...change(state, holding, { sourceId: '', sourceLost: true, run: null }),
+              active: holding.id,
+            }
+          : { ...state, active: holding.id };
       const id = makeId();
       const types = query.parameters.filter((each) => each.type !== 'text');
       const opened: SqlTab = {

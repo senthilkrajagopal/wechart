@@ -342,6 +342,31 @@ describe('a saved query opened and renamed (T813, AC-458)', () => {
     expect(own.tabs[1]).not.toHaveProperty('sourceLost');
   });
 
+  it('takes the source from a tab already holding it, once it is lost, rather than selecting it on that source (T814 review)', () => {
+    const start: TabsState = {
+      tabs: [
+        tab({ id: 'a', name: 'Query 1' }),
+        tab({
+          id: 'b',
+          name: 'Top EMEA orders',
+          sourceId: 'emea',
+          sql: 'SELECT 9',
+          saved: { id: 'q-top', name: 'Top EMEA orders', description: '' },
+        }),
+      ],
+      active: 'a',
+    };
+    const opened = tabsReducer(start, { kind: 'open-saved', query: saved, sourceId: '', lose: true }, () => 'c');
+    expect(opened.active).toBe('b');
+    expect(opened.tabs).toHaveLength(2);
+    expect(opened.tabs[1]).toMatchObject({ sourceId: '', sourceLost: true, sql: 'SELECT 9', run: null });
+    // Without `lose` (the tab is on a source the user still runs SQL on), it is only selected.
+    expect(tabsReducer(start, { kind: 'open-saved', query: saved, sourceId: '' }, () => 'c')).toEqual({
+      ...start,
+      active: 'b',
+    });
+  });
+
   it('selects the tab already holding it rather than opening another', () => {
     const start: TabsState = {
       tabs: [
