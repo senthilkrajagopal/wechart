@@ -1,4 +1,4 @@
-import { PARALLEL_LINE_CAP, parallelLinesOf } from '@wechart/charts';
+import { parallelLinesOf } from '@wechart/charts';
 import { tooFewMeasures, type RenderSpec } from '@wechart/core';
 
 import { StateLine } from '../shell/StatusIcon';
@@ -54,7 +54,7 @@ export function ParallelNotes({
       {cut ? (
         <div className="tile-notes parallel-cut" data-testid="parallel-cut">
           <StateLine kind="warn">
-            Showing {PARALLEL_LINE_CAP.toLocaleString('en-US')} of {members.toLocaleString('en-US')}{' '}
+            Showing {drawn.toLocaleString('en-US')} of {members.toLocaleString('en-US')}{' '}
             {membersWord(titleOf(spec, lineBy))}, by {titleOf(spec, axes[0] ?? '')}. Filter, or open
             the table.
           </StateLine>

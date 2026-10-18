@@ -85,24 +85,35 @@ export function parallelLinesOf(spec: RenderSpec): ParallelLines {
   if (lineBy === undefined || axes.length < MIN_PARALLEL_AXES) {
     return { lineBy, colour, axes, scale, rows: [], members, drawn: 0 };
   }
-  if (members <= PARALLEL_LINE_CAP) {
+  // Each row is a line: one per member, or one per member and Colour where
+  // Colour splits a member.
+  if (spec.rows.length <= PARALLEL_LINE_CAP) {
     return { lineBy, colour, axes, scale, rows: spec.rows, members, drawn: members };
   }
 
-  // The first 1,000 members by the first measure, largest first; a member
-  // split by Colour across rows keeps all its rows.
+  // The members with the largest first measure, each with all its lines,
+  // while they come to at most 1,000 lines (the first 1,000 members where
+  // each is one line).
   const [first] = axes;
+  const memberOf = (row: Row) => String(row[lineBy] ?? '');
+  const linesOf = new Map<string, number>();
+  for (const row of spec.rows) linesOf.set(memberOf(row), (linesOf.get(memberOf(row)) ?? 0) + 1);
   const ranked = [...spec.rows].sort(
     (a, b) =>
       (numberOf(b[first ?? '']) ?? Number.NEGATIVE_INFINITY) -
       (numberOf(a[first ?? '']) ?? Number.NEGATIVE_INFINITY),
   );
   const kept = new Set<string>();
+  let lines = 0;
   for (const row of ranked) {
-    if (kept.size === PARALLEL_LINE_CAP) break;
-    kept.add(String(row[lineBy] ?? ''));
+    const member = memberOf(row);
+    if (kept.has(member)) continue;
+    const more = linesOf.get(member) ?? 1;
+    if (lines + more > PARALLEL_LINE_CAP) break;
+    kept.add(member);
+    lines += more;
   }
-  const rows = spec.rows.filter((row) => kept.has(String(row[lineBy] ?? '')));
+  const rows = spec.rows.filter((row) => kept.has(memberOf(row)));
   return { lineBy, colour, axes, scale, rows, members, drawn: kept.size };
 }
 
@@ -118,11 +129,12 @@ function extentOf(values: readonly (number | null)[]): [number, number] {
 export function parallelOption(spec: RenderSpec): EChartsOption {
   if (!isParallelType(spec.chartType))
     throw new Error(`${spec.chartType} is not parallel coordinates`);
-  const { lineBy, colour, axes, scale, rows, drawn } = parallelLinesOf(spec);
+  const { lineBy, colour, axes, scale, rows } = parallelLinesOf(spec);
 
   const valuesOf = (member: string) => rows.map((row) => numberOf(row[member]));
   const shared = extentOf(axes.flatMap(valuesOf));
-  const opacity = drawn > FADED_PAST ? FADED_OPACITY : 1;
+  // By the lines drawn, a row each (T982's review).
+  const opacity = rows.length > FADED_PAST ? FADED_OPACITY : 1;
 
   const parallelAxis = axes.map((member, dim) => {
     const [min, max] = scale === 'shared' ? shared : extentOf(valuesOf(member));

@@ -446,7 +446,11 @@ export function ChartTile({
         <ParallelNotes
           spec={spec}
           onFilter={onFilter}
-          {...(canSwitch && tableToggle ? { onTable: () => setAsTable(true) } : {})}
+          // Wherever the tile has a table view: its head's button, or a
+          // dashboard's "View as table" (T982's review).
+          {...(canSwitch && (tableToggle || onTableViewChange !== undefined)
+            ? { onTable: () => setAsTable(true) }
+            : {})}
         />
       ) : null}
       {foot}

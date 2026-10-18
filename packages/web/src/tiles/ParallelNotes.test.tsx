@@ -68,6 +68,23 @@ describe('parallel coordinates’ notes (T982, AC-598)', () => {
     expect(onTable).toHaveBeenCalledTimes(1);
   });
 
+  it('says how many members are drawn where Colour splits them into more lines (T982 review)', () => {
+    const rows = rowsOf(600).flatMap((row) => [
+      { ...row, 'products.channel': 'Web' },
+      { ...row, 'products.channel': 'Retail' },
+    ]);
+    render(
+      <ParallelNotes
+        spec={spec(rows, {
+          encoding: { x: ['products.name'], y: AXES, color: ['products.channel'] },
+        })}
+      />,
+    );
+    expect(screen.getByTestId('parallel-cut').querySelector('span')?.textContent).toBe(
+      'Showing 500 of 600 products, by Revenue. Filter, or open the table.',
+    );
+  });
+
   it('says nothing of a cut up to 1,000 members', () => {
     render(<ParallelNotes spec={spec(rowsOf(1000))} />);
     expect(screen.queryByTestId('parallel-cut')).toBeNull();
@@ -106,5 +123,21 @@ describe('a parallel-coordinates tile (T982, AC-598)', () => {
     expect(screen.queryByRole('button', { name: 'Filter' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Table' }));
     expect(screen.getByTestId('toggle-table-view').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('on a dashboard, with no Table view button in the head, its Table still opens the tile’s table view (T982 review)', () => {
+    const onTableViewChange = vi.fn();
+    render(
+      <ChartTile
+        title="Products"
+        spec={spec(rowsOf(1001))}
+        tableToggle={false}
+        tableView={false}
+        onTableViewChange={onTableViewChange}
+      />,
+    );
+    expect(screen.queryByTestId('toggle-table-view')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Table' }));
+    expect(onTableViewChange).toHaveBeenCalledWith(true);
   });
 });

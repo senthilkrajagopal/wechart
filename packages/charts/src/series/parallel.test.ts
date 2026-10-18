@@ -211,6 +211,26 @@ describe('parallel coordinates’ lines (T982, AC-598)', () => {
     expect(axesOf(option)[0]!.min).toBe(1000 + 3210 * 10);
   });
 
+  it('counts lines, not members, where Colour splits a member: never more than 1,000, faded past 50 (T982 review)', () => {
+    // 30 members, each in two channels: 60 lines.
+    const split = (n: number) =>
+      rowsOf(n).flatMap((row) => [
+        { ...row, 'products.channel': 'Web' },
+        { ...row, 'products.channel': 'Retail' },
+      ]);
+    const coloured = (rows: RenderSpec['rows']) =>
+      spec(rows, { encoding: { x: ['products.name'], y: AXES, color: ['products.channel'] } });
+    const sixty = parallelOption(coloured(split(30)));
+    expect(lineCount(sixty)).toBe(60);
+    for (const one of seriesOf(sixty)) expect(one.lineStyle.opacity).toBe(0.6);
+
+    // 600 members in two channels: 1,200 lines, cut to the 500 members with
+    // the largest first measure, all of whose lines are drawn.
+    const many = coloured(split(600));
+    expect(lineCount(parallelOption(many))).toBe(1000);
+    expect(parallelLinesOf(many)).toMatchObject({ members: 600, drawn: 500 });
+  });
+
   it('draws no line with fewer than 3 measures (AC-597)', () => {
     const two = spec(rowsOf(5), {}, ['products.revenue', 'products.margin']);
     const option = optionFor(two);
