@@ -18,7 +18,7 @@ import { folderAccessStore, ROOT_ACCESS_ID } from '../../repos/folder-access';
 import { mcpPageStore } from '../../repos/mcp-pages';
 import { signInStore } from '../../repos/sign-ins';
 import { buildServer } from '../../server';
-import { mcpClient } from '../client.fixture';
+import { challengesFor, mcpClient, mcpClientSeeing } from '../client.fixture';
 import { forgetTestCounts, testCounter } from '../counter.fixture';
 import { MAX_ROWS } from '../paging';
 import { USER_DATA, USER_DATA_NOTICE } from '../result';
@@ -316,13 +316,20 @@ describe('querying cubes and views through MCP, as the owner (T784, AC-437, AC-4
   });
 
   it('needs the read scope', async () => {
-    await withClient(tokens.unread!, async (client) => {
-      const refused = await client.callTool({
-        name: 'query',
-        arguments: { query: QUERY, for: { kind: 'chart', id: at.reached } },
-      });
-      expect(refused.isError).toBe(true);
-      expect(JSON.stringify(refused.content)).toContain('read scope');
-    });
+    // From T785, 403 `insufficient_scope` before anything runs (AC-433).
+    const before = loads.length;
+    const { client, answers } = await mcpClientSeeing(app, HOST, tokens.unread!);
+    try {
+      await expect(
+        client.callTool({
+          name: 'query',
+          arguments: { query: QUERY, for: { kind: 'chart', id: at.reached } },
+        }),
+      ).rejects.toThrow();
+    } finally {
+      await client.close();
+    }
+    expect(challengesFor(answers.at(-1), 'read')).toBe(true);
+    expect(loads.length).toBe(before);
   });
 });

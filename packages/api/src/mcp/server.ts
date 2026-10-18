@@ -15,6 +15,7 @@ import type { McpAuth } from './auth';
 import type { McpPageStore } from '../repos/mcp-pages';
 import { paged } from './paging';
 import { refusal, routeRefusal } from './result';
+import { scopeChallenge } from './scopes';
 
 /**
  * The server's instructions: fixed text, holding nothing a user wrote
@@ -154,7 +155,8 @@ async function called(
     // Arguments checked here, not by the SDK, so a call that doesn't fit is
     // recorded too (T781's review): refused, saying what doesn't fit.
     const unfit = await unfitIn(tool, args);
-    // Each tool needs its scope (T782, AC-469): without it, nothing runs.
+    // Each tool needs its scope (T782, AC-469): without it, nothing runs. The
+    // SDK's scope challenge answers 403 first (T785); this stays as a guard.
     if (!token.scopes.includes(tool.scope)) {
       result = refusal(
         `This token wasn’t given the ${tool.scope} scope, which ${tool.name} needs.`,
@@ -179,6 +181,18 @@ async function called(
       result = refusal('The tool failed. Nothing more is said here; the server logged it.');
     }
   }
+  await recorded(tool, auth, outcome, services);
+  return result;
+}
+
+/** One MCP call in the audit trail (T781, AC-478): who, the token, the tool, the outcome. */
+async function recorded(
+  tool: McpTool,
+  auth: McpAuth,
+  outcome: McpOutcome,
+  services: McpServices,
+): Promise<void> {
+  const { token, caller } = auth.extra;
   await recordIn(
     services.audit,
     {
@@ -191,7 +205,6 @@ async function called(
     },
     services.log,
   );
-  return result;
 }
 
 /**
@@ -215,6 +228,10 @@ export function mcpHandler(onerror: (error: Error) => void, services: McpService
         const config = {
           description: tool.description,
           ...(tool.annotations === undefined ? {} : { annotations: tool.annotations }),
+          // Without its scope, 403 `insufficient_scope` before it runs, recorded as refused (T785, AC-433).
+          scopeChallenge: scopeChallenge(tool, (refusedAuth) =>
+            recorded(tool, refusedAuth as McpAuth, 'refused', services),
+          ),
         };
         if (tool.inputSchema === undefined)
           server.registerTool(tool.name, config, () => called(tool, undefined, auth, services));

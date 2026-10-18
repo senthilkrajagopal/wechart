@@ -19,7 +19,7 @@ import { folderAccessStore, ROOT_ACCESS_ID } from '../../repos/folder-access';
 import { modelFileStore } from '../../repos/model-files';
 import { signInStore } from '../../repos/sign-ins';
 import { buildServer } from '../../server';
-import { mcpClient } from '../client.fixture';
+import { challengesFor, mcpClient, mcpClientSeeing } from '../client.fixture';
 import { forgetTestCounts, testCounter } from '../counter.fixture';
 import { USER_DATA, USER_DATA_NOTICE } from '../result';
 import { mintToken } from '../tokenText';
@@ -422,15 +422,22 @@ describe('ids that would name another route (T782’s review)', () => {
 });
 
 describe('the read scope (T782, AC-469)', () => {
+  // From T785, 403 `insufficient_scope` before anything runs (AC-433).
   it('refuses every read tool to a token without the read scope, running nothing', async () => {
-    await withClient(tokens.unread!, async (client) => {
+    const { client, answers } = await mcpClientSeeing(app, HOST, tokens.unread!);
+    try {
       for (const [tool, args] of READS) {
-        const refused = await call(client, tool, args);
-        expect(refused.isError, tool).toBe(true);
-        expect(JSON.stringify(refused.content), tool).toContain('read scope');
-        expect(refused.structuredContent, tool).toBeUndefined();
+        await expect(call(client, tool, args), tool).rejects.toThrow();
+        expect(challengesFor(answers.at(-1), 'read'), tool).toBe(true);
+        // Its body the OAuth error, holding no tool result.
+        expect(await answers.at(-1)!.clone().json(), tool).toEqual({
+          error: 'insufficient_scope',
+          error_description: `This token wasn't given the read scope, which ${tool} needs.`,
+        });
       }
-    });
+    } finally {
+      await client.close();
+    }
   });
 });
 

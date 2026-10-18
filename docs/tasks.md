@@ -1624,11 +1624,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T784 (AC-437, AC-475, AC-443) Query cubes and views through MCP as the owner, and page every tool's result past 1,000 rows or 50,000 characters with a cursor
 
-- [ ] T785 (AC-438, AC-433, AC-469, AC-432) Edit in my workspace through MCP: copy a shared dashboard, chart or model into its project folder in the owner's workspace; refuse with 403 `insufficient_scope` without workspace-edit
-  - Lane: MCP
-  - Files: `packages/api/src/mcp/tools/workspace.ts` (+ `workspace.test.ts`), `packages/api/src/mcp/scopes.ts` (+ test; `scopeChallenge`).
-  - Failing test: `workspace.test.ts`: copying a shared dashboard puts it, with its project folder, in the owner's My workspace, as the web app's Edit in my workspace does (`[R48-5]`), and leaves the shared one unchanged (AC-438); a token without workspace-edit gets 403 with `insufficient_scope` and nothing changes (AC-433, AC-469).
-  - Depends on: T783
+- [x] T785 (AC-438, AC-433, AC-469, AC-432) Edit in my workspace through MCP: copy a shared dashboard, chart or model into its project folder in the owner's workspace; refuse with 403 `insufficient_scope` without workspace-edit
 
 - [ ] T786 (AC-438) Create, change and delete dashboards, charts, cubes and views in the owner's workspace through MCP, and nowhere else
   - Lane: MCP

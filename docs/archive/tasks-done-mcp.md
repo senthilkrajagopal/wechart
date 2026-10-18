@@ -380,6 +380,20 @@
     - **Tests changed:** `mcp/transport.test.ts` lists `query` and `next_page` after the read tools.
     - **Unit suite:** all green: api 2,020, web 3,117, core 550, charts 556, recommender 133, ui 47.
 
+- [x] T785 (AC-438, AC-433, AC-469, AC-432) Edit in my workspace through MCP: copy a shared dashboard, chart or model into its project folder in the owner's workspace; refuse with 403 `insufficient_scope` without workspace-edit
+  - Lane: MCP
+  - Files: `packages/api/src/mcp/tools/workspace.ts` (+ `workspace.test.ts`), `packages/api/src/mcp/scopes.ts` (+ test; `scopeChallenge`).
+  - Failing test: `workspace.test.ts`: copying a shared dashboard puts it, with its project folder, in the owner's My workspace, as the web app's Edit in my workspace does (`[R48-5]`), and leaves the shared one unchanged (AC-438); a token without workspace-edit gets 403 with `insufficient_scope` and nothing changes (AC-433, AC-469).
+  - Depends on: T783
+  - **Built 2026-10-18** (lane MCP, batch 5). **AC-433 is ticked.** AC-438 waits on T786, and AC-469 on T787, T788 and the token page (decision T785-3).
+    - **The tool** (`mcp/tools/workspace.ts`, `edit_in_my_workspace`): a dashboard or library chart by `{ kind, id }`, a model file by `{ kind: "model", folderId, path }`, posted to the web app's own `/api/workspace/copies` as the caller, with `timeZone` (UTC unless given) for the project folder's name. The route's answer, `{ kind, id, created, folderId }`, is under the marked field, and its refusal under `userData.reason` (decision T785-2). It needs workspace-edit.
+    - **403 `insufficient_scope`** (`mcp/scopes.ts`): every tool is registered with the SDK's `scopeChallenge`, so a token without the tool's scope is answered 403 with `WWW-Authenticate: Bearer error="insufficient_scope", …, scope="‹scope›"` before the tool runs. The call is recorded as Refused from inside the challenge (decision T785-1, departing from T782-3). How the installed SDK answers it is now `mcp-sdk-installed-notes.md` §12.
+    - **Tests:** `mcp/tools/workspace.test.ts` (3, new), with sign-in on: `writer`'s token copies a shared dashboard; the copy and a project folder made with it are the only new documents in their workspace, the folder directly under it; the shared one is as it was, version included; asked again, their copy opens (`created: false`, same ids). A dashboard in a folder they may only read is refused and nothing is made (AC-432's change half). A token with read alone gets 403, `error="insufficient_scope"` and `scope="workspace-edit"`, nothing is made, and the call is one Refused "MCP call". `mcp/scopes.test.ts` (3, new): a token with the scope passes untold; one without is challenged for that scope alone, in RFC 6750's grammar, and the refusal told first; no token is left to the sign-in gate.
+    - **Tests changed:** `read.test.ts`'s and `query.test.ts`'s scope tests now expect the 403 challenge for `read`, its body the OAuth error. `client.fixture.ts` gains `mcpClientSeeing` (the client with every HTTP answer it was given) and `challengesFor`. `transport.test.ts` lists `edit_in_my_workspace` last.
+    - **Gotcha:** vitest's transform turns `]` in a regex literal into a bare `]`, which closes a character class; the RFC 6750 check in `scopes.test.ts` is a `new RegExp` from a string.
+    - **Seen red:** all three `workspace.test.ts` cases, for "Tool edit_in_my_workspace not found" and "expected 200 to be 403".
+    - **Unit suite:** all green: api 2,026, web 3,117, core 550, charts 556, recommender 133, ui 47.
+
 ## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
 
 - **Asked:** why `GET /api/images/:id` in `access/route-matrix.test.ts` times out at 5 s in most full unit runs.
