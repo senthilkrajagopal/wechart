@@ -713,7 +713,10 @@ test('the sheet is kept as left for the visit only, and stored nowhere', async (
   // A refresh of the tile's data.
   const refresh = status.getByRole('button', { name: 'Refresh By status' });
   await expect(refresh).toBeEnabled();
+  // The tile asked again, and answered (T835's review: not merely clicked).
+  const asked = page.waitForResponse((answer) => answer.url().endsWith('/api/load'));
   await refresh.click();
+  await asked;
   await expect(refresh).toBeEnabled();
   expect(await expanded()).toBe('true');
 
