@@ -433,7 +433,9 @@ function Workbench({
     const paramTypes =
       typed.length === 0 ? undefined : Object.fromEntries(typed.map((each) => [each.name, each.type]));
     const own = run.unavailable === true ? '' : run.cubeStore ? CUBE_STORE_ID : (run.dataSource?.id ?? '');
-    const rowSource = own !== '' && sources.data?.some((row) => row.id === own) === true ? own : '';
+    // One the user may still run SQL on: a row read before its source went off names it still (T818's review).
+    const rowSource =
+      own !== '' && sources.data?.some((row) => row.id === own && row.runner !== 'off') === true ? own : '';
     if (openTab !== undefined && rowSource !== '' && openTab.sourceId === rowSource) {
       setReplaced({
         tabId: openTab.id,

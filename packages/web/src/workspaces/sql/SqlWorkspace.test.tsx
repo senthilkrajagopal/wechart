@@ -1224,6 +1224,44 @@ describe('opening a saved query whose source is no longer available (T814, AC-45
     expect(posts).toEqual([]);
   });
 
+  it('opens a History row on none when its source, still named in a row read before, is now off (T818’s review, AC-381)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+        if (url === '/api/sql/sources') return json([{ ...listed[0]!, id: 'fx', name: 'fx_warehouse', runner: 'off' }]);
+        if (url === '/api/sql/saved') return json({ queries: [] });
+        if (url === '/api/sql-runs')
+          return json({
+            runs: [
+              {
+                id: 'r9',
+                sql: 'SELECT 9 AS stale',
+                dataSource: { id: 'fx', name: 'fx_warehouse', folderPath: [], inWorkspace: false },
+                cubeStore: false,
+                startedAt: '2026-10-18T14:10:00Z',
+                outcome: 'finished',
+                rowCount: 1,
+                durationMs: 5,
+                truncated: null,
+                statement: 'select',
+                parameters: [],
+              },
+            ],
+          });
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+    renderAs(writer);
+    const right = screen.getByRole('complementary', { name: 'Saved and History' });
+    await userEvent.click(within(right).getByRole('button', { name: 'History' }));
+    await userEvent.click(await within(right).findByRole('button', { name: /SELECT 9 AS stale/ }));
+    await vi.waitFor(() => {
+      expect(screen.getAllByRole('tab')).toHaveLength(2);
+    });
+    expect(screen.getAllByRole('tab')[1]!.getAttribute('aria-label')).toMatch(/^From History · \d\d:\d\d, Not run yet$/);
+  });
+
   it('keeps the first visit’s sentence for a tab with no source that wasn’t opened so', async () => {
     vi.stubGlobal(
       'fetch',
