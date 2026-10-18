@@ -2104,7 +2104,8 @@ const CASES: Record<string, Case> = {
     // longer run SQL on names no source (T817, AC-381 as amended 2026-10-17),
     // so whose rows these are is read while each may run there.
     const switches = sqlRunnerSwitches(getDb());
-    for (const place of PLACES) await switches.on(at[place].source, { key: 'super', name: 'Super' });
+    for (const place of PLACES)
+      await switches.on(at[place].source, { key: 'super', name: 'Super' });
     try {
       for (const who of WHO) {
         const answer = await ask(who, { method: 'GET', url: '/api/sql-runs' });
@@ -2154,7 +2155,10 @@ const CASES: Record<string, Case> = {
     const mine = await savedBy('writer', 'reopened');
     for (const who of WHO)
       if (who === 'writer')
-        answered(await ask(who, { method: 'GET', url: `/api/sql/saved/${mine}` }), 'writer reopening theirs');
+        answered(
+          await ask(who, { method: 'GET', url: `/api/sql/saved/${mine}` }),
+          'writer reopening theirs',
+        );
       else
         refused(
           await ask(who, { method: 'GET', url: `/api/sql/saved/${mine}` }),
@@ -2169,7 +2173,10 @@ const CASES: Record<string, Case> = {
         await ask(who, { method: 'PUT', url: `/api/sql/saved/${mine}`, payload }),
         `${who} updating writer's saved query`,
       );
-    answered(await ask('writer', { method: 'PUT', url: `/api/sql/saved/${mine}`, payload }), 'writer updating theirs');
+    answered(
+      await ask('writer', { method: 'PUT', url: `/api/sql/saved/${mine}`, payload }),
+      'writer updating theirs',
+    );
   },
   // The Saved tab (T813, AC-458): each lists their own alone; only the owner deletes one.
   'GET /api/sql/saved': async () => {
@@ -2178,7 +2185,9 @@ const CASES: Record<string, Case> = {
       const answer = await ask(who, { method: 'GET', url: '/api/sql/saved' });
       answered(answer, `${who} listing their saved queries`);
       expect(
-        answer.json<{ queries: { name: string }[] }>().queries.some((each) => each.name === `${MARK} listed`),
+        answer
+          .json<{ queries: { name: string }[] }>()
+          .queries.some((each) => each.name === `${MARK} listed`),
         `${who}'s list holding writer's`,
       ).toBe(who === 'writer');
     }
@@ -2190,7 +2199,10 @@ const CASES: Record<string, Case> = {
         await ask(who, { method: 'DELETE', url: `/api/sql/saved/${mine}` }),
         `${who} deleting writer's saved query`,
       );
-    answered(await ask('writer', { method: 'DELETE', url: `/api/sql/saved/${mine}` }), 'writer deleting theirs');
+    answered(
+      await ask('writer', { method: 'DELETE', url: `/api/sql/saved/${mine}` }),
+      'writer deleting theirs',
+    );
   },
   'POST /api/sql-runs/cancel': async () => {
     for (const who of WHO)
@@ -2830,7 +2842,14 @@ describe('every route, asked as users in and out of each group (T408, AC-268, AC
     ).toEqual([]);
   });
 
-  it.each(Object.keys(CASES))('%s', async (route) => {
-    await CASES[route]!();
-  });
+  // Each case asks its route as every user in and out of each group, so with
+  // several suites sharing the machine one can pass vitest's 5 s default
+  // while doing nothing wrong (every case passes alone; 2026-10-18).
+  it.each(Object.keys(CASES))(
+    '%s',
+    async (route) => {
+      await CASES[route]!();
+    },
+    30_000,
+  );
 });
