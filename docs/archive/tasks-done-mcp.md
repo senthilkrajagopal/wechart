@@ -263,3 +263,11 @@
     - **Not shown here:** the factory gets the caller in `authInfo.extra.caller`. No tool reads it until T782, which should test it, along with the `preParsing` hook.
     - **Tests changed:** `mcp/auth.test.ts`'s requests past the token check are now a 2025 `initialize` with the Streamable HTTP `Accept` header, and expect 200 where they expected the stand-in's 501.
     - **Tests:** `mcp/transport.test.ts` (5, new).
+    - **After the cold review (follow-up commit):** it passed, with no bug found. The stale "answered 501" comment in `plugin.ts` is gone, and `auth.test.ts`'s request is named `initialize`, which is what it is.
+      - **For T782: `reply.hijack()` skips Fastify's `onSend` hooks.** With sign-in on, the workspace-id `aliasOut` hook (`server.ts`, which names `ws:<key>` as `mine` in every JSON answer) doesn't run on `/mcp` replies. Tool results must alias workspace ids themselves, or call the same alias function.
+      - **Left as is:**
+        - The instructions test only pins the text. AC-443 stays open for T782 on, where a user's title must be shown never to reach the instructions or a tool's description.
+        - The handler's `onerror` logs a working-token caller's rejected requests (415, a bad version) at error level.
+    - **Batch run, real Chrome, at d6ffe766:**
+      - **Main:** 825 passed, 4 failed. All four pass when rerun alone, so they are load flakes: a11y-tokens:88, filters:201, model-design:855 and model-schedule:73.
+      - **Security:** 395 passed, none failed.

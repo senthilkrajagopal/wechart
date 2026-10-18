@@ -62,8 +62,7 @@ export function registerMcp(app: FastifyInstance, options: McpOptions): void {
     }
   };
   // One JSON-RPC request per POST (the 2026-07-28 Streamable HTTP transport,
-  // `mcp-typescript-sdk.md`, "Transports and client support"). Until T778
-  // serves it, a request past the token check is answered 501.
+  // `mcp-typescript-sdk.md`, "Transports and client support").
   // The request acts as the token's caller, the web app's user for every
   // check it makes (T777, AC-432). Set in the route's own `preParsing`,
   // which runs after the session's, so no cookie's user can stand in.

@@ -53,7 +53,7 @@ const lastUsed = async (owner: string, id: string) =>
     .find((token) => token.id === id)!.lastUsedAt;
 
 /** A 2025-era client's first request, which `/mcp` answers 200 once past the token check (T778). */
-const tools = {
+const initialize = {
   jsonrpc: '2.0',
   id: 1,
   method: 'initialize',
@@ -92,7 +92,7 @@ describe('the token on /mcp, sign-in off (T776, AC-435, AC-431, AC-430, AC-479)'
       method: 'POST',
       url,
       headers: { host: HOST, ...ACCEPT, ...headers },
-      payload: tools,
+      payload: initialize,
     });
 
   it('answers 401 with a Bearer challenge to a missing, bad, revoked or expired token, running nothing', async () => {
@@ -195,7 +195,7 @@ describe('the token on /mcp, sign-in on (T776, AC-435)', () => {
         method: 'POST',
         url: '/mcp',
         headers: { host: HOST, authorization: `Bearer ${working.text}` },
-        payload: tools,
+        payload: initialize,
       });
       expect(answer.statusCode).toBe(401);
       expect(answer.headers['www-authenticate']).toBe(REFUSED);
@@ -215,7 +215,7 @@ describe('the token on /mcp, sign-in on (T776, AC-435)', () => {
         method: 'POST',
         url: '/mcp',
         headers: { host: HOST, cookie },
-        payload: tools,
+        payload: initialize,
       });
       expect(answer.statusCode).toBe(401);
       expect(answer.headers['www-authenticate']).toBe(MISSING);
@@ -251,7 +251,7 @@ describe('the token on /mcp, sign-in on (T776, AC-435)', () => {
             authorization: `Bearer ${working.text}`,
             ...(origin === undefined ? {} : { origin }),
           },
-          payload: tools,
+          payload: initialize,
         });
         expect(answer.statusCode, String(origin)).toBe(200);
       }
@@ -270,7 +270,7 @@ describe('the token on /mcp, sign-in on (T776, AC-435)', () => {
           method: 'POST',
           url: '/mcp',
           headers: { host: HOST, ...ACCEPT, authorization: `Bearer ${token.text}` },
-          payload: tools,
+          payload: initialize,
         });
       expect((await bearing()).statusCode).toBe(200);
       const cookie = await signIn(app, USERS.super!);
