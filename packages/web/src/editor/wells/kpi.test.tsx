@@ -88,10 +88,13 @@ describe('the KPI’s wells (AC-564)', () => {
       'Metrics',
       'Compare to',
       'Target',
-      'Time',
+      // Design 23 sheet 1's words, so it never reads as the query's Time
+      // well below (T936 follow-up, the coordinator).
+      'Time period and trend',
       'Tile by',
       'Direction',
     ]);
+    expect(labels.filter((label) => label === 'Time')).toHaveLength(1);
   });
 
   it('offers Compare to’s five choices and None, None chosen at first', () => {
@@ -132,7 +135,7 @@ describe('the KPI’s wells (AC-564)', () => {
       'orders.revenue_target',
     );
     await userEvent.selectOptions(
-      screen.getByRole('combobox', { name: 'Time' }),
+      screen.getByRole('combobox', { name: 'Time period and trend' }),
       'orders.ordered_at',
     );
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Time by' }), 'month');
@@ -177,7 +180,7 @@ describe('the KPI’s wells (AC-564)', () => {
   it('shows what is stored after an undo, not the choice last made (T936’s review)', async () => {
     render(<Harness />);
     const compare = screen.getByRole('combobox', { name: 'Compare to' });
-    const time = screen.getByRole('combobox', { name: 'Time' });
+    const time = screen.getByRole('combobox', { name: 'Time period and trend' });
     await userEvent.selectOptions(compare, 'previousPeriod');
     await userEvent.selectOptions(time, 'orders.ordered_at');
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Time by' }), 'month');

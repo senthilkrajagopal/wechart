@@ -33,12 +33,15 @@ type TargetKind = 'none' | 'measure' | 'value';
 function Well({
   id,
   label,
+  aside,
   name,
   highlighted,
   children,
 }: {
   id: string;
   label: string;
+  /** Said after the label, quieter, as the editor's wells say "(group by)". */
+  aside?: string;
   name: string;
   highlighted: boolean;
   children: ReactNode;
@@ -47,6 +50,12 @@ function Well({
     <section className="well-field">
       <h3 id={id} className="well-field__label">
         {label}
+        {aside === undefined ? null : (
+          <>
+            {' '}
+            <span className="well-field__opt">{aside}</span>
+          </>
+        )}
       </h3>
       <div
         className="well well--settings"
@@ -220,7 +229,15 @@ export function KpiWells({ highlight, available, options, onOptions, titleOf }: 
         ) : null}
       </Well>
 
-      <Well id={`${ids}-time`} label="Time" name="kpi-time" highlighted={false}>
+      {/* Design 23 sheet 1's words: "Time · period and trend", so it never
+          reads as the query's own Time well (T936 follow-up). */}
+      <Well
+        id={`${ids}-time`}
+        label="Time"
+        aside="period and trend"
+        name="kpi-time"
+        highlighted={false}
+      >
         <select
           aria-labelledby={`${ids}-time`}
           value={kpi.time?.member ?? timeMember}

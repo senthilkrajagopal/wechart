@@ -42,10 +42,12 @@ test('a KPI offers its five wells after Metrics, keeps what is set through a sav
     'Metrics',
     'Compare to',
     'Target',
-    'Time',
+    'Time period and trend',
     'Tile by',
     'Direction',
   ]);
+  // One "Time" heading: the query's own (T936 follow-up).
+  expect(all.filter((label) => label === 'Time')).toHaveLength(1);
   const compare = page.getByRole('combobox', { name: 'Compare to', exact: true });
   await expect(compare.locator('option')).toHaveText([
     'None',
