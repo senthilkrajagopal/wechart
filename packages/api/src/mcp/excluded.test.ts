@@ -340,20 +340,29 @@ describe('what MCP never offers (T789, AC-440, AC-441)', () => {
       expect(
         await refusedCall(client, 'withdraw_proposal', { proposalId: ids.proposal }),
       ).toContain('Only your own open proposal is withdrawn');
-      // A shared folder's item, changed or deleted, or one made there (AC-441).
-      await refusedCall(client, 'delete_item', { kind: 'dashboard', id: ids.board });
-      await refusedCall(client, 'change_item', {
-        kind: 'dashboard',
-        id: ids.board,
-        body: { ...board!.body, title: `Renamed ${MARK}`, folderId: ids.shared },
-        version: board!.version,
-      });
-      await refusedCall(client, 'create_item', {
-        kind: 'dashboard',
-        title: `Made ${MARK}`,
-        folderId: ids.shared,
-        targetFolderId: ids.shared,
-      });
+      // A shared folder's item, changed or deleted, or one made there (AC-441):
+      // each refused by MCP's own check, which the routes alone wouldn't make
+      // for a Super-Admin (T789's review: by its words, not only as an error).
+      const outside = 'only what is in your My workspace is made, changed or deleted';
+      expect(
+        await refusedCall(client, 'delete_item', { kind: 'dashboard', id: ids.board }),
+      ).toContain(outside);
+      expect(
+        await refusedCall(client, 'change_item', {
+          kind: 'dashboard',
+          id: ids.board,
+          body: { ...board!.body, title: `Renamed ${MARK}`, folderId: ids.shared },
+          version: board!.version,
+        }),
+      ).toContain(outside);
+      expect(
+        await refusedCall(client, 'create_item', {
+          kind: 'dashboard',
+          title: `Made ${MARK}`,
+          folderId: ids.shared,
+          targetFolderId: ids.shared,
+        }),
+      ).toContain(outside);
       // Their own dashboard moved into the shared folder: a move, refused.
       const own = await client.callTool({
         name: 'create_item',
@@ -368,25 +377,33 @@ describe('what MCP never offers (T789, AC-440, AC-441)', () => {
       const made_ = own.structuredContent as { userData: { item: { id: string } } };
       const ownId = made_.userData.item.id;
       const stored = await docs().get('dashboard', ownId);
-      await refusedCall(client, 'change_item', {
-        kind: 'dashboard',
-        id: ownId,
-        body: { ...stored!.body, folderId: ids.shared },
-        version: stored!.version,
-      });
+      expect(
+        await refusedCall(client, 'change_item', {
+          kind: 'dashboard',
+          id: ownId,
+          body: { ...stored!.body, folderId: ids.shared },
+          version: stored!.version,
+        }),
+      ).toContain(outside);
       expect((await docs().get('dashboard', ownId))?.body['folderId']).toBe(ids.superFolder);
-      // A shared folder's model file, saved or deleted there.
-      await refusedCall(client, 'save_model_file', {
-        folderId: ids.shared,
-        path: `cubes/${MARK}.yml`,
-        content: `cubes:\n  - name: ${MARK}\n    sql_table: public.${MARK}\n`,
-      });
-      await refusedCall(client, 'delete_model_file', {
-        folderId: ids.shared,
-        path: `cubes/${MARK}.yml`,
-      });
-      // A data source proposed, to land once approved.
-      await refusedCall(client, 'propose', { kind: 'data-source', id: randomUUID() });
+      // A shared folder's model file, saved or deleted there: refused before its route is asked.
+      expect(
+        await refusedCall(client, 'save_model_file', {
+          folderId: ids.shared,
+          path: `cubes/${MARK}.yml`,
+          content: `cubes:\n  - name: ${MARK}\n    sql_table: public.${MARK}\n`,
+        }),
+      ).toContain(outside);
+      expect(
+        await refusedCall(client, 'delete_model_file', {
+          folderId: ids.shared,
+          path: `cubes/${MARK}.yml`,
+        }),
+      ).toContain(outside);
+      // A data source proposed, to land once approved: not a kind the tool takes.
+      expect(
+        await refusedCall(client, 'propose', { kind: 'data-source', id: randomUUID() }),
+      ).toContain('The arguments don’t fit propose');
     });
     expect(await state()).toEqual(before);
     expect(await docs().get('dashboard', ids.board)).toEqual(board);
