@@ -1,6 +1,6 @@
 import { EditorView } from '@codemirror/view';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -67,7 +67,8 @@ function serve({ cubeStore = false } = {}) {
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      asked.push(url);
+      // Each ask as "METHOD url body", to tell a catalog read from a run (T807).
+      asked.push(`${init?.method ?? 'GET'} ${url}${typeof init?.body === 'string' ? ` ${init.body}` : ''}`);
       const json = (body: unknown, status = 200) => Response.json(body, { status });
       if (url === '/api/sql/sources')
         return json([
@@ -78,6 +79,16 @@ function serve({ cubeStore = false } = {}) {
       if (url === '/api/sql-runs/going') return json({ going: null });
       if (url === '/api/data-sources/emea') return json(page('emea', 'emea_replica'));
       if (url === '/api/data-sources/fx') return json(page('fx', 'fx_warehouse'));
+      if (url.endsWith('/sql') && init?.method === 'POST')
+        return json({
+          outcome: 'finished',
+          columns: [{ name: 'order_id', type: 'int8' }],
+          rows: [[1]],
+          rowCount: 1,
+          truncated: null,
+          durationMs: 4,
+          statement: 'select',
+        });
       if (url === '/api/cube-store')
         return json({ on: true, runs: true, confirmedBy: { name: 'Ada' }, confirmedAt: '2026-10-17T10:00:00Z' });
       const catalog = /^\/api\/data-sources\/(\w+)\/catalog\/(\w+)/.exec(url);
@@ -314,5 +325,85 @@ describe('Find a table, and PK and FK tags (T806, AC-448)', () => {
     expect(within(fk).getByText('FK').getAttribute('title')).toBe('References sales.customers (id)');
     const status = within(leftPane()).getByRole('treeitem', { name: 'status, text' });
     expect(within(status).queryByText(/^(PK|FK)$/)).toBeNull();
+  });
+});
+
+/**
+ * T807 (AC-449): WHEN the user opens a table's ⋯ in the schema browser,
+ * THE SYSTEM SHALL offer Insert name, Insert SELECT and Preview 100 rows.
+ * Insert SELECT writes its SELECT limited to 100 rows at the cursor and runs
+ * nothing; Preview 100 rows opens a new tab holding it and runs it as an
+ * ordinary run. Expanding a schema or table sends only catalog reads.
+ */
+describe('a table’s ⋯ (T807, AC-449)', () => {
+  const SELECT = 'SELECT order_id\nFROM public.orders\nLIMIT 100';
+  async function tableMenu() {
+    const schema = await within(leftPane()).findByRole('treeitem', { name: 'public' });
+    if (schema.getAttribute('aria-expanded') !== 'true') await expand('public');
+    const orders = await within(leftPane()).findByRole('treeitem', { name: 'orders' });
+    await userEvent.click(within(orders).getByRole('button', { name: 'Actions for public.orders' }));
+    return screen.getByRole('menu', { name: 'Actions for public.orders' });
+  }
+  const runs = (asked: readonly string[]) => asked.filter((line) => /^POST \S+\/sql\b/.test(line));
+
+  it('offers Insert name, Insert SELECT and Preview 100 rows; expanding sends only catalog reads', async () => {
+    const asked = serve();
+    open();
+    await choose('emea_replica');
+    const before = asked.length;
+
+    const menu = await tableMenu();
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Insert name',
+      'Insert SELECT',
+      'Preview 100 rows',
+    ]);
+    await userEvent.keyboard('{Escape}');
+    await expand('orders');
+    await within(leftPane()).findByRole('treeitem', { name: 'order_id, int8' });
+    const opening = asked.slice(before);
+    expect(opening.some((line) => line.startsWith('POST /api/data-sources/emea/catalog/columns'))).toBe(true);
+    expect(opening.every((line) => line.includes('/catalog/'))).toBe(true);
+    // The pane's foot says so (design 17 pin 6).
+    expect(
+      within(leftPane()).getByText('Opening a schema or a table reads only its names. Nothing runs until you press Run.'),
+    ).toBeTruthy();
+  });
+
+  it('Insert name and Insert SELECT write at the cursor and run nothing', async () => {
+    const asked = serve();
+    open();
+    await choose('emea_replica');
+
+    await userEvent.click(within(await tableMenu()).getByRole('menuitem', { name: 'Insert name' }));
+    expect(editorText()).toBe('public.orders');
+
+    const view = EditorView.findFromDOM(document.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+    act(() => {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } });
+    });
+    await userEvent.click(within(await tableMenu()).getByRole('menuitem', { name: 'Insert SELECT' }));
+    await waitFor(() => {
+      expect(editorText()).toBe(SELECT);
+    });
+    expect(runs(asked)).toEqual([]);
+  });
+
+  it('Preview 100 rows opens a new tab holding that SELECT and runs it there', async () => {
+    const asked = serve();
+    open();
+    await choose('emea_replica');
+
+    await userEvent.click(within(await tableMenu()).getByRole('menuitem', { name: 'Preview 100 rows' }));
+
+    expect(
+      await screen.findByRole('tab', { name: 'orders, Finished, 1 row, on emea_replica' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /^orders,/ }).getAttribute('aria-selected')).toBe('true');
+    expect(editorText()).toBe(SELECT);
+    expect(runs(asked)).toEqual([`POST /api/data-sources/emea/sql ${JSON.stringify({ sql: SELECT })}`]);
+    // The first tab keeps its own empty text.
+    await userEvent.click(screen.getByRole('tab', { name: /^Query 1/ }));
+    expect(editorText()).toBe('');
   });
 });

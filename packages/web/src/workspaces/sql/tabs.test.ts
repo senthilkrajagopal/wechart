@@ -93,6 +93,29 @@ describe('a tab, bound to one data source (T800, AC-450)', () => {
     expect(added.active).toBe('c');
   });
 
+  // T807 (AC-449): Preview 100 rows opens a new tab holding its SELECT.
+  it('opens a new tab, last, on a given source and holding given SQL, and selects it', () => {
+    const state: TabsState = {
+      tabs: [tab({ id: 'a', name: 'Query 1', sourceId: 'fx' }), tab({ id: 'b', name: 'Query 2' })],
+      active: 'a',
+    };
+
+    const opened = tabsReducer(
+      state,
+      { kind: 'open', sourceId: 'emea', sql: 'SELECT *\nFROM sales.orders\nLIMIT 100', name: 'orders' },
+      () => 'c',
+    );
+
+    expect(opened.tabs.map((each) => each.id)).toEqual(['a', 'b', 'c']);
+    expect(opened.tabs[2]).toMatchObject({
+      name: 'orders',
+      sourceId: 'emea',
+      sql: 'SELECT *\nFROM sales.orders\nLIMIT 100',
+      run: null,
+    });
+    expect(opened.active).toBe('c');
+  });
+
   it('names a new tab one past the highest “Query n”', () => {
     const state: TabsState = {
       tabs: [tab({ id: 'a', name: 'Query 4' }), tab({ id: 'b', name: 'orders check' })],

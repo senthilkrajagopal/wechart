@@ -1746,11 +1746,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
     - **What's left once xcube reports the key:** add the e2e's **FK** check on `orders.customer_id` (its tooltip "References public.customers (id)"), then tick T806 and AC-448. Today xcube's catalog answers `foreignKeys: []` for it, though PostgreSQL shows the key to that login.
     - "Unread" counts a schema never opened, or one with pages still to show (decision T806-1).
 
-- [ ] T807 (AC-449) A table's ⋯: Insert name, Insert SELECT with a 100-row limit in the driver's syntax, and Preview 100 rows as an ordinary run in a new tab; opening a node sends only catalog reads
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/tableMenu.ts` (+ test), `packages/web/src/workspaces/sql/SchemaTree.tsx`, `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: `tableMenu.test.ts`: Insert SELECT writes `SELECT <columns> FROM <schema>.<table>` with `LIMIT 100` on PostgreSQL and MySQL, `TOP 100` on SQL Server and `FETCH FIRST 100 ROWS ONLY` on Oracle, at the cursor, and runs nothing. The e2e: Preview 100 rows opens a new tab holding that SELECT, runs it capped, and leaves an audit event and a History row; expanding a schema and a table sends xcube only catalog reads (AC-449).
-  - Depends on: T805, T802
+- [x] T807 (AC-449) A table's ⋯: Insert name, Insert SELECT with a 100-row limit in the driver's syntax, and Preview 100 rows as an ordinary run in a new tab; opening a node sends only catalog reads
 
 - [ ] T808 (AC-456) Autocomplete the tab's source's schemas, tables and columns as the user types: ↑ ↓ choose, Enter accepts, Esc closes the list only, Tab still leaves the editor
   - Lane: SQL

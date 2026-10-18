@@ -13,8 +13,12 @@ import {
   type RefObject,
 } from 'react';
 
+import type { DriverType } from '@wechart/core';
+
+import { MenuButton } from '../../shell/MenuButton';
 import { StateLine } from '../../shell/StatusIcon';
 import { findTables } from '../sql/findTable';
+import { selectOf } from '../sql/tableMenu';
 
 /**
  * The schema browser beside the SQL editor (T539, AC-386; design 15's P3,
@@ -113,6 +117,15 @@ interface Tree {
   readonly find: string;
   /** PK and FK tags on columns (T806, design 17 pin 5). */
   readonly keys: boolean;
+  /** A table's ⋯ (T807, design 17 pin 6): its driver, for the SELECT's limit, and Preview. */
+  readonly menu: TableMenu | null;
+}
+
+/** What a table's ⋯ needs (T807, AC-449). */
+export interface TableMenu {
+  readonly driver: DriverType;
+  /** Preview 100 rows: the SELECT, to run in a new tab, and the table it reads. */
+  readonly onPreview: (sql: string, table: { readonly schema: string; readonly name: string }) => void;
 }
 const TreeContext = createContext<Tree | null>(null);
 const useTree = () => useContext(TreeContext)!;
@@ -124,6 +137,7 @@ export function SchemaBrowser({
   onChoose,
   heading = 'Tables',
   extended = false,
+  menu = null,
 }: {
   sourceId: string;
   /** Its settings' version: another reads it again. */
@@ -139,6 +153,8 @@ export function SchemaBrowser({
    * page's tree (design 15) has neither.
    */
   extended?: boolean;
+  /** A table's ⋯: Insert name, Insert SELECT and Preview 100 rows (T807); none on the data source page. */
+  menu?: TableMenu | null;
 }) {
   const queryClient = useQueryClient();
   const root = useRef<HTMLUListElement>(null);
@@ -186,6 +202,7 @@ export function SchemaBrowser({
     onChoose,
     find: extended ? find : '',
     keys: extended,
+    menu,
   };
   return (
     <section className="sql-schema" aria-label={`Tables in ${sourceName}`}>
@@ -280,6 +297,7 @@ function Row({
   className,
   children,
   inside,
+  actions,
 }: {
   rowKey: string;
   level: number;
@@ -293,6 +311,8 @@ function Row({
   children: ReactNode;
   /** Its group, drawn when open. */
   inside?: ReactNode;
+  /** Its ⋯, given its place in the tab order: reached by Tab from this row alone (T807). */
+  actions?: ((tabIndex: number) => ReactNode) | undefined;
 }) {
   const tree = useTree();
   const self = useRef<HTMLLIElement>(null);
@@ -369,8 +389,9 @@ function Row({
         if (event.target === event.currentTarget) tree.setStop(rowKey);
       }}
       onClick={(event) => {
-        // A click inside a row inside it is that row's.
+        // A click inside a row inside it is that row's; one on its ⋯ or menu, theirs.
         if ((event.target as HTMLElement).closest('[role="treeitem"]') !== self.current) return;
+        if ((event.target as HTMLElement).closest('[data-row-menu]') !== null) return;
         self.current?.focus();
         if ((event.target as HTMLElement).closest('[data-caret]') !== null) onToggle?.();
         else onChoose();
@@ -385,11 +406,30 @@ function Row({
           <span className="sql-schema__caret" />
         )}
         {children}
+        {actions === undefined ? null : (
+          <span className="sql-schema__actions" data-row-menu="">
+            {actions(tree.stop === rowKey ? 0 : -1)}
+          </span>
+        )}
       </span>
       {inside}
     </li>
   );
 }
+
+/** A table's columns, as its row reads them, and as Insert SELECT asks for them. */
+const columnsQuery = (tree: Tree, table: Table) => ({
+  queryKey: [...tree.key, 'columns', table.schema, table.name],
+  queryFn: async () =>
+    (
+      await answerOf<{ tables: { columns: Column[] }[] }>(`${catalogOf(tree.sourceId)}/columns`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tables: [{ schema: table.schema, table: table.name }] }),
+      })
+    ).tables[0]?.columns ?? [],
+  staleTime: KEPT,
+});
 
 function SchemaItem({ schema }: { schema: string }) {
   const tree = useTree();
@@ -488,20 +528,19 @@ function TableItem({ table }: { table: Table }) {
   const tree = useTree();
   const [open, setOpen] = useState(false);
   const qualified = `${table.schema}.${table.name}`;
-  const columns = useQuery({
-    queryKey: [...tree.key, 'columns', table.schema, table.name],
-    enabled: open,
-    queryFn: async () =>
-      (
-        await answerOf<{ tables: { columns: Column[] }[] }>(`${catalogOf(tree.sourceId)}/columns`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ tables: [{ schema: table.schema, table: table.name }] }),
-        })
-      ).tables[0]?.columns ?? [],
-    staleTime: KEPT,
-  });
+  const queryClient = useQueryClient();
+  const columns = useQuery({ ...columnsQuery(tree, table), enabled: open });
   const kind = table.type === null || table.type === 'table' ? null : table.type;
+  const menu = tree.menu;
+  /** Its SELECT of 100 rows, its columns read first: a catalog read, never a run (AC-449). */
+  const select = async (driver: DriverType) => {
+    const read = await queryClient.fetchQuery(columnsQuery(tree, table)).catch(() => []);
+    return selectOf(
+      driver,
+      table,
+      read.map((column) => column.name),
+    );
+  };
   return (
     <Row
       rowKey={`t:${qualified}`}
@@ -514,6 +553,52 @@ function TableItem({ table }: { table: Table }) {
       onChoose={() => {
         tree.onChoose(qualified);
       }}
+      actions={
+        menu === null
+          ? undefined
+          : (tabIndex) => (
+              // Design 17's C1: Insert name, Insert SELECT, Preview 100 rows (T807, AC-449).
+              <MenuButton
+                label={`Actions for ${qualified}`}
+                className="sql-schema__menu"
+                align="end"
+                fixed
+                tabIndex={tabIndex}
+                items={[
+                  {
+                    key: 'name',
+                    label: 'Insert name',
+                    onSelect: () => {
+                      tree.onChoose(qualified);
+                    },
+                  },
+                  {
+                    key: 'select',
+                    label: 'Insert SELECT',
+                    onSelect: () => {
+                      void select(menu.driver).then(tree.onChoose);
+                    },
+                  },
+                  {
+                    key: 'preview',
+                    label: 'Preview 100 rows',
+                    title: 'Runs it in a new tab, as an ordinary run',
+                    onSelect: () => {
+                      void select(menu.driver).then((sql) => {
+                        menu.onPreview(sql, table);
+                      });
+                    },
+                  },
+                ]}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <circle cx="3.5" cy="8" r="1.3" fill="currentColor" />
+                  <circle cx="8" cy="8" r="1.3" fill="currentColor" />
+                  <circle cx="12.5" cy="8" r="1.3" fill="currentColor" />
+                </svg>
+              </MenuButton>
+            )
+      }
       inside={
         open ? (
           <ul role="group" aria-label={`Columns of ${qualified}`}>

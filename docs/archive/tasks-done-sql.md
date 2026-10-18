@@ -92,3 +92,21 @@
     - **Cube Store:** design 17's C5 note, as built, and no catalog read.
     - `SchemaTree.tsx` wraps the data source page's `SchemaBrowser`, which gains an optional `heading` (none here, under the pane's "Schema").
     - Decision T805-1 is in `docs/design/decisions-sql.md`.
+
+- [x] T807 (AC-449) A table's ⋯: Insert name, Insert SELECT with a 100-row limit in the driver's syntax, and Preview 100 rows as an ordinary run in a new tab; opening a node sends only catalog reads
+  - Lane: SQL
+  - Files: `packages/web/src/workspaces/sql/tableMenu.ts` (+ test), `packages/web/src/workspaces/sql/SchemaTree.tsx`, `e2e/security/sql-workspace.spec.ts`.
+  - Failing test: `tableMenu.test.ts`: Insert SELECT writes `SELECT <columns> FROM <schema>.<table>` with `LIMIT 100` on PostgreSQL and MySQL, `TOP 100` on SQL Server and `FETCH FIRST 100 ROWS ONLY` on Oracle, at the cursor, and runs nothing. The e2e: Preview 100 rows opens a new tab holding that SELECT, runs it capped, and leaves an audit event and a History row; expanding a schema and a table sends xcube only catalog reads (AC-449).
+  - Depends on: T805, T802
+  - **Built 2026-10-17** (lane SQL, batch 3).
+    - **AC-449 is ticked** on the e2e "a table’s ⋯ in the schema browser (T807)", against the sample database:
+      - opening `public` and `orders` sends only `/catalog/` requests;
+      - the ⋯ offers its three items in order;
+      - Insert SELECT writes the 6-column SELECT with `LIMIT 100` and posts no run;
+      - Preview 100 rows opens a selected tab named `orders`, holding that SELECT, and runs it once on the ordinary route, with 100 rows or fewer;
+      - History (`GET /api/sql-runs`) lists it first, and the audit trail has its `sql-run` event since the test began.
+    - History's pane in the workspace is T817's. The row exists now and shows on the data source page's My runs.
+    - **Each driver's limit,** from new research `docs/research/sql-row-limits.md`: `LIMIT 100`, but `TOP (100)` on SQL Server, with the parentheses Microsoft recommends, and `FETCH FIRST 100 ROWS ONLY` on Oracle 12c and later. The task line said `TOP 100`.
+    - **The ⋯** is the shell's `MenuButton`, which gains an optional `tabIndex`. It's on each table row of the shared `SchemaBrowser`, opt-in through `menu`, which the data source page doesn't pass. It is in the tab order only on the row holding the tree's stop.
+    - The pane's foot reads "Opening a schema or a table reads only its names. Nothing runs until you press Run." (pin 6).
+    - Decision T807-1 is in `docs/design/decisions-sql.md`.

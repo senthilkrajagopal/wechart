@@ -24,12 +24,12 @@ import { CUBE_STORE_ID, CUBE_STORE_QUERY } from '../data-sources/cubeStore';
 import { endedAway } from './awayRun';
 import { GOING_QUERY } from './going';
 import { holdTabs, releaseTabs, tabsStoreFor } from './liveTabs';
-import { QueryTab, type Insertion, type RunHold } from './QueryTab';
+import { QueryTab, type Insertion, type RunHold, type RunOnOpen } from './QueryTab';
 import { SchemaTree } from './SchemaTree';
 import { runState, type RunState } from './runState';
 import type { SqlSourceRow } from './sources';
 import type { SqlSource } from './sqlSource';
-import { firstTabs, type SqlTab, type TabsAction, type TabsState } from './tabs';
+import { firstTabs, newTabId, type SqlTab, type TabsAction, type TabsState } from './tabs';
 import { TabStrip } from './TabStrip';
 import { keepTabs, keptTabs } from './tabStore';
 import {
@@ -163,6 +163,7 @@ function ChosenOn({
     readonly hold: RunHold | null;
     readonly onGoTo: (id: string) => void;
     readonly insertion: Insertion | undefined;
+    readonly runOnOpen: RunOnOpen | undefined;
   };
 }) {
   const page = useQuery({ ...sourceQuery(row.id), retry: false, enabled: !row.cubeStore });
@@ -395,6 +396,8 @@ function Workbench({
   const [share, setShare] = useState<number>(SPLIT.editor);
   /** A name chosen in the schema browser, for the tab open as it was chosen (T805). */
   const [insertion, setInsertion] = useState<Insertion | undefined>(undefined);
+  /** A tab opened by Preview 100 rows, to run as it opens (T807, AC-449). */
+  const [runOnOpen, setRunOnOpen] = useState<RunOnOpen | undefined>(undefined);
   const [open, setOpen] = useState<Side | null>(null);
   const leftFolded = useWindowMatches(LEFT_RAIL_QUERY);
   const rightFolded = useWindowMatches(RIGHT_RAIL_QUERY);
@@ -505,6 +508,13 @@ function Workbench({
             onChoose={(name) => {
               setInsertion({ text: name, tabId: tabs.active });
             }}
+            onPreview={(sql, table) => {
+              // Preview 100 rows: a new tab on this source, holding its SELECT, run as it opens (T807).
+              if (chosenRow === undefined) return;
+              const id = newTabId();
+              dispatch({ kind: 'open', id, sourceId: chosenRow.id, sql, name: table.name });
+              setRunOnOpen({ tabId: id });
+            }}
           />
         </div>
       </SidePane>
@@ -555,6 +565,7 @@ function Workbench({
                   dispatch({ kind: 'select', id });
                 },
                 insertion,
+                runOnOpen,
               }}
             />
           ) : (

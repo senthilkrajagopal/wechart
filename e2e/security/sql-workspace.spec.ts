@@ -839,6 +839,99 @@ test.describe('the schema browser in the left pane (T805, AC-386)', () => {
 });
 
 /**
+ * T807 (AC-449): a table's ⋯ — Insert name, Insert SELECT (written, not
+ * run) and Preview 100 rows (a new tab, an ordinary run: capped, audited and
+ * in History); opening a schema or a table sends only catalog reads.
+ */
+test.describe('a table’s ⋯ in the schema browser (T807, AC-449)', () => {
+  test('Insert SELECT writes its 100-row SELECT and runs nothing; Preview 100 rows runs it in a new tab, audited and in History', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    const asked: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/api/')) asked.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    });
+    const select = 'SELECT id, customer_id, product_id, status, amount, ordered_at\nFROM public.orders\nLIMIT 100';
+    // A second's margin for the clocks of this machine and wechart's server.
+    const began = new Date(Date.now() - 1_000).toISOString();
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.on) }).click();
+      await expect(page.getByTestId('sql-warning')).toBeVisible();
+
+      // Opening a schema and a table: catalog reads alone.
+      const from = asked.length;
+      const schema = leftPane(page).getByRole('treeitem', { name: 'public', exact: true });
+      await schema.getByTestId('sql-schema-caret').first().click();
+      const orders = schema.getByRole('treeitem', { name: 'orders', exact: true });
+      await orders.getByTestId('sql-schema-caret').first().click();
+      await expect(orders.getByRole('group', { name: 'Columns of public.orders' }).getByRole('treeitem')).toHaveCount(6);
+      const opening = asked.slice(from).filter((line) => !line.endsWith('/api/sql-runs/going'));
+      expect(opening.length).toBeGreaterThan(0);
+      for (const line of opening) expect(line).toMatch(/\/catalog\/(schemas|tables|columns)$/);
+
+      // Insert SELECT: written at the cursor, in PostgreSQL's LIMIT, and not run.
+      const actions = orders.getByRole('button', { name: 'Actions for public.orders' });
+      await actions.click();
+      await expect(page.getByRole('menu', { name: 'Actions for public.orders' }).getByRole('menuitem')).toHaveText([
+        'Insert name',
+        'Insert SELECT',
+        'Preview 100 rows',
+      ]);
+      await page.getByRole('menuitem', { name: 'Insert SELECT' }).click();
+      await expect(page.locator('.sql-editor .cm-content')).toHaveText(select.replaceAll('\n', ''));
+      expect(asked.filter((line) => line.startsWith('POST') && line.endsWith('/sql'))).toEqual([]);
+
+      // Preview 100 rows: a new tab holding it, run as an ordinary run.
+      await actions.click();
+      await page.getByRole('menuitem', { name: 'Preview 100 rows' }).click();
+      const preview = page.getByRole('tablist', { name: 'SQL tabs' }).getByRole('tab', { name: /^orders, / });
+      await expect(preview).toHaveAttribute('aria-selected', 'true');
+      await expect(preview).toHaveAttribute('aria-label', new RegExp(`^orders, (Finished, \\d+ rows?|Limited to 10,000 rows), on ${SOURCES.on}$`));
+      await expect(page.getByRole('table', { name: /^Result: \d+ rows?, 6 columns$/ })).toBeVisible();
+      expect(asked.filter((line) => line.startsWith('POST') && line.endsWith('/sql'))).toEqual([
+        `POST /api/data-sources/${world.sources.on}/sql`,
+      ]);
+      const rows = Number(/^Result: (\d+)/.exec((await page.getByRole('table').first().getAttribute('aria-label')) ?? '')?.[1]);
+      expect(rows).toBeGreaterThan(0);
+      expect(rows).toBeLessThanOrEqual(100);
+
+      // In History: the user's own runs, newest first.
+      const history = (await (await page.request.get(`/api/sql-runs?dataSource=${world.sources.on}`)).json()) as {
+        runs: { sql: string; outcome: string }[];
+      };
+      expect(history.runs[0]).toMatchObject({ sql: select, outcome: 'finished' });
+    } finally {
+      await context.close();
+    }
+
+    // And audited, as every run is (AC-382).
+    const admin = await signedIn(browser, 'super');
+    try {
+      // Only events since this test began: never an earlier run's (T807's review).
+      const trail = await admin.page.request.get(
+        `/api/audit?events=sql-run&folder=${world.folderId}&limit=5&since=${encodeURIComponent(began)}`,
+      );
+      expect(trail.status(), await trail.text()).toBe(200);
+      const [event] = ((await trail.json()) as { records: Record<string, unknown>[] }).records;
+      expect(event).toMatchObject({
+        event: 'sql-run',
+        item: { kind: 'data-source', id: world.sources.on },
+        details: { outcome: 'finished' },
+      });
+      expect(String((event?.details as { sql?: unknown } | undefined)?.sql)).toMatch(
+        /^SELECT id, customer_id, product_id, status, amount, ordered_at\s+FROM public\.orders\s+LIMIT /,
+      );
+    } finally {
+      await admin.context.close();
+    }
+  });
+});
+
+/**
  * T804 (AC-452, AC-379): one run per person across every tab, its state the
  * same on its tab and in its result head; every other tab's Run held with
  * Go to it and Cancel that run; and the run kept going while the user is in

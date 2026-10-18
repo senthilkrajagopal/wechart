@@ -59,6 +59,15 @@ export interface TabsState {
 
 export type TabsAction =
   | { readonly kind: 'add' }
+  /** A new tab, last, on a source and holding SQL: Preview 100 rows' (T807). */
+  | {
+      readonly kind: 'open';
+      readonly sourceId: string;
+      readonly sql: string;
+      readonly name: string;
+      /** Its id, where the opener must know it: to run it as it opens. */
+      readonly id?: string;
+    }
   | { readonly kind: 'select'; readonly id: string }
   | { readonly kind: 'rename'; readonly id: string; readonly name: string }
   | { readonly kind: 'duplicate'; readonly id: string }
@@ -130,6 +139,13 @@ export function tabsReducer(
       const id = makeId();
       return {
         tabs: [...state.tabs, blank(id, nextName(state.tabs), openTab(state)?.sourceId ?? '')],
+        active: id,
+      };
+    }
+    case 'open': {
+      const id = action.id ?? makeId();
+      return {
+        tabs: [...state.tabs, { ...blank(id, action.name, action.sourceId), sql: action.sql }],
         active: id,
       };
     }

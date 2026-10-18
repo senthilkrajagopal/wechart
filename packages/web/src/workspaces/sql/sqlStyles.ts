@@ -268,6 +268,15 @@ main:has(.sql-workspace) {
   background: var(--wc-bg-surface); color: var(--wc-text-primary); font: inherit; font-size: 12px;
 }
 .sql-schema__find:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
+/* A table's ⋯ (T807; pin 6): shown on its row's hover or focus, or while its menu is open. */
+.sql-schema__actions { flex: none; margin-left: auto; display: inline-flex; }
+.sql-schema__menu {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; min-height: 0; padding: 0;
+  border: 0; border-radius: 4px; background: none; color: var(--wc-text-secondary);
+}
+.sql-schema__menu:hover { background: var(--wc-bg-hover); }
+[role='treeitem']:not(:focus-visible) > .sql-schema__row:not(:hover) .sql-schema__menu:not(:focus-visible):not([aria-expanded='true']) { opacity: 0; }
+.sql-schema__foot { margin-top: 8px; }
 /* PK and FK, text tags in a 3 px outline: never colour alone (pin 5). */
 .sql-schema__tag {
   flex: none; display: inline-flex; align-items: center; height: 16px; margin-left: 4px; padding: 0 4px;

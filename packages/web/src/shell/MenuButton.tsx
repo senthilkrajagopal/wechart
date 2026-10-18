@@ -64,6 +64,11 @@ export interface MenuButtonProps {
    * scrolls sideways and would clip it (T800: the SQL runner's tabs).
    */
   readonly fixed?: boolean;
+  /**
+   * The button's place in the tab order, for one inside a widget that is a
+   * single stop (T807: a schema tree row's ⋯, reached only from its row).
+   */
+  readonly tabIndex?: number;
 }
 
 export function MenuButton({
@@ -78,6 +83,7 @@ export function MenuButton({
   heading,
   menuWidth,
   fixed = false,
+  tabIndex,
 }: MenuButtonProps) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -187,6 +193,7 @@ export function MenuButton({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
+        {...(tabIndex === undefined ? {} : { tabIndex })}
         onClick={() => setOpen((now) => !now)}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' && !open) {

@@ -18,10 +18,13 @@ import type { SqlSourceRow } from './sources';
 export function SchemaTree({
   row,
   onChoose,
+  onPreview,
 }: {
   /** The open tab's data source, as the picker lists it. */
   readonly row: SqlSourceRow | undefined;
   readonly onChoose: (name: string) => void;
+  /** Preview 100 rows: a table's SELECT, to run in a new tab on this source (T807). */
+  readonly onPreview: (sql: string, table: { readonly schema: string; readonly name: string }) => void;
 }) {
   if (row === undefined || row.runner === 'off') return null;
   if (row.cubeStore)
@@ -31,7 +34,15 @@ export function SchemaTree({
         <code>information_schema.tables</code> and <code>system.tables</code>.
       </p>
     );
-  return <SourceTree key={row.id} id={row.id} name={row.name} onChoose={onChoose} />;
+  return (
+    <>
+      <SourceTree key={row.id} id={row.id} name={row.name} onChoose={onChoose} onPreview={onPreview} />
+      {/* The pane's foot, as design 17 pin 6 draws it (T807, AC-449). */}
+      <p className="sql-schema__none sql-schema__foot">
+        Opening a schema or a table reads only its names. Nothing runs until you press Run.
+      </p>
+    </>
+  );
 }
 
 /** A data source's tree, at its settings' version, which a change reads again (T539's review). */
@@ -39,10 +50,12 @@ function SourceTree({
   id,
   name,
   onChoose,
+  onPreview,
 }: {
   readonly id: string;
   readonly name: string;
   readonly onChoose: (name: string) => void;
+  readonly onPreview: (sql: string, table: { readonly schema: string; readonly name: string }) => void;
 }) {
   const page = useQuery({ ...sourceQuery(id), retry: false });
   if (page.isError) return <StateLine kind="err">{page.error.message}</StateLine>;
@@ -55,6 +68,8 @@ function SourceTree({
       heading={null}
       // Find a table, and PK and FK tags (T806, AC-448).
       extended
+      // A table's ⋯, its SELECT in its driver's syntax (T807, AC-449).
+      menu={{ driver: page.data.driver, onPreview }}
       onChoose={onChoose}
     />
   );

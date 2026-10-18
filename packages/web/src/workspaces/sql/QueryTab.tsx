@@ -84,6 +84,13 @@ export interface Insertion {
 /** Those put in already: a tab opened again doesn't put its last one in twice. */
 const inserted = new WeakSet<Insertion>();
 
+/** A tab to run as it opens: Preview 100 rows' (T807, AC-449). */
+export interface RunOnOpen {
+  readonly tabId: string;
+}
+/** Those run already: a tab opened again doesn't run twice. */
+const ranOnOpen = new WeakSet<RunOnOpen>();
+
 /**
  * Whether this page is being left: the workspace switcher's links load
  * another page, which drops a run's request while the run goes on.
@@ -185,6 +192,7 @@ export function QueryTab({
   hold = null,
   onGoTo = () => undefined,
   insertion,
+  runOnOpen,
 }: {
   readonly tab: SqlTab;
   readonly source: SqlSource;
@@ -199,6 +207,8 @@ export function QueryTab({
   readonly onGoTo?: (tabId: string) => void;
   /** A name chosen in the schema browser: put in at the cursor, if it is this tab's and new. */
   readonly insertion?: Insertion | undefined;
+  /** Run its text as it opens, if this is that tab and it hasn't (Preview 100 rows, T807). */
+  readonly runOnOpen?: RunOnOpen | undefined;
 }) {
   const toInsert =
     insertion !== undefined && insertion.tabId === tab.id && !inserted.has(insertion) ? insertion : undefined;
@@ -269,6 +279,22 @@ export function QueryTab({
       setFocusing({});
     void queryClient.invalidateQueries({ queryKey: ['sql-runs'] });
   };
+
+  // Preview 100 rows: its SELECT runs as the tab opens, an ordinary run (T807, AC-449).
+  const toRunOnOpen = runOnOpen?.tabId === tab.id && !ranOnOpen.has(runOnOpen) ? runOnOpen : undefined;
+  useEffect(() => {
+    if (toRunOnOpen === undefined) return undefined;
+    // Once the tab has drawn, once per Preview.
+    const opened = setTimeout(() => {
+      if (ranOnOpen.has(toRunOnOpen)) return;
+      ranOnOpen.add(toRunOnOpen);
+      void run(tab.sql);
+    }, 0);
+    return () => {
+      clearTimeout(opened);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toRunOnOpen]);
 
   const download = () => {
     if (shown === null) return;
