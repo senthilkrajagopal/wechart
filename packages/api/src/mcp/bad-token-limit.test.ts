@@ -98,7 +98,7 @@ afterAll(async () => {
   await closeDb();
 });
 
-function wechart(config: { trustProxy?: readonly string[] } = {}) {
+function wechart(config: { trustProxy?: readonly string[]; mcpBadTokenLimit?: number } = {}) {
   return buildServer({
     config: { ...base, ...config },
     accessTokens: accessTokenStore(getDb()),
@@ -183,6 +183,30 @@ describe('bad and missing tokens on /mcp, limited by address (T780, AC-474)', ()
       await app.close();
     }
   }, 30_000);
+
+  it('believes no X-Forwarded-For from a peer it doesn’t trust: rotating it escapes nothing', async () => {
+    const app = wechart();
+    const address = ipv4();
+    try {
+      for (let n = 0; n < 20; n += 1)
+        expect((await post(app, address, { 'x-forwarded-for': ipv4() })).statusCode).toBe(401);
+      expect((await post(app, address, { 'x-forwarded-for': ipv4() })).statusCode).toBe(429);
+    } finally {
+      await app.close();
+    }
+  }, 30_000);
+
+  it('takes the deployment’s limit where it sets one', async () => {
+    const app = wechart({ mcpBadTokenLimit: 2 });
+    const address = ipv4();
+    try {
+      expect((await post(app, address)).statusCode).toBe(401);
+      expect((await post(app, address)).statusCode).toBe(401);
+      expect((await post(app, address)).statusCode).toBe(429);
+    } finally {
+      await app.close();
+    }
+  });
 });
 
 describe('WECHART_MCP_BAD_TOKEN_LIMIT (T780, AC-474)', () => {

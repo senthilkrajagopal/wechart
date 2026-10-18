@@ -301,3 +301,8 @@
     - **Tests:** `bad-token-limit.test.ts` (5, new): the 21st bad-token request from one address answers 429 with `Retry-After`, after twenty 401s; a /64 counts together; a working token is neither counted against its address nor refused; the forwarded address is counted behind a trusted proxy; the setting. `rate-limit.test.ts`'s store-outage test now also shows a bad token, and a token-less POST, GET and DELETE, answered 503.
     - **Tests changed:** the new `mcp/counter.fixture.ts` gives tests that aren't about the limits the real counter with keys of their own (decision T780-4). `auth/guard.test.ts`, `mcp/guard.test.ts`, `mcp/plugin.test.ts`, `mcp/auth.test.ts` and `mcp/transport.test.ts` use it, since `/mcp` now counts every request and takes none with no counter.
     - **Unit suite:** all green: api 1,971, web 3,020, core 550, charts 556, recommender 133, ui 47.
+    - **The cold review:** PASS, no bug. Taken up in the follow-up commit:
+      - `bad-token-limit.test.ts` now shows the deployment's own limit taken (`mcpBadTokenLimit: 2`: two 401s, then 429), since nothing tested `server.ts` passing it on. The token limit's wiring was already shown by `rate-limit.test.ts`'s "counts each token on its own".
+      - It also shows a rotated `X-Forwarded-For` from a peer that isn't trusted escaping nothing.
+      - Decision T780-3 now names the two exceptions to "503 while the store fails": a foreign Host or Origin is 403 first, and PUT is 404.
+      - **Left as is:** an address over its bad-token limit still has its tokens looked up, and a working one still answers 200. That is AC-472/AC-474's "two budgets"; the limit turns 401s into 429s, it saves no lookups.
