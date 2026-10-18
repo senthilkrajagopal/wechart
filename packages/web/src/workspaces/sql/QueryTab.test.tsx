@@ -100,8 +100,11 @@ function Harness({ start, source }: { readonly start: SqlTab; readonly source: S
     </>
   );
 }
-function open(start: SqlTab, source: SqlSource = EMEA) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function open(
+  start: SqlTab,
+  source: SqlSource = EMEA,
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   return render(
     <QueryClientProvider client={client}>
       <Harness start={start} source={source} />
@@ -265,5 +268,129 @@ describe('the selection, or the statement at the cursor (T803, AC-387)', () => {
     await vi.waitFor(() => {
       expect(sent()).toEqual(['SELECT 1', "SELECT ';'"]);
     });
+  });
+});
+
+/**
+ * T808 (AC-456): while the user types, the names the schema browser has read
+ * are offered; ↑ and ↓ choose, Enter accepts, Esc closes the list only, and
+ * Tab still moves focus out of the editor.
+ * Fails when: Enter adds a new line while the list is open; Esc does anything
+ * but close the list; or Tab is kept in the editor.
+ */
+describe('autocomplete in the editor (T808, AC-456)', () => {
+  /** The schema browser's answers for EMEA, kept as it keeps them. */
+  const readClient = () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ['sql-catalog', 'emea', 1];
+    client.setQueryData([...key, 'schemas'], { schemas: [{ name: 'public' }] });
+    client.setQueryData([...key, 'tables', 'public'], {
+      pages: [{ tables: [{ schema: 'public', name: 'customers', type: 'table', rawType: null }], total: 1 }],
+      pageParams: [0],
+    });
+    client.setQueryData(
+      [...key, 'columns', 'public', 'customers'],
+      [
+        { name: 'id', rawType: 'integer' },
+        { name: 'country', rawType: 'text' },
+      ],
+    );
+    return client;
+  };
+  const view = (container: HTMLElement) =>
+    EditorView.findFromDOM(container.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+  /** One character typed at the end, as typing makes it. */
+  const typeAtEnd = (container: HTMLElement, text: string) => {
+    const editor = view(container);
+    act(() => {
+      editor.focus();
+      const end = editor.state.doc.length;
+      editor.dispatch({
+        changes: { from: end, insert: text },
+        selection: { anchor: end + text.length },
+        userEvent: 'input.type',
+      });
+    });
+  };
+  const listed = (container: HTMLElement) =>
+    [...container.querySelectorAll('.cm-tooltip-autocomplete li')].map((item) => item.textContent);
+  /** A key pressed in the editor, as the browser sends it; whether anything outside saw it. */
+  const press = (container: HTMLElement, key: string) => {
+    let outside = false;
+    const seen = () => {
+      outside = true;
+    };
+    window.addEventListener('keydown', seen);
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    act(() => {
+      view(container).contentDOM.dispatchEvent(event);
+    });
+    window.removeEventListener('keydown', seen);
+    return { prevented: event.defaultPrevented, outside };
+  };
+
+  it('offers a table’s columns read so far; ↓ and ↑ choose, Enter accepts, adding no new line', async () => {
+    const { container } = open(tab({ sql: 'SELECT customers' }), EMEA, readClient());
+    typeAtEnd(container, '.');
+    await vi.waitFor(() => {
+      // In the list's own order, by name.
+      expect(listed(container)).toEqual(['country', 'id']);
+    });
+    // At once: the list takes its keys as soon as it shows (decision T808-2).
+    const chosen = () =>
+      container.querySelector('.cm-tooltip-autocomplete li[aria-selected="true"]')?.textContent;
+    expect(chosen()).toBe('country');
+
+    expect(press(container, 'ArrowDown').prevented).toBe(true);
+    expect(chosen()).toBe('id');
+    press(container, 'ArrowUp');
+    expect(chosen()).toBe('country');
+    press(container, 'ArrowDown');
+    expect(press(container, 'Enter').prevented).toBe(true);
+
+    expect(view(container).state.doc.toString()).toBe('SELECT customers.id');
+    expect(listed(container)).toEqual([]);
+    expect(screen.getByTestId('kept-sql').textContent).toBe('SELECT customers.id');
+  });
+
+  it('Esc closes the list and nothing else: the text, the cursor and the page are untouched', async () => {
+    const { container } = open(tab({ sql: 'SELECT * FROM ' }), EMEA, readClient());
+    typeAtEnd(container, 'cust');
+    await vi.waitFor(() => {
+      expect(listed(container)).toEqual(['customers']);
+    });
+    const before = view(container).state.selection.main;
+
+    const esc = press(container, 'Escape');
+
+    expect(listed(container)).toEqual([]);
+    expect(esc.outside).toBe(false);
+    expect(view(container).state.doc.toString()).toBe('SELECT * FROM cust');
+    expect(view(container).state.selection.main.eq(before)).toBe(true);
+    // With the list closed, Enter is a new line again.
+    press(container, 'Enter');
+    expect(view(container).state.doc.toString()).toBe('SELECT * FROM cust\n');
+  });
+
+  it('Tab still moves focus out of the editor while the list is open', async () => {
+    const { container } = open(tab({ sql: 'SELECT * FROM ' }), EMEA, readClient());
+    typeAtEnd(container, 'cust');
+    await vi.waitFor(() => {
+      expect(listed(container)).toEqual(['customers']);
+    });
+
+    expect(press(container, 'Tab').prevented).toBe(false);
+    view(container).contentDOM.focus();
+    await userEvent.tab();
+
+    expect(view(container).dom.contains(document.activeElement)).toBe(false);
+    expect(view(container).state.doc.toString()).toBe('SELECT * FROM cust');
+  });
+
+  it('offers nothing on Cube Store, which has no catalog read', async () => {
+    const { container } = open(tab({ sql: 'SELECT * FROM ', sourceId: 'cubestore' }), CUBE_STORE, readClient());
+    typeAtEnd(container, 'cust');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(listed(container)).toEqual([]);
   });
 });

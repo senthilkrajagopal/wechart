@@ -1740,11 +1740,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T807 (AC-449) A table's ⋯: Insert name, Insert SELECT with a 100-row limit in the driver's syntax, and Preview 100 rows as an ordinary run in a new tab; opening a node sends only catalog reads
 
-- [ ] T808 (AC-456) Autocomplete the tab's source's schemas, tables and columns as the user types: ↑ ↓ choose, Enter accepts, Esc closes the list only, Tab still leaves the editor
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/completion.ts` (+ test; `schemaCompletionSource` of `@codemirror/lang-sql`, per `code-editor.md`), `packages/web/src/workspaces/sql/QueryTab.tsx` (+ test).
-  - Failing test: `completion.test.ts`: typing `cust` offers `customers` and, after `customers.`, its columns read so far. `QueryTab.test.tsx`: with the list open, ↓ then Enter accepts and adds no new line; Esc closes the list and nothing else; Tab moves focus out of the editor (AC-456).
-  - Depends on: T805
+- [x] T808 (AC-456) Autocomplete the tab's source's schemas, tables and columns as the user types: ↑ ↓ choose, Enter accepts, Esc closes the list only, Tab still leaves the editor
 
 ### Lane SQL: parameters
 

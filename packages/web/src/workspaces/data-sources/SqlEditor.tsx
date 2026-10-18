@@ -1,3 +1,10 @@
+import {
+  acceptCompletion,
+  autocompletion,
+  closeCompletion,
+  moveCompletionSelection,
+  type CompletionSource,
+} from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { sql, StandardSQL, type SQLDialect } from '@codemirror/lang-sql';
 import { syntaxHighlighting } from '@codemirror/language';
@@ -57,6 +64,29 @@ const statementMark = StateField.define<DecorationSet>({
 });
 
 /**
+ * Autocomplete as AC-456 has it (T808): the list opens as the user types,
+ * from `source` alone. Its keys are only those AC-456 names: ↑ and ↓ choose,
+ * Enter accepts, Esc closes the list and goes no further; each acts only
+ * while the list is open. `@codemirror/autocomplete`'s own keymap is off: it
+ * also binds Ctrl-Space, Alt-` and Alt-i, and Page Up and Down, which no
+ * criterion approves (R75). Tab is bound to nothing, so it leaves the editor
+ * (research/code-editor.md, accessibility). The list takes its keys as soon
+ * as it shows, not 75 ms later as the library would: Enter accepts whenever
+ * the list is open (lane SQL's call, T808-2).
+ */
+const completionOf = (source: CompletionSource) => [
+  autocompletion({ override: [source], defaultKeymap: false, icons: false, interactionDelay: 0 }),
+  Prec.highest(
+    keymap.of([
+      { key: 'ArrowDown', run: moveCompletionSelection(true) },
+      { key: 'ArrowUp', run: moveCompletionSelection(false) },
+      { key: 'Enter', run: acceptCompletion },
+      { key: 'Escape', run: closeCompletion, stopPropagation: true },
+    ]),
+  ),
+];
+
+/**
  * The SQL tab's editor (T535; design 15's P2): the app's CodeMirror, as the
  * model's YAML has it, in SQL mode (`@codemirror/lang-sql`,
  * research/code-editor.md), driven as a controlled editor.
@@ -78,7 +108,10 @@ export function SqlEditor({
   atCursor = false,
   onStatement,
   dialect = StandardSQL,
+  completion,
 }: {
+  /** The SQL runner workspace's autocomplete (T808, AC-456): what to offer as the user types. Read once. */
+  completion?: CompletionSource | undefined;
   /** The source's dialect, for the statement at the cursor's bounds (with `atCursor`). Read once. */
   dialect?: SQLDialect;
   /**
@@ -140,6 +173,7 @@ export function SqlEditor({
             ]),
           ),
           ...(atCursor ? [STATEMENT_DIALECT.of(dialect), statementMark] : []),
+          ...(completion === undefined ? [] : completionOf(completion)),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           sql(),
           syntaxHighlighting(TOKEN_HIGHLIGHT),

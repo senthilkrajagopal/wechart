@@ -846,6 +846,81 @@ test.describe('the schema browser in the left pane (T805, AC-386)', () => {
 });
 
 /**
+ * T808 (AC-456): while the user types, the tab's source's schemas, tables
+ * and columns read so far that match are listed; ↑ and ↓ choose, Enter
+ * accepts, Esc closes the list only, and Tab still leaves the editor.
+ */
+test.describe('autocomplete in the editor (T808, AC-456)', () => {
+  test('offers the read tables and columns as they are typed; Enter accepts, Esc closes the list only, Tab leaves', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.on) }).click();
+      // The schema browser reads public's tables, and customers' columns.
+      const schema = leftPane(page).getByRole('treeitem', { name: 'public', exact: true });
+      await schema.getByTestId('sql-schema-caret').first().click();
+      const customers = schema.getByRole('treeitem', { name: 'customers', exact: true });
+      await customers.getByTestId('sql-schema-caret').first().click();
+      await expect(
+        customers.getByRole('group', { name: 'Columns of public.customers' }).getByRole('treeitem'),
+      ).toHaveCount(4);
+
+      const editor = page.locator('.sql-editor .cm-content');
+      const list = page.locator('.cm-tooltip-autocomplete li');
+      await editor.click();
+      await page.keyboard.type('SELECT cust', { delay: 30 });
+      await expect(list.filter({ hasText: /^customers$/ })).toHaveCount(1);
+      await page.keyboard.press('Enter');
+      await expect(editor).toHaveText('SELECT customers');
+      await expect(list).toHaveCount(0);
+
+      // Its columns, as introspection read them, by their first letters.
+      await page.keyboard.type('.', { delay: 30 });
+      await expect(list).toHaveText(['country', 'id', 'name', 'signed_up_at']);
+      await page.keyboard.type('co', { delay: 30 });
+      await expect(list).toHaveText(['country']);
+      await page.keyboard.press('Enter');
+      // One line: Enter took the name and added no new one.
+      await expect(page.locator('.sql-editor .cm-line')).toHaveCount(1);
+      await expect(editor).toHaveText('SELECT customers.country');
+
+      // ↓ and ↑ choose.
+      await page.keyboard.type(', customers.', { delay: 30 });
+      await expect(list).toHaveCount(4);
+      await expect(list.and(page.locator('[aria-selected="true"]'))).toHaveText('country');
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('ArrowUp');
+      await expect(list.and(page.locator('[aria-selected="true"]'))).toHaveText('id');
+      await page.keyboard.press('Enter');
+      await expect(editor).toHaveText('SELECT customers.country, customers.id');
+
+      // Esc closes the list, and nothing else: the text, the page and the focus stay.
+      await page.keyboard.type(' FROM cus', { delay: 30 });
+      await expect(list).toHaveCount(1);
+      await page.keyboard.press('Escape');
+      await expect(list).toHaveCount(0);
+      await expect(editor).toHaveText('SELECT customers.country, customers.id FROM cus');
+      await expect(editor).toBeFocused();
+      await expect(page).toHaveURL(/\/sql/);
+
+      // Tab leaves the editor, the list open or not.
+      await page.keyboard.type('t', { delay: 30 });
+      await expect(list).toHaveCount(1);
+      await page.keyboard.press('Tab');
+      await expect(editor).not.toBeFocused();
+      await expect(editor).toHaveText('SELECT customers.country, customers.id FROM cust');
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+/**
  * T807 (AC-449): a table's ⋯ — Insert name, Insert SELECT (written, not
  * run) and Preview 100 rows (a new tab, an ordinary run: capped, audited and
  * in History); opening a schema or a table sends only catalog reads.

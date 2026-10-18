@@ -278,6 +278,19 @@ Read in the installed packages: `@codemirror/commands` 6.11.1, `@codemirror/view
 - **The empty editor's hint:** `placeholder(text)` from `@codemirror/view` (`dist/index.js:10102`; [placeholder](https://codemirror.net/docs/ref/#view.placeholder)).
 - **Testing a key in jsdom:** `runScopeHandlers(view, event, 'editor')` runs the keymap's handlers for a `KeyboardEvent`, and says whether one took it (`dist/index.js:9113`; [runScopeHandlers](https://codemirror.net/docs/ref/#view.runScopeHandlers)). jsdom's `navigator.platform` isn't a Mac's, so `Mod` there is Ctrl.
 
+## Addendum 2026-10-17: autocomplete in the SQL runner (T808, AC-456)
+
+Read in the installed packages: `@codemirror/autocomplete` **6.20.3** (now pinned in `packages/web/package.json`; it was already in the store as `@codemirror/lang-sql` 6.10.0's dependency) and `@codemirror/lang-sql` 6.10.0. Paths are under each package's `dist/`.
+
+- **Schema completion.** `schemaCompletionSource(config)` returns a completion source over `config.schema`, an `SQLNamespace` (`lang-sql/dist/index.js:698`). An object namespace nests schema → table → column names; a key's dots split a path unless escaped as `\.` (`addNamespaceObject`, `:507`). The source finds the parents before the cursor (`customers.` → `customers`; a table's alias in its FROM, `getAliases`, `:426`) and offers that level's names (`completeFromSchema`, `:537`). With nothing typed it offers nothing unless asked explicitly (`empty && !context.explicit`, `:553`). A name that isn't `^[a-z_][a-z_\d]*$` is applied quoted with the dialect's first identifier quote (`nameCompletion`, `:525`).
+- **The source needs the SQL syntax tree:** it reads `syntaxTree(state)` (`sourceContext`, `:409`), so a test's `EditorState` needs `sql({dialect})`.
+- **`sql()` installs keyword completion** as language data (`:712`). `autocompletion({override: [source]})` uses only the given sources instead of language data (`autocomplete/dist/index.d.ts:355-360`).
+- **The keymap.** `completionKeymap` binds Ctrl-Space, Alt-\` and Alt-i (macOS) to start, Escape to close, ArrowDown, ArrowUp, PageDown and PageUp to move, and Enter to accept (`index.js:2063`). It is added at `Prec.highest` unless `defaultKeymap: false`, which "requires you to add bindings to control completion yourself" at a high precedence (`index.d.ts:371-377`). `moveCompletionSelection(forward)`, `acceptCompletion` and `closeCompletion` are exported and each returns false when no list is open (`index.js:1073`, `:1096`, `:1116`), so a binding of them leaves the key to the next handler then. Tab isn't bound.
+- **`interactionDelay`:** "By default, commands relating to an open completion only take effect 75 milliseconds after the completion opened, so that key presses made before the user is aware of the tooltip don't go to the tooltip" (`index.d.ts:439-445`). Both move and accept check it (`index.js:1077`, `:1099`).
+- **A binding's `stopPropagation`** stops the key event's propagation when its command returns true (`view/dist/index.js:9203`, `:9244`).
+- **Options are sorted** by match score, then by label (observed in jsdom: `id` and `country` list as `country`, `id`).
+- **Typing opens it.** A transaction with `userEvent: 'input.type'` starts completion when `activateOnTyping` is on, its default (`index.d.ts:330`); in jsdom the list renders as `.cm-tooltip-autocomplete li`, the selected one `aria-selected="true"`.
+
 Sources:
 - https://codemirror.net/docs/ref/
 - https://codemirror.net/examples/decoration/

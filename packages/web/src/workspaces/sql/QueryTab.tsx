@@ -7,6 +7,7 @@ import { CUBE_STORE_ID } from '../data-sources/cubeStore';
 import { csvFileName, csvOf } from '../data-sources/sqlCsv';
 import { SqlEditor } from '../data-sources/SqlEditor';
 import { ResultHead, seconds, SqlResult, type SqlOutcome } from '../data-sources/SqlResult';
+import { catalogRead, schemaCompletion } from './completion';
 import { cancelRun, GOING_QUERY, NO_CANCEL, type Going } from './going';
 import { RunLine } from './RunLine';
 import { runState, type RunState } from './runState';
@@ -222,6 +223,10 @@ export function QueryTab({
   /** With nothing selected, the statement at the cursor, which is what runs (T803, AC-387); the first, on opening. */
   const dialect = dialectFor(source.cubeStore === true ? null : source.driver);
   const [statement, setStatement] = useState(() => statementAt(tab.sql, 0, dialect)?.text ?? '');
+  // Autocomplete from the names the schema browser has read (T808, AC-456); Cube Store has no catalog.
+  const [completion] = useState(() =>
+    source.cubeStore === true ? undefined : schemaCompletion(() => catalogRead(queryClient, source.id), dialect),
+  );
   const [said, setSaid] = useState('');
   const [focusing, setFocusing] = useState<object | undefined>(undefined);
   const bar = useRef<HTMLDivElement>(null);
@@ -335,6 +340,7 @@ export function QueryTab({
           describedBy={`${warningId} ${limitsId}`}
           focusing={focusing}
           insertion={toInsert}
+          completion={completion}
         />
         <div className="sql-runner__bar" ref={bar}>
           <button

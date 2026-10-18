@@ -110,3 +110,20 @@
     - **The ⋯** is the shell's `MenuButton`, which gains an optional `tabIndex`. It's on each table row of the shared `SchemaBrowser`, opt-in through `menu`, which the data source page doesn't pass. It is in the tab order only on the row holding the tree's stop.
     - The pane's foot reads "Opening a schema or a table reads only its names. Nothing runs until you press Run." (pin 6).
     - Decision T807-1 is in `docs/design/decisions-sql.md`.
+
+- [x] T808 (AC-456) Autocomplete the tab's source's schemas, tables and columns as the user types: ↑ ↓ choose, Enter accepts, Esc closes the list only, Tab still leaves the editor
+  - Lane: SQL
+  - Files: `packages/web/src/workspaces/sql/completion.ts` (+ test; `schemaCompletionSource` of `@codemirror/lang-sql`, per `code-editor.md`), `packages/web/src/workspaces/sql/QueryTab.tsx` (+ test).
+  - Failing test: `completion.test.ts`: typing `cust` offers `customers` and, after `customers.`, its columns read so far. `QueryTab.test.tsx`: with the list open, ↓ then Enter accepts and adds no new line; Esc closes the list and nothing else; Tab moves focus out of the editor (AC-456).
+  - Depends on: T805
+  - **Built 2026-10-17** (lane SQL, batch 4).
+    - **AC-456 is ticked** on the e2e "autocomplete in the editor (T808, AC-456)", against the sample database. With `public` and `customers` opened in the schema browser:
+      - typing `SELECT cust` lists `customers`, and Enter takes it;
+      - `.` lists its four columns, `co` narrows them to `country`, and Enter takes it on the same line;
+      - ↓ ↓ ↑ chooses `id`;
+      - Esc closes the list, leaving the text, the address and the focus;
+      - Tab leaves the editor while the list is open.
+    - **The names** are the schema browser's kept answers (`['sql-catalog', id, version, …]`), read at the moment the list is asked for, at the source's latest version: nothing new is fetched. `completion.ts` turns them into a lang-sql namespace.
+    - **The editor** is the shared `SqlEditor`, which gains an optional `completion`; the data source page passes none, so it has no autocomplete.
+    - **New pinned package:** `@codemirror/autocomplete` 6.20.3, already in the store as lang-sql's dependency. Research addendum in `code-editor.md`, 2026-10-17.
+    - Decisions T808-1 and T808-2 are in `docs/design/decisions-sql.md`. T808-2 binds only AC-456's keys, and lets the list take them at once, not after the library's 75 ms.
