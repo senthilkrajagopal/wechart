@@ -223,6 +223,30 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R81 — new chart components** (2026-10-18, the user)
+- **Sources.** Study: `docs/design/references-new-chart-components.md` (the visualization and BI expert; its §4 ranking, §5 spec sketches and §7 questions). Design: 23 in `docs/design/reviews/2026-10-18/designs/` (`23-new-chart-types.html`).
+- **Questions and answers** (about the study):
+  - Q: Which new chart components should we take up? A: "Top tier (1–5), Spotfire analysis (6–8), Mix & flow (9–12), Time & hierarchy (13–15)". That is all fifteen of the study's §4:
+    1. KPI with comparison, target, sparkline and tile-by;
+    2. graphical table;
+    3. waterfall;
+    4. histogram;
+    5. bubble, with size and shape;
+    6. geo layers;
+    7. parallel coordinates;
+    8. bullet chart;
+    9. 100% stacked bar and area;
+    10. Sankey;
+    11. box plot with points and violin;
+    12. funnel;
+    13. timeline / Gantt;
+    14. calendar heatmap;
+    15. sunburst / icicle.
+  - Q: Inventory the .dxp files first? A: "Proceed without them (Recommended)". *The study's Q1: the ranking stands without counting the 50 most-used `.dxp` files' visualization types.*
+  - Q: Gauges? A: "No gauge (Recommended)". *The study's Q5 (a): no gauge is built; the bullet chart and the KPI with a target do that job.*
+  - Q: Order relative to combo and rich tiles? A: "In parallel". *R81 is designed and planned alongside R80 (designs 20–22), not after it. The KPI and graphical table reuse R80's sparkline, Change and bullet elements, so both rounds draw them one way.*
+- **Still open:** the study's Q2, Q3, Q4 and Q6–Q10, and the questions design 23 adds, are listed with candidate answers in `docs/design/reviews/2026-10-18/designs/index.md` (23-Q1 … 23-Q19).
+
 **R80 — combo charts and rich text tiles, as a priority from phase 3** (2026-10-18, the user)
 - **Sources.** Input: `docs/inputs/2026-10-18-phase-3-advanced-analytics.md`. Studies: `docs/design/references-combo-and-rich-tiles.md` (visualization and BI expert) and `docs/design/references-spotfire-combo-textarea.md` (Spotfire expert). Research: `docs/research/rich-tiles-and-combo-tech.md`.
 - **The request:** "let us work on combo charts and rich text charts... make it modern.. use the best technologies available. start working on this on priority..use ui/visualization/bi expert as well as spotfire expert."

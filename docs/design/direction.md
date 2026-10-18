@@ -4,6 +4,7 @@
 **Phase 2 (2026-09-25):** principles 6–9, §7e and rules 59–89 extend this direction to sign-in, folder access, workspaces, proposals, history, bookmarks, the audit trail, the country map and the box plot. Evidence: `references.md` › "Phase 2". **Accepted by the user on 2026-09-25.**
 **R78 (2026-10-17):** §7f and rules 90–108 extend it to the SQL runner workspace and personal access tokens. Evidence: `references-sql-runner.md` (its checklist rules 107–125, renumbered here and amended for R78's answers) and designs 17 and 18 (`reviews/2026-10-17/designs/`). **Accepted with designs 17 and 18 on 2026-10-17** ("Approve with defaults (Recommended)"; the defaults taken are in that review's `index.md`). Rule 107's Ctrl+Q and Ctrl+Alt+[ and ] wait on `docs/research/keyboard-shortcuts-sql-runner.md` (17-Q3, "Research first").
 **R80 (2026-10-18):** §7h and rules 115–146 extend it to the combo chart, the Text tile (which replaces Markdown), dashboard parameters and the AI provider settings. Evidence: `references-combo-and-rich-tiles.md`, `references-spotfire-combo-textarea.md`, `references-copilot.md` §9, research `rich-tiles-and-combo-tech.md`, and designs 20–22 (`reviews/2026-10-18/designs/`). **Proposed; waiting for the user's approval of designs 20–22.**
+**R81 (2026-10-18):** §7i and rules 147–167 extend it to fifteen new chart types: the KPI with comparison, target, sparkline and tile-by; the graphical table; waterfall; histogram; bubble; map layers; parallel coordinates; bullet chart; 100 % stacked bar and area; Sankey; box plot points and violin; funnel; timeline; calendar heatmap; icicle and sunburst. Evidence: `references-new-chart-components.md` and design 23 (`reviews/2026-10-18/designs/23-new-chart-types.html`). **Proposed; waiting for the user's approval of design 23.**
 **Sources:**
 
 - `references.md`: six enterprise BI products studied, with a committed direction.
@@ -599,6 +600,48 @@ Nothing in §2–§7g changes except as the designs' criteria tables say: §6's 
 | Summarize | The insert menu's Copilot group; its settings in Properties; the draft card in the tile |
 | AI provider | Security › AI, after Access tokens; Super-Admins only; `/security/ai` |
 
+## 7i. R81: new chart types (proposed 2026-10-18)
+
+**Direction** (`references-new-chart-components.md` › Direction, settled by R81's answers). Add the chart types that answer the questions Spotfire analysts already ask: performance against a target, contribution to a change, distribution, multi-measure profiles, mix, flow, time spans and hierarchy. Each draws from Cube's grouped (or, where it says so, ungrouped) queries, is markable at the granularity it draws, says what it can't mark, and has a table view and a text alternative. The KPI and the graphical table are built from R80's Change, sparkline, icon and bullet-graph elements (§7h), drawn as designs 20 and 21 draw them. No gauge (R81). Every type is designed in parallel with R80 (R81).
+
+Nothing in §2–§7h changes except as design 23's criteria table says: §6's bar marks for histograms and waterfalls (below), rule 50's wording for a tile whose items are partly marked, AC-305's country map becoming the Map's Regions layer, and the gallery's purposes (a Flow shelf, 23-Q11). No new colour, type size or weight. Every value below reuses a token or is derived from one, and says which, so design-critic can measure against it.
+
+| Token use | Value | Traced to |
+| --- | --- | --- |
+| Gallery card | as built: 12 px padding, radius 6, 28 px icon in `accent`, name 13/600, description and needs `text-xs` `text-secondary`, what's missing in `text-primary` on a `bg-subtle` card | AC-217; `styles.ts` `.type-card` (T688) |
+| KPI value | `text-kpi-solo` 40/52 alone; `text-kpi` 32/40 when tiled; `tnum` | §3 |
+| KPI comparison line | R80's Change (▲/▼, sign, `status-success`, `status-error` or `text-secondary` by Direction), then "vs ‹period› (‹value›)" in `text-xs` `text-secondary` | §7h Change; rule 133 |
+| KPI sparkline | R80's sparkline (2 px line in the measure's dashboard colour, no axes or markers) at the tile's content width × 32 px; 132 × 32 when tiled | §7h Sparkline; 32 = 2 × 16; 23-Q14 |
+| KPI target | R80's bullet graph at the content width × 16, then "‹p›% of ‹target›" in `text-xs` `text-secondary` | §7h Bullet graph |
+| KPI tiles | 8 px gap, 1 px `border-subtle`, radius 6, padding 10 12; a marked tile has the 1.5 px marking outline; unmarked tiles keep their text in `text-secondary` and fade their micro-charts to 0.28 | §4; §5 marking outline and fade; rule 2 |
+| Graphical table | 24 px dense rows, 28 px header; Sparkline cells 64 × 16; Bullet cells 96 × 16 with the value beside; Icon cells the status icon and its word; partly marked Value cells add "· $X marked" in `text-secondary` | §4 table rows; §7h; §7a "Tables" |
+| Waterfall | increase §5's diverging blue (categorical slot 1's hex), decrease its red (slot 8's hex), totals `text-secondary`; labels ▲/▼ and a sign in `text-xs` `text-primary`; square ends; 2 px surface gap; connectors 1 px `border-strong`, dash 2 2 | §5 diverging "blue ↔ red"; rule 3; 23-Q12 |
+| Histogram | bins in slot 1 (or the Colour members), a 1 px surface gap and square ends; ticks at bin edges | §5; derived here (bins are a continuous range) |
+| Bubble | size by area, 8–40 px across; fill at 0.72 with a 1 px `bg-surface` ring; larger marks drawn first; shapes in order circle, square, triangle, diamond, down-triangle, cross (≤ 6); a size legend of three reference circles, 1 px `text-secondary` | §6 markers ≥ 8 px; §5 ≤ 6 shapes, ≤ 3 colours on all-pairs forms; 23-Q13 |
+| Map layers | regions: §5's sequential ramp, the null neutral and "No data", 0.5 px `bg-surface` boundaries; points: area-proportional 8–24 px, 0.72 fill, 1 px surface ring, slot 2 over a Regions layer (slot 1 is the ramp's hue); density: the sequential ramp fading to transparent, regions drawn as 1 px `border-strong` outlines while it shows | §7e Country map; rule 86; derived here |
+| Parallel coordinates | axes 1 px axis colour, each titled `text-xs` `text-primary` with its max above and min below in `text-secondary`; lines 1.5 px, at 0.6 past 50 lines; brushed range: the drag overlay | §6; §7a DragOverlay; derived here |
+| Bullet chart | 24 px band rows, 48 px pitch; bands R80's three greys (`bg-subtle`, `border-subtle`, `border-strong`), lightest lowest; value bar 8 px `text-primary`; target 2 × 32 px `text-primary`; one shared axis from 0 | §7h Bullet graph, scaled 2 × (band 12→24, bar 4→8) |
+| 100 % stacked | value axis fixed 0–100 %, ticks every 25 %; tooltip "‹value› · ‹p›% of ‹category›" | §6; derived here |
+| Sankey | nodes 12 px wide; the colouring step's nodes in their members' colours, other steps' nodes `text-secondary`; links in that colour at 0.4, 0.6 hovered; labels `text-xs` outside the nodes with their totals | §5; derived here |
+| Box plot layers | violin in the category colour at 0.24 with a 1.5 px edge; box 20 px wide inside a violin; points 8 px at 0.6 | §7h area fill; §6 markers; §7e outliers at 60 % |
+| Funnel | §6 bars on one left baseline, 28 px, 44 px pitch, one colour; conversion `text-xs` `text-secondary` after each value | §6; derived here |
+| Timeline | bars 16 px in 28 px rows, radius 3; "▸ running" for an open end; Today as R80's fixed reference line (1.5 px, dash 5 4, `text-secondary`); a zero-length task an 8 px diamond | §4 compact rows; §7h Reference line |
+| Calendar heatmap | 14 px cells on a 16 px pitch, radius 2; §5's sequential ramp; days with no rows in the null neutral with a "No data" swatch; weekday and month labels `text-xs` `text-secondary` | §5; rule 86; 16 = `text-xs` line height |
+| Icicle and sunburst | 1 px surface gaps; colour follows the first level's member and deeper boxes inherit it; root `border-strong`; labels `text-xs` `text-primary` on a 3 px `bg-surface` halo where a box is ≥ 16 px tall | rule 7; §7h Reference label halo |
+| Marking on new types | §5's 1.5 px marking outline and 0.28 fade throughout; a range or brush drawn as the drag overlay on `bg-subtle` | §5; §7a |
+| Paging | "Tiles 1–20 of n", "Rows 1–50 of n" with 24 px ‹ › buttons | §4 small controls; 23-Q5 |
+| Proposed caps (23-Q5) | KPI tiles 20; graphical-table rows 50 a page; parallel-coordinate lines 1,000; Sankey flows 50; calendar 366 days a panel, offered from 56; bullet bands 2–3; histogram bins 5–50 | proposed, not decided |
+
+**Where each surface lives**
+
+| Surface | Placement |
+| --- | --- |
+| The new types | The chart-type gallery (AC-217), on the shelves design 23's screen 1 lists, one new shelf, Flow (23-Q11) |
+| New wells | The chart editor's Data tab, after Metrics and Dimensions in each type's order (design 23's sheets) |
+| Stack 100 %, Draw as, Points and Violin, Colour links by, Percent of, Scale, Week starts | The chart editor's Customize tab |
+| Boundary sets (custom GeoJSON) | Uploaded by the semantic-layer engineer; where, after research (23-Q6) |
+| Bin dimensions | Drafted from the histogram's "Make bins in the model…" into My workspace, in the model editor (23-Q4) |
+
 ## 8. Components (primitives and states)
 
 - **Shell:** TopBar, WorkspaceSwitcher, Pane (with collapsed rail), Splitter, Drawer, CommandPalette.
@@ -649,6 +692,11 @@ Nothing in §2–§7g changes except as the designs' criteria tables say: §6's 
   - ParametersSection, ParameterForm (role, choices, default, used by); ParameterPill (in a well)
   - SummarizePanel; DraftCard (facts, Insert, Regenerate, Discard); AILabel; EarlierDataWarning
   - AISettingsPage (General, Provider, Limits, What's sent, Test connection, Usage); StoredKey and ReplaceKeyDialog; ConnectionChecks
+- **R81 (§7i, proposed):**
+  - KpiTile (value, Change, sparkline, target; tiled list with paging); CompareToField; DirectionSegmented
+  - GraphicalTable (Value, Change, Sparkline, Bullet and Icon columns; ColumnList with ⋯ Move up, Move down, Remove; paging)
+  - WaterfallChart; HistogramChart (BinsField; "Make bins in the model…"); BubbleChart (SizeLegend, ShapeLegend); MapLayers (BoundarySetSelect, RegionsLayer, PointsLayer, DensityLayer, UnplacedNote); ParallelCoordinates (ScaleWarning, AxisRangeInputs if 23-Q8 (a)); BulletChart (BandsField); StackModeSegmented; SankeyChart; BoxPlotDistribution (Points, Violin); FunnelChart (PercentOf); TimelineChart (EachBarIs; RunningEnd); CalendarHeatmap (WeekStart; NoDataSwatch); IcicleChart (DrawAs; ZoomBreadcrumb)
+  - States per type: empty (what's missing, one action), over a limit (the cap and an alternative), can't be marked (icon and label), and the table view
 
 ## 9. Checklist (numbered rules for design-critic and write-spec)
 
@@ -767,7 +815,7 @@ R78, the SQL runner workspace (§7f; design 17). From `references-sql-runner.md`
 107. The SQL runner adds only the keys R78 approved under R75: ⌘/Ctrl+Enter runs the selection, or else the statement at the cursor; ⌘/Ctrl+S saves; ⌘/Ctrl+F finds inside the editor; autocomplete opens as you type (↑ ↓ choose, Enter accepts, Esc closes the list only, Tab still leaves the editor); Ctrl+Q opens a tab on the current data source, and Ctrl+Alt+[ and Ctrl+Alt+] select the previous and next tab, with Control on macOS too. No key closes a tab. *(ref. 124; AC-387, AC-455, AC-456, AC-480; amended from "no shortcut … unless the user approves it" to the set R78 approved)*
 108. Every SQL runner pane, dialog and popover follows rule 85. The picker is a custom listbox that meets the 12 px floor. The workspace adds no colour, type size or weight. *(ref. 125)*
 
-R79, the compact dashboard header (§7g; design 19, approved 2026-10-17). From `references-compact-header.md` §4, "Proposed checklist rules", numbered from 109 in its order. ~~The copilot study's proposed rules (`references-copilot.md`) are still unnumbered; when the copilot is taken up they follow these, from 115.~~ R80's rules take 115–146 below; the copilot study's proposed rules, when the copilot is taken up, follow them, from 147 (2026-10-18).
+R79, the compact dashboard header (§7g; design 19, approved 2026-10-17). From `references-compact-header.md` §4, "Proposed checklist rules", numbered from 109 in its order. ~~The copilot study's proposed rules (`references-copilot.md`) are still unnumbered; when the copilot is taken up they follow these, from 115.~~ R80's rules take 115–146 below; ~~the copilot study's proposed rules, when the copilot is taken up, follow them, from 147 (2026-10-18)~~ R81's take 147–167; the copilot study's proposed rules, when the copilot is taken up, follow them, from 168 (2026-10-18).
 
 109. The dashboard header is one 48 px row by default. It holds the way back to the folder, the title, the page tabs, the interaction summary, the actions and the Filters toggle, and stays fixed above the scrolling tiles. *(AC-484, AC-196)*
 110. The toggle is a disclosure button with `aria-expanded`. Its visible label names "Filters" and the number set, or "Details" when the dashboard has no filters. *(AC-486)*
@@ -776,7 +824,7 @@ R79, the compact dashboard header (§7g; design 19, approved 2026-10-17). From `
 113. A filter changed while the sheet is closed changes the toggle's count, or a compact chip, and is announced politely. *(AC-493)*
 114. In edit mode the sheet is open and has no toggle. *(AC-491)*
 
-R80, combo charts, the Text tile, dashboard parameters and the AI provider (§7h; designs 20–22, **proposed 2026-10-18**). Drawn from both studies' proposed rules and R80's answers. The copilot study's rules follow from 147 when the copilot is taken up; its 103 and 104 (its numbering) overlap 142–144 and would be merged then.
+R80, combo charts, the Text tile, dashboard parameters and the AI provider (§7h; designs 20–22, **proposed 2026-10-18**). Drawn from both studies' proposed rules and R80's answers. ~~The copilot study's rules follow from 147 when the copilot is taken up~~ R81's rules follow from 147; the copilot study's rules follow those, from 168, when the copilot is taken up; its 103 and 104 (its numbering) overlap 142–144 and would be merged then.
 
 *Combo charts (design 20)*
 
@@ -824,3 +872,41 @@ R80, combo charts, the Text tile, dashboard parameters and the AI provider (§7h
 *For all of R80*
 
 146. Designs 20–22 add no colour, type size or weight and keep the 12 px floor. They add no keyboard shortcut beyond the insert menu's combobox keys and markdown's typing patterns (the editor's standard text keys wait on 21-Q11), and every panel, dialog and popover follows rule 85.
+
+R81, the new chart types (§7i; design 23, **proposed 2026-10-18**). Drawn from `references-new-chart-components.md` §5 and R81's answers. Caps named here are 23-Q5's proposals until decided. The copilot study's rules follow from 168 when the copilot is taken up.
+
+*The gallery and the KPI types (design 23, screen 1 and sheets 1, 2, 8)*
+
+147. The chart-type gallery lists every new type on the shelf of each question it answers (design 23, screen 1), a type on two shelves being the same card. Each card states what it needs in the field list's words, saying "summed" where the measure must add up, and a card the chart's fields can't draw is greyed with what's missing. No gauge is offered.
+148. A KPI takes optional Compare to (previous period, same period last year, another measure, a value), Target, Time, Tile by and Direction (Higher is better, Lower is better, Neutral). With none set it draws as today. Its change shows ▲ or ▼ by the value's direction, a sign and "vs ‹period› (‹value›)", coloured by Direction with status text roles; its sparkline and target are R80's elements at tile size, each with a text alternative. Tiled, each tile is a list item whose accessible name gives the member, value, change and target, and tiles page past 20.
+149. A graphical table is a real `<table>` of one row per member with ordered columns, each a Value, Change, Sparkline (64 × 16), Bullet (96 × 16) or Icon (an icon and its word). Rows mark as table tiles do (click, Ctrl/⌘, Shift+click); sorting never changes the marking; a row partly marked by another tile shows its marked share in its Value cells; rows page past 50, each page querying its own trends.
+150. A bullet chart draws each member's value bar against its target tick and 2–3 bands in R80's greys, lightest lowest, on one shared axis from zero. It's offered only while Target is set. Each bullet's accessible name is "‹member›: ‹value› of ‹target› (‹p›%), in the ‹band› band"; a member without a target says "No target".
+
+*Ranking, flow and part of a whole (sheets 3, 9, 10, 12, 15)*
+
+151. A waterfall's steps float from the running total with dashed connectors; totals start at zero and are `text-secondary`. Every step label carries ▲ or ▼ and a sign, so increase and decrease never rest on colour. It takes only a summed measure, refusing others with the reason. A total marks every member it sums; "Other (n)" marks its members; with Compare periods each step is a member's change between the two periods.
+152. 100 % stacked bars and areas take only summed measures. Folding to "Other" and the row limit apply before shares are taken; the axis is fixed at 0–100 %; tooltips and the table view give both the value and the share.
+153. A Sankey draws 2–4 ordered dimensions and one summed measure as acyclic flows, a member repeated in a later step being split as "‹member› (2)". A node marks its member and a link its (source, target) tuple; a link's marked share is given in its tooltip, not drawn, and the tile says so. Flows past 50 fold into "Other".
+154. A funnel draws stages (a dimension, or two or more measures sharing a format) as bars on one baseline, in stage order, with "‹p›% of previous" (or "of first") as text. Stages that are measures can't be marked, and the tile says so. A stage larger than the one before is drawn as it is, with a warning.
+155. An icicle (or, as its option, a sunburst) draws 2–4 levels or a hierarchy of one summed measure. A box is a path predicate and marking it marks everything under it. Click marks; double-click or "Zoom into" zooms, with a breadcrumb back, and zooming never marks or filters. Colour follows the first level's member; labels sit on a surface halo where a box is at least 16 px tall.
+
+*Distribution and correlation (sheets 4, 5, 7, 11)*
+
+156. A histogram's bins touch (a 1 px surface gap and square ends) and are spoken "from ‹a› to under ‹b›". Bins from a model bin dimension mark as ranges (AC-093); bins computed in the browser mark as entity lists of at most 1,000 and show "Computed from n of N" when the data was cut.
+157. The box plot's Points (None, Outliers, All, Beeswarm) and Violin need Each point is, and say so when it's missing. A point marks its entity by ID; points are placed from a fixed seed so redraws match; a beeswarm that can't fit falls back to All and says so.
+158. A bubble chart sizes marks by area between 8 and 40 px across, draws larger marks first, and shows a size legend of three reference circles with values. Colour takes at most 3 values and Shape at most 6, an over-cap well saying why; marks with a size at or below zero aren't drawn and are counted.
+159. Parallel coordinates draw one line per member across 3 or more measure axes, each axis labelled with its own minimum and maximum, and the warning not to compare heights across axes is visible text. Brushing marks the members whose lines pass through every brushed range, stored as a member list of at most 1,000; lines past 1,000 aren't drawn and the tile says how many.
+
+*Time and place (sheets 6, 13, 14)*
+
+160. A map draws Regions, Points and Density layers on vector boundaries (Countries, Admin-1, or a custom set) with no tile basemap. Regions follow rules 86–87 on every boundary set. Points are area-proportional and take a non-blue slot over a Regions layer. The Density layer can't be marked and says so. Keys or locations that can't be placed are named under the map.
+161. A timeline draws one bar per row from its start to its end on a time axis; a bar with no end runs to Today and reads "▸ running"; rows that end before they start aren't drawn and are named. A drag along the axis marks the bars that overlap the range. Durations are spoken in words.
+162. A calendar heatmap draws one cell per day on §5's sequential ramp, days with no rows in the null neutral with a "No data" swatch; past 366 days it draws a calendar per year. A drag marks a contiguous date range; Ctrl/⌘ toggles a day.
+
+*For every new type*
+
+163. Each new type marks at the granularity it draws, with §5's outline and fade; where an item can only be partly marked it shows the marked share as its form allows (from its own base, in its cells, or in its tooltip), and a tile whose items are all partly marked says "‹marking›'s share shown" instead of a count. Anything that can't be marked says so with an icon and a label.
+164. The recommender proposes a new type as the top pick only where design 23's sheets say (histogram, bubble, parallel coordinates, map, bullet with a target); every other new type is only a runner-up, each with a reason of at most 80 characters, and line stays the top pick for one measure over time. No new type needs a second value axis. Saved charts in Auto follow 23-Q3's answer.
+165. Every new type has an empty state naming what's missing with one action, and every cap it meets shows the cap and an alternative (page, fold to "Other", filter, table); nothing over a cap is dropped silently.
+166. Every new type has a table view (AC-178) holding the numbers behind every mark, and a text alternative naming the type, its encodings, its range and its extremes. No state rests on colour alone.
+167. Design 23 adds no colour, type size or weight and keeps the 12 px floor. It adds no keyboard shortcut; keyboard marking on the new types uses §7a's existing keys only if the user approves it (23-Q8), and the table view is always the complete path.
