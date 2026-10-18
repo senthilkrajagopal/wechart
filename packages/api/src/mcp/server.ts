@@ -72,6 +72,29 @@ const refusal = (text: string): CallToolResult => ({
   content: [{ type: 'text', text }],
 });
 
+/** What doesn't fit the tool's schema in `args`, by its issues' messages; none where all fits. */
+async function unfitIn(tool: McpTool, args: unknown): Promise<string | undefined> {
+  if (tool.inputSchema === undefined) return undefined;
+  const checked = await tool.inputSchema['~standard'].validate(args ?? {});
+  if (checked.issues === undefined) return undefined;
+  return checked.issues
+    .map((issue) => {
+      const at = (issue.path ?? [])
+        .map((part) => String(typeof part === 'object' ? part.key : part))
+        .join('.');
+      return at === '' ? issue.message : `${at}: ${issue.message}`;
+    })
+    .join('; ');
+}
+
+/**
+ * The tool's schema as the SDK lists it, taking whatever it is given, so
+ * the call reaches `called`, which checks it and records it either way.
+ */
+const advertised = (schema: StandardSchemaWithJSON): StandardSchemaWithJSON => ({
+  '~standard': { ...schema['~standard'], validate: (value: unknown) => ({ value }) },
+});
+
 /**
  * Runs a tool as the call's caller, and records the call in the audit
  * trail (T781, AC-478): who, the token's name, the tool, the outcome and
@@ -85,7 +108,8 @@ async function called(
   auth: McpAuth | undefined,
   services: McpServices,
 ): Promise<CallToolResult> {
-  if (auth === undefined) return refusal('No token was taken.');
+  // Never without a token: the `/mcp` POST answered that before any tool.
+  if (auth === undefined) throw new Unauthenticated();
   const { token, caller } = auth.extra;
   const call: McpCall = {
     caller,
@@ -94,8 +118,16 @@ async function called(
   let outcome: McpOutcome;
   let result: CallToolResult;
   try {
-    result = await tool.run(args, call);
-    outcome = result.isError === true ? 'refused' : 'ok';
+    // Arguments checked here, not by the SDK, so a call that doesn't fit is
+    // recorded too (T781's review): refused, saying what doesn't fit.
+    const unfit = await unfitIn(tool, args);
+    if (unfit === undefined) {
+      result = await tool.run(args, call);
+      outcome = result.isError === true ? 'refused' : 'ok';
+    } else {
+      result = refusal(`The arguments don’t fit ${tool.name}: ${unfit}`);
+      outcome = 'refused';
+    }
   } catch (error) {
     if (error instanceof Forbidden || error instanceof Unauthenticated) {
       outcome = 'refused';
@@ -146,8 +178,10 @@ export function mcpHandler(onerror: (error: Error) => void, services: McpService
         if (tool.inputSchema === undefined)
           server.registerTool(tool.name, config, () => called(tool, undefined, auth, services));
         else
-          server.registerTool(tool.name, { ...config, inputSchema: tool.inputSchema }, (args) =>
-            called(tool, args, auth, services),
+          server.registerTool(
+            tool.name,
+            { ...config, inputSchema: advertised(tool.inputSchema) },
+            (args) => called(tool, args, auth, services),
           );
       }
       return server;

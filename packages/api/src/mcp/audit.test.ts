@@ -53,6 +53,15 @@ const tools: McpTool[] = [
     },
   },
   {
+    name: 'test_fails',
+    description: 'Fails, for the test.',
+    scope: 'read',
+    inputSchema: ARGS,
+    async run() {
+      throw new Error('a fault of the server’s own');
+    },
+  },
+  {
     name: 'test_propose',
     description: 'Records a proposal, for the test.',
     scope: 'proposals-and-jobs',
@@ -163,6 +172,53 @@ describe('every MCP tool call in the audit trail (T781, AC-478)', () => {
         // None of the call's argument values, anywhere in the record.
         const whole = JSON.stringify(record);
         expect(whole).not.toContain(FILTER);
+        expect(whole).not.toContain(TITLE);
+      }
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('calls that never reach the tool, or that fail in it (T781’s review, AC-478)', () => {
+  it('records a call whose arguments don’t fit as refused, and a tool’s own failure as failed, with no argument value', async () => {
+    const app = wechart();
+    try {
+      const client = await mcpClient(app, HOST, token.text);
+      try {
+        // The schema is still listed for the client, though `called` checks it.
+        const listed = (await client.listTools()).tools.find((tool) => tool.name === 'test_read');
+        expect(listed?.inputSchema.properties).toEqual({
+          filter: { type: 'string' },
+          name: { type: 'string' },
+        });
+        // `filter` is a string: a number doesn't fit, and the tool never runs.
+        const unfit = await client.callTool({
+          name: 'test_read',
+          arguments: { filter: 424242, name: TITLE },
+        });
+        expect(unfit.isError).toBe(true);
+        const failed = await client.callTool({ name: 'test_fails', arguments: { name: TITLE } });
+        expect(failed.isError).toBe(true);
+        expect(JSON.stringify(failed.content)).not.toContain('a fault of the server’s own');
+      } finally {
+        await client.close();
+      }
+      const calls = (await recordsOf(token.id)).filter(
+        (record) =>
+          record.event === 'mcp-call' &&
+          (record.details?.['outcome'] === 'failed' ||
+            (record.details?.['tool'] === 'test_read' && record.details['outcome'] === 'refused')),
+      );
+      expect(
+        calls.map((record) => [record.details?.['tool'], record.details?.['outcome']]),
+      ).toEqual([
+        ['test_read', 'refused'],
+        ['test_fails', 'failed'],
+      ]);
+      for (const record of calls) {
+        const whole = JSON.stringify(record);
+        expect(whole).not.toContain('424242');
         expect(whole).not.toContain(TITLE);
       }
     } finally {
