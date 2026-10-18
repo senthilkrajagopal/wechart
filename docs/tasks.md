@@ -1745,11 +1745,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T800 (AC-450) Editor tabs, each bound to one data source: "+", the tab's ⋯ with Rename…, Duplicate, Close and Close other tabs, a changed source keeping the SQL and clearing the result, the state in the tooltip and accessible name, and asking before closing unsaved text
 
-- [ ] T801 (AC-451, AC-446) Keep open tabs in this browser only, for the signed-in user, restore them on reload, and name the open tab in the address
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/tabStore.ts` (+ test), `packages/web/src/workspaces/sql/SqlWorkspace.tsx`, `packages/web/src/router/routes.tsx`, `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: `tabStore.test.ts`: tabs (name, data source, SQL, parameters) are kept under a key holding the user's id, so another user in the same browser sees none of them. The e2e: `/sql?tab=<id>` names the open tab; a reload opens that tab with its source and text (AC-446); a second browser context for the same user has no such tab; no request to the API carries a tab, and the metadata database holds none (AC-451).
-  - Depends on: T800
+- [x] T801 (AC-451, AC-446) Keep open tabs in this browser only, for the signed-in user, restore them on reload, and name the open tab in the address
 
 - [ ] T802 (AC-373, AC-385, AC-380) Run a tab's SQL on its data source from the workspace, under the run line and the warning naming that tab's source and login, with the result grid and CSV
   - Lane: SQL

@@ -21,6 +21,7 @@ import { SQL_SOURCES_QUERY } from './sources';
 import { SourcePicker } from './SourcePicker';
 import { firstTabs, tabsReducer, type TabsAction, type TabsState } from './tabs';
 import { TabStrip } from './TabStrip';
+import { keepTabs, keptTabs } from './tabStore';
 import {
   editorShare,
   LEFT_PANE,
@@ -42,12 +43,54 @@ import {
  * signed in is known, nothing of it, never a moment of content they may not
  * see (T500's review: fail closed).
  */
-export function SqlWorkspace() {
+export function SqlWorkspace({
+  tab,
+  onOpenTab,
+}: {
+  /** The tab the address names, `/sql?tab=…` (T801, AC-446). */
+  readonly tab?: string | undefined;
+  /** Names the open tab in the address, as it opens. */
+  readonly onOpenTab?: ((id: string) => void) | undefined;
+} = {}) {
   const me = useQuery({ ...ME_QUERY, retry: false });
   if (me.data === undefined) return me.isError ? <NotFound /> : null;
   if (hiddenWorkspacesFor(me.data).includes('sql')) return <NotFound />;
-  // With sign-in off, the one user holds every permission (AC-254).
-  return <Workbench superAdmin={me.data.superAdmin || me.data.security === 'off'} />;
+  // Whose tabs these are, as the data source page's runner keys its drafts.
+  // An empty identity is none (T801's review): never one key for all such users.
+  const user = me.data.identity || me.data.name;
+  // With sign-in off, the one user holds every permission (AC-254). Another
+  // user's tabs are another workbench's (AC-451).
+  return (
+    <Workbench
+      key={user}
+      user={user}
+      tab={tab}
+      onOpenTab={onOpenTab}
+      superAdmin={me.data.superAdmin || me.data.security === 'off'}
+    />
+  );
+}
+
+/** The browser's storage, where it has one it lets the page use. */
+const browserStorage = (): Storage | undefined => {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * The tabs a visit opens with (T801, AC-451, AC-446): the user's kept in
+ * this browser, open on the one the address names where it is among them;
+ * else a first visit's (AC-466).
+ */
+function openingTabs(user: string, asked: string | undefined): TabsState {
+  const kept = keptTabs(browserStorage(), user);
+  if (kept === null) return firstTabs();
+  return kept.tabs.some((each) => each.id === asked) && asked !== undefined
+    ? { ...kept, active: asked }
+    : kept;
 }
 
 /**
@@ -95,14 +138,36 @@ type Side = 'left' | 'right';
  * right one, and below 1,024 the left one too, is a 40 px rail that opens
  * over the centre (design 17's Q1, (a)), one at a time.
  */
-function Workbench({ superAdmin }: { readonly superAdmin: boolean }) {
+function Workbench({
+  superAdmin,
+  user,
+  tab,
+  onOpenTab,
+}: {
+  readonly superAdmin: boolean;
+  readonly user: string;
+  readonly tab: string | undefined;
+  readonly onOpenTab: ((id: string) => void) | undefined;
+}) {
   const sources = useQuery({ ...SQL_SOURCES_QUERY, retry: false });
   /** The editor tabs, each bound to one data source (T800, AC-450). */
   const [tabs, dispatch] = useReducer(
     (state: TabsState, action: TabsAction) => tabsReducer(state, action),
     undefined,
-    () => firstTabs(),
+    () => openingTabs(user, tab),
   );
+  // Kept in this browser, for this user, as they change (T801, AC-451).
+  useEffect(() => {
+    keepTabs(browserStorage(), user, tabs);
+  }, [user, tabs]);
+  // The open tab named in the address (AC-446).
+  const naming = useRef(onOpenTab);
+  useEffect(() => {
+    naming.current = onOpenTab;
+  }, [onOpenTab]);
+  useEffect(() => {
+    naming.current?.(tabs.active);
+  }, [tabs.active]);
   const openTab = tabs.tabs.find((tab) => tab.id === tabs.active) ?? tabs.tabs[0];
   /** The open tab's data source, which the picker shows and chooses. */
   const chosen = openTab?.sourceId ?? '';

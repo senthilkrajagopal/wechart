@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 import type { Browser, Page } from '@playwright/test';
@@ -431,4 +432,104 @@ test.describe('the data source picker (T798, AC-447)', () => {
   // Who sees a folder only from below, or reads it, is the API's to hold
   // (`routes/sql-sources.test.ts`): here those users have no workspace to
   // open the picker in.
+});
+
+/**
+ * T801 (AC-451, AC-446): open tabs kept in this browser only, for the
+ * signed-in user, restored on reload, the open one named in the address;
+ * no tab sent to wechart's server, nor held in its metadata database.
+ */
+test.describe('tabs kept in this browser, the open one in the address (T801, AC-451, AC-446)', () => {
+  const MARKER = `tab_${RUN}_kept`;
+  const tabs = (page: Page) => page.getByRole('tablist', { name: 'SQL tabs' }).getByRole('tab');
+
+  test('a reload opens the tab the address names, with its name and data source; no other browser or user sees it', async ({
+    browser,
+  }) => {
+    const writer = await signedIn(browser, 'writer');
+    const sent: string[] = [];
+    writer.page.on('request', (request) => {
+      sent.push(`${request.url()} ${request.postData() ?? ''}`);
+    });
+    try {
+      const { page } = writer;
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await expect(tabs(page)).toHaveText(['Query 1']);
+
+      // A second tab, named and on the folder's source.
+      await page.getByRole('button', { name: 'New tab' }).click();
+      await page.getByRole('button', { name: 'Actions for Query 2' }).click();
+      await page.getByRole('menuitem', { name: 'Rename…' }).click();
+      await page.getByRole('dialog', { name: 'Rename Query 2' }).getByRole('textbox', { name: 'Name' }).fill(MARKER);
+      await page.getByRole('button', { name: 'Rename', exact: true }).click();
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.on) }).click();
+      const kept = tabs(page).filter({ hasText: MARKER });
+      await expect(kept).toHaveAttribute('aria-label', `${MARKER}, Not run yet, on ${SOURCES.on}`);
+      const id = (await kept.getAttribute('id'))?.replace(/^.*-tab-/, '') ?? '';
+      expect(id).toMatch(/^[0-9a-f]{8}$/);
+      // The address names the open tab (AC-446).
+      await expect(page).toHaveURL(new RegExp(`/sql\\?tab=${id}$`));
+
+      // Another tab opened, then the address of the kept one reloaded.
+      await tabs(page).first().click();
+      await page.goto(`/sql?tab=${id}`);
+      await expect(tabs(page)).toHaveText(['Query 1', MARKER]);
+      await expect(tabs(page).filter({ hasText: MARKER })).toHaveAttribute('aria-selected', 'true');
+      await expect(tabs(page).filter({ hasText: MARKER })).toHaveAttribute(
+        'aria-label',
+        `${MARKER}, Not run yet, on ${SOURCES.on}`,
+      );
+      await expect(pickerButton(page)).toContainText(SOURCES.on);
+      await page.reload();
+      await expect(tabs(page).filter({ hasText: MARKER })).toHaveAttribute('aria-selected', 'true');
+
+      // No request to the API carried the tab (AC-451).
+      expect(
+        sent.filter((line) => line.includes(MARKER) || (line.includes('/api/') && line.includes(id))),
+      ).toEqual([]);
+    } finally {
+      await writer.context.close();
+    }
+
+    // Another browser, the same user: SQL runner starts with Query 1.
+    const elsewhere = await signedIn(browser, 'writer');
+    try {
+      await elsewhere.page.goto('/sql');
+      await expect(tabs(elsewhere.page)).toHaveText(['Query 1']);
+    } finally {
+      await elsewhere.context.close();
+    }
+
+    // The metadata database holds no tab.
+    const dump = execFileSync(
+      'docker',
+      ['exec', 'wechart-meta', 'pg_dump', '-U', 'wechart', '--format=plain', 'wechart_security'],
+      { encoding: 'utf8', maxBuffer: 512 * 1024 * 1024 },
+    );
+    expect(dump.includes(MARKER)).toBe(false);
+  });
+
+  test('another user signed in to the same browser sees none of them', async ({ browser }) => {
+    const context = await browser.newContext({
+      baseURL: BASE_URL,
+      storageState: { cookies: [], origins: [] },
+    });
+    try {
+      const page = await context.newPage();
+      await signInThroughDex(page, 'writer');
+      await page.goto('/sql');
+      await page.getByRole('button', { name: 'New tab' }).click();
+      await expect(tabs(page)).toHaveText(['Query 1', 'Query 2']);
+
+      // Signed out, by its cookies; the browser's storage stays.
+      await context.clearCookies();
+      await signInThroughDex(page, 'super');
+      await page.goto('/sql');
+      await expect(tabs(page)).toHaveText(['Query 1']);
+    } finally {
+      await context.close();
+    }
+  });
 });

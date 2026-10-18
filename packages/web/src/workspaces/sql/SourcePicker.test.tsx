@@ -46,6 +46,8 @@ const ROWS: readonly SqlSourceRow[] = [
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  // Each test a first visit: the workspace keeps its tabs in this browser (T801).
+  localStorage.clear();
 });
 
 const wrap = (node: React.ReactNode, me?: Me) => {
