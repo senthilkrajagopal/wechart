@@ -400,6 +400,12 @@
     - **Gotcha:** vitest's transform turns `]` in a regex literal into a bare `]`, which closes a character class; the RFC 6750 check in `scopes.test.ts` is a `new RegExp` from a string.
     - **Seen red:** all three `workspace.test.ts` cases, for "Tool edit_in_my_workspace not found" and "expected 200 to be 403".
     - **Unit suite:** all green: api 2,026, web 3,117, core 550, charts 556, recommender 133, ui 47.
+    - **The cold review:** PASS. Taken up in the follow-up commit:
+      - **A model's `into`** (medium, fidelity): the web app's dialog copies a dashboard's models into the dashboard copy's project folder (`{ into }`); the tool now takes `into` for a model file and passes it to the route, which checks it is a folder of the caller's own workspace. New test (seen red: "The arguments don't fit"): the tool sends it and gives the route's refusal, as no xcube is configured in the API tests.
+      - **The 2025 era and every tool** (medium, test gap): a new test calls every tool in `MCP_TOOLS`, with a token lacking its scope, from a 2026-07-28 client and from a plain 2025 client, and each is answered the 403 challenge for its own scope. `mcpClientSeeing` takes the era. It passed at once: the behaviour was there, untested.
+      - **Copies outside the workspace** (low): the copy test now checks the shared dashboard's only copy anywhere is the one in the workspace, and the refused one has none anywhere.
+      - **For the user:** the project folder's time zone defaults to UTC where the client gives none (decision T785-2), the lane's call. It is raised in the lane's handoff.
+      - **Left as is:** `scopes.test.ts` doesn't check the order of telling and answering; the answer is returned after the awaited telling.
 
 ## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
 

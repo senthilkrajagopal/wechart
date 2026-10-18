@@ -41,12 +41,18 @@ export async function mcpClient(app: FastifyInstance, host: string, token: strin
  * The same client, with every HTTP answer it was given, latest last (T785):
  * to see a refusal the SDK's client throws, such as a 403 scope challenge.
  */
-export async function mcpClientSeeing(app: FastifyInstance, host: string, token: string) {
+export async function mcpClientSeeing(
+  app: FastifyInstance,
+  host: string,
+  token: string,
+  /** `2025`: the plain 2025 sequence, served by the SDK's stateless fallback (T785's review). */
+  era: 'modern' | '2025' = 'modern',
+) {
   const answers: Response[] = [];
   const into = fetchInto(app, host);
   const client = new Client(
     { name: 'wechart-tests', version: '1.0.0' },
-    { versionNegotiation: { mode: 'auto' } },
+    era === 'modern' ? { versionNegotiation: { mode: 'auto' } } : {},
   );
   const transport = new StreamableHTTPClientTransport(new URL(`https://${host}/mcp`), {
     fetch: async (url, init) => {

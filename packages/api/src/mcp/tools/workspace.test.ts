@@ -20,6 +20,7 @@ import { challengesFor, mcpClient, mcpClientSeeing } from '../client.fixture';
 import { forgetTestCounts, testCounter } from '../counter.fixture';
 import { USER_DATA, USER_DATA_NOTICE } from '../result';
 import { mintToken } from '../tokenText';
+import { MCP_TOOLS } from '.';
 
 /**
  * T785 (AC-438, AC-433, AC-469, AC-432): "Edit in my workspace" through
@@ -60,7 +61,7 @@ let rootBefore: Awaited<ReturnType<ReturnType<typeof docs>['get']>> = null;
 let app: FastifyInstance;
 let writerKey = '';
 const tokenIds: string[] = [];
-const tokens: Partial<Record<'edit' | 'readOnly', string>> = {};
+const tokens: Partial<Record<'edit' | 'readOnly' | 'noRead' | 'noEdit', string>> = {};
 const at = { writable: '', readable: '' };
 
 async function make(kind: DocumentKind, body: Record<string, unknown>): Promise<string> {
@@ -139,6 +140,8 @@ beforeAll(async () => {
   ).user_key;
   tokens.edit = await tokenFor(['read', 'workspace-edit']);
   tokens.readOnly = await tokenFor(['read']);
+  tokens.noRead = await tokenFor(['workspace-edit']);
+  tokens.noEdit = await tokenFor(['read']);
 }, 60_000);
 
 /** The copies made here, and their project folders, removed after. */
@@ -205,6 +208,10 @@ describe('Edit in my workspace through MCP (T785, AC-438, AC-432)', () => {
       expect(await inWorkspace()).toEqual(
         [...before, `dashboard:${id}`, `folder:${folderId}`].sort(),
       );
+      // Its only copy anywhere: none put outside their workspace (T785's review).
+      expect((await docs().withOrigin('dashboard', at.writable)).map((each) => each.id)).toEqual([
+        id,
+      ]);
 
       // The shared one as it was.
       expect(await docs().get('dashboard', at.writable)).toEqual(shared);
@@ -228,6 +235,42 @@ describe('Edit in my workspace through MCP (T785, AC-438, AC-432)', () => {
       expect(refused.structuredContent).toBeUndefined();
     });
     expect(await inWorkspace()).toEqual(before);
+    // Nor anywhere else (T785's review).
+    expect(await docs().withOrigin('dashboard', at.readable)).toEqual([]);
+  });
+
+  it('copies a model file into a folder of the owner’s workspace it names, as the web app’s dialog does', async () => {
+    // Without xcube the route copies no model; the tool sends what the dialog
+    // sends, `into` included, and gives the route's refusal (T785's review).
+    await withClient(tokens.edit!, async (client) => {
+      const refused = await client.callTool({
+        name: 'edit_in_my_workspace',
+        arguments: { kind: 'model', folderId: 'root', path: `${MARK}/model.yml`, into: 'mine' },
+      });
+      expect(refused.isError).toBe(true);
+      expect(JSON.stringify(refused.content)).toContain('xcube isn’t configured');
+    });
+  });
+});
+
+describe('every tool’s scope, in both eras (T785’s review, AC-433)', () => {
+  it('answers a call by a token without its tool’s scope 403 insufficient_scope, for every tool, 2026-07-28 and 2025 alike', async () => {
+    const without = { read: tokens.noRead!, 'workspace-edit': tokens.noEdit! } as const;
+    for (const era of ['modern', '2025'] as const) {
+      for (const tool of MCP_TOOLS) {
+        const scope = tool.scope as keyof typeof without;
+        const { client, answers } = await mcpClientSeeing(app, HOST, without[scope], era);
+        try {
+          await expect(
+            client.callTool({ name: tool.name, arguments: {} }),
+            `${era} ${tool.name}`,
+          ).rejects.toThrow();
+        } finally {
+          await client.close();
+        }
+        expect(challengesFor(answers.at(-1), tool.scope), `${era} ${tool.name}`).toBe(true);
+      }
+    }
   });
 });
 

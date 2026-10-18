@@ -27,6 +27,7 @@ interface CopyArgs {
   readonly folderId?: string;
   readonly path?: string;
   readonly timeZone?: string;
+  readonly into?: string;
 }
 
 const COPY_ARGS = fromJsonSchema<CopyArgs>({
@@ -54,6 +55,12 @@ const COPY_ARGS = fromJsonSchema<CopyArgs>({
       description:
         'The IANA time zone the copy’s project folder is named in, by the minute it is made; UTC unless given.',
     },
+    into: {
+      type: 'string',
+      pattern: ID,
+      description:
+        'For a model file: a folder of your workspace to copy it into, such as the project folder a dashboard’s copy was given, as the web app copies a dashboard’s models with it; "mine" for My workspace itself. A project folder of its own unless given.',
+    },
   },
   required: ['kind'],
   additionalProperties: false,
@@ -61,8 +68,12 @@ const COPY_ARGS = fromJsonSchema<CopyArgs>({
 
 /** "Edit in my workspace", as the web app's route makes it (`[R48-5]`, AC-278, AC-368). */
 async function copyIn(args: unknown, call: McpCall): Promise<CallToolResult> {
-  const { kind, id, folderId, path, timeZone = DEFAULT_TIME_ZONE } = args as CopyArgs;
-  const body = kind === 'model' ? { kind, folderId, path, timeZone } : { kind, id, timeZone };
+  const { kind, id, folderId, path, into, timeZone = DEFAULT_TIME_ZONE } = args as CopyArgs;
+  // A model's `into` is the route's to check: a folder of the caller's own workspace (T763).
+  const body =
+    kind === 'model'
+      ? { kind, folderId, path, timeZone, ...(into === undefined ? {} : { into }) }
+      : { kind, id, timeZone };
   return changed(await call.ask('/api/workspace/copies', { method: 'POST', body }), 'copy');
 }
 
