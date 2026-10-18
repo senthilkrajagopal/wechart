@@ -167,7 +167,9 @@ describe('a Text tile’s stored document (T868, AC-513, AC-518)', () => {
 
   it('refuses what isn’t a document of this version', () => {
     for (const notOne of [null, 'text', [], {}, { version: 1 }, { doc: { type: 'doc' } }])
-      expect(textDocumentProblems(notOne)).not.toEqual([]);
+      expect(textDocumentProblems(notOne)).toEqual([
+        'A Text document must be an object with its version and doc.',
+      ]);
     expect(textDocumentProblems({ version: 99, doc: { type: 'doc', content: [] } })).toEqual([
       'Unknown Text document version 99.',
     ]);
@@ -327,10 +329,89 @@ describe('a Text tile’s stored document (T868, AC-513, AC-518)', () => {
     ]);
   });
 
+  // T868's review: names every object inherits are no node, mark or
+  // attribute of the schema, and are refused by name rather than throwing.
+  it('refuses an inherited name as a node, mark or attribute, without throwing', () => {
+    const posted = (json: string) => textDocumentProblems(JSON.parse(json) as unknown);
+    const wrapped = (block: string) =>
+      `{"version":${String(TEXT_DOCUMENT_VERSION)},"doc":{"type":"doc","content":[${block}]}}`;
+    expect(posted(wrapped('{"type":"paragraph","attrs":{"constructor":1}}'))).toEqual([
+      'A paragraph has no attribute "constructor".',
+    ]);
+    expect(posted(wrapped('{"type":"paragraph","attrs":{"__proto__":{"x":1}}}'))).toEqual([
+      'A paragraph has no attribute "__proto__".',
+    ]);
+    expect(
+      posted(
+        wrapped(
+          '{"type":"paragraph","content":[{"type":"text","text":"a","marks":[{"type":"link","attrs":{"href":"https://x.example","toString":"x"}}]}]}',
+        ),
+      ),
+    ).toEqual(['A link has no attribute "toString".']);
+    expect(
+      posted(
+        wrapped(
+          '{"type":"paragraph","content":[{"type":"text","text":"a","marks":[{"type":"constructor"},{"type":"__proto__"}]}]}',
+        ),
+      ),
+    ).toEqual(['Unknown mark "constructor".', 'Unknown mark "__proto__".']);
+    expect(posted(wrapped('{"type":"toString"},{"type":"__proto__"}'))).toEqual([
+      'Unknown node "toString".',
+      'Unknown node "__proto__".',
+    ]);
+  });
+
+  // T868's review: ProseMirror marks every inline node in a selection, a
+  // line break included.
+  it('accepts a line break inside bold, italic or a link', () => {
+    expect(
+      textDocumentProblems(
+        docOf(
+          paragraph(
+            text('a', [{ type: 'bold' }]),
+            { type: 'hardBreak', marks: [{ type: 'bold' }, { type: 'italic' }] },
+            { type: 'hardBreak', marks: [{ type: 'link', attrs: { href: 'https://x.example' } }] },
+            text('b', [{ type: 'bold' }]),
+          ),
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  // T868's review: as StarterKit's lists are, so a document that passes
+  // here opens in the editor (`listItem+`, `paragraph block*`).
+  it('refuses an empty list, and a list item that doesn’t start with a paragraph', () => {
+    expect(textDocumentProblems(docOf({ type: 'bulletList', content: [] }))).toEqual([
+      'A bulletList needs at least one listItem.',
+    ]);
+    expect(textDocumentProblems(docOf({ type: 'orderedList' }))).toEqual([
+      'An orderedList needs at least one listItem.',
+    ]);
+    expect(
+      textDocumentProblems(
+        docOf({
+          type: 'bulletList',
+          content: [
+            { type: 'listItem', content: [] },
+            {
+              type: 'listItem',
+              content: [
+                { type: 'bulletList', content: [{ type: 'listItem', content: [paragraph()] }] },
+              ],
+            },
+          ],
+        }),
+      ),
+    ).toEqual([
+      'A listItem must start with a paragraph.',
+      'A listItem must start with a paragraph.',
+    ]);
+  });
+
   it('checks a document nested past any call stack’s depth without overflowing', () => {
     let deep: TextNode = paragraph(text('bottom'));
     for (let at = 0; at < 200_000; at += 1)
-      deep = { type: 'bulletList', content: [{ type: 'listItem', content: [deep] }] };
+      deep = { type: 'bulletList', content: [{ type: 'listItem', content: [paragraph(), deep] }] };
     expect(textDocumentProblems(docOf(deep))).toEqual([]);
     expect(elementsOf(docOf(deep))).toEqual([]);
   });

@@ -139,7 +139,18 @@ interface NodeSpec {
   readonly attrs: Readonly<Record<string, AttrSpec>>;
   /** The marks it may carry; none for a block. */
   readonly marks: readonly string[];
+  /** A list's: it holds at least one of its content (StarterKit's `listItem+`). */
+  readonly nonEmpty?: boolean;
+  /** A list item's: its first child (StarterKit's `paragraph block*`). */
+  readonly first?: string;
 }
+
+/**
+ * A table's own entry, never one every object inherits: `constructor`,
+ * `__proto__` or `toString` is no node, mark or attribute here (T868's review).
+ */
+const own = <T>(table: Readonly<Record<string, T>>, key: string): T | undefined =>
+  Object.hasOwn(table, key) ? table[key] : undefined;
 
 const MEMBER = /^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -243,7 +254,7 @@ const NODES: Readonly<Record<string, NodeSpec>> = {
   }),
   /** `text-kpi`, for a lone Value or Change (design 21 pin 2). */
   largeValue: block(),
-  bulletList: { content: ['listItem'], attrs: {}, marks: [] },
+  bulletList: { content: ['listItem'], attrs: {}, marks: [], nonEmpty: true },
   orderedList: {
     content: ['listItem'],
     attrs: {
@@ -254,10 +265,17 @@ const NODES: Readonly<Record<string, NodeSpec>> = {
       },
     },
     marks: [],
+    nonEmpty: true,
   },
-  listItem: { content: ['paragraph', 'bulletList', 'orderedList'], attrs: {}, marks: [] },
+  listItem: {
+    content: ['paragraph', 'bulletList', 'orderedList'],
+    attrs: {},
+    marks: [],
+    first: 'paragraph',
+  },
   text: { content: [], attrs: {}, marks: TEXT_MARKS },
-  hardBreak: { content: [], attrs: {}, marks: [] },
+  /** Marked as the text around it is, since ProseMirror marks every inline node in a selection. */
+  hardBreak: { content: [], attrs: {}, marks: TEXT_MARKS },
 
   value: element({
     measure: requiredMember,
@@ -356,7 +374,7 @@ function attrProblems(
   if (!isRecord(attrs)) return [`${a(type)}’s attributes must be an object.`];
   const problems: string[] = [];
   for (const [key, value] of Object.entries(attrs)) {
-    const spec = specs[key];
+    const spec = own(specs, key);
     if (spec === undefined) problems.push(`${a(type)} has no attribute "${key}".`);
     else if (value !== undefined && !spec.check(value))
       problems.push(`${a(type)}’s "${key}" must be ${spec.mustBe}.`);
@@ -375,7 +393,7 @@ function markProblems(type: string, marks: unknown, allowed: readonly string[]):
       problems.push(`${a(type)} has a mark with no type.`);
       continue;
     }
-    const specs = MARKS[mark.type];
+    const specs = own(MARKS, mark.type);
     if (specs === undefined) {
       problems.push(`Unknown mark "${mark.type}".`);
       continue;
@@ -410,7 +428,7 @@ function* walk(root: unknown): Generator<{ node: unknown; parent: string | undef
     if (next === undefined) break;
     yield next;
     const { node } = next;
-    if (!isRecord(node) || typeof node.type !== 'string' || NODES[node.type] === undefined)
+    if (!isRecord(node) || typeof node.type !== 'string' || own(NODES, node.type) === undefined)
       continue;
     if (!Array.isArray(node.content)) continue;
     const children = node.content as unknown[];
@@ -424,11 +442,11 @@ function nodeProblems(node: unknown, parent: string | undefined): string[] {
   if (!isRecord(node) || typeof node.type !== 'string')
     return [`${parent === undefined ? 'The document' : a(parent)} holds a node with no type.`];
   const { type } = node;
-  const spec = NODES[type];
+  const spec = own(NODES, type);
   if (spec === undefined) return [`Unknown node "${type}".`];
   if (parent === undefined && type !== 'doc')
     return [`The document must start with "doc", not "${type}".`];
-  if (parent !== undefined && !(NODES[parent]?.content ?? []).includes(type))
+  if (parent !== undefined && !(own(NODES, parent)?.content ?? []).includes(type))
     return [`${a(parent)} can’t hold ${a(type).toLowerCase()}.`];
 
   const problems: string[] = [];
@@ -447,6 +465,12 @@ function nodeProblems(node: unknown, parent: string | undefined): string[] {
     problems.push('A text needs its "text".');
   if (node.content !== undefined && !Array.isArray(node.content))
     problems.push(`${a(type)}’s content must be a list.`);
+  const children: unknown[] = Array.isArray(node.content) ? (node.content as unknown[]) : [];
+  if (spec.nonEmpty === true && children.length === 0)
+    problems.push(`${a(type)} needs at least one ${spec.content.join(' or ')}.`);
+  const first = children[0];
+  if (spec.first !== undefined && !(isRecord(first) && first.type === spec.first))
+    problems.push(`${a(type)} must start with ${a(spec.first).toLowerCase()}.`);
   if (type !== 'text') problems.push(...attrProblems(type, node.attrs, spec.attrs));
   if (node.marks !== undefined && spec.marks.length > 0)
     problems.push(...markProblems(type, node.marks, spec.marks));
