@@ -4,7 +4,7 @@ import { closeDb, getDb } from '../db/client';
 import { buildServer } from '../server';
 import { identityFrom } from './oidc';
 import { pgSessionStore } from './session-store';
-import { PUBLIC_URL, signIn, USERS } from './sign-in.fixture';
+import { cookieOf, PUBLIC_URL, signIn, signInAtDex, USERS } from './sign-in.fixture';
 
 /**
  * T777 (AC-471): each web sign-in records the user's groups, as the
@@ -15,9 +15,12 @@ describe('a web sign-in', () => {
     await closeDb();
   });
 
-  it('records the user’s groups and the time', async () => {
-    const recorded: { key: string; groups: readonly string[]; at: Date }[] = [];
-    const app = buildServer({
+  /** Sign-in on, its sign-ins kept by `signIns` and its audit records in `audited`. */
+  const server = (
+    signIns: { record: (key: string, groups: readonly string[], at: Date) => Promise<void> },
+    audited: { actor: { key: string } }[] = [],
+  ) =>
+    buildServer({
       config: {
         cubeApiUrl: 'http://cube.invalid/cubejs-api',
         cubeApiSecret: 'secret',
@@ -38,23 +41,60 @@ describe('a web sign-in', () => {
         },
       },
       sessions: pgSessionStore(getDb()),
-      signIns: {
+      signIns: { ...signIns, latest: async () => undefined },
+      audit: {
+        record: async (entry: { actor: { key: string } }) => {
+          audited.push(entry);
+        },
+      } as never,
+    });
+
+  it('records the user’s groups and the time, under the key the session has', async () => {
+    const recorded: { key: string; groups: readonly string[]; at: Date }[] = [];
+    const audited: { actor: { key: string } }[] = [];
+    const app = server(
+      {
         record: async (key, groups, at) => {
           recorded.push({ key, groups, at });
         },
-        latest: async () => undefined,
       },
-    });
+      audited,
+    );
     try {
       const before = Date.now();
       const cookie = await signIn(app, USERS.writer!);
       const me = await app.inject({ method: 'GET', url: '/api/me', headers: { cookie } });
       expect(recorded).toHaveLength(1);
-      expect(recorded[0]!.key.length).toBeGreaterThan(0);
+      // The key the session's user has, as the sign-in's audit record names it.
+      expect(audited.map((entry) => entry.actor.key)).toEqual([recorded[0]!.key]);
       expect(recorded[0]!.groups).toEqual(me.json<{ groups: string[] }>().groups);
       expect(recorded[0]!.groups).toEqual(USERS.writer!.groups);
       expect(recorded[0]!.at.getTime()).toBeGreaterThanOrEqual(before);
       expect(recorded[0]!.at.getTime()).toBeLessThanOrEqual(Date.now());
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('fails, on wechart’s own page, and signs no one in, where the groups can’t be kept', async () => {
+    const app = server({
+      record: async () => {
+        throw new Error('the metadata database is away');
+      },
+    });
+    try {
+      const login = await app.inject({ method: 'GET', url: '/api/auth/login?returnTo=/explore' });
+      const callback = new URL(await signInAtDex(login.headers.location as string, USERS.writer!));
+      const done = await app.inject({
+        method: 'GET',
+        url: `${callback.pathname}${callback.search}`,
+        headers: { cookie: cookieOf(login.headers['set-cookie']) },
+      });
+      expect(done.statusCode).toBe(302);
+      expect(done.headers.location).toBe('/sign-in-failed');
+      const cookie = cookieOf(done.headers['set-cookie'] ?? login.headers['set-cookie']);
+      const me = await app.inject({ method: 'GET', url: '/api/me', headers: { cookie } });
+      expect(me.statusCode).toBe(401);
     } finally {
       await app.close();
     }

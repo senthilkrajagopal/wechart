@@ -337,8 +337,19 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
 
     // The groups this user's tokens act with on /mcp from now on (T777,
     // AC-471): kept before the session is, so a sign-in whose groups can't
-    // be kept fails rather than leave a token acting on stale ones.
-    await options.signIns?.record(userKeyOf(claims.iss, claims.sub), groups, new Date());
+    // be kept fails, on wechart's own page, rather than leave a token acting
+    // on stale ones.
+    try {
+      await options.signIns?.record(userKeyOf(claims.iss, claims.sub), groups, new Date());
+    } catch (error) {
+      request.log.error({ err: error }, 'the sign-in’s groups couldn’t be kept');
+      return failedSignIn(
+        request,
+        reply,
+        'wechart couldn’t record your groups for this sign-in. Try again shortly.',
+        attempt.returnTo,
+      );
+    }
 
     // A new session id once signed in (session fixation; research, OWASP),
     // lasting 12 hours from now (AC-316).

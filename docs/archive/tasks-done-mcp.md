@@ -237,3 +237,9 @@
       - With sign-in on and no `signIns` store, `/mcp` takes no token, so it never falls back to no groups.
     - **"Through `access/visible.ts`":** the web app works out a user's folders in `server.ts`'s `visibilityOf`, from `folderRights` (`@wechart/core`). `access/visible.ts` only counts and searches. The test therefore checks the caller's folders with `folderRights`, as `visibilityOf` does. The whole path is T782's to show through a tool.
     - **Tests:** `repos/sign-ins.test.ts` (2), `mcp/caller.test.ts` (3), `auth/oidc.test.ts` (1 new). `mcp/auth.test.ts`'s sign-in-on server now gets the `signIns` store.
+    - **After the cold review (follow-up commit):** it passed, with no bug in what it was asked to check.
+      - A sign-in whose groups can't be kept now goes to wechart's own sign-in-failed page, not a JSON 500 (T697: "wechart's page, never JSON"). Its detail is "wechart couldn't record your groups for this sign-in. Try again shortly." No one is signed in (`oidc.test.ts`, new).
+      - `oidc.test.ts` now checks that the recorded key is the session's own, the key the sign-in's audit record names, not merely that one is there.
+      - With sign-in on and no `signIns` store, a working token gets 401 (`mcp/auth.test.ts`, new).
+      - The upsert guard's comment and test now say what it guards against. The time is taken when the callback finishes, so it covers two replicas whose clocks differ, not a sign-in begun earlier.
+      - **Left for T782:** the `/mcp` POST's `preParsing` hook that sets `request.wechartUser` to the caller has no test of its own until a tool reads it.

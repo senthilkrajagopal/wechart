@@ -31,7 +31,7 @@ describe('the latest sign-in (T777, AC-471)', () => {
     expect(await store().latest(KEY)).toEqual({ groups: ['B'], at: second });
     await store().record(KEY, [], new Date('2026-10-17T11:00:00.000Z'));
     expect((await store().latest(KEY))?.groups).toEqual([]);
-    // One finishing late, but begun before, doesn't replace a later one.
+    // One with an earlier time (another replica's clock behind) doesn't replace a later one.
     await store().record(KEY, ['A'], second);
     expect((await store().latest(KEY))?.groups).toEqual([]);
   });

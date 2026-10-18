@@ -147,7 +147,7 @@ describe('the token on /mcp, sign-in off (T776, AC-435, AC-431, AC-430, AC-479)'
 });
 
 describe('the token on /mcp, sign-in on (T776, AC-435)', () => {
-  const signedIn = () =>
+  const signedIn = (keepsSignIns = true) =>
     buildServer({
       config: {
         ...base,
@@ -167,8 +167,25 @@ describe('the token on /mcp, sign-in on (T776, AC-435)', () => {
       sessions: pgSessionStore(getDb()),
       accessTokens: store(),
       // Whose groups a token acts with (T777): with none kept, no token is taken.
-      signIns: signInStore(getDb()),
+      ...(keepsSignIns ? { signIns: signInStore(getDb()) } : {}),
     });
+
+  it('takes no token where no sign-ins are kept, rather than act with no groups (T777)', async () => {
+    const working = await tokenOf(`t777-none-${Date.now()}`, 0, 30);
+    const app = signedIn(false);
+    try {
+      const answer = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        headers: { host: HOST, authorization: `Bearer ${working.text}` },
+        payload: tools,
+      });
+      expect(answer.statusCode).toBe(401);
+      expect(answer.headers['www-authenticate']).toBe(REFUSED);
+    } finally {
+      await app.close();
+    }
+  });
 
   it('refuses a request signed in only by the web app’s session cookie', async () => {
     const app = signedIn();

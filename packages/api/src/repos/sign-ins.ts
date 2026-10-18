@@ -11,7 +11,8 @@ export interface LatestSignIn {
 /**
  * Each user's latest web sign-in (T777, AC-471), whose groups their
  * personal access tokens act with on `/mcp`. A sign-in replaces the one
- * before it, unless it is older (two finishing out of order).
+ * before it, unless its time is earlier: two API replicas whose clocks
+ * differ, recording two sign-ins close together.
  */
 export function signInStore(db: Kysely<Database>) {
   return {
