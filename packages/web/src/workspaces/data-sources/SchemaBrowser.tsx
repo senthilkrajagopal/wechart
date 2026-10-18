@@ -104,6 +104,7 @@ export function SchemaBrowser({
   sourceVersion,
   sourceName,
   onChoose,
+  heading = 'Tables',
 }: {
   sourceId: string;
   /** Its settings' version: another reads it again. */
@@ -111,6 +112,8 @@ export function SchemaBrowser({
   sourceName: string;
   /** A name chosen, for the editor. */
   onChoose: (name: string) => void;
+  /** Its own heading; none where its pane has one (the SQL runner workspace's "Schema", T805). */
+  heading?: string | null;
 }) {
   const queryClient = useQueryClient();
   const root = useRef<HTMLUListElement>(null);
@@ -134,7 +137,7 @@ export function SchemaBrowser({
   return (
     <section className="sql-schema" aria-label={`Tables in ${sourceName}`}>
       <div className="sql-schema__top">
-        <h2 className="sql-schema__head">Tables</h2>
+        {heading === null ? <span /> : <h2 className="sql-schema__head">{heading}</h2>}
         <button
           type="button"
           className="btn-link sql-schema__again"

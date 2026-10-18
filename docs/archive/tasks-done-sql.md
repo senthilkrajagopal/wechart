@@ -77,3 +77,18 @@
     - **`SqlResult`:** it takes an optional `state` for its head, which only the workspace passes. "Finished" then says "no rows" in its detail.
     - **"Unavailable" reads "No answer"**, outside AC-452's list, because whether such a run ran isn't known (lane SQL's call).
     - **Go to it shows only where a tab holds the run.** A run started on the data source page, or before a reload with no tab kept, holds Run with Cancel that run only.
+
+- [x] T805 (AC-386) The schema browser in the left pane: the tab's source's schemas, tables and columns with their types, read as they're opened, putting a chosen name into the editor
+  - Lane: SQL
+  - Files: `packages/web/src/workspaces/sql/SchemaTree.tsx` (+ test; from `workspaces/data-sources/SchemaBrowser.tsx`), `e2e/security/sql-workspace.spec.ts`.
+  - Failing test: `SchemaTree.test.tsx`: the tree shows the tab's own source, and switching tabs to another source shows that one's; a column shows its database type; choosing a name puts it at the editor's cursor. The e2e: every table and column of the development database's `public` schema is listed (AC-386).
+  - Depends on: T800
+  - **Built 2026-10-17** (lane SQL, batch 3).
+    - **AC-386 stays open, for the coordinator.** Its words take in "a SQL runner tab … on Cube Store", but design 17's C5, approved, draws no browser there: "Cube Store has no catalog to browse", as built. No research says Cube Store can be introspected. Its data-source part passes on the e2e "the schema browser in the left pane (T805)". That e2e compares the tree to the sample database's `information_schema`: every `public` base table, and each one's columns in order as "name, data_type". Choosing `orders` puts `public.orders` in the editor.
+    - **The unit tests show:**
+      - the tree follows the open tab's source, there and back;
+      - a column shows its database type;
+      - a chosen name goes in at the cursor of the tab open when it was chosen, once.
+    - **Cube Store:** design 17's C5 note, as built, and no catalog read.
+    - `SchemaTree.tsx` wraps the data source page's `SchemaBrowser`, which gains an optional `heading` (none here, under the pane's "Schema").
+    - Decision T805-1 is in `docs/design/decisions-sql.md`.

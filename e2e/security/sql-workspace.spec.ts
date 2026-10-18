@@ -730,6 +730,74 @@ test.describe('running a tab’s SQL in the workspace (T802)', () => {
 });
 
 /**
+ * T805 (AC-386): the open tab's source's schemas, tables and columns, with
+ * their types, in the left pane, a name chosen going into the editor.
+ */
+test.describe('the schema browser in the left pane (T805, AC-386)', () => {
+  /** The development database's own `public` tables and their columns, in order. */
+  const catalog = () => {
+    const lines = execFileSync(
+      'docker',
+      [
+        'exec',
+        'wechart-sample-db',
+        'psql',
+        '-U',
+        'sample',
+        '-d',
+        'sample',
+        '-Atc',
+        // Its type as introspection's rawType names it: PostgreSQL's data_type (research cube/introspection-api.md).
+        "SELECT c.table_name, c.column_name || ', ' || c.data_type FROM information_schema.columns c JOIN information_schema.tables t USING (table_schema, table_name) WHERE c.table_schema = 'public' AND t.table_type = 'BASE TABLE' ORDER BY c.table_name, c.ordinal_position",
+      ],
+      { encoding: 'utf8' },
+    )
+      .trim()
+      .split('\n');
+    const tables = new Map<string, string[]>();
+    for (const line of lines) {
+      const [table, column] = line.split('|') as [string, string];
+      tables.set(table, [...(tables.get(table) ?? []), column]);
+    }
+    return tables;
+  };
+
+  test('lists every table and column of the development database’s public schema, and puts a chosen name in the editor', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.on) }).click();
+      const tree = leftPane(page).getByRole('tree', { name: `Schemas in ${SOURCES.on}` });
+      const schema = tree.getByRole('treeitem', { name: 'public', exact: true });
+      await schema.getByTestId('sql-schema-caret').first().click();
+      const tables = schema.getByRole('group', { name: 'Tables in public' });
+
+      const expected = catalog();
+      expect(expected.size).toBeGreaterThan(0);
+      for (const [table, columns] of expected) {
+        const item = tables.getByRole('treeitem', { name: table, exact: true });
+        await item.getByTestId('sql-schema-caret').first().click();
+        const listed = item.getByRole('group', { name: `Columns of public.${table}` }).getByRole('treeitem');
+        await expect(listed).toHaveCount(columns.length);
+        // Each column by its name, with its type as the database names it.
+        const labels = await listed.evaluateAll((rows) => rows.map((row) => row.getAttribute('aria-label') ?? ''));
+        expect(labels).toEqual(columns);
+      }
+
+      // A table chosen goes into the editor, with its schema.
+      await tables.getByRole('treeitem', { name: 'orders', exact: true }).locator('.sql-schema__name').first().click();
+      await expect(page.locator('.sql-editor .cm-content')).toHaveText('public.orders');
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+/**
  * T804 (AC-452, AC-379): one run per person across every tab, its state the
  * same on its tab and in its result head; every other tab's Run held with
  * Go to it and Cancel that run; and the run kept going while the user is in

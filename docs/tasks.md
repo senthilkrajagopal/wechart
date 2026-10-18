@@ -1737,11 +1737,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T804 (AC-452, AC-379) Show a run's state the same way on its tab, in its result head and in History; hold Run on every other tab with "Go to it · Cancel that run"; keep a run going while the user is away
 
-- [ ] T805 (AC-386) The schema browser in the left pane: the tab's source's schemas, tables and columns with their types, read as they're opened, putting a chosen name into the editor
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/SchemaTree.tsx` (+ test; from `workspaces/data-sources/SchemaBrowser.tsx`), `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: `SchemaTree.test.tsx`: the tree shows the tab's own source, and switching tabs to another source shows that one's; a column shows its database type; choosing a name puts it at the editor's cursor. The e2e: every table and column of the development database's `public` schema is listed (AC-386).
-  - Depends on: T800
+- [x] T805 (AC-386) The schema browser in the left pane: the tab's source's schemas, tables and columns with their types, read as they're opened, putting a chosen name into the editor
 
 - [ ] T806 (AC-448) Find a table over the names read, saying so while pages are unread, and PK and FK tags, the FK's target in its tooltip
   - Lane: SQL

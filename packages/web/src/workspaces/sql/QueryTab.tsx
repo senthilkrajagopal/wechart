@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useId, useRef, useState, type Dispatch, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type Dispatch, type ReactNode } from 'react';
 
 import { clockOf } from '../../shell/formatTime';
 import { StatusIcon } from '../../shell/StatusIcon';
@@ -75,6 +75,14 @@ export type RunHold =
   | { readonly kind: 'elsewhere'; readonly going: Going };
 
 const clockWithSeconds = (at: Date) => clockOf(at, { seconds: true });
+
+/** A name chosen in the schema browser, for one tab's editor (T805, AC-386). */
+export interface Insertion {
+  readonly text: string;
+  readonly tabId: string;
+}
+/** Those put in already: a tab opened again doesn't put its last one in twice. */
+const inserted = new WeakSet<Insertion>();
 
 /**
  * Whether this page is being left: the workspace switcher's links load
@@ -176,6 +184,7 @@ export function QueryTab({
   state = runState(tab.run, tab.run?.at ?? 0),
   hold = null,
   onGoTo = () => undefined,
+  insertion,
 }: {
   readonly tab: SqlTab;
   readonly source: SqlSource;
@@ -188,7 +197,14 @@ export function QueryTab({
   readonly hold?: RunHold | null;
   /** Selects the tab whose run is going. */
   readonly onGoTo?: (tabId: string) => void;
+  /** A name chosen in the schema browser: put in at the cursor, if it is this tab's and new. */
+  readonly insertion?: Insertion | undefined;
 }) {
+  const toInsert =
+    insertion !== undefined && insertion.tabId === tab.id && !inserted.has(insertion) ? insertion : undefined;
+  useEffect(() => {
+    if (toInsert !== undefined) inserted.add(toInsert);
+  }, [toInsert]);
   const queryClient = useQueryClient();
   const warningId = useId();
   const limitsId = useId();
@@ -292,6 +308,7 @@ export function QueryTab({
           label={`SQL for ${source.name}`}
           describedBy={`${warningId} ${limitsId}`}
           focusing={focusing}
+          insertion={toInsert}
         />
         <div className="sql-runner__bar" ref={bar}>
           <button

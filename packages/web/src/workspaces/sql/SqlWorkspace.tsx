@@ -24,7 +24,8 @@ import { CUBE_STORE_ID, CUBE_STORE_QUERY } from '../data-sources/cubeStore';
 import { endedAway } from './awayRun';
 import { GOING_QUERY } from './going';
 import { holdTabs, releaseTabs, tabsStoreFor } from './liveTabs';
-import { QueryTab, type RunHold } from './QueryTab';
+import { QueryTab, type Insertion, type RunHold } from './QueryTab';
+import { SchemaTree } from './SchemaTree';
 import { runState, type RunState } from './runState';
 import type { SqlSourceRow } from './sources';
 import type { SqlSource } from './sqlSource';
@@ -161,6 +162,7 @@ function ChosenOn({
     readonly state: RunState;
     readonly hold: RunHold | null;
     readonly onGoTo: (id: string) => void;
+    readonly insertion: Insertion | undefined;
   };
 }) {
   const page = useQuery({ ...sourceQuery(row.id), retry: false, enabled: !row.cubeStore });
@@ -391,6 +393,8 @@ function Workbench({
   const [left, setLeft] = useState<number>(LEFT_PANE.start);
   const [right, setRight] = useState<number>(RIGHT_PANE.start);
   const [share, setShare] = useState<number>(SPLIT.editor);
+  /** A name chosen in the schema browser, for the tab open as it was chosen (T805). */
+  const [insertion, setInsertion] = useState<Insertion | undefined>(undefined);
   const [open, setOpen] = useState<Side | null>(null);
   const leftFolded = useWindowMatches(LEFT_RAIL_QUERY);
   const rightFolded = useWindowMatches(RIGHT_RAIL_QUERY);
@@ -494,6 +498,15 @@ function Workbench({
           )}
         </div>
         <h2 className="sql-pane__head">Schema</h2>
+        <div className="sql-pane__section">
+          {/* The open tab's own source's (T805, AC-386); a name chosen goes into that tab. */}
+          <SchemaTree
+            row={chosenRow}
+            onChoose={(name) => {
+              setInsertion({ text: name, tabId: tabs.active });
+            }}
+          />
+        </div>
       </SidePane>
       <div
         className="sql-centre"
@@ -541,6 +554,7 @@ function Workbench({
                 onGoTo: (id) => {
                   dispatch({ kind: 'select', id });
                 },
+                insertion,
               }}
             />
           ) : (
