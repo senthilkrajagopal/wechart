@@ -5,7 +5,7 @@ Read this first when resuming. It holds only the current state and the rules in 
 ## Now (2026-10-17)
 
 - **Branch:** all work is on `feat/xcube` until the user merges it to main. The user pushes, or asks for a push.
-- **Deployed** on docker-desktop k8s (namespace `wechart`, http://localhost:8089): 260e59aa, with xcube c2602ac72a. ghcr.io has wechart-api and wechart-web at `:260e59aa` and `:latest`, and `xcube:latest` is c2602ac72a. Nothing since has been deployed.
+- **Deployed** on docker-desktop k8s (namespace `wechart`, http://localhost:8089): **ffaaf521** (2026-10-17, verify.sh 46/46), with xcube 407622a6b8, sign-in on, no MCP host set (MCP off). It has the SQL runner workspace through T807 (schema browser), tokens T767–T774, and the compact header T828–T831. Images are built from `deploy/Dockerfile` (`docker build -f deploy/Dockerfile --target api|web`). ghcr.io still has `:260e59aa` as latest; nothing newer is pushed.
 - **Compose** runs xcube **407622a6b8**, which the repo pins as of T690.
 - **ACs:** 394 of 403 are ticked.
   - **Active (4):** AC-187, AC-190, AC-343, AC-352, all design conformance.
