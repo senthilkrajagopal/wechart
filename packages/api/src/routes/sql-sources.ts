@@ -54,34 +54,47 @@ const CUBE_STORE_ROW: SqlSourceRow = {
   runner: 'on',
 };
 
-export function registerSqlSources(
-  app: FastifyInstance,
-  {
-    store,
-    access,
-    switches,
-    workspaceOf,
-    ownWorkspace,
-    paths,
-    runs,
-  }: {
-    readonly store: Pick<DataSourceStore, 'all' | 'get'>;
-    readonly access: DataSourceAccess;
-    readonly switches: SqlRunnerSwitchStore | undefined;
-    /** The workspace a folder is in, or null for a shared one; unset with sign-in off. */
-    readonly workspaceOf: ((folderId: string) => Promise<string | null>) | undefined;
-    /** The request's user's own workspace; unset with sign-in off. */
-    readonly ownWorkspace: ((request: FastifyRequest) => Promise<string | undefined>) | undefined;
-    readonly paths: () => Promise<
-      (folderId: string) => readonly { readonly id: string; readonly title: string }[]
-    >;
-    /** Whether xcube's runner is set up here: none runs SQL without it. */
-    readonly runs: boolean;
-  },
-): void {
-  app.get('/api/sql/sources', USER, async (request: FastifyRequest, reply) => {
-    if (!runs || switches === undefined)
-      return reply.status(503).send({ error: 'The SQL runner isn’t set up here.' });
+export interface SqlSourcesDeps {
+  readonly store: Pick<DataSourceStore, 'all' | 'get'>;
+  readonly access: DataSourceAccess;
+  readonly switches: SqlRunnerSwitchStore | undefined;
+  /** The workspace a folder is in, or null for a shared one; unset with sign-in off. */
+  readonly workspaceOf: ((folderId: string) => Promise<string | null>) | undefined;
+  /** The request's user's own workspace; unset with sign-in off. */
+  readonly ownWorkspace: ((request: FastifyRequest) => Promise<string | undefined>) | undefined;
+  readonly paths: () => Promise<
+    (folderId: string) => readonly { readonly id: string; readonly title: string }[]
+  >;
+  /** Whether xcube's runner is set up here: none runs SQL without it. */
+  readonly runs: boolean;
+}
+
+/**
+ * The request's user's picker rows, as `GET /api/sql/sources` answers them;
+ * undefined where the SQL runner isn't set up here.
+ */
+export type SqlSourcesOf = (request: FastifyRequest) => Promise<SqlSourceRow[] | undefined>;
+
+/**
+ * Whether the request's user may run SQL on the data source `id` (Cube
+ * Store's by its own id): listed for them and not off. A saved query's or a
+ * History row's source they may not is never named to them (T814, AC-459;
+ * T817, AC-381).
+ */
+export const runsSqlOn = (rows: readonly SqlSourceRow[], id: string): boolean =>
+  rows.some((row) => row.id === id && row.runner !== 'off');
+
+export function sqlSourcesLister({
+  store,
+  access,
+  switches,
+  workspaceOf,
+  ownWorkspace,
+  paths,
+  runs,
+}: SqlSourcesDeps): SqlSourcesOf {
+  return async (request) => {
+    if (!runs || switches === undefined) return undefined;
     const all = await store.all();
     const on = await switches.among([...all.map((source) => source.id), CUBE_STORE_TARGET]);
     const own = (await ownWorkspace?.(request)) ?? null;
@@ -122,5 +135,13 @@ export function registerSqlSources(
       on.has(CUBE_STORE_TARGET) &&
       (request.wechartUser?.superAdmin === true || shared.some((row) => row.runner === 'on'));
     return [...mine, ...shared, ...(cubeStore ? [CUBE_STORE_ROW] : [])];
+  };
+}
+
+export function registerSqlSources(app: FastifyInstance, sourcesOf: SqlSourcesOf): void {
+  app.get('/api/sql/sources', USER, async (request: FastifyRequest, reply) => {
+    const rows = await sourcesOf(request);
+    if (rows === undefined) return reply.status(503).send({ error: 'The SQL runner isn’t set up here.' });
+    return rows;
   });
 }

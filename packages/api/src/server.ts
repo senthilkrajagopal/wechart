@@ -1509,8 +1509,10 @@ export function buildServer({
    * a read-only user (AC-263) — and changed only by its read-write members
    * (AC-262, AC-266). One a user may not see answers as one that isn't there.
    */
-  if (dataSources !== undefined)
-    registerDataSources(app, {
+  const registeredSources =
+    dataSources === undefined
+      ? undefined
+      : registerDataSources(app, {
       store: dataSources,
       // Each change recorded (T368, AC-294).
       ...(audit === undefined ? {} : { audit }),
@@ -4521,7 +4523,12 @@ export function buildServer({
   }
 
   // Saved SQL runner queries, each its owner's alone (T812, AC-457).
-  if (savedQueries !== undefined) registerSavedQueries(app, { store: savedQueries });
+  // A source the user may no longer run SQL on, never named (T814, AC-459).
+  if (savedQueries !== undefined)
+    registerSavedQueries(app, {
+      store: savedQueries,
+      ...(registeredSources === undefined ? {} : { sourcesOf: registeredSources.sqlSourcesOf }),
+    });
   // Personal access tokens for MCP (T767, AC-430).
   if (accessTokens !== undefined)
     registerAccessTokens(app, {

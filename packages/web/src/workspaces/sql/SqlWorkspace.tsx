@@ -572,7 +572,13 @@ function Workbench({
           ) : (
             <>
               <div className="sql-centre__editor" data-testid="sql-editor-area">
-                {sources.data === undefined ? null : runsAny ? <ChooseASource /> : <NoSourceToRun />}
+                {sources.data === undefined ? null : openTab?.sourceLost === true ? (
+                  <ChooseASource lost />
+                ) : runsAny ? (
+                  <ChooseASource />
+                ) : (
+                  <NoSourceToRun />
+                )}
               </div>
               {grip}
               <div className="sql-centre__results" data-testid="sql-results-area" />
@@ -598,9 +604,11 @@ function Workbench({
         <SavedList
           sourceOf={(id) => sources.data?.find((row) => row.id === id)}
           onOpen={(query) => {
-            // On its own source where the user still has it; else none, never named (AC-459).
-            const has = sources.data?.some((row) => row.id === query.sourceId) === true;
-            dispatch({ kind: 'open-saved', query, sourceId: has ? query.sourceId : '' });
+            // On its own source where the user still has it; else none, never
+            // named (AC-459): the API says none where they may not run SQL on it.
+            const own = query.sourceId;
+            const has = own !== null && sources.data?.some((row) => row.id === own) === true;
+            dispatch({ kind: 'open-saved', query, sourceId: has ? own : '' });
             setOpen(null);
           }}
           onRenamed={(savedId, name) => {

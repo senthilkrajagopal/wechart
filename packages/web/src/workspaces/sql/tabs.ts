@@ -49,6 +49,11 @@ export interface SqlTab {
   readonly name: string;
   /** The one data source it runs on; '' until one is chosen. */
   readonly sourceId: string;
+  /**
+   * Opened from a saved query whose source the user can no longer run SQL
+   * on, none chosen since: its empty state says so (T814, AC-459).
+   */
+  readonly sourceLost?: true;
   readonly sql: string;
   /** Its parameters' values, by name (AC-451). */
   readonly params: Readonly<Record<string, string>>;
@@ -226,9 +231,13 @@ export function tabsReducer(
         ? state
         : {
             ...state,
-            tabs: state.tabs.map((tab) =>
-              tab === target ? { ...tab, sourceId: action.sourceId, run: null } : tab,
-            ),
+            tabs: state.tabs.map((tab) => {
+              if (tab !== target) return tab;
+              // One chosen: no longer the lost one's (T814).
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              const { sourceLost, ...rest } = tab;
+              return { ...rest, sourceId: action.sourceId, run: null };
+            }),
           };
     case 'sql':
       return change(state, target, { sql: action.sql });
@@ -246,6 +255,7 @@ export function tabsReducer(
       const types = query.parameters.filter((each) => each.type !== 'text');
       const opened: SqlTab = {
         ...blank(id, query.name, action.sourceId),
+        ...(action.sourceId === '' ? { sourceLost: true as const } : {}),
         sql: query.sql,
         params: Object.fromEntries(query.parameters.map((each) => [each.name, each.value])),
         ...(types.length === 0

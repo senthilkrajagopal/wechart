@@ -14,7 +14,11 @@ export interface SavedQuery {
   readonly id: string;
   readonly name: string;
   readonly description: string;
-  readonly sourceId: string;
+  /**
+   * None where the user can no longer run SQL on the one it was saved with:
+   * the API never names it (T814, AC-459). A save sending none keeps it.
+   */
+  readonly sourceId: string | null;
   readonly sql: string;
   readonly parameters: readonly { readonly name: string; readonly type: ParamType; readonly value: string }[];
 }
@@ -124,7 +128,8 @@ export function SavedList({
     const name = copyName(query.name, (saved.data ?? []).map((each) => each.name));
     const response = await ask('/api/sql/saved', {
       method: 'POST',
-      body: JSON.stringify({ ...bodyOf(query), name }),
+      // One whose source is held back takes that one's, from the query it copies (T814-1).
+      body: JSON.stringify({ ...bodyOf(query), name, ...(query.sourceId === null ? { from: query.id } : {}) }),
     });
     if (response !== null && !response.ok) setFailed(await refusalOf(response, 'duplicated'));
     await again();
@@ -161,7 +166,7 @@ export function SavedList({
           <p className="sql-saved__note">Only me · by name</p>
           <ul className="sql-saved__list" aria-label="Saved queries">
             {rows.map((query) => {
-              const source = sourceOf(query.sourceId);
+              const source = query.sourceId === null ? undefined : sourceOf(query.sourceId);
               const count = query.parameters.length;
               return (
                 <li key={query.id} className="sql-saved__row">

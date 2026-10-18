@@ -6,12 +6,20 @@ import { StatusIcon } from '../../shell/StatusIcon';
  * one.
  */
 
-/** A tab with no data source chosen yet (H1): the first visit's. */
-export function ChooseASource() {
+/**
+ * A tab with no data source chosen yet (H1): the first visit's; or a saved
+ * query's whose source the user can no longer run SQL on, never naming it
+ * (T814, AC-459; design 17, §5).
+ */
+export function ChooseASource({ lost = false }: { readonly lost?: boolean }) {
   return (
     <div className="sql-empty">
       <StatusIcon kind="info" />
-      <p>Choose a data source to write SQL against.</p>
+      <p>
+        {lost
+          ? 'Choose a data source: the one it was saved with isn’t available to you.'
+          : 'Choose a data source to write SQL against.'}
+      </p>
     </div>
   );
 }

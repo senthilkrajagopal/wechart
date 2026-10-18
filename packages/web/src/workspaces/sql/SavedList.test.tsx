@@ -183,6 +183,24 @@ describe('the Saved tab (T813, AC-458)', () => {
       parameters: held.find((each) => each.id === 'q-top')!.parameters,
     });
     expect(asked.find((each) => each.method === 'POST')?.body).not.toHaveProperty('id');
+    // Its source is sent as it was read: no `from`.
+    expect(asked.find((each) => each.method === 'POST')?.body).not.toHaveProperty('from');
+  });
+
+  it('Duplicate of one whose source the API holds back asks for that one’s source by `from` (T814-1)', async () => {
+    held = [query({ id: 'q-lost', name: 'Lost one', sourceId: null })];
+    open();
+    await screen.findByRole('button', { name: 'Lost one' });
+    // Its row names no source.
+    expect(within(rows()[0]!).getByText('A data source no longer available to you')).toBeTruthy();
+    await userEvent.click(within(await menuOf('Lost one')).getByRole('menuitem', { name: 'Duplicate' }));
+    await vi.waitFor(() => {
+      expect(asked.find((each) => each.method === 'POST')?.body).toMatchObject({
+        name: 'Lost one (copy)',
+        sourceId: null,
+        from: 'q-lost',
+      });
+    });
   });
 
   it('Rename… renames it, shows a refusal’s reason in the dialog, and says the new name to the workspace', async () => {

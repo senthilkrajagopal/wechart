@@ -17,8 +17,10 @@ import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtur
  * a bookmark; or a deleted one can't be brought back from the toast.
  */
 const RUN = Math.random().toString(36).slice(2, 8);
-const world = { folderId: '', source: '' };
+const world = { folderId: '', source: '', lost: '' };
 const SOURCE = `sqlsaved_${RUN}`;
+/** T814's: switched off once a query is saved on it. */
+const LOST_SOURCE = `sqllost_${RUN}`;
 const NAME = `Top customers ${RUN}`;
 const SQL = 'SELECT * FROM customers WHERE country = {{c}}';
 const KEY = JSON.parse(
@@ -51,22 +53,27 @@ test.beforeAll(async ({ browser }) => {
       data: { readOnly: [], readWrite: ['sales-rw'] },
     });
     expect(access.status()).toBe(200);
-    const source = await request.post('/api/data-sources', {
-      data: await testedSource(request, {
-        folderId: world.folderId,
-        name: SOURCE,
-        driver: 'postgres',
-        authMethod: 'password',
-        fields: FIELDS,
-        sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', FIELDS, 'sample') },
-      }),
-    });
-    expect(source.status(), await source.text()).toBe(201);
-    world.source = ((await source.json()) as { id: string }).id;
-    const on = await request.put(`/api/data-sources/${world.source}/sql-runner`, {
-      data: { on: true, readOnlyConfirmed: true },
-    });
-    expect(on.status(), await on.text()).toBe(200);
+    for (const [key, name] of [
+      ['source', SOURCE],
+      ['lost', LOST_SOURCE],
+    ] as const) {
+      const source = await request.post('/api/data-sources', {
+        data: await testedSource(request, {
+          folderId: world.folderId,
+          name,
+          driver: 'postgres',
+          authMethod: 'password',
+          fields: FIELDS,
+          sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', FIELDS, 'sample') },
+        }),
+      });
+      expect(source.status(), await source.text()).toBe(201);
+      world[key] = ((await source.json()) as { id: string }).id;
+      const on = await request.put(`/api/data-sources/${world[key]}/sql-runner`, {
+        data: { on: true, readOnlyConfirmed: true },
+      });
+      expect(on.status(), await on.text()).toBe(200);
+    }
   } finally {
     await admin.context.close();
   }
@@ -86,6 +93,7 @@ test.afterAll(async ({ browser }) => {
   const admin = await signedIn(browser, 'super');
   try {
     if (world.source !== '') await admin.page.request.delete(`/api/data-sources/${world.source}`);
+    if (world.lost !== '') await admin.page.request.delete(`/api/data-sources/${world.lost}`);
     if (world.folderId !== '')
       await admin.page.request.delete(`/api/documents/folder/${world.folderId}`);
   } finally {
@@ -216,6 +224,55 @@ test.describe('the Saved tab (T813, AC-458)', () => {
       expect(await (await writer.page.request.get('/api/proposals')).text()).not.toContain(RUN);
     } finally {
       await writer.context.close();
+    }
+  });
+});
+
+/**
+ * T814 (AC-459): once its data source's runner is turned off, a saved query
+ * opens with no data source chosen, saying "Choose a data source: the one it
+ * was saved with isn't available to you.", with no Run, and the source named
+ * nowhere on the page.
+ */
+test.describe('a saved query whose source is no longer available (T814, AC-459)', () => {
+  test('opens with no source chosen, saying so, with no Run, never naming the old one', async ({ browser }) => {
+    const lostName = `Lost month end ${RUN}`;
+    const { context, page } = await signedIn(browser, 'writer');
+    try {
+      const made = await page.request.post('/api/sql/saved', {
+        data: { name: lostName, description: '', sourceId: world.lost, sql: 'SELECT 42 AS answer', parameters: [] },
+      });
+      expect(made.status(), await made.text()).toBe(201);
+      const admin = await signedIn(browser, 'super');
+      try {
+        const off = await admin.page.request.put(`/api/data-sources/${world.lost}/sql-runner`, {
+          data: { on: false },
+        });
+        expect(off.status(), await off.text()).toBe(200);
+      } finally {
+        await admin.context.close();
+      }
+
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      const row = rowOf(page, lostName);
+      await expect(row).toContainText('A data source no longer available to you');
+      await row.getByRole('button', { name: lostName, exact: true }).click();
+
+      const tab = page.getByRole('tablist', { name: 'SQL tabs' }).getByRole('tab', { name: new RegExp(`^${lostName}`) });
+      await expect(tab).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByTestId('sql-editor-area')).toHaveText(
+        'Choose a data source: the one it was saved with isn’t available to you.',
+      );
+      await expect(page.getByRole('button', { name: /^Data source Choose…/ })).toBeVisible();
+      // No Run that can start: none at all.
+      await expect(page.getByRole('button', { name: 'Run', exact: true })).toHaveCount(0);
+      // The old source is named nowhere on the page, nor in what the API answered.
+      await expect(page.locator('body')).not.toContainText(LOST_SOURCE);
+      const answer = await page.request.get(`/api/sql/saved/${((await made.json()) as { id: string }).id}`);
+      expect(await answer.text()).not.toContain(world.lost);
+    } finally {
+      await context.close();
     }
   });
 });

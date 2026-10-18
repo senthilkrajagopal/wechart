@@ -330,6 +330,18 @@ describe('a saved query opened and renamed (T813, AC-458)', () => {
     expect(tabsReducer(start, { kind: 'open-saved', query: saved, sourceId: '' }, () => 'b').tabs[1]?.sourceId).toBe('');
   });
 
+  it('marks a tab opened with none as having lost its source, until one is chosen (T814, AC-459)', () => {
+    const start: TabsState = { tabs: [tab({ id: 'a', name: 'Query 1' })], active: 'a' };
+    const opened = tabsReducer(start, { kind: 'open-saved', query: saved, sourceId: '' }, () => 'b');
+    expect(opened.tabs[1]?.sourceLost).toBe(true);
+    expect(opened.tabs[0]?.sourceLost).toBeUndefined();
+    const chosen = tabsReducer(opened, { kind: 'source', id: 'b', sourceId: 'emea' });
+    expect(chosen.tabs[1]).not.toHaveProperty('sourceLost');
+    // Opened on its own source: never lost.
+    const own = tabsReducer(start, { kind: 'open-saved', query: saved, sourceId: 'emea' }, () => 'b');
+    expect(own.tabs[1]).not.toHaveProperty('sourceLost');
+  });
+
   it('selects the tab already holding it rather than opening another', () => {
     const start: TabsState = {
       tabs: [

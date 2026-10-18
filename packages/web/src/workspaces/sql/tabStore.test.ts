@@ -93,6 +93,16 @@ describe('open tabs kept in this browser, for this user (T801, AC-451)', () => {
     expect(keptTabs(browser, 'wren@example.com')).toEqual(saved);
   });
 
+  it('keeps that a tab lost its saved query’s source (T814)', () => {
+    const browser = storage();
+    const lost: TabsState = {
+      tabs: [tab({ id: 'qa1b2c3d', name: 'saved', sourceId: '', sourceLost: true })],
+      active: 'qa1b2c3d',
+    };
+    keepTabs(browser, 'wren@example.com', lost);
+    expect(keptTabs(browser, 'wren@example.com')).toEqual(lost);
+  });
+
   it('keeps them under a key holding the user’s id', () => {
     const browser = storage();
 

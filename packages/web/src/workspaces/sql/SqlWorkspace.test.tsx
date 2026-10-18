@@ -933,3 +933,73 @@ describe('a run going, across tabs and away (T804, AC-452, AC-379)', () => {
     expect(await screen.findByRole('table', { name: 'Result: 1 row, 1 column' })).toBeTruthy();
   });
 });
+
+/**
+ * T814 (AC-459): a saved query whose data source the user can no longer run
+ * SQL on, which the API answers with none, opens with no source chosen,
+ * saying why, with no Run, and names that source nowhere.
+ */
+describe('opening a saved query whose source is no longer available (T814, AC-459)', () => {
+  const listed = [
+    {
+      id: 'emea',
+      name: 'emea_replica',
+      driver: 'postgres',
+      cubeStore: false,
+      folderId: 'f-sales',
+      folderPath: [{ id: 'f-sales', title: 'Sales' }],
+      inWorkspace: false,
+      runner: 'on',
+    },
+  ];
+  const lost = {
+    id: 'q-lost',
+    name: 'Old month end',
+    description: '',
+    sourceId: null,
+    sql: 'SELECT 42',
+    parameters: [],
+  };
+
+  it('opens it in a tab of its own with no source, saying the one it was saved with isn’t available', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/sql/saved') return json({ queries: [lost] });
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+    renderAs(writer);
+    await userEvent.click(await screen.findByRole('button', { name: 'Old month end' }));
+
+    expect(await screen.findByRole('tab', { name: /^Old month end/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /^Old month end/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Data source Choose…' })).toBeTruthy();
+    expect(screen.getByTestId('sql-editor-area').textContent).toBe(
+      'Choose a data source: the one it was saved with isn’t available to you.',
+    );
+    expect(screen.queryByRole('button', { name: 'Run' })).toBeNull();
+
+    // Chosen one: the sentence goes, and its SQL is there to run on it.
+    await userEvent.click(screen.getByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: /emea_replica/ }));
+    expect(screen.queryByText(/the one it was saved with/)).toBeNull();
+  });
+
+  it('keeps the first visit’s sentence for a tab with no source that wasn’t opened so', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        Promise.resolve(
+          url === '/api/sql/sources'
+            ? new Response(JSON.stringify(listed), { status: 200 })
+            : new Response('{}', { status: 404 }),
+        ),
+      ),
+    );
+    renderAs(writer);
+    expect(await screen.findByText('Choose a data source to write SQL against.')).toBeTruthy();
+  });
+});

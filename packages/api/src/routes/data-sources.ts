@@ -9,7 +9,7 @@ import type { AuditStore } from '../repos/audit';
 import type { SqlRunnerSwitchStore } from '../repos/sql-runner-switches';
 import type { SqlRunStore } from '../repos/sql-runs';
 import { mayRunSql, needsSwitch, registerSqlRunner, type SqlRunnerOptions } from './sql-runner';
-import { registerSqlSources } from './sql-sources';
+import { registerSqlSources, sqlSourcesLister, type SqlSourcesOf } from './sql-sources';
 import { signsInOtherwise } from './sql-runner-switch';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from '../repos/catalog';
 import {
@@ -306,7 +306,7 @@ export function registerDataSources(
       readonly inTurn: <T>(workspace: string, work: () => Promise<T>) => Promise<T>;
     };
   },
-): void {
+): { readonly sqlSourcesOf: SqlSourcesOf } {
   // Public by nature: it seals, and opens nothing (AC-298).
   app.get('/api/data-sources/sealing-key', USER, async (_request, reply) =>
     key === undefined
@@ -401,8 +401,9 @@ export function registerDataSources(
     reached,
     workspaceOf,
   });
-  // The SQL runner workspace's picker (T798, AC-447).
-  registerSqlSources(app, {
+  // The SQL runner workspace's picker (T798, AC-447); also who may run SQL
+  // on a saved query's source (T814, AC-459).
+  const sqlSourcesOf = sqlSourcesLister({
     store,
     access,
     switches,
@@ -411,6 +412,7 @@ export function registerDataSources(
     paths: () => listing.pathOf(),
     runs: sqlRunner !== undefined,
   });
+  registerSqlSources(app, sqlSourcesOf);
 
   /**
    * Every data source the user may see, in every folder (T364, AC-157): each
@@ -1264,4 +1266,5 @@ export function registerDataSources(
     await recordChange(request, source, 'Removed');
     return reply.status(204).send();
   });
+  return { sqlSourcesOf };
 }

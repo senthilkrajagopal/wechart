@@ -264,3 +264,15 @@
       - **An open tab whose saved query was deleted** still offers Save, which answers "No saved query of yours has that id." Undo, or Save as new…, recovers it.
       - **The toast holds one deleted query at a time.**
     - Decision T813-1 is in `docs/design/decisions-sql.md`.
+
+- [x] T814 (AC-459) Open a saved query whose data source the user can no longer run SQL on with no source chosen, never naming it
+  - Lane: SQL
+  - Files: `packages/web/src/workspaces/sql/SavedList.tsx` (+ test), `packages/api/src/routes/sql-saved.ts` (+ test), `e2e/security/sql-saved.spec.ts`.
+  - Failing test: `sql-saved.test.ts`: once the source's runner is off for that user, the saved query comes back with no source id or name. The e2e: opening it gives a tab with no source, "Choose a data source: the one it was saved with isn't available to you.", no Run that can start, and the old source's name nowhere on the page (AC-459).
+  - Depends on: T813
+  - **Built 2026-10-18** (lane SQL, batch 6).
+    - **AC-459 is ticked** on the e2e "opens with no source chosen, saying so, with no Run, never naming the old one" (`e2e/security/sql-saved.spec.ts`): a query saved on a source whose runner a Super-Admin then turns off lists as "A data source no longer available to you", opens in its own tab with "Data source Choose…" and the sentence, has no Run, and neither the page nor `GET /api/sql/saved/:id` holds the source's name or id.
+    - **The API:** `sql-sources.ts`'s picker rule is now `sqlSourcesLister`, shared: `registerDataSources` returns it, and `server.ts` hands it to `registerSavedQueries`. A saved query's answer has `sourceId: null` where `runsSqlOn` says the user may not run SQL on it. The test is its own file, `sql-saved-lost.test.ts`, since it needs data sources and the stub xcube, which `sql-saved.test.ts`'s server has none of.
+    - **Keeping the source:** `PUT` with `sourceId: null` keeps the stored one (Rename…); `POST` with `sourceId: null` and `from` takes that query's (Duplicate); `DELETE` answers the source as kept, for Undo.
+    - **The web:** a tab opened so carries `sourceLost` (kept in this browser) until a source is chosen; `ChooseASource lost` says the sentence.
+    - Decision T814-1 is in `docs/design/decisions-sql.md`.

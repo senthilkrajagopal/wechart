@@ -1726,11 +1726,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T813 (AC-458) The Saved tab: the owner's saved queries by name with their source and "Only me", Open, Rename…, Duplicate and Delete with Undo; nobody else, a Super-Admin included, reaches one
 
-- [ ] T814 (AC-459) Open a saved query whose data source the user can no longer run SQL on with no source chosen, never naming it
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/SavedList.tsx` (+ test), `packages/api/src/routes/sql-saved.ts` (+ test), `e2e/security/sql-saved.spec.ts`.
-  - Failing test: `sql-saved.test.ts`: once the source's runner is off for that user, the saved query comes back with no source id or name. The e2e: opening it gives a tab with no source, "Choose a data source: the one it was saved with isn't available to you.", no Run that can start, and the old source's name nowhere on the page (AC-459).
-  - Depends on: T813
+- [x] T814 (AC-459) Open a saved query whose data source the user can no longer run SQL on with no source chosen, never naming it
 
 - [ ] T815 (AC-460) List the user's own saved queries in ⌘K, labelled "Saved query", and no one else's
   - Lane: SQL
