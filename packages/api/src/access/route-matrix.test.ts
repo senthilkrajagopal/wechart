@@ -2100,18 +2100,27 @@ const CASES: Record<string, Case> = {
   // A user's own past runs (T534, AC-381): theirs alone. The runs the case
   // above made are each listed to its own runner, and to nobody else.
   'GET /api/sql-runs': async () => {
-    for (const who of WHO) {
-      const answer = await ask(who, { method: 'GET', url: '/api/sql-runs' });
-      answered(answer, `${who} listing their runs`);
-      const runs = answer.json<{ runs: { dataSource: { id: string } | null }[] }>().runs;
-      // Of this world's data sources, theirs alone: the places they write,
-      // where the run case ran theirs, and not another's. Other suites' runs
-      // by the same test users are theirs too.
-      for (const place of PLACES)
-        expect(
-          runs.some((run) => run.dataSource?.id === at[place].source),
-          `${who}'s runs on ${place}'s`,
-        ).toBe(writes(who, place));
+    // Switched on again, as when they ran: a row on a source its user can no
+    // longer run SQL on names no source (T817, AC-381 as amended 2026-10-17),
+    // so whose rows these are is read while each may run there.
+    const switches = sqlRunnerSwitches(getDb());
+    for (const place of PLACES) await switches.on(at[place].source, { key: 'super', name: 'Super' });
+    try {
+      for (const who of WHO) {
+        const answer = await ask(who, { method: 'GET', url: '/api/sql-runs' });
+        answered(answer, `${who} listing their runs`);
+        const runs = answer.json<{ runs: { dataSource: { id: string } | null }[] }>().runs;
+        // Of this world's data sources, theirs alone: the places they write,
+        // where the run case ran theirs, and not another's. Other suites' runs
+        // by the same test users are theirs too.
+        for (const place of PLACES)
+          expect(
+            runs.some((run) => run.dataSource?.id === at[place].source),
+            `${who}'s runs on ${place}'s`,
+          ).toBe(writes(who, place));
+      }
+    } finally {
+      for (const place of PLACES) await switches.off(at[place].source);
     }
   },
   // The SQL runner workspace's picker (T798, AC-447): of this world's

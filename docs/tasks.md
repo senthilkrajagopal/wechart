@@ -1725,12 +1725,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 ### Lane SQL: History
 
-- [ ] T817 (AC-381, AC-452) History in the right pane: all of the user's runs by default, "This data source" to narrow, and a row whose source is no longer available reading so
-  - Lane: SQL
-  - Also (added by T804): each row shows its state as `runState.ts` names it, the icon and label its tab and result head use. The e2e then checks one run's state in all three places, and ticks AC-452, which T804 left open for want of History.
-  - Files: `packages/api/src/routes/sql-runner.ts` (+ `sql-runner-history.test.ts`), `packages/web/src/workspaces/sql/HistoryList.tsx` (+ test), `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: `sql-runner-history.test.ts`: `GET /api/sql-runs` with no source lists all the user's runs across sources, newest first, 50 at a time; a run on a source the user can no longer run SQL on comes back with neither its source nor its folder. `HistoryList.test.tsx`: History starts on All; each row has its SQL, source and folder, time, outcome and row count; "This data source" narrows to the open tab's; the unavailable row reads "A data source no longer available to you" (AC-381, as amended 2026-10-17).
-  - Depends on: T797, T802
+- [x] T817 (AC-381, AC-452) History in the right pane: all of the user's runs by default, "This data source" to narrow, and a row whose source is no longer available reading so
 
 - [ ] T818 (AC-465) Choosing a History row puts its SQL into the current tab with Undo when the sources match, or into a new tab on the row's source, and never runs it
   - Lane: SQL

@@ -1084,6 +1084,45 @@ describe('opening a saved query whose source is no longer available (T814, AC-45
     expect(screen.getByRole('dialog', { name: 'Save query' })).toBeTruthy();
   });
 
+  it('shows Saved first, and History, all the user’s runs, on its button in the right pane (T817, AC-381)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/sql/saved') return json({ queries: [lost] });
+        if (url === '/api/sql-runs')
+          return json({
+            runs: [
+              {
+                id: 'r1',
+                sql: 'SELECT 99',
+                dataSource: { id: 'emea', name: 'emea_replica', folderPath: [{ id: 'f-sales', title: 'Sales' }], inWorkspace: false },
+                cubeStore: false,
+                startedAt: '2026-10-18T14:32:00Z',
+                outcome: 'finished',
+                rowCount: 1,
+                durationMs: 5,
+                truncated: null,
+                statement: 'select',
+                parameters: [],
+              },
+            ],
+          });
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+    renderAs(writer);
+    const right = screen.getByRole('complementary', { name: 'Saved and History' });
+    expect(within(right).getByRole('button', { name: 'Saved' }).getAttribute('aria-pressed')).toBe('true');
+    await within(right).findByRole('button', { name: 'Old month end' });
+    await userEvent.click(within(right).getByRole('button', { name: 'History' }));
+    expect(await within(right).findByText('SELECT 99')).toBeTruthy();
+    expect(within(right).getByText('emea_replica · Shared / Sales')).toBeTruthy();
+    expect(within(right).getByRole('radio', { name: 'All' })).toHaveProperty('checked', true);
+    expect(within(right).queryByRole('list', { name: 'Saved queries' })).toBeNull();
+  });
+
   it('keeps the first visit’s sentence for a tab with no source that wasn’t opened so', async () => {
     vi.stubGlobal(
       'fetch',

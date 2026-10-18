@@ -363,8 +363,43 @@ describe('every run, an audit event (T534, AC-382)', () => {
   });
 });
 
-describe('a run on a data source one no longer sees (T534’s review)', () => {
-  it('is listed under the name it had, not its new one', async () => {
+describe('History of all the user’s runs (T817, AC-381)', () => {
+  it('lists every source’s runs with no source named, and one whose runner is off as no longer available', async () => {
+    expect((await run('writer', sourceIds[0]!, `SELECT 'all one ${MARK}'`)).statusCode).toBe(200);
+    expect((await run('writer', sourceIds[1]!, `SELECT 'all two ${MARK}'`)).statusCode).toBe(200);
+    const ours = async () =>
+      (await as('writer', { method: 'GET', url: '/api/sql-runs' }))
+        .json<{ runs: Record<string, unknown>[] }>()
+        .runs.filter((each) => String(each['sql']).includes(`all `) && String(each['sql']).includes(MARK));
+    expect((await ours()).map((each) => (each['dataSource'] as { id: string }).id)).toEqual([
+      sourceIds[1],
+      sourceIds[0],
+    ]);
+
+    await switches().off(sourceIds[1]!);
+    try {
+      const [two, one] = await ours();
+      expect(two).toMatchObject({ sql: `SELECT 'all two ${MARK}'`, dataSource: null, cubeStore: false, unavailable: true });
+      expect(JSON.stringify(two)).not.toContain(`two_${MARK}`);
+      expect(one).toMatchObject({
+        dataSource: { id: sourceIds[0], name: `one_${MARK}`, folderPath: [{ id: folder, title: `Sales ${MARK}` }] },
+      });
+      expect(one).not.toHaveProperty('unavailable');
+    } finally {
+      await switches().on(sourceIds[1]!, { key: 'super', name: 'Super' });
+    }
+  });
+});
+
+/**
+ * AC-381, as amended 2026-10-17 (design 17's Q4; T817): a run on a data
+ * source its user can no longer run SQL on comes back with neither its source
+ * nor its folder, marked unavailable, so History reads "A data source no
+ * longer available to you". T534's review listed it under the name it had;
+ * the amendment names it nowhere.
+ */
+describe('a run on a data source one no longer sees (T534’s review; T817, AC-381)', () => {
+  it('is listed with neither its source, by either name, nor its folder', async () => {
     const hidden = await sources().create({
       folderId: folder,
       name: `hidden_${MARK}`,
@@ -394,10 +429,15 @@ describe('a run on a data source one no longer sees (T534’s review)', () => {
         .set({ folder_id: elsewhere, name: `renamed_${MARK}` })
         .where('id', '=', hidden.id)
         .execute();
-      const listed = (await listOf('writer', `?dataSource=${hidden.id}`)).runs;
-      expect(listed.map((each) => each.dataSource)).toEqual([
-        { id: hidden.id, name: `hidden_${MARK}`, folderPath: null, inWorkspace: false },
+      const answer = await as('writer', { method: 'GET', url: `/api/sql-runs?dataSource=${hidden.id}` });
+      const listed = answer.json<{ runs: Record<string, unknown>[] }>().runs;
+      expect(listed.map(({ dataSource, cubeStore, unavailable }) => ({ dataSource, cubeStore, unavailable }))).toEqual([
+        { dataSource: null, cubeStore: false, unavailable: true },
       ]);
+      expect(answer.body).not.toContain(hidden.id);
+      expect(answer.body).not.toContain(`hidden_${MARK}`);
+      expect(answer.body).not.toContain(`renamed_${MARK}`);
+      expect(answer.body).not.toContain(`Elsewhere ${MARK}`);
     } finally {
       await getDb()
         .updateTable('data_sources')

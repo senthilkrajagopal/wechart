@@ -1050,6 +1050,144 @@ test.describe('saving a query (T812, AC-457, AC-483)', () => {
 });
 
 /**
+ * T817 (AC-381, as amended 2026-10-17; AC-452): History in the right pane
+ * lists all the user's runs by default, newest first, each with its SQL, its
+ * data source and folder, time, outcome and row count; "This data source"
+ * narrows to the open tab's; a row on a source the user can no longer run
+ * SQL on reads "A data source no longer available to you", naming neither;
+ * and one run's state reads the same, icon and label, on its tab, in its
+ * result head and in its History row.
+ */
+test.describe('History in the right pane (T817, AC-381, AC-452)', () => {
+  const tabs = (page: Page) => page.getByRole('tablist', { name: 'SQL tabs' }).getByRole('tab');
+  const editor = (page: Page) => page.locator('.sql-editor .cm-content');
+  async function runOn(page: Page, source: string, sql: string) {
+    await pickerButton(page).click();
+    await groupOf(page).getByRole('option', { name: new RegExp(source) }).click();
+    await editor(page).click();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.press('Delete');
+    await page.keyboard.type(sql);
+    await page.getByRole('button', { name: 'Run', exact: true }).click();
+    await expect(page.getByTestId('sql-result-head')).toHaveText(/^Finished 1 row/);
+  }
+  const historyRows = (page: Page) =>
+    rightPane(page)
+      .getByRole('list', { name: 'History' })
+      .getByRole('listitem')
+      .filter({ hasText: `hist_${RUN}` });
+
+  test('lists all the user’s runs, narrows to the open tab’s source, reads a lost source as no longer available, and says a run’s state as its tab and result head do', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await runOn(page, SOURCES.on, `SELECT 'hist_${RUN}_one' AS m`);
+      await page.getByRole('button', { name: `New tab on ${SOURCES.on}` }).click();
+      await runOn(page, SOURCES.two, `SELECT 'hist_${RUN}_two' AS m`);
+
+      await rightPane(page).getByRole('button', { name: 'History' }).click();
+      await expect(rightPane(page).getByRole('radio', { name: 'All' })).toBeChecked();
+      await expect(rightPane(page)).toContainText('Only you can see these · newest first');
+      // All, newest first: both sources.
+      await expect(historyRows(page)).toHaveCount(2);
+      const [newest, older] = [historyRows(page).nth(0), historyRows(page).nth(1)];
+      await expect(newest).toContainText(`SELECT 'hist_${RUN}_two' AS m`);
+      await expect(newest).toContainText(`${SOURCES.two} · Shared / SQL workspace ${RUN}`);
+      await expect(newest).toContainText('1 row');
+      await expect(newest.locator('time')).toHaveText(/^Today \d\d:\d\d$/);
+      await expect(older).toContainText(`${SOURCES.on} · Shared / SQL workspace ${RUN}`);
+
+      // One run's state, the same in all three places (AC-452).
+      await expect(tabs(page).nth(1)).toHaveAttribute('aria-label', `Query 2, Finished, 1 row, on ${SOURCES.two}`);
+      await expect(tabs(page).nth(1).locator('svg[data-icon]')).toHaveAttribute('data-icon', 'ok');
+      await expect(page.getByTestId('sql-result-head').locator('svg[data-icon]').first()).toHaveAttribute('data-icon', 'ok');
+      await expect(newest.locator('.status')).toHaveText('Finished');
+      await expect(newest.locator('.status svg[data-icon]')).toHaveAttribute('data-icon', 'ok');
+
+      // This data source: the open tab's (the second, on two).
+      await rightPane(page).getByRole('radio', { name: 'This data source' }).check();
+      await expect(historyRows(page)).toHaveCount(1);
+      await expect(historyRows(page).first()).toContainText(`hist_${RUN}_two`);
+      await rightPane(page).getByRole('radio', { name: 'All' }).check();
+      await expect(historyRows(page)).toHaveCount(2);
+
+      // Two's runner off: its row names neither it nor its folder.
+      const admin = await signedIn(browser, 'super');
+      try {
+        const off = await admin.page.request.put(`/api/data-sources/${world.sources.two}/sql-runner`, {
+          data: { on: false },
+        });
+        expect(off.status(), await off.text()).toBe(200);
+        await page.reload();
+        await rightPane(page).getByRole('button', { name: 'History' }).click();
+        const lost = historyRows(page).filter({ hasText: `hist_${RUN}_two` });
+        await expect(lost).toContainText('A data source no longer available to you');
+        await expect(lost).not.toContainText(SOURCES.two);
+        await expect(lost).not.toContainText(`SQL workspace ${RUN}`);
+        await expect(historyRows(page).filter({ hasText: `hist_${RUN}_one` })).toContainText(SOURCES.on);
+      } finally {
+        const on = await admin.page.request.put(`/api/data-sources/${world.sources.two}/sql-runner`, {
+          data: { on: true, readOnlyConfirmed: true },
+        });
+        expect(on.status(), await on.text()).toBe(200);
+        await admin.context.close();
+      }
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('says a run going the same way, icon and label, on its tab, in its result head and in its History row (AC-452)', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.on) }).click();
+      await editor(page).click();
+      await page.keyboard.type(`SELECT pg_sleep(6), 'slow_${RUN}' AS m`);
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+      await rightPane(page).getByRole('button', { name: 'History' }).click();
+
+      const row = rightPane(page).getByRole('list', { name: 'History' }).getByRole('listitem').first();
+      await expect(row).toContainText(`slow_${RUN}`);
+      await expect(row).toContainText(`${SOURCES.on} · Shared / SQL workspace ${RUN}`);
+      // Read together, so the one clock reads the same second in all three.
+      const said = await page.evaluate(() => {
+        const tab = document.querySelector('[role="tablist"][aria-label="SQL tabs"] [role="tab"][aria-selected="true"]');
+        const head = document.querySelector('[data-testid="sql-result-head"]');
+        const going = document.querySelector('[aria-label="History"] li .status');
+        return {
+          tab: tab?.getAttribute('aria-label') ?? '',
+          tabIcon: tab?.querySelector('svg[data-icon]')?.getAttribute('data-icon') ?? '',
+          head: head?.textContent ?? '',
+          headIcon: head?.querySelector('svg[data-icon]')?.getAttribute('data-icon') ?? '',
+          row: going?.textContent ?? '',
+          rowIcon: going?.querySelector('svg[data-icon]')?.getAttribute('data-icon') ?? '',
+        };
+      });
+      expect(said.row).toMatch(/^Running · \d+ s of 30$/);
+      expect(said.tab).toBe(`Query 1, ${said.row}, on ${SOURCES.on}`);
+      expect(said.head.startsWith(said.row)).toBe(true);
+      expect([said.tabIcon, said.headIcon, said.rowIcon]).toEqual(['run', 'run', 'run']);
+
+      // Ended: Finished in all three, its row now History's own.
+      await expect(page.getByTestId('sql-result-head')).toHaveText(/^Finished 1 row/, { timeout: 15_000 });
+      await expect(tabs(page).first()).toHaveAttribute('aria-label', `Query 1, Finished, 1 row, on ${SOURCES.on}`);
+      await expect(row.locator('.status')).toHaveText('Finished');
+      await expect(row).toContainText(`slow_${RUN}`);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+/**
  * T816 (AC-455): ⌘/Ctrl+S anywhere in the workspace saves the open tab's
  * query (Save… on a new one, Save on a saved one) instead of the browser's
  * saving the page; ⌘/Ctrl+F in the editor opens the editor's own find; and

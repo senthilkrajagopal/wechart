@@ -337,4 +337,33 @@ main:has(.sql-workspace) {
 .sql-saved__more { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--wc-text-secondary); cursor: pointer; }
 .sql-saved__more:hover { background: var(--wc-bg-hover); }
 .sql-saved__more:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
+/* Saved or History, one at a time (T817; design 17, pin 17). */
+.sql-pane__switch { align-self: flex-start; margin: 0 12px 8px; }
+/* History (T817; design 17, pins 17 and 18): All or This data source, then
+   rows of the state, rows and time over the SQL, its values and its source. */
+.sql-history { padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.sql-history__scope { align-self: flex-start; }
+.sql-history .seg label {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 8px; font-size: 12px; cursor: pointer;
+  border-left: 1px solid var(--wc-border-subtle); background: var(--wc-bg-surface);
+}
+.sql-history .seg label:first-child { border-left: 0; }
+.sql-history .seg label.is-on { background: var(--wc-bg-accent-soft); color: var(--wc-accent); font-weight: 600; }
+.sql-history .seg label:has(input:disabled) { color: var(--wc-text-muted); cursor: default; }
+.sql-history .seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.sql-history .seg label:focus-within { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
+.sql-history__note { margin: 0; font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); color: var(--wc-text-secondary); }
+.sql-history__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.sql-history__row { display: grid; gap: 3px; padding: 7px 0; border-bottom: 1px solid var(--wc-border-subtle); min-width: 0; }
+.sql-history__top { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; min-width: 0; }
+.sql-history__rows, .sql-history__when { color: var(--wc-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sql-history__when { margin-left: auto; }
+.sql-history__sql {
+  font: 400 12px/16px var(--wc-font-code); overflow: hidden; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.sql-history__values, .sql-history__source {
+  font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); color: var(--wc-text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 `;

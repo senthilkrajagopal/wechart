@@ -389,6 +389,17 @@ export function registerDataSources(
     return source;
   };
 
+  // The SQL runner workspace's picker (T798, AC-447); also who may run SQL
+  // on a saved query's source (T814, AC-459) and on a History row's (T817, AC-381).
+  const sqlSourcesOf = sqlSourcesLister({
+    store,
+    access,
+    switches,
+    workspaceOf,
+    ownWorkspace,
+    paths: () => listing.pathOf(),
+    runs: sqlRunner !== undefined,
+  });
   // SQL run on one, by those who may (T532, AC-373, AC-383).
   registerSqlRunner(app, {
     runner: sqlRunner,
@@ -400,17 +411,7 @@ export function registerDataSources(
     access,
     reached,
     workspaceOf,
-  });
-  // The SQL runner workspace's picker (T798, AC-447); also who may run SQL
-  // on a saved query's source (T814, AC-459).
-  const sqlSourcesOf = sqlSourcesLister({
-    store,
-    access,
-    switches,
-    workspaceOf,
-    ownWorkspace,
-    paths: () => listing.pathOf(),
-    runs: sqlRunner !== undefined,
+    sourcesOf: sqlSourcesOf,
   });
   registerSqlSources(app, sqlSourcesOf);
 

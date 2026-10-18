@@ -26,6 +26,8 @@ import type {
 import { queryOf, tablesOf, type Catalog } from '../model/introspection';
 import type { DataSourceAccess } from './data-sources';
 import { copyRepointed } from './sql-runner-switch';
+// A type only: sql-sources.ts reads this file's `needsSwitch`.
+import type { SqlSourcesOf } from './sql-sources';
 
 /**
  * The SQL runner (T532, F40; R50, R51): read-only SQL on a data source's own
@@ -423,7 +425,14 @@ export function registerSqlRunner(
     runs,
     audit,
     paths,
+    sourcesOf,
   }: {
+    /**
+     * The sources the request's user may run SQL on, as the workspace's
+     * picker lists them: a History row on any other names neither it nor its
+     * folder (T817, AC-381). Unset, each row is said as before.
+     */
+    readonly sourcesOf?: SqlSourcesOf;
     /** Where each run is recorded (T534, AC-382). */
     readonly audit: Pick<AuditStore, 'record'> | undefined;
     /** Each folder's path from the root, for a run's data source (T534). */
@@ -779,6 +788,22 @@ export function registerSqlRunner(
       ...(after === undefined ? {} : { after }),
     });
     const pathOf = await paths();
+    /**
+     * The sources of this page's runs the user may still run SQL on (T817,
+     * AC-381, as amended 2026-10-17): a row on any other is said as no
+     * longer available, naming neither the source nor its folder. Cube
+     * Store's runs, by its own id. Unset, every row is said as before.
+     */
+    const runnable =
+      sourcesOf === undefined || page.runs.length === 0
+        ? undefined
+        : await sourcesOf(
+            request,
+            new Set(page.runs.map((each) => each.dataSourceId ?? CUBE_STORE_TARGET)),
+          );
+    const available = (id: string | null) =>
+      runnable === undefined ||
+      runnable.some((row) => row.id === (id ?? CUBE_STORE_TARGET) && row.runner !== 'off');
     const sourceView = async (id: string, name: string | null) => {
       const source = await store.get(id);
       const seen =
@@ -795,8 +820,9 @@ export function registerSqlRunner(
     const viewed = new Map<string, Awaited<ReturnType<typeof sourceView>>>();
     const out = [];
     for (const run of page.runs) {
+      const lost = !available(run.dataSourceId);
       let view = null;
-      if (run.dataSourceId !== null) {
+      if (run.dataSourceId !== null && !lost) {
         view = viewed.get(run.dataSourceId);
         if (view === undefined) {
           view = await sourceView(run.dataSourceId, run.dataSourceName);
@@ -807,8 +833,9 @@ export function registerSqlRunner(
         id: run.id,
         sql: run.sql,
         dataSource: view,
-        // Cube Store's has no data source (T536).
-        cubeStore: run.dataSourceId === null,
+        // Cube Store's has no data source (T536); one no longer available is neither.
+        cubeStore: run.dataSourceId === null && !lost,
+        ...(lost ? { unavailable: true as const } : {}),
         startedAt: run.startedAt.toISOString(),
         outcome: run.outcome,
         rowCount: run.rowCount,

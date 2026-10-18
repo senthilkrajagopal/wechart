@@ -527,6 +527,34 @@ describe('the SQL tab, the runner on (T535)', () => {
     ).toEqual(['2 rows', null, '0 rows']);
   });
 
+  it('says a run on a source no longer available as such under All, naming none, opening nothing (T817, AC-381)', async () => {
+    serve({
+      runs: [
+        {
+          id: 'gone',
+          sql: 'SELECT gone',
+          dataSource: null,
+          cubeStore: false,
+          unavailable: true,
+          startedAt: '2026-10-01T14:32:00.000Z',
+          outcome: 'finished',
+          rowCount: 1,
+          durationMs: 10,
+          truncated: null,
+          statement: 'select',
+        },
+      ],
+    });
+    open();
+    const pane = await screen.findByRole('region', { name: 'My runs' });
+    await userEvent.click(within(pane).getByRole('radio', { name: 'All' }));
+    const row = (await within(pane).findByText('SELECT gone')).closest('li')!;
+    expect(within(row).getByText('A data source no longer available to you')).toBeTruthy();
+    expect(row.textContent).not.toContain('Cube Store');
+    expect(within(row).queryByRole('link')).toBeNull();
+    expect(within(row).queryByRole('button')).toBeNull();
+  });
+
   it('moves between runs with ↑ and ↓, and Enter puts a run’s SQL in the editor and focus there (design 15, keyboard)', async () => {
     const run = (id: string, dataSource: string) => ({
       id,

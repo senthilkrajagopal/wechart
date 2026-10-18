@@ -18,7 +18,7 @@ import { hiddenWorkspacesFor } from '../../shell/WorkspaceSwitcher';
 import { sourceQuery } from '../data-sources/SourceSettings';
 import { ChooseASource, NoSourceToRun } from './EmptyStates';
 import { OffPanel } from './OffPanel';
-import { SQL_SOURCES_QUERY } from './sources';
+import { placeOf, SQL_SOURCES_QUERY } from './sources';
 import { SourcePicker } from './SourcePicker';
 import { CUBE_STORE_ID, CUBE_STORE_QUERY } from '../data-sources/cubeStore';
 import { endedAway } from './awayRun';
@@ -27,6 +27,7 @@ import { holdTabs, releaseTabs, tabsStoreFor } from './liveTabs';
 import { QueryTab, type Insertion, type RunHold, type RunOnOpen } from './QueryTab';
 import { SchemaTree } from './SchemaTree';
 import { runState, type RunState } from './runState';
+import { HistoryList } from './HistoryList';
 import { SavedList, savedQueryById, type SavedQuery } from './SavedList';
 import { SaveKeyContext, useSaveKeyScope } from './saveKey';
 import type { SqlSourceRow } from './sources';
@@ -435,6 +436,8 @@ function Workbench({
   /** A tab opened by Preview 100 rows, to run as it opens (T807, AC-449). */
   const [runOnOpen, setRunOnOpen] = useState<RunOnOpen | undefined>(undefined);
   const [open, setOpen] = useState<Side | null>(null);
+  /** What the right pane shows: Saved, first, or History (T817). */
+  const [rightShows, setRightShows] = useState<'saved' | 'history'>('saved');
   const leftFolded = useWindowMatches(LEFT_RAIL_QUERY);
   const rightFolded = useWindowMatches(RIGHT_RAIL_QUERY);
   const workspace = useRef<HTMLElement>(null);
@@ -646,17 +649,60 @@ function Workbench({
         }}
       >
         <h2 className="sql-pane__head">Saved and History</h2>
-        {/* The Saved tab (T813, AC-458); History joins it with T817. */}
-        <SavedList
-          sourceOf={(id) => sources.data?.find((row) => row.id === id)}
-          onOpen={(query) => {
-            openSaved(query);
-            setOpen(null);
-          }}
-          onRenamed={(savedId, name) => {
-            dispatch({ kind: 'saved-renamed', savedId, name });
-          }}
-        />
+        {/* Saved (T813, AC-458) or History (T817, AC-381), one at a time, as design 17 draws them. */}
+        <div className="seg sql-pane__switch" role="group" aria-label="Saved or History">
+          {(
+            [
+              ['saved', 'Saved'],
+              ['history', 'History'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={rightShows === value}
+              className={rightShows === value ? 'is-on' : undefined}
+              onClick={() => {
+                setRightShows(value);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {rightShows === 'saved' ? (
+          <SavedList
+            sourceOf={(id) => sources.data?.find((row) => row.id === id)}
+            onOpen={(query) => {
+              openSaved(query);
+              setOpen(null);
+            }}
+            onRenamed={(savedId, name) => {
+              dispatch({ kind: 'saved-renamed', savedId, name });
+            }}
+          />
+        ) : (
+          <HistoryList
+            sourceId={chosen}
+            // The run going, in the state its tab shows (AC-452).
+            going={
+              runningTab?.run?.kind === 'running'
+                ? {
+                    sql: runningTab.lastRunSql ?? '',
+                    sourceId: runningTab.sourceId,
+                    at: runningTab.run.at,
+                    state: stateOf(runningTab),
+                    place:
+                      runningRow === undefined
+                        ? 'a data source'
+                        : runningRow.cubeStore
+                          ? 'Cube Store'
+                          : `${runningRow.name} · ${placeOf(runningRow)}`,
+                  }
+                : undefined
+            }
+          />
+        )}
       </SidePane>
       </SaveKeyContext.Provider>
     </section>

@@ -11,6 +11,7 @@ import { SqlEditor } from './SqlEditor';
 import { CUBE_STORE_ID } from './cubeStore';
 import { refusalSentence, SqlResult, type SqlOutcome } from './SqlResult';
 import { cancelRun, GOING_QUERY, NO_CANCEL } from '../sql/going';
+import { NO_LONGER_AVAILABLE } from '../sql/HistoryList';
 import { OffPanel } from '../sql/OffPanel';
 import { loginFor, pageKeyOf, pathText, routeOf, type SqlSource } from '../sql/sqlSource';
 
@@ -597,6 +598,8 @@ interface PastRun {
     readonly folderPath: readonly { readonly title: string }[] | null;
     readonly inWorkspace: boolean;
   } | null;
+  /** On a data source the user can no longer run SQL on: named nowhere (T817, AC-381). */
+  readonly unavailable?: true;
   readonly startedAt: string;
   readonly outcome: string;
   readonly rowCount: number | null;
@@ -723,7 +726,9 @@ function MyRuns({
               </span>
               {scope === 'all' ? (
                 <span className="sql-runs__source">
-                  {there === null
+                  {run.unavailable === true
+                    ? NO_LONGER_AVAILABLE
+                    : there === null
                     ? 'Cube Store'
                     : `${there.name} · ${
                         there.inWorkspace
@@ -741,7 +746,10 @@ function MyRuns({
           const elsewhereId = there === null ? CUBE_STORE_ID : there.id;
           return (
             <li key={run.id}>
-              {here ? (
+              {run.unavailable === true ? (
+                // Nowhere to open it: its source is no longer the user's to run SQL on (T817).
+                <div className="sql-runs__run">{body}</div>
+              ) : here ? (
                 <button
                   type="button"
                   className="sql-runs__run"
