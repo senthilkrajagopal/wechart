@@ -41,6 +41,8 @@ An addendum to `rich-tiles-and-combo-tech.md` §2, for T846 (design 20's draw or
 - **The legend's formatter** is called with the entry's name and returns the text, which the entry's `textStyle` (and its `rich`) draws (`LegendView.js:321-340`).
 - **Legend hover.** Over an entry, the legend dispatches `highlight` with the series' name, and `downplay` as the pointer leaves (`LegendView.js:168, 517-535`). A dispatched action is triggered as an event of the same type, carrying its payload (`EC/lib/core/echarts.js:1506-1587`), so `chart.on('highlight', …)` receives `seriesName`. **But with `selectedMode: false`, every part of an entry is silent** (`LegendView.js:359-362`), so no hover reaches it. wechart's legend has `selectedMode: false` (`legend.ts`).
 - **Series hover** is the documented `mouseover` / `mouseout`, with `componentType: 'series'` and `seriesName` (`echarts.md`, "Events").
+- **The axis pointer sends `highlight` and `downplay` too:** batched, as it moves from one category to the next (`EC/lib/component/axisPointer/axisTrigger.js:350-358`). Listening for `downplay` as the pointer leaving a series would end an emphasis while the pointer is still on it (T848's review).
+- **An item's own `itemStyle.opacity` wins over its series'**, so a series faded as a whole leaves alone the items a marking or a highlight drew with their own strength (`marking/option.ts`, `crossfilter/highlight.ts`); those fade item by item.
 
 ## Gotchas
 

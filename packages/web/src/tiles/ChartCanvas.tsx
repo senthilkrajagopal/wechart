@@ -107,6 +107,7 @@ export function ChartCanvas({
   const tipShown = useRef(false);
   /** The option last drawn, and the series whose axis is emphasised (T848, AC-500). */
   const drawnOption = useRef<EChartsOption | null>(null);
+  const drawnType = useRef<string>(spec.chartType);
   const hovered = useRef<string | undefined>(undefined);
   const [canvas, setCanvas] = useState<Canvas | null>(null);
   /**
@@ -490,6 +491,7 @@ export function ChartCanvas({
     chart.setOption(option, true);
     // Drawn afresh, nothing emphasised (T848).
     drawnOption.current = option;
+    drawnType.current = spec.chartType;
     hovered.current = undefined;
 
     /**
@@ -518,8 +520,9 @@ export function ChartCanvas({
    * would be the `highlight` the legend dispatches with its series' name, but
    * wechart's legend (`selectedMode: false`) is silent to the pointer
    * (research/echarts-combo-layers.md; decision T848-2), so that path waits on
-   * an entry the pointer can reach. Anything without two value axes is left
-   * alone.
+   * an entry the pointer can reach; the axis pointer's own `downplay`, sent
+   * at each category, isn't the pointer leaving (T848's review). Anything but
+   * a combo of two value axes is left alone.
    */
   useEffect(() => {
     const chart = instance.current;
@@ -527,7 +530,7 @@ export function ChartCanvas({
     const emphasise = (name: string | undefined) => {
       const option = drawnOption.current;
       if (name === hovered.current || option === null || chart.isDisposed()) return;
-      const patch = emphasisPatch(option, name, theme);
+      const patch = emphasisPatch(option, drawnType.current, name, theme);
       if (patch === undefined) return;
       hovered.current = name;
       chart.setOption(patch);
@@ -540,22 +543,14 @@ export function ChartCanvas({
     const out = (params: unknown) => {
       if ((params as Hovered)?.componentType === 'series') emphasise(undefined);
     };
-    const highlight = (params: unknown) => {
-      const { seriesName } = (params as Hovered) ?? {};
-      if (typeof seriesName === 'string') emphasise(seriesName);
-    };
     const away = () => emphasise(undefined);
     chart.on('mouseover', over);
     chart.on('mouseout', out);
-    chart.on('highlight', highlight);
-    chart.on('downplay', away);
     chart.on('globalout', away);
     return () => {
       if (chart.isDisposed()) return;
       chart.off('mouseover', over);
       chart.off('mouseout', out);
-      chart.off('highlight', highlight);
-      chart.off('downplay', away);
       chart.off('globalout', away);
     };
   }, [theme]);

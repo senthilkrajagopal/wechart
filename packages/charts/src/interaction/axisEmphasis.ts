@@ -36,18 +36,32 @@ function axisOf(option: EChartsOption, seriesName: string): number | undefined {
 }
 
 /**
- * The patch to merge for `hovered`, or for nothing hovered; none where the
- * chart hasn't two value axes. Each value is set from the drawn option, so
- * a mark already faded (a marking's unmarked items) fades further and comes
- * back to where it was.
+ * An item with its own strength, as a marking or a cross-filter highlight
+ * draws one (it wins over its series'), faded by `fade`; any other item as
+ * it is, taking its series' strength.
+ */
+function itemFaded(item: unknown, fade: number): unknown {
+  const own = asObject(item);
+  const style = asObject(own['itemStyle']);
+  if (typeof style['opacity'] !== 'number') return item;
+  return { ...own, itemStyle: { ...style, opacity: style['opacity'] * fade } };
+}
+
+/**
+ * The patch to merge for `hovered`, or for nothing hovered; none but for a
+ * combo of two value axes (a trellis has an axis per panel, T848's review).
+ * Each value is set from the drawn option, so a mark already faded (a
+ * marking's unmarked items, each with its own strength) fades further and
+ * comes back to where it was.
  */
 export function emphasisPatch(
   option: EChartsOption,
+  chartType: string,
   hovered: string | undefined,
   theme: ChartTheme,
 ): EChartsOption | undefined {
   const axes = option['yAxis'];
-  if (!Array.isArray(axes) || axes.length < 2) return undefined;
+  if (chartType !== 'combo' || !Array.isArray(axes) || axes.length < 2) return undefined;
   const on = hovered === undefined ? undefined : axisOf(option, hovered);
   if (hovered !== undefined && on === undefined) return undefined;
   const tokens = COLORS[theme];
@@ -67,7 +81,10 @@ export function emphasisPatch(
     series: series.map((one) => {
       const index = typeof one['yAxisIndex'] === 'number' ? one['yAxisIndex'] : 0;
       const fade = on !== undefined && index !== on ? FADED : 1;
+      const data = Array.isArray(one['data']) ? (one['data'] as unknown[]) : [];
+      const ownStrength = data.some((item) => itemFaded(item, FADED) !== item);
       return {
+        ...(ownStrength ? { data: data.map((item) => itemFaded(item, fade)) } : {}),
         itemStyle: { opacity: opacityOf(one['itemStyle']) * fade },
         lineStyle: { opacity: opacityOf(one['lineStyle']) * fade },
         ...(one['areaStyle'] === undefined
@@ -86,10 +103,11 @@ function merged(option: EChartsOption, patch: EChartsOption): EChartsOption {
       const top = asObject(Array.isArray(over) ? over[at] : undefined);
       return {
         ...own,
+        // An array (a series' data) replaces; an object merges.
         ...Object.fromEntries(
           Object.entries(top).map(([key, value]) => [
             key,
-            { ...asObject(own[key]), ...asObject(value) },
+            Array.isArray(value) ? value : { ...asObject(own[key]), ...asObject(value) },
           ]),
         ),
       };
@@ -104,10 +122,11 @@ function merged(option: EChartsOption, patch: EChartsOption): EChartsOption {
 /** The option with `hovered`'s axis emphasised, or the option itself where nothing is. */
 export function axisEmphasis(
   option: EChartsOption,
+  chartType: string,
   hovered: string | undefined,
   theme: ChartTheme,
 ): EChartsOption {
   if (hovered === undefined) return option;
-  const patch = emphasisPatch(option, hovered, theme);
+  const patch = emphasisPatch(option, chartType, hovered, theme);
   return patch === undefined ? option : merged(option, patch);
 }

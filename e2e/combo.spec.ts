@@ -115,18 +115,39 @@ test('a combo titles its two axes with their glyphs, says "(right)", and a hover
     );
   expect(new Set((await rightTicks()).map((one) => one.fill))).toEqual(new Set([TEXT_SECONDARY]));
 
+  // The left axis's bars: tall filled shapes, each at its drawn strength.
+  const bars = () =>
+    page.locator('[data-tile="tile-combo"] svg path').evaluateAll((nodes) =>
+      nodes
+        .filter((node) => {
+          const fill = node.getAttribute('fill') ?? 'none';
+          return fill.startsWith('#') && node.getBoundingClientRect().height > 20;
+        })
+        .map(
+          (node) =>
+            Number(node.getAttribute('opacity') ?? 1) *
+            Number(node.getAttribute('fill-opacity') ?? 1),
+        ),
+    );
+  expect((await bars()).length).toBeGreaterThan(0);
+  expect(new Set(await bars())).toEqual(new Set([1]));
+
   // Hover a point of the right axis's series: its axis's ticks go to
-  // text-primary (AC-500).
+  // text-primary, and the left axis's bars fade to 0.28 (AC-500).
   const point = page.locator('[data-tile="tile-combo"] svg path[d^="M1 0A"]').first();
   const at = (await point.boundingBox())!;
   await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
   await expect
     .poll(async () => new Set((await rightTicks()).map((one) => one.fill)))
     .toEqual(new Set([TEXT_PRIMARY]));
+  await expect
+    .poll(async () => (await bars()).map((strength) => Math.round(strength * 100) / 100))
+    .toEqual((await bars()).map(() => 0.28));
 
   // Away from the chart, it's back as it was.
   await page.mouse.move(box.x - 40, box.y - 40);
   await expect
     .poll(async () => new Set((await rightTicks()).map((one) => one.fill)))
     .toEqual(new Set([TEXT_SECONDARY]));
+  await expect.poll(async () => new Set(await bars())).toEqual(new Set([1]));
 });
