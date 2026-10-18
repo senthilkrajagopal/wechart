@@ -779,8 +779,13 @@ test.describe('the schema browser in the left pane (T805, AC-386)', () => {
       await schema.getByTestId('sql-schema-caret').first().click();
       const tables = schema.getByRole('group', { name: 'Tables in public' });
 
-      const expected = catalog();
-      expect(expected.size).toBeGreaterThan(0);
+      // Every table of the development database's own, with every column. Not
+      // sql-runner.spec.ts's `sqlrun_<run>` tables: that spec makes them in
+      // `public` and drops them while this one may run, in another worker, so
+      // one can come or go between this read and the tree's (lane SQL,
+      // 2026-10-18). Any other table is checked.
+      const expected = new Map([...catalog()].filter(([table]) => !table.startsWith('sqlrun_')));
+      expect([...expected.keys()]).toEqual(expect.arrayContaining(['customers', 'orders', 'products']));
       for (const [table, columns] of expected) {
         const item = tables.getByRole('treeitem', { name: table, exact: true });
         await item.getByTestId('sql-schema-caret').first().click();
