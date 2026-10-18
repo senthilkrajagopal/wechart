@@ -1142,6 +1142,9 @@ function EditorBody({
                           available,
                           titleOf: (member: string) => titles[member] ?? member,
                           spec,
+                          formats,
+                          onAdd: (well, member) =>
+                            setSpec((current) => addToWell(current, well, member)),
                         }
                   }
                   // A box plot's "Each point is" (T400, AC-314), for a box plot alone.

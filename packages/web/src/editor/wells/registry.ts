@@ -1,9 +1,10 @@
-import type { ChartType } from '@wechart/core';
+import type { ChartType, MemberFormats, WellName as SpecWell } from '@wechart/core';
 import type { WellName } from '@wechart/recommender';
 import type { ComponentType } from 'react';
 
 import type { Member } from '../fields';
 import { MapWells } from './map';
+import { ParallelWells } from './parallel';
 
 /**
  * R81's wells, one module per type (T934; docs/tasks.md §P2.27): a KPI's
@@ -30,9 +31,14 @@ export interface TypeWellsProps {
   /** The chart's own Metrics and Dimensions. */
   readonly spec?:
     { readonly measures: readonly string[]; readonly dimensions: readonly string[] } | undefined;
+  /** Each member's format, as the model gives it (T981: Shared needs one format). */
+  readonly formats?: MemberFormats | undefined;
+  /** Add a field to one of the editor's wells (T981: parallel coordinates' + Measure). */
+  readonly onAdd?: ((well: SpecWell, member: string) => void) | undefined;
 }
 
 /** Each type with wells of its own, by its type. One line per type. */
 export const TYPE_WELLS: Partial<Record<ChartType, ComponentType<TypeWellsProps>>> = {
   map: MapWells,
+  parallel: ParallelWells,
 };

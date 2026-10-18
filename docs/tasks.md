@@ -2583,10 +2583,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 ### Lane CHARTS-B: parallel coordinates
 
-- [ ] T981 (AC-597, AC-037) Parallel coordinates' spec and wells: Line by, 3 or more ordered measures, Colour, and Scale with Shared only for one format
-  - Files: `packages/core/src/chart-types/parallel.ts` (+ test), `packages/web/src/editor/wells/parallel.tsx` (+ test).
-  - Failing test: `parallel.test.ts`: a spec of Product and 5 measures parses in order; `parallel.test.tsx` (wells): Shared is disabled for $ and % with the reason; 2 measures say "Parallel coordinates need at least 3 measures; there are 2. Add a measure, or use Scatter." with + Measure (AC-597, AC-037).
-  - Depends on: T934
+- [x] T981 (AC-597, AC-037) Parallel coordinates' spec and wells: Line by, 3 or more ordered measures, Colour, and Scale with Shared only for one format
 
 - [ ] T982 (AC-598) Draw one line per member over min-to-max axes, the scale warning as text, and at most 1,000 lines with the cut said
   - Files: `packages/charts/src/series/parallel.ts` (+ test), `packages/web/src/tiles/ParallelNotes.tsx` (+ test).

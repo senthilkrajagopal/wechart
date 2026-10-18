@@ -346,4 +346,15 @@ export {
   type MapSettings,
   type PointsLayer,
 } from './chart-types/map';
+export {
+  MIN_PARALLEL_AXES,
+  PARALLEL_SCALES,
+  parallelModule,
+  parallelOf,
+  sharedScaleRefusal,
+  tooFewMeasures,
+  type Parallel,
+  type ParallelScale,
+  type ParallelSettings,
+} from './chart-types/parallel';
 export { sealSecretV1, type XcubeKey } from './data-sources/seal';

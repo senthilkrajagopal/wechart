@@ -1,5 +1,6 @@
 import type { ChartType } from '../render-spec';
 import { mapModule } from './map';
+import { parallelModule } from './parallel';
 
 /**
  * R81's chart types, one module each (T934; docs/tasks.md §P2.27): a type's
@@ -19,4 +20,5 @@ export interface ChartTypeModule<Options = unknown> {
 /** Every type with a module of its own, by its type. One line per type. */
 export const CHART_TYPE_MODULES: Partial<Record<ChartType, ChartTypeModule>> = {
   map: mapModule as ChartTypeModule,
+  parallel: parallelModule as ChartTypeModule,
 };
