@@ -52,6 +52,12 @@ describe('the result builder (T783, AC-443)', () => {
     }
   });
 
+  it('keeps the notice and the data whatever wechart’s own account of the answer names', () => {
+    const result = dataResult(nested, { notice: 'not the notice', [USER_DATA]: 'not the data' });
+    for (const value of both(result))
+      expect(value).toEqual({ notice: USER_DATA_NOTICE, [USER_DATA]: nested });
+  });
+
   it('marks the field with a fixed notice naming it, saying it is data users wrote', () => {
     expect(USER_DATA_NOTICE).toContain(`"${USER_DATA}"`);
     expect(USER_DATA_NOTICE).toMatch(/written by wechart’s users/);

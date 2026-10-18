@@ -10,6 +10,7 @@ import { auditStore } from '../repos/audit';
 import { buildServer } from '../server';
 import { mcpClient } from './client.fixture';
 import { forgetTestCounts, testCounter } from './counter.fixture';
+import { USER_DATA, USER_DATA_NOTICE } from './result';
 import type { McpTool } from './server';
 import { mintToken } from './tokenText';
 
@@ -151,6 +152,14 @@ describe('every MCP tool call in the audit trail (T781, AC-478)', () => {
           arguments: { filter: FILTER, name: TITLE },
         });
         expect(refused.isError).toBe(true);
+        // A refusal's words, which can name what a user wrote, only under the
+        // marked field (T783's review, AC-443).
+        const said = JSON.parse((refused.content as { text: string }[])[0]!.text) as Record<
+          string,
+          unknown
+        >;
+        expect(said[USER_DATA]).toEqual({ reason: 'You may not do that.' });
+        expect(said['notice']).toBe(USER_DATA_NOTICE);
       } finally {
         await client.close();
       }

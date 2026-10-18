@@ -33,7 +33,13 @@ export function dataResult(
   data: Record<string, unknown>,
   about: Record<string, unknown> = {},
 ): CallToolResult {
-  return structured({ notice: USER_DATA_NOTICE, ...about, [USER_DATA]: data });
+  // The notice and the data last, so no key of `about` stands in for either (T783's review).
+  return structured(
+    Object.assign({ notice: USER_DATA_NOTICE }, about, {
+      notice: USER_DATA_NOTICE,
+      [USER_DATA]: data,
+    }),
+  );
 }
 
 /** A refusal in wechart's own fixed words. */

@@ -12,7 +12,7 @@ import { Forbidden, Unauthenticated, type WechartUser } from '../auth/user';
 import type { TokenScope } from '../repos/access-tokens';
 import type { AuditStore } from '../repos/audit';
 import type { McpAuth } from './auth';
-import { refusal } from './result';
+import { refusal, routeRefusal } from './result';
 
 /**
  * The server's instructions: fixed text, holding nothing a user wrote
@@ -148,7 +148,8 @@ async function called(
   } catch (error) {
     if (error instanceof Forbidden || error instanceof Unauthenticated) {
       outcome = 'refused';
-      result = refusal(error.message);
+      // Its words can name what a user wrote: under the marked field (T783's review).
+      result = routeRefusal(error.message);
     } else {
       services.log.error({ err: error, tool: tool.name }, 'MCP tool failed');
       outcome = 'failed';
