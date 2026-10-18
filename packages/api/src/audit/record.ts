@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import {
   DRIVERS,
   periodOf,
@@ -28,13 +30,39 @@ export function actorOf(user: WechartUser | null): AuditActor | null {
   };
 }
 
-/** Kept, or said in the log: what was done stands either way. */
+/** The token an MCP request is served for (T781, AC-442): its id and its owner's name for it. */
+export interface McpToken {
+  readonly id: string;
+  readonly name: string;
+}
+const mcpRequest = new AsyncLocalStorage<McpToken>();
+
+/** Runs `work` as an MCP request bearing `token`: what it records says so (AC-442). */
+export function viaMcp<T>(token: McpToken, work: () => T): T {
+  return mcpRequest.run({ id: token.id, name: token.name }, work);
+}
+
+/**
+ * Kept, or said in the log: what was done stands either way. Recorded while
+ * an MCP request is served, it says it came through MCP and names the token,
+ * in its line and its details (T781, AC-442; design 18, state I).
+ */
 export async function recordIn(
   audit: Pick<AuditStore, 'record'> | undefined,
-  entry: AuditEntry,
+  given: AuditEntry,
   log: FastifyBaseLogger,
 ): Promise<void> {
   if (audit === undefined) return;
+  const token = mcpRequest.getStore();
+  // An MCP call names its token itself (AC-478).
+  const entry =
+    token === undefined || given.event === 'mcp-call'
+      ? given
+      : {
+          ...given,
+          summary: `${given.summary} · via ${token.name}`,
+          details: { ...given.details, viaMcp: { token } },
+        };
   await audit.record(entry).catch((error: unknown) => {
     log.warn({ err: error, event: entry.event }, 'could not keep an audit record');
   });

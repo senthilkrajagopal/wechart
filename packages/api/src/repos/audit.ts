@@ -33,6 +33,8 @@ export const AUDIT_EVENTS = [
   // A personal access token made or revoked (T767, T768, AC-442; design 18, state I).
   'token-made',
   'token-revoked',
+  // Every MCP tool call, reads included, with no argument value (T781, AC-478; design 18, state I).
+  'mcp-call',
 ] as const;
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];
 

@@ -150,6 +150,7 @@ import { workspaceModels } from './routes/workspace-models';
 import { bearerAuth } from './mcp/auth';
 import { mcpCaller } from './mcp/caller';
 import { mcpUrlOf, registerMcp } from './mcp/plugin';
+import type { McpTool } from './mcp/server';
 import {
   type RateLimitCounter,
   RateLimited,
@@ -279,6 +280,8 @@ export interface BuildOptions {
   readonly signIns?: SignInStore;
   /** Each token's requests to `/mcp`, counted for every replica (T779, AC-472). Unset: 503. */
   readonly mcpRateLimits?: RateLimitCounter;
+  /** The MCP tools served, wechart's own unless a test gives others (T781). */
+  readonly mcpTools?: readonly McpTool[];
   /**
    * Where a data source lands before it is stored, and leaves before it is
    * removed (T442): xcube's connections. Unset without xcube.
@@ -519,6 +522,7 @@ export function buildServer({
   accessTokens,
   signIns,
   mcpRateLimits,
+  mcpTools,
   dataSourceLanding,
   connectionTest,
   connectionTests,
@@ -4525,6 +4529,9 @@ export function buildServer({
       ...(config.mcpRateLimit === undefined ? {} : { rateLimit: config.mcpRateLimit }),
       // And bad or missing tokens by address (T780, AC-474).
       ...(config.mcpBadTokenLimit === undefined ? {} : { badTokenLimit: config.mcpBadTokenLimit }),
+      // Its tools, each call recorded in the audit trail (T781, AC-478).
+      ...(mcpTools === undefined ? {} : { tools: mcpTools }),
+      ...(audit === undefined ? {} : { audit }),
       // A token acts as its owner, with their latest sign-in's groups (T777,
       // AC-471); with none kept, no token is taken with sign-in on.
       ...(accessTokens === undefined || (security === 'oidc' && signIns === undefined)

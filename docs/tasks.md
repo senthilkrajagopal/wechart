@@ -1614,11 +1614,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T780 (AC-474, AC-473) Limit requests to `/mcp` bearing a bad or missing token per IP address, 20 a minute where unset, IPv6 by its /64
 
-- [ ] T781 (AC-478, AC-442) Record every MCP tool call in the audit trail with who, the token's name, the tool, the outcome and when, and no argument values; mark every event caused through MCP with the token's name
-  - Lane: MCP
-  - Files: `packages/api/src/audit/record.ts` (+ `record.test.ts`; the request's MCP context), `packages/api/src/mcp/server.ts`, `packages/api/src/mcp/audit.test.ts`, `packages/web/src/workspaces/security/AuditTrail.tsx` (+ test; "MCP call" and the MCP mark, as design 18 state I draws them).
-  - Failing test: `audit.test.ts`: a tool call, a read included, and a refused one each leave one "MCP call" event with who, the token's name, the tool, the outcome and when, and a search of the event for the call's argument values (a filter value, a name) finds none (AC-478); an event of an AC-294 kind recorded inside an MCP request carries "via MCP" and the token's name (AC-442). `AuditTrail.test.tsx`: both show as design 18 state I draws them.
-  - Depends on: T778
+- [x] T781 (AC-478, AC-442) Record every MCP tool call in the audit trail with who, the token's name, the tool, the outcome and when, and no argument values; mark every event caused through MCP with the token's name
 
 ### Lane MCP: the tools
 

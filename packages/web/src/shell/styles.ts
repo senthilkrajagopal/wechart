@@ -5135,6 +5135,8 @@ code.schedules__sub { font-family: var(--wc-font-code); }
 .audit-trail__glist ins { text-decoration: none; color: var(--wc-status-success); }
 .audit-trail__glist del { color: var(--wc-status-error); }
 .badge.audit-trail__replaced { gap: 4px; height: 22px; border: 0; background: var(--wc-bg-subtle); font-weight: 400; }
+/* An event caused through MCP: design 18's small plug badge beside it (T781, state I). */
+.badge.audit-trail__mcp { gap: 4px; height: 20px; margin-left: 6px; vertical-align: middle; }
 .audit-trail__replaced svg { color: var(--wc-text-secondary); }
 .audit-trail__tested { margin: 0; font-size: 12px; }
 /* The rows on one line, 34 px, as design 08's table (SEC-04, SEC-10); identities

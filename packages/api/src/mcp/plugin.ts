@@ -3,7 +3,10 @@ import { toNodeHandler } from '@modelcontextprotocol/node';
 import { bearerAuthChallengeResponse } from '@modelcontextprotocol/server';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
+import { viaMcp } from '../audit/record';
 import { PUBLIC } from '../auth/guard';
+import { Unauthenticated } from '../auth/user';
+import type { AuditStore } from '../repos/audit';
 import { type McpAuth, noTokens } from './auth';
 import { mcpGuard } from './guard';
 import {
@@ -13,7 +16,7 @@ import {
   RateLimited,
   rateLimitStore,
 } from './rateLimitStore';
-import { mcpHandler } from './server';
+import { mcpHandler, type McpTool } from './server';
 
 /** Where MCP is served, on its host (AC-476). */
 export const MCP_PATH = '/mcp';
@@ -41,6 +44,10 @@ export interface McpOptions {
   readonly rateLimit?: number;
   /** An address's bad-token requests a minute, `WECHART_MCP_BAD_TOKEN_LIMIT`: 20 unset (AC-474). */
   readonly badTokenLimit?: number;
+  /** The tools served (T782 on); none unset. */
+  readonly tools?: readonly McpTool[];
+  /** Where every tool call is recorded (T781, AC-478). */
+  readonly audit?: Pick<AuditStore, 'record'>;
 }
 
 const MINUTE_MS = 60_000;
@@ -107,7 +114,11 @@ export function registerMcp(app: FastifyInstance, options: McpOptions): void {
   // MCP itself (T778, AC-434): the SDK's handler, through its Node adapter,
   // given the body Fastify parsed and the caller's `authInfo`. The reply is
   // hijacked, as the handler writes the raw response itself.
-  const handler = mcpHandler((error) => app.log.error({ err: error }, 'MCP'));
+  const handler = mcpHandler((error) => app.log.error({ err: error }, 'MCP'), {
+    tools: options.tools ?? [],
+    ...(options.audit === undefined ? {} : { audit: options.audit }),
+    log: app.log,
+  });
   const node = toNodeHandler(handler, { onerror: (error) => app.log.error({ err: error }, 'MCP') });
   app.addHook('onClose', async () => {
     await handler.close();
@@ -151,12 +162,15 @@ export function registerMcp(app: FastifyInstance, options: McpOptions): void {
         preParsing: [refuseUntaken, actAsCaller],
       },
       async (request, reply) => {
+        // Never without a token: `refuseUntaken` answered that.
+        const auth = request.mcpAuth;
+        if (auth === null) throw new Unauthenticated();
         reply.hijack();
         // `auth` on the raw request is where the adapter reads it from (the SDK's Fastify recipe).
-        const raw = Object.assign(request.raw, { auth: request.mcpAuth }) as Parameters<
-          typeof node
-        >[0];
-        await node(raw, reply.raw, request.body);
+        const raw = Object.assign(request.raw, { auth }) as Parameters<typeof node>[0];
+        // Served as the token's request: whatever it records says so (T781, AC-442).
+        const { id, name } = auth.extra.token;
+        await viaMcp({ id, name }, () => node(raw, reply.raw, request.body));
       },
     );
     // Counted as a POST is, by its token or its address (T780), then 405

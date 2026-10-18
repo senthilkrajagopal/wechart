@@ -306,3 +306,18 @@
       - It also shows a rotated `X-Forwarded-For` from a peer that isn't trusted escaping nothing.
       - Decision T780-3 now names the two exceptions to "503 while the store fails": a foreign Host or Origin is 403 first, and PUT is 404.
       - **Left as is:** an address over its bad-token limit still has its tokens looked up, and a working one still answers 200. That is AC-472/AC-474's "two budgets"; the limit turns 401s into 429s, it saves no lookups.
+
+- [x] T781 (AC-478, AC-442) Record every MCP tool call in the audit trail with who, the token's name, the tool, the outcome and when, and no argument values; mark every event caused through MCP with the token's name
+  - Lane: MCP
+  - Files: `packages/api/src/audit/record.ts` (+ `record.test.ts`; the request's MCP context), `packages/api/src/mcp/server.ts`, `packages/api/src/mcp/audit.test.ts`, `packages/web/src/workspaces/security/AuditTrail.tsx` (+ test; "MCP call" and the MCP mark, as design 18 state I draws them).
+  - Failing test: `audit.test.ts`: a tool call, a read included, and a refused one each leave one "MCP call" event with who, the token's name, the tool, the outcome and when, and a search of the event for the call's argument values (a filter value, a name) finds none (AC-478); an event of an AC-294 kind recorded inside an MCP request carries "via MCP" and the token's name (AC-442). `AuditTrail.test.tsx`: both show as design 18 state I draws them.
+  - Depends on: T778
+  - **Built 2026-10-17** (lane MCP, batch 4). **No AC is ticked** (decision T781-5): AC-478 ticks at T782, with the first real tools; AC-442 at T787, with the first proposal made through MCP.
+    - **Tools:** `mcp/server.ts`'s `McpTool` (name, description, scope, input schema, `run(args, call)`). The per-request factory registers every tool through `called`, which runs it as the caller and records one "MCP call" event: who, the token's id and name, the tool, the outcome (OK, Refused or Failed) and when, with no folder, item or argument value (decisions T781-1, -2, -4). `buildServer` takes `mcpTools`; none are served until T782.
+    - **The MCP mark:** `audit/record.ts`'s `viaMcp(token, work)` sets an `AsyncLocalStorage` that the `/mcp` POST wraps around the SDK's handler. `recordIn`, which every audit record goes through, then appends " · via ‹token name›" to the line and puts `viaMcp.token` in the details (decision T781-3).
+    - **The token's name** is now read with it (`PresentedToken.name`).
+    - **Event:** `mcp-call` joins `AUDIT_EVENTS`.
+    - **The trail:** "MCP call" with design 18's plug, in the Event filter too; an event with `viaMcp` gets the small MCP badge with the plug beside its event, titled "Caused through MCP, by the token ‹name›". One CSS line in `styles.ts`.
+    - **Tests:** `mcp/audit.test.ts` (3, new), through the SDK's client with tools of the test's own: a read and a refused call each leave one event with the token's name and no argument value; a proposal recorded inside the request is marked and names the token; one recorded outside isn't. `AuditTrail.test.tsx` (3, new): the MCP call row, the badge and line, and the filter. `mcp/client.fixture.ts` (new) is the SDK client over `inject`, for T782 on too.
+    - **No `record.test.ts` case** (decision T781-6). **No e2e:** no page's flow changed beyond the trail's row, which the component test draws.
+    - **Unit suite:** all green: api 1,976, web 3,023, core 550, charts 556, recommender 133, ui 47.

@@ -34,6 +34,8 @@ export const EVENTS = [
   // A personal access token made or revoked (T767, T768, AC-442; design 18, state I).
   ['token-made', 'Token made'],
   ['token-revoked', 'Token revoked'],
+  // Every MCP tool call, reads included (T781, AC-478; design 18, state I).
+  ['mcp-call', 'MCP call'],
 ] as const;
 export type AuditEvent = (typeof EVENTS)[number][0];
 const EVENT_LABEL = Object.fromEntries(EVENTS) as Record<AuditEvent, string>;
@@ -225,6 +227,9 @@ function periodOf(days: number): string {
   return days === 1 ? '1 day' : `${String(days)} days`;
 }
 
+/** Design 18's plug: an MCP call, and the MCP badge (state I). */
+const PLUG = 'M5.5 1.8v3.4M10.5 1.8v3.4M3.8 5.2h8.4v2.6a4.2 4.2 0 0 1-8.4 0zM8 12v2.4';
+
 /**
  * Each event's icon beside its label, never colour alone (pin 5, rule 3):
  * design 08's glyphs (its `i-*` symbols; T699, SEC-06), named by them, and
@@ -296,7 +301,35 @@ const EVENT_ICONS: Record<AuditEvent, { name: string; paths: readonly string[]; 
       name: 'revoked',
       paths: ['M1.5 8a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0-13 0z', 'M4.6 11.4l6.8-6.8'],
     },
+    // Design 18's plug (state I).
+    'mcp-call': { name: 'plug', paths: [PLUG], width: 1.4 },
   };
+
+/** The token an event caused through MCP names, if it was (T781, AC-442). */
+function viaMcpOf(record: Record_): string | undefined {
+  const via = record.details?.['viaMcp'] as { token?: { name?: unknown } } | undefined;
+  return typeof via?.token?.name === 'string' ? via.token.name : undefined;
+}
+
+/** The MCP badge beside an event caused through MCP (design 18, state I). */
+function McpBadge({ token }: { token: string | undefined }) {
+  if (token === undefined) return null;
+  return (
+    <span className="badge audit-trail__mcp" title={`Caused through MCP, by the token ${token}`}>
+      <svg
+        viewBox="0 0 16 16"
+        width="12"
+        height="12"
+        aria-hidden="true"
+        data-icon="plug"
+        className="audit-trail__icon"
+      >
+        <path d={PLUG} fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round" />
+      </svg>
+      <span>MCP</span>
+    </span>
+  );
+}
 
 function EventIcon({ event }: { event: AuditEvent }) {
   const icon = EVENT_ICONS[event];
@@ -641,6 +674,8 @@ export function AuditTrail({
                           <EventIcon event={record.event} />
                           <span>{EVENT_LABEL[record.event] ?? record.event}</span>
                         </span>
+                        {/* Caused through MCP (T781, AC-442; design 18, state I). */}
+                        <McpBadge token={viaMcpOf(record)} />
                       </td>
                       <td>{folderText(record, false)}</td>
                       <td>

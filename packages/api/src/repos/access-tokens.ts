@@ -62,6 +62,8 @@ export interface TokenOwned {
 /** A working token presented on `/mcp`: whose it is and what it may do (T776). */
 export interface PresentedToken {
   readonly id: string;
+  /** Its owner's name for it, which the audit trail gives every MCP call (T781, AC-478). */
+  readonly name: string;
   readonly scopes: readonly TokenScope[];
   readonly expiresAt: Date;
   readonly owner: { readonly key: string; readonly name: string };
@@ -121,7 +123,7 @@ export function accessTokenStore(db: Kysely<Database>) {
     async presented(digest: Buffer, now: Date): Promise<PresentedToken | undefined> {
       const row = await db
         .selectFrom('personal_access_tokens')
-        .select(['id', 'scopes', 'expires_at', 'owner_key', 'owner_name'])
+        .select(['id', 'name', 'scopes', 'expires_at', 'owner_key', 'owner_name'])
         .where('digest', '=', digest)
         .where('revoked_at', 'is', null)
         .where('expires_at', '>', now)
@@ -130,6 +132,7 @@ export function accessTokenStore(db: Kysely<Database>) {
         ? undefined
         : {
             id: row.id,
+            name: row.name,
             scopes: row.scopes as TokenScope[],
             expiresAt: row.expires_at,
             owner: { key: row.owner_key, name: row.owner_name },

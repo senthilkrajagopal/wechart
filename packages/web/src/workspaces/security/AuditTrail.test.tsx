@@ -1186,6 +1186,87 @@ describe('a token made (T767, AC-442; design 18, state I)', () => {
   });
 });
 
+/**
+ * T781 (AC-478, AC-442; design 18, state I): an MCP call, with the plug
+ * icon, its tool, token and outcome; and an event caused through MCP,
+ * marked MCP beside its event, its line naming the token.
+ */
+describe('MCP in the audit trail (T781, AC-478, AC-442; design 18, state I)', () => {
+  const WREN = { key: 'wren', name: 'Wren Writer', identity: 'wren@corp.example' };
+  const TOKEN = { id: 'pat-1', name: 'Claude Code · desktop' };
+  const CALL = {
+    id: 'm1',
+    at: today(14, 46, 19),
+    actor: WREN,
+    event: 'mcp-call',
+    folderId: null,
+    folderPath: null,
+    item: null,
+    summary: 'list_folders · Claude Code · desktop · OK',
+    details: { tool: 'list_folders', token: TOKEN, outcome: 'ok' },
+  };
+  const PROPOSED = {
+    id: 'm2',
+    at: today(14, 52, 40),
+    actor: WREN,
+    event: 'proposal',
+    folderId: null,
+    folderPath: null,
+    item: { kind: 'dashboard', id: 'd1', title: 'EMEA top accounts' },
+    summary: 'EMEA top accounts → Sales / EMEA · via Claude.ai connector',
+    details: { viaMcp: { token: { id: 'pat-2', name: 'Claude.ai connector' } } },
+  };
+
+  it('shows “MCP call” with the plug icon, its tool, token and outcome, unmarked', async () => {
+    serve({ first: { records: [CALL], total: 1, retentionDays: 365 } });
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+    const [row] = within(table()).getAllByRole('row').slice(1);
+    expect(
+      within(row!)
+        .queryAllByRole('cell')
+        .slice(1)
+        .map((cell) => cell.textContent),
+    ).toEqual([
+      'wren@corp.example',
+      'MCP call',
+      '—',
+      '—',
+      'list_folders · Claude Code · desktop · OK',
+    ]);
+    expect(within(row!).getByText('MCP call').previousElementSibling).toHaveProperty(
+      'dataset.icon',
+      'plug',
+    );
+    expect(within(row!).queryByText('MCP', { exact: true })).toBeNull();
+  });
+
+  it('marks an event caused through MCP with the MCP badge, its line naming the token', async () => {
+    serve({ first: { records: [PROPOSED], total: 1, retentionDays: 365 } });
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+    const [row] = within(table()).getAllByRole('row').slice(1);
+    const [, , event, , , summary] = within(row!).queryAllByRole('cell');
+    expect(event!.textContent).toBe('ProposalMCP');
+    const badge = within(event!).getByText('MCP', { exact: true });
+    expect(badge.closest('.audit-trail__mcp')).toBeInstanceOf(HTMLElement);
+    expect(badge.previousElementSibling).toHaveProperty('dataset.icon', 'plug');
+    expect(badge.closest('.audit-trail__mcp')?.getAttribute('title')).toBe(
+      'Caused through MCP, by the token Claude.ai connector',
+    );
+    expect(summary!.textContent).toBe('EMEA top accounts → Sales / EMEA · via Claude.ai connector');
+  });
+
+  it('offers “MCP call” in the Event filter', async () => {
+    const asked = serve({ first: { records: [CALL], total: 1, retentionDays: 365 } });
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+    await userEvent.click(screen.getByRole('button', { name: /^Event/ }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'MCP call' }));
+    await waitFor(() => expect(lastQuery(asked).get('events')).toBe('mcp-call'));
+  });
+});
+
 /** T405 (AC-176; direction.md rule 85): the inspector and the Event picker from the keyboard. */
 describe('the audit trail from the keyboard (T405, rule 85)', () => {
   it('closes the inspector on Escape, giving focus back to its row', async () => {
