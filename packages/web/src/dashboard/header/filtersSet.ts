@@ -17,23 +17,28 @@ export interface FiltersSet {
  * description (AC-486; design 19 B3): the filters holding a value that
  * filters something — as the tiles are asked them (`activeFilters`) — then
  * the filters made from a marking (AC-113), which sit after them in the bar.
- * A filter with no field yet is not one a reader is shown, so it isn't
- * counted.
+ * Only the filters a reader is shown are counted, as the bar shows them in
+ * view mode: on a field, and one the model has — `titleOf` names it — not a
+ * filter with no field yet, nor one on a field the model has since lost.
  */
 export function filtersSet(
   filters: readonly DashboardFilter[],
   values: FilterValues,
   markFilters: readonly Pick<MarkFilter, 'members'>[],
-  titleOf: (member: string) => string,
+  titleOf: (member: string) => string | undefined,
 ): FiltersSet {
-  const active = activeFilters(filters, values);
-  const onAField = filters.filter((filter) => filter.member !== undefined);
+  const shown = filters.filter(
+    (filter) => filter.member !== undefined && titleOf(filter.member) !== undefined,
+  );
+  const active = activeFilters(shown, values);
   return {
     set: active.length + markFilters.length,
-    of: onAField.length + markFilters.length,
+    of: shown.length + markFilters.length,
     names: [
-      ...active.map(({ filter }) => titleOf(filter.member ?? '')),
-      ...markFilters.map((each) => each.members.map(titleOf).join(' and ')),
+      ...active.map(({ filter }) => titleOf(filter.member ?? '') ?? ''),
+      ...markFilters.map((each) =>
+        each.members.map((member) => titleOf(member) ?? member).join(' and '),
+      ),
     ],
   };
 }

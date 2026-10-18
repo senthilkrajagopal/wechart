@@ -58,6 +58,20 @@ describe('the filters set', () => {
     });
   });
 
+  it('leaves out a filter on a field the model no longer has, which the bar does not show (T831’s review)', () => {
+    const known = (member: string) => (member === 'orders.status' ? 'Status' : undefined);
+    const values: FilterValues = {
+      [at('f-country')]: { kind: 'values', values: ['Norway'] },
+      [at('f-status')]: { kind: 'values', values: ['shipped'] },
+    };
+
+    expect(filtersSet(FILTERS, values, [], known)).toEqual({
+      set: 1,
+      of: 1,
+      names: ['Status'],
+    });
+  });
+
   it('names a filter made from a marking on two fields by both', () => {
     expect(
       filtersSet([], {}, [{ members: ['customers.country', 'products.category'] }], titleOf),

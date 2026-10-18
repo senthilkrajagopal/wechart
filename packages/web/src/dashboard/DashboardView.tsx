@@ -5835,12 +5835,14 @@ export function DashboardView({
         // The toggle's count, name and description (AC-486): the filters
         // holding a value, and those made from a marking, by the bar's titles.
         filtersSummary={filtersSet(
-          document.filters ?? [],
+          // The filters the tiles are asked (T831's review).
+          live.filters ?? [],
           filterValues,
           markFilters,
           // The model's titles, as the bar's pills read them (DashboardPage's
-          // memberTitle is the same meta's).
-          (member) => memberTitle?.(member) ?? member,
+          // memberTitle is the same meta's): a field it lacks is not shown,
+          // so not counted. With no titles handed down, the field's name.
+          memberTitle === undefined ? (member) => member : memberTitle,
         )}
         // The filter bar is in the header sheet, opened by the Filters toggle
         // (F43; design 19 screen 2).
