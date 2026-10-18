@@ -38,10 +38,18 @@ const animates = (): boolean =>
 export function HeaderSheet({
   id,
   open,
+  still = false,
   children,
 }: {
   readonly id: string;
   readonly open: boolean;
+  /**
+   * Shown or hidden at once, whatever the motion setting: edit mode's sheet,
+   * which comes and goes with the rest of edit mode's chrome, as Edit,
+   * Discard and Save switch it (T833-3). A turn of `open` made as `still`
+   * turns, either way, is one of those.
+   */
+  readonly still?: boolean | undefined;
   readonly children: ReactNode;
 }) {
   const [motion, setMotion] = useState<Motion>(open ? 'open' : 'closed');
@@ -49,10 +57,13 @@ export function HeaderSheet({
    * `open` turned: start the move from here, in the same render, so the
    * sheet is never drawn a frame at rest on the wrong side of it.
    */
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    setMotion(animates() ? (open ? 'opening' : 'closing') : open ? 'open' : 'closed');
+  const [was, setWas] = useState({ open, still });
+  if (open !== was.open || still !== was.still) {
+    setWas({ open, still });
+    if (open !== was.open) {
+      const moves = animates() && !still && !was.still;
+      setMotion(moves ? (open ? 'opening' : 'closing') : open ? 'open' : 'closed');
+    }
   }
   const sheet = useRef<HTMLDivElement>(null);
 

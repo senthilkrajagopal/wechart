@@ -520,7 +520,8 @@ export function EditChrome<T>({
             {band?.(session)}
             {hasSheet ? (
               // Directly after the row (design 19's keyboard table).
-              <HeaderSheet id={sheetId} open={editing || sheetOpen}>
+              // At once as edit mode comes and goes (T833-3).
+              <HeaderSheet id={sheetId} open={editing || sheetOpen} still={editing}>
                 {!titleCut && about.description === '' && about.ownership === undefined ? null : (
                   <div className="header-sheet__about">
                     {/* The whole title, only where the row cut it short

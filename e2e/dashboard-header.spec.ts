@@ -435,6 +435,14 @@ test('the sheet opens by its height over 200 ms decelerating and closes over 150
   });
   expect(closing.height).toBeGreaterThan(0);
   await expect(page.locator('.header-sheet')).toBeHidden({ timeout: 10_000 });
+
+  // Opening starts from 0 (T833's review): read as the press is handled.
+  expect(
+    await page.evaluate(() => {
+      document.querySelector<HTMLButtonElement>('.dashboard__header button.header-toggle')!.click();
+      return document.querySelector('.header-sheet')!.getBoundingClientRect().height;
+    }),
+  ).toBe(0);
 });
 
 /**

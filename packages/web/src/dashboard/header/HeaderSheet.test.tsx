@@ -1,10 +1,11 @@
 import type { ChartDocument, RenderSpec } from '@wechart/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, isInaccessible, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, isInaccessible, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../DashboardView';
+import { HeaderSheet } from './HeaderSheet';
 import type { DashboardDocument } from '../model/document';
 
 /**
@@ -343,6 +344,97 @@ describe('the header sheet in motion', () => {
     expect(inert()).toBe(false);
     await userEvent.click(toggle());
     expect(sheet().hidden).toBe(true);
+  });
+});
+
+/**
+ * T833's review (T833-2, T833-3): the sheet always comes to rest — when no
+ * transition runs, when one is cancelled, when a move is turned back — and
+ * edit mode shows and hides it at once.
+ */
+describe('the header sheet coming to rest', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.endsWith(': no-preference)'),
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function sheetOf(open: boolean, still = false) {
+    return (
+      <HeaderSheet id="sheet" open={open} still={still}>
+        <button type="button">Pill</button>
+      </HeaderSheet>
+    );
+  }
+  const node = () => document.getElementById('sheet')!;
+  const at = () => node().getAttribute('data-motion');
+  const event = (type: string) => {
+    fireEvent(node(), Object.assign(new Event(type), { propertyName: 'height' }));
+  };
+  const wait = (ms: number) => {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  };
+
+  it('comes to rest 100 ms after its duration when no transition runs', () => {
+    const { rerender } = render(sheetOf(false));
+    rerender(sheetOf(true));
+    expect(at()).toBe('opening');
+    wait(299);
+    expect(node().hasAttribute('inert')).toBe(true);
+    wait(1);
+    expect(at()).toBeNull();
+    expect(node().hasAttribute('inert')).toBe(false);
+
+    rerender(sheetOf(false));
+    expect(at()).toBe('closing');
+    wait(250);
+    expect(node().hidden).toBe(true);
+  });
+
+  it('waits for a transition that runs, however long, and rests again after one cancelled', () => {
+    const { rerender } = render(sheetOf(false));
+    rerender(sheetOf(true));
+    event('transitionrun');
+    wait(5000);
+    expect(at()).toBe('opening');
+    event('transitioncancel');
+    wait(299);
+    expect(at()).toBe('opening');
+    wait(1);
+    expect(at()).toBeNull();
+  });
+
+  it('turned back while it opens, closes, and is hidden at its end', () => {
+    const { rerender } = render(sheetOf(false));
+    rerender(sheetOf(true));
+    event('transitionrun');
+    rerender(sheetOf(false));
+    expect(at()).toBe('closing');
+    expect(node().hasAttribute('inert')).toBe(true);
+    event('transitionrun');
+    event('transitionend');
+    expect(node().hidden).toBe(true);
+    expect(at()).toBeNull();
+  });
+
+  it('shows and hides at once as edit mode comes and goes (T833-3)', () => {
+    const { rerender } = render(sheetOf(false));
+    rerender(sheetOf(true, true));
+    expect(at()).toBeNull();
+    expect(node().hidden).toBe(false);
+    expect(node().hasAttribute('inert')).toBe(false);
+    rerender(sheetOf(false, false));
+    expect(at()).toBeNull();
+    expect(node().hidden).toBe(true);
   });
 });
 
