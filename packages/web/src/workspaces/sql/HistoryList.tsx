@@ -3,7 +3,7 @@ import { useId, useState } from 'react';
 
 import { exactOf, whenOf } from '../../shell/formatTime';
 import { StatusIcon } from '../../shell/StatusIcon';
-import { outcomeOf } from './awayRun';
+import { outcomeOf, type Finishing } from './awayRun';
 import type { ParamType } from './parameterNames';
 import { runState, type RunState } from './runState';
 
@@ -70,6 +70,7 @@ type Scope = 'all' | 'source';
 export function HistoryList({
   sourceId,
   going,
+  stillFinishing = null,
 }: {
   /** The open tab's data source, Cube Store's by its id; '' for none. */
   readonly sourceId: string;
@@ -88,6 +89,11 @@ export function HistoryList({
         readonly place: string;
       }
     | undefined;
+  /**
+   * xcube says the user's last run, stopped, still goes on in Cube Store
+   * (T548), as the tab hears it: that run's row says so too (AC-452).
+   */
+  readonly stillFinishing?: Finishing;
 }) {
   const ids = useId();
   const [chosen, setChosen] = useState<Scope>('all');
@@ -108,6 +114,12 @@ export function HistoryList({
     getNextPageParam: (last) => last.next,
   });
   const listed = runs.data?.pages.flatMap((page) => page.runs) ?? [];
+  // The user's newest Cube Store run, where it was stopped: the one xcube may say goes on.
+  const newestOnCubeStore = listed.find((run) => run.cubeStore);
+  const lastStopped =
+    newestOnCubeStore?.outcome === 'timeout' || newestOnCubeStore?.outcome === 'cancelled'
+      ? newestOnCubeStore
+      : undefined;
   const goingShown = going !== undefined && (scope === 'all' || going.sourceId === sourceId) ? going : undefined;
   return (
     <div className="sql-history">
@@ -163,12 +175,13 @@ export function HistoryList({
         )}
         {listed.map((run) => {
           const at = new Date(run.startedAt);
-          const { kind, label, rows } = runState({
-            kind: 'done',
-            outcome: outcomeOf(run, null),
-            sql: run.sql,
-            at: at.getTime(),
-          });
+          // The newest stopped Cube Store run is the one xcube says goes on.
+          const finishing = run === lastStopped ? stillFinishing : null;
+          const { kind, label, rows } = runState(
+            { kind: 'done', outcome: outcomeOf(run, finishing), sql: run.sql, at: at.getTime() },
+            Date.now(),
+            finishing !== null,
+          );
           const count = countOf(run, rows);
           return (
             <li key={run.id} className="sql-history__row">

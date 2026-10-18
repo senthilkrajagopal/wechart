@@ -183,6 +183,26 @@ describe('History in the workspace (T817, AC-381, AC-452)', () => {
     expect(screen.queryByText('SELECT pg_sleep(4)')).toBeNull();
   });
 
+  it('says the user’s last Cube Store run, stopped, as still finishing while xcube says so, as its tab does (T817’s review, AC-452)', async () => {
+    answers['/api/sql-runs'] = {
+      runs: [
+        run({ id: 'c2', sql: 'SELECT slow', dataSource: null, cubeStore: true, outcome: 'timeout', rowCount: 0 }),
+        run({ id: 'c1', sql: 'SELECT older', dataSource: null, cubeStore: true, outcome: 'cancelled', rowCount: 0 }),
+      ],
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <HistoryList sourceId="" stillFinishing={{ endsBy: null }} />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('SELECT slow');
+    const [last, older] = rows();
+    expect(within(last!).getByText('Cube Store still finishing').closest('.status')?.querySelector('svg')?.getAttribute('data-icon')).toBe('run');
+    // Only the last: an older one ended long since.
+    expect(within(older!).getByText('Cancelled')).toBeTruthy();
+  });
+
   it('says so when there are none', async () => {
     answers['/api/sql-runs'] = { runs: [] };
     open();

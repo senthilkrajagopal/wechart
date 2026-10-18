@@ -684,6 +684,7 @@ function Workbench({
         ) : (
           <HistoryList
             sourceId={chosen}
+            stillFinishing={stillFinishing}
             // The run going, in the state its tab shows (AC-452).
             going={
               runningTab?.run?.kind === 'running'

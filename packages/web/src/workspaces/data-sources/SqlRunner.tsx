@@ -691,7 +691,10 @@ function MyRuns({
         className="sql-runs__list"
         onKeyDown={(event) => {
           if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-          const runs = [...event.currentTarget.querySelectorAll<HTMLElement>('.sql-runs__run')];
+          // Those that open something: a run no longer available is passed over (T817's review).
+          const runs = [
+            ...event.currentTarget.querySelectorAll<HTMLElement>('a.sql-runs__run, button.sql-runs__run'),
+          ];
           const at = runs.indexOf(event.target as HTMLElement);
           if (at < 0) return;
           event.preventDefault();
