@@ -1892,10 +1892,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T832 (AC-487) The open sheet pushes the tiles down, covers none of them, keeps the canvas's scroll position, and grows as its pills wrap
 
-- [ ] T833 (AC-488) Open the sheet by its height over 200 ms decelerating and close it over 150 ms accelerating, its contents inert while it moves, and with no animation under reduced motion
-  - Files: `packages/web/src/dashboard/header/HeaderSheet.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
-  - Failing test: `HeaderSheet.test.tsx`: while it moves, the sheet's contents are `inert`. The e2e: the sheet's computed `transition-property` is `height`, `0.2s` with `cubic-bezier(0, 0, 0, 1)` while opening and `0.15s` with `cubic-bezier(1, 0, 1, 1)` while closing; mid-opening, Tab doesn't reach a pill; with `page.emulateMedia({ reducedMotion: 'reduce' })` the duration is `0s` and the sheet has its full height in the first animation frame after the toggle is pressed (AC-488).
-  - Depends on: T832
+- [x] T833 (AC-488) Open the sheet by its height over 200 ms decelerating and close it over 150 ms accelerating, its contents inert while it moves, and with no animation under reduced motion
 
 - [ ] T834 (AC-489, AC-119) Close the sheet with its toggle or with Escape in the header, innermost first and ahead of the dashboard's own Escape, focus to the toggle; a click on the tiles leaves it open
   - Files: `packages/web/src/dashboard/header/HeaderSheet.tsx` (+ test), `packages/web/src/dashboard/DashboardView.tsx` (the dashboard-wide Escape that clears cross-filters, held while focus is in the open header), `e2e/dashboard-header.spec.ts`.

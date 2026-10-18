@@ -1,6 +1,6 @@
 import type { ChartDocument, RenderSpec } from '@wechart/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { isInaccessible, render, screen, within } from '@testing-library/react';
+import { fireEvent, isInaccessible, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -289,5 +289,59 @@ describe('the header sheet', () => {
 
     expect(toggle().getAttribute('aria-expanded')).toBe('true');
     expect(isInaccessible(screen.getByRole('region', { name: 'Filters' }))).toBe(false);
+  });
+});
+
+/**
+ * T833 (AC-488; design 19 pin 8, state I): the sheet opens and closes by its
+ * height, its contents inert while it moves; with reduced motion asked for,
+ * it opens and closes at once, never inert.
+ */
+describe('the header sheet in motion', () => {
+  /** The system's motion setting, as `prefers-reduced-motion` reports it. */
+  function motion(reduce: boolean) {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.endsWith(': no-preference)') ? !reduce : query.endsWith(': reduce)') && reduce,
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+  }
+  const ended = (node: Element) => fireEvent.transitionEnd(node, { propertyName: 'height' });
+  const pill = () => within(sheet()).getByRole('button', { name: /Status/ });
+  /** By its attribute: jsdom has no `inert` property. */
+  const inert = () => sheet().hasAttribute('inert');
+
+  it('is inert while it opens and while it closes, and only then', async () => {
+    motion(false);
+    render(view());
+    await userEvent.click(toggle());
+    // Opening: shown, but nothing in it reachable yet.
+    expect(sheet().hidden).toBe(false);
+    expect(inert()).toBe(true);
+    // A pill's own transition ending is not the sheet's.
+    ended(pill());
+    expect(inert()).toBe(true);
+    ended(sheet());
+    expect(inert()).toBe(false);
+    expect(isInaccessible(pill())).toBe(false);
+
+    // Closing: still shown while it moves, and inert.
+    await userEvent.click(toggle());
+    expect(sheet().hidden).toBe(false);
+    expect(inert()).toBe(true);
+    ended(sheet());
+    expect(sheet().hidden).toBe(true);
+    expect(inert()).toBe(false);
+  });
+
+  it('opens and closes at once, never inert, with reduced motion asked for', async () => {
+    motion(true);
+    render(view());
+    await userEvent.click(toggle());
+    expect(sheet().hidden).toBe(false);
+    expect(inert()).toBe(false);
+    await userEvent.click(toggle());
+    expect(sheet().hidden).toBe(true);
   });
 });

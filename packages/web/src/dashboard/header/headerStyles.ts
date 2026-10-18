@@ -117,6 +117,26 @@ export const HEADER_CSS = `
    full width of the dashboard. Hidden while closed, whatever else styles it. */
 .header-sheet { background: var(--wc-bg-page); }
 .header-sheet[hidden] { display: none; }
+/* Its motion (AC-488; design 19 pin 8; direction §7g): the height only,
+   opening over 200 ms decelerating (Fluent 2 durationNormal,
+   curveDecelerateMid) and closing over 150 ms accelerating (durationFast,
+   curveAccelerateMid), its contents clipped while it moves and free again at
+   rest, where a filter's popover opens over the tiles. None under reduced
+   motion. */
+.header-sheet {
+  transition-property: height;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0, 0, 0, 1);
+}
+.header-sheet[data-motion] { overflow: hidden; }
+.header-sheet[data-motion='closing'] {
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(1, 0, 1, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-sheet,
+  .header-sheet[data-motion] { transition-duration: 0s; }
+}
 /* The description and the ownership line, 8 + 20 + 4 + 16 + 8 (design 19
    .about), ruled off from the row above. */
 .header-sheet__about {

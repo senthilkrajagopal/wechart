@@ -358,6 +358,121 @@ test('with 12 filters the open bar wraps, every pill in view, and the sheet grow
   for (const tile of await visibleTiles(page)) expect(overlaps(tile, sheetBox)).toBe(false);
 });
 
+/** The sheet's motion as drawn now: its state, its transition and its height. */
+const motionOf = (page: Page) =>
+  page.locator('.header-sheet').evaluate((node: HTMLElement) => {
+    const style = getComputedStyle(node);
+    return {
+      motion: node.dataset.motion,
+      inert: node.hasAttribute('inert'),
+      property: style.transitionProperty,
+      duration: style.transitionDuration,
+      timing: style.transitionTimingFunction,
+      height: node.getBoundingClientRect().height,
+      full: node.scrollHeight,
+    };
+  });
+
+/**
+ * T833 (AC-488; design 19 pin 8, state I): the sheet opens by its height over
+ * 200 ms decelerating and closes over 150 ms accelerating, nothing in it
+ * reached while it moves.
+ */
+test('the sheet opens by its height over 200 ms decelerating and closes over 150 ms accelerating, nothing in it reached while it moves', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { id, title } = await sharedDashboard(request);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+  // Played at a tenth of its speed, so that a move lasts long enough to be
+  // looked at: 2 s opening, 1.5 s closing.
+  const devtools = await page.context().newCDPSession(page);
+  await devtools.send('Animation.enable');
+  await devtools.send('Animation.setPlaybackRate', { playbackRate: 0.1 });
+
+  const toggle = page.locator('.dashboard__header button.header-toggle');
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  const opening = await motionOf(page);
+  expect(opening).toMatchObject({
+    motion: 'opening',
+    inert: true,
+    property: 'height',
+    duration: '0.2s',
+    timing: 'cubic-bezier(0, 0, 0, 1)',
+  });
+  expect(opening.height).toBeLessThan(opening.full);
+  // Mid-opening, Tab passes over it: no pill takes focus.
+  await page.keyboard.press('Tab');
+  expect(
+    await page.evaluate(() => ({
+      inSheet: document.activeElement?.closest('.header-sheet') !== null,
+      motion: document.querySelector<HTMLElement>('.header-sheet')?.dataset.motion,
+    })),
+  ).toEqual({ inSheet: false, motion: 'opening' });
+
+  // At rest, open: its full height, and its pills reached again.
+  const sheet = headerSheet(page);
+  await expect(sheet).not.toHaveAttribute('data-motion', /./, { timeout: 10_000 });
+  await expect(sheet).not.toHaveAttribute('inert');
+  const open = await motionOf(page);
+  expect(open.height).toBe(open.full);
+  await expect(sheet.getByRole('button', { name: /Status/ }).first()).toBeVisible();
+
+  // Closing: 150 ms accelerating, inert, then hidden.
+  await toggle.click();
+  const closing = await motionOf(page);
+  expect(closing).toMatchObject({
+    motion: 'closing',
+    inert: true,
+    property: 'height',
+    duration: '0.15s',
+    timing: 'cubic-bezier(1, 0, 1, 1)',
+  });
+  expect(closing.height).toBeGreaterThan(0);
+  await expect(page.locator('.header-sheet')).toBeHidden({ timeout: 10_000 });
+});
+
+/**
+ * T833 (AC-488; WCAG 2.2 SC 2.3.3): with reduced motion asked for, the sheet
+ * opens and closes with no transition, at its full height, or gone, in the
+ * first frame after the toggle is pressed.
+ */
+test('with reduced motion the sheet opens and closes at once', async ({ page, request }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const { id, title } = await sharedDashboard(request);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+
+  /** Presses the toggle, then reads the sheet in the next animation frame. */
+  const pressed = () =>
+    page.evaluate(async () => {
+      document.querySelector<HTMLButtonElement>('.dashboard__header button.header-toggle')!.click();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const node = document.querySelector<HTMLElement>('.header-sheet')!;
+      return {
+        hidden: node.hidden,
+        motion: node.dataset.motion,
+        duration: getComputedStyle(node).transitionDuration,
+        height: node.getBoundingClientRect().height,
+        full: node.scrollHeight,
+      };
+    });
+
+  const opened = await pressed();
+  expect(opened).toMatchObject({ hidden: false, motion: undefined, duration: '0s' });
+  expect(opened.height).toBeGreaterThan(0);
+  expect(opened.height).toBe(opened.full);
+  // And it stays at that height: it was already where it was going.
+  expect((await headerSheet(page).boundingBox())!.height).toBe(opened.height);
+
+  const closed = await pressed();
+  expect(closed).toMatchObject({ hidden: true, motion: undefined, height: 0 });
+});
+
 /**
  * T830 (AC-485; design 19 pins 1 and 2, state G): the title at text-lg
  * 20/26/600, cut short with "…" when the row has no room, never under

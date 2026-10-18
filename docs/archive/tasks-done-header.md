@@ -26,3 +26,8 @@ Lane HEADER's ticked tasks from `docs/tasks.md` §P2.25 (F43), their sub-lines w
   - Files: `packages/web/src/dashboard/header/HeaderSheet.tsx`, `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
   - Failing test: the e2e at 1,440 × 900: with the canvas scrolled 300 px, opening the sheet leaves its `scrollTop` at 300 and moves the canvas's top down by the sheet's height, and no tile's box intersects the sheet's; the sheet holds the description, the ownership line and the bar in that order; with 12 filters the bar wraps onto more rows, every pill wholly in view, and the sheet is as tall as its contents (AC-487).
   - Depends on: T829
+
+- [x] T833 (AC-488) Open the sheet by its height over 200 ms decelerating and close it over 150 ms accelerating, its contents inert while it moves, and with no animation under reduced motion
+  - Files: `packages/web/src/dashboard/header/HeaderSheet.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
+  - Failing test: `HeaderSheet.test.tsx`: while it moves, the sheet's contents are `inert`. The e2e: the sheet's computed `transition-property` is `height`, `0.2s` with `cubic-bezier(0, 0, 0, 1)` while opening and `0.15s` with `cubic-bezier(1, 0, 1, 1)` while closing; mid-opening, Tab doesn't reach a pill; with `page.emulateMedia({ reducedMotion: 'reduce' })` the duration is `0s` and the sheet has its full height in the first animation frame after the toggle is pressed (AC-488).
+  - Depends on: T832
