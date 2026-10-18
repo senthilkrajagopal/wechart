@@ -553,6 +553,9 @@
       - **Left:** `/mcp/` on the web host still falls to the app's `index.html` (AC-476 names `/mcp`, and nothing reaches the API); the no-host guard test, never red, as said above.
       - **Also in the follow-up:** `trust-proxy.test.ts` (T773) timed out at 5 s in the full unit run, its `helm template` slowed by the load. Its suite now has the 60 s timeout the new file has; no assertion changed.
     - **Unit suite at T794:** web 3,179, core 594, charts 556, recommender 133, ui 47 green; api 2,092 passed, 1 failed, the `trust-proxy` timeout above, which passes alone and with the follow-up.
+    - **Batch runs** (lane MCP, batch 7), real Chrome, at 112137ea:
+      - **Main** (`--project=chrome`): 850 passed, 1 failed, `model-design.spec.ts:855`, the known flake.
+      - **Security** (`--project=chrome`): 409 passed, 1 failed, 2 did not run. The failure is `propose.spec.ts:83`, the known flake (the item stayed "Draft"); the two that didn't run are its serial followers. `calc-request-resolve.spec.ts:200`, `reviews.spec.ts:168` and `export-import.spec.ts:393`, which failed in batch 6's run and alone, all passed.
 
 ## Security specs failing alone: xcube's folder tree stuck (lane MCP, batch 7, at the coordinator's request)
 
