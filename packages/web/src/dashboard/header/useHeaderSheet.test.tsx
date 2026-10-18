@@ -116,7 +116,10 @@ async function visit(): Promise<(string | null)[]> {
   await userEvent.click(screen.getByRole('button', { name: 'Bookmarks' }));
   const popover = screen.getByRole('dialog', { name: 'Bookmarks' });
   await userEvent.click(await within(popover).findByRole('button', { name: 'Shipped' }));
-  await screen.findByText('Applied the bookmark “Shipped”.');
+  // Said once, by the dashboard, with what it changed (T840, AC-493). The
+  // model here titles no field, so the toggle reads "Details" and the
+  // announcement says nothing of filters, as the toggle counts none.
+  await screen.findByText('Bookmark applied: Shipped. Page Detail. Nothing marked.');
   seen.push(expanded());
 
   await userEvent.click(screen.getByRole('tab', { name: 'Overview' }));

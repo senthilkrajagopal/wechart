@@ -227,7 +227,9 @@ describe('a bookmark in the list', () => {
     await user.click(within(list).getByRole('button', { name: 'Odd' }));
 
     expect(applied).toEqual([['Odd', { ...STATE, marks: {} }]]);
-    expect((await screen.findByRole('status')).textContent).toBe('Applied the bookmark “Odd”.');
+    // The dashboard says it, once, with what it changed (T840, AC-493): not
+    // this popover's region too.
+    expect(screen.getByRole('status').textContent).toBe('');
     expect(asked.filter((each) => each.method !== 'GET')).toEqual([]);
   });
 

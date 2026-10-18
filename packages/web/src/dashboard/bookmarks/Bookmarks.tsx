@@ -229,8 +229,9 @@ export function Bookmarks({
       setSaid(`The bookmark “${bookmark.name}” holds nothing to restore.`);
       return;
     }
+    // Said by the dashboard, once, with what it changed (AC-493): not here too.
+    setSaid('');
     onApply(state, bookmark.name);
-    setSaid(`Applied the bookmark “${bookmark.name}”.`);
   };
 
   /** A change with nothing to ask first, its owner's or a Super-Admin's delete: said done, or why not. */

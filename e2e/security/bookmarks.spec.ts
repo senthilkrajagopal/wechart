@@ -294,15 +294,17 @@ test.describe('the reader, who may see the dashboard (T367)', () => {
     let menu = await actionsOf(page, row(popover, 'Shared', NAME), NAME);
     await expect(menu.getByRole('menuitem')).toHaveText(['Apply', 'Save a copy to mine…']);
     await menu.getByRole('menuitem', { name: 'Apply' }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Applied' })).toHaveText(
-      `Applied the bookmark “${NAME}”.`,
+    // Said once, by the dashboard, with what it restored (T840, AC-493): one
+    // page, no filters, nothing marked.
+    await expect(page.getByRole('status').filter({ hasText: 'Bookmark applied' })).toHaveText(
+      `Bookmark applied: ${NAME}. Nothing marked.`,
     );
 
     popover = await bookmarks(page);
     // The name itself applies it too.
     await row(popover, 'Shared', NEWER).getByRole('button', { name: NEWER, exact: true }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Applied' })).toHaveText(
-      `Applied the bookmark “${NEWER}”.`,
+    await expect(page.getByRole('status').filter({ hasText: 'Bookmark applied' })).toHaveText(
+      `Bookmark applied: ${NEWER}. Nothing marked.`,
     );
 
     popover = await bookmarks(page);

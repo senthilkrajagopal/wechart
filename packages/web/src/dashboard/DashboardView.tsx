@@ -171,6 +171,7 @@ import { ExportPane, type Outline as ExportOutline } from './export/ExportPane';
 import { ExportedToast } from './export/ExportedToast';
 import { Canvas, type CanvasProps } from './grid/Canvas';
 import { CompactChips } from './header/CompactChips';
+import { filterChangeSaid, markFilterSaid } from './header/filterChangeSaid';
 import { filtersSet } from './header/filtersSet';
 import { PageTabsMore } from './header/PageTabsMore';
 import { useTabsThatFit } from './header/useTabsThatFit';
@@ -2401,6 +2402,20 @@ export function DashboardView({
         ? chartTitleOf(tile.chartId)
         : undefined;
     });
+  /**
+   * A field's title as the bar's pills and the Filters toggle name it (the
+   * model's titles; with none handed down, the field's name).
+   */
+  const filterTitle = (member: string): string | undefined =>
+    memberTitle === undefined ? member : memberTitle(member);
+  /**
+   * How many filters the Filters toggle counts as set with these values and
+   * filters made from a marking (AC-486), for a change's announcement (AC-493).
+   */
+  const filtersSetWith = (
+    values: FilterValues,
+    made: readonly Pick<MarkFilter, 'members'>[],
+  ): number => filtersSet(live.filters ?? [], values, made, filterTitle).set;
   /** A view restored, fitted to the dashboard (`viewFor`) and its marking filters worded here. */
   const restored = (state: ViewState, into: DashboardDocument): ViewState => {
     const view = viewFor(into, state);
@@ -2533,7 +2548,7 @@ export function DashboardView({
    * than left on the page.
    */
   const clearCompactCrossFilter = (selection: CrossSelection) => {
-    clearCrossFilter(selection);
+    clearCrossFilterSaid(selection);
     requestAnimationFrame(() => {
       focusFirstOf([
         '[data-testid="compact-cross-chip"] button[aria-label^="Clear "]',
@@ -2989,6 +3004,43 @@ export function DashboardView({
     },
     [setCrossSelections],
   );
+  /** A cross-filter in words, by its field's title: "Category is Beverages". */
+  const crossWords = (selection: Pick<CrossSelection, 'member' | 'value'>) =>
+    `${memberTitle?.(selection.member) ?? selection.member} is ${String(selection.value)}`;
+  /** One cross-filter, or all of them, taken back from a chip, and said (AC-493). */
+  const clearCrossFilterSaid = (selection?: CrossSelection) => {
+    clearCrossFilter(selection);
+    setCrossSaid(
+      filterChangeSaid({
+        kind: 'cross-filter cleared',
+        what: selection === undefined ? undefined : crossWords(selection),
+      }),
+    );
+  };
+  /**
+   * A click on a mark that cross-filters (AC-117), said once (AC-493; design
+   * 19 B4): the cross-filter set with the tile it came from, or, a second
+   * click on the same value, cleared. The keyboard and a tile's ⋯ say their
+   * own (T405, T632).
+   */
+  const onItemClickSaid = (tileId: string, chartId: string, item: ClickedItem) => {
+    const spec = withFiltered.specs[chartId] ?? drawn.specs[chartId];
+    const value = spec === undefined ? undefined : clickedValue(spec, item);
+    const had = crossSelections.find((each) => each.from === tileId);
+    onItemClick(tileId, chartId, item);
+    if (value === undefined) {
+      if (had !== undefined)
+        setCrossSaid(filterChangeSaid({ kind: 'cross-filter cleared', what: crossWords(had) }));
+      return;
+    }
+    const same = had?.member === value.member && had?.value === value.value;
+    const from = chartTitleOf(chartId);
+    setCrossSaid(
+      same
+        ? filterChangeSaid({ kind: 'cross-filter cleared', what: crossWords(value) })
+        : filterChangeSaid({ kind: 'cross-filter', what: crossWords(value), from }),
+    );
+  };
 
   /**
    * Escape takes them all back, as the prototype's "Clear (Esc)" says it
@@ -3008,6 +3060,8 @@ export function DashboardView({
       )
         return;
       setCrossSelections([]);
+      // Said, as every change while the sheet is closed is (AC-493).
+      setCrossSaid(filterChangeSaid({ kind: 'cross-filter cleared' }));
     };
     window.document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -4014,7 +4068,7 @@ export function DashboardView({
      * mode — never both (AC-117, AC-120) — and neither while editing, where
      * a click picks the tile up.
      */
-    ...(crossFiltering ? { onItemClick } : {}),
+    ...(crossFiltering ? { onItemClick: onItemClickSaid } : {}),
     ...(marking
       ? {
           onMarkClick,
@@ -4303,7 +4357,16 @@ export function DashboardView({
             return () => {
               setMarkFilters((now) => [...now, made]);
               setMarks((now) => withMarking(now, markingId, EMPTY_PREDICATE));
-              setMarkSaid(`${markFilterLabel(made)}. ${named.name} cleared.`);
+              // Said once, with the new number set (AC-493; design 19 B2):
+              // the marking's chip goes with it, unsaid, as the filter
+              // holds what it held.
+              setMarkSaid(
+                filterChangeSaid({
+                  kind: 'added',
+                  what: markFilterSaid(made, filterTitle),
+                  set: filtersSetWith(filterValues, [...markFilters, made]),
+                }),
+              );
             };
           },
           /**
@@ -5122,7 +5185,7 @@ export function DashboardView({
    * touched. What else the reader had made of the dashboard goes with it:
    * cross-filter selections, drills, the keyboard's place in a tile.
    */
-  const applyView = (state: ViewState) => {
+  const applyView = (state: ViewState, name: string) => {
     const view = restored(state, live);
     setOpenPage(view.page);
     setFilterValues(view.filters);
@@ -5130,7 +5193,32 @@ export function DashboardView({
     setMarkFilters(view.markFilters);
     setMarkSources(view.from);
     setMarkFocus({});
-    setMarkSaid('');
+    /**
+     * Said once, here, whatever it changed (AC-493; design 19 B5): its page
+     * where there's more than one, the number of filters set where there are
+     * filters, and what is marked.
+     */
+    const pages = live.pages;
+    const opened = pages.find((each) => each.id === view.page) ?? pages[0];
+    const shownFilters = filtersSet(
+      live.filters ?? [],
+      view.filters,
+      view.markFilters,
+      filterTitle,
+    );
+    setMarkSaid(
+      filterChangeSaid({
+        kind: 'bookmark',
+        name,
+        page: pages.length > 1 ? opened?.title : undefined,
+        set: shownFilters.of === 0 ? undefined : shownFilters.set,
+        // A cross-filtering dashboard says nothing of markings (AC-120).
+        marked:
+          interactions.mode === 'markings'
+            ? markings.reduce((sum, each) => sum + markedCount(markingOf(view.marks, each.id)), 0)
+            : undefined,
+      }),
+    );
     setCrossSelections([]);
     setDrills({});
     // A "Filter to marked" made after this is numbered past those restored.
@@ -5871,7 +5959,7 @@ export function DashboardView({
           // The model's titles, as the bar's pills read them (DashboardPage's
           // memberTitle is the same meta's): a field it lacks is not shown,
           // so not counted. With no titles handed down, the field's name.
-          memberTitle === undefined ? (member) => member : memberTitle,
+          filterTitle,
         )}
         // While the sheet is closed, its chips in short in the row (AC-200,
         // AC-119; design 19 pin 4): the cross-filters in cross-filter mode,
@@ -5940,7 +6028,17 @@ export function DashboardView({
                         aria-label={`Remove: ${markFilterLabel(each)}`}
                         onClick={() => {
                           setMarkFilters((now) => now.filter((one) => one.id !== each.id));
-                          setMarkSaid(`Removed: ${markFilterLabel(each)}.`);
+                          // With the new number set (AC-493).
+                          setMarkSaid(
+                            filterChangeSaid({
+                              kind: 'removed',
+                              what: markFilterSaid(each, filterTitle),
+                              set: filtersSetWith(
+                                filterValues,
+                                markFilters.filter((one) => one.id !== each.id),
+                              ),
+                            }),
+                          );
                           // The × goes with its chip: on to the next one's, or
                           // the filter bar, as a marking's chip does (T120's review).
                           requestAnimationFrame(() => {
@@ -5961,7 +6059,7 @@ export function DashboardView({
                   {crossFiltering && crossSelections.length > 0 ? (
                     <CrossFilterChips
                       selections={crossSelections}
-                      onClear={clearCrossFilter}
+                      onClear={clearCrossFilterSaid}
                       memberTitle={memberTitle}
                       tileName={chartTitleOfTile}
                     />

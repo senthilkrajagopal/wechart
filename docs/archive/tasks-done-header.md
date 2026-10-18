@@ -61,3 +61,8 @@ Lane HEADER's ticked tasks from `docs/tasks.md` §P2.25 (F43), their sub-lines w
   - Files: `packages/web/src/dashboard/header/FiltersToggle.tsx` (+ test), `packages/web/src/shell/styles.ts`.
   - Failing test: `FiltersToggle.test.tsx`, with fake timers: when the number goes from 3 to 4 with the sheet closed, the count takes its changed state (the `accent-soft` ground and `accent` border), still has it at 1,800 ms and has lost it by 2,200 ms; it does so with reduced motion too; a render with the same number, or a change with the sheet open, doesn't highlight it (AC-493).
   - Depends on: T831
+
+- [x] T840 (AC-493) Announce each change made while the sheet is closed exactly once, politely, with the new number, and leave the sheet closed
+  - Files: `packages/web/src/dashboard/header/filterChangeSaid.ts` (+ test), `packages/web/src/dashboard/DashboardView.tsx` (the existing `MarkingAnnouncer` region), `packages/web/src/dashboard/bookmarks/Bookmarks.tsx`, `e2e/dashboard-header.spec.ts`.
+  - Failing test: `filterChangeSaid.test.ts`: "Filter added: Product is Côte de Blaye or Raclette Courdavault. 4 filters set."; a removal, "Filter removed: … 3 filters set."; a bookmark, "Bookmark applied: Q3 review. Page By country. 2 filters set. Nothing marked.". The e2e: with the sheet closed, Filter to marked from a tile's ⋯ turns the toggle's number to 4 and the compact chip goes; the page's polite live regions together receive exactly one new message, holding "4 filters set"; the toggle stays `aria-expanded="false"`; a bookmark applied is said once (AC-493).
+  - Depends on: T831, T838

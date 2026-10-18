@@ -517,12 +517,14 @@ test("Escape closes a filter's popover first, then the sheet, focus on the toggl
 /**
  * A dashboard of its own in My workspace, marking or cross-filtering, with a
  * description, a Status filter, and two page tabs: Only, with one bar tile,
- * orders by status ("tile-status"), and Detail, empty; opened.
+ * orders by status ("tile-status"), and Detail, empty; opened — with
+ * `filters` after the Status filter, and the values in `set` in its address.
  */
 async function barBoard(
   page: Page,
   request: APIRequestContext,
   mode: 'markings' | 'crossFilter',
+  { filters = [], set = [] }: { filters?: object[]; set?: object[] } = {},
 ): Promise<Locator> {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Header ${mode} ${unique}`;
@@ -573,11 +575,15 @@ async function barBoard(
           },
           { id: 'detail', title: 'Detail', items: [] },
         ],
-        filters: [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }],
+        filters: [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }, ...filters],
       },
     },
   });
-  await page.goto(`/explore/dashboards/${board.id}`);
+  await page.goto(
+    `/explore/dashboards/${board.id}${
+      set.length === 0 ? '' : `?filters=${encodeURIComponent(JSON.stringify(set))}`
+    }`,
+  );
   await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
   const status = page.locator('[data-tile="tile-status"]');
   await expect(status.getByTestId('chart-canvas')).toBeVisible();
@@ -707,7 +713,10 @@ test('the sheet is kept as left for the visit only, and stored nowhere', async (
     .getByRole('list', { name: 'Mine' })
     .getByRole('button', { name: 'Header visit', exact: true })
     .click();
-  await expect(page.getByRole('status').filter({ hasText: 'Applied the bookmark' })).toBeVisible();
+  // Said by the dashboard (T840, AC-493).
+  await expect(page.getByTestId('marking-announcer')).toHaveText(
+    'Bookmark applied: Header visit. Page Only. No filters set. Nothing marked.',
+  );
   expect(await expanded()).toBe('true');
 
   // A refresh of the tile's data.
@@ -919,4 +928,171 @@ test('at 1,152 px, 8 page tabs: those that fit inline, the rest behind More, the
   await expect(strip.getByRole('tab')).toHaveCount(8);
   await expect(more).toHaveCount(0);
   expect(await strip.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0);
+});
+
+/**
+ * Watches every polite live region on the page (`aria-live="polite"`, or a
+ * `status`, polite by default) and keeps each new message, in order, with
+ * the times the Filters toggle took and lost its change highlight.
+ */
+async function listen(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const kept = window as unknown as {
+      said: string[];
+      lit: { on: number; off?: number }[];
+    };
+    kept.said = [];
+    kept.lit = [];
+    const polite = '[aria-live="polite"], [role="status"]:not([aria-live="off"])';
+    new MutationObserver((records) => {
+      const regions = new Set<Element>();
+      for (const record of records) {
+        const at = record.target instanceof Element ? record.target : record.target.parentElement;
+        const region = at?.closest(polite);
+        if (region) regions.add(region);
+      }
+      for (const region of regions) {
+        const text = (region.textContent ?? '').trim();
+        if (text !== '') kept.said.push(text);
+      }
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+    new MutationObserver(() => {
+      const on = document.querySelector('.header-toggle--changed') !== null;
+      const last = kept.lit[kept.lit.length - 1];
+      if (on && (last === undefined || last.off !== undefined))
+        kept.lit.push({ on: performance.now() });
+      if (!on && last !== undefined && last.off === undefined) last.off = performance.now();
+    }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  });
+}
+
+/** What the polite regions said since `listen`, or since the last call to this. */
+async function saidSince(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const kept = window as unknown as { said: string[] };
+    const said = kept.said;
+    kept.said = [];
+    return said;
+  });
+}
+
+/**
+ * T840 (AC-493; design 19 states B2 and B5): with the sheet closed, Filter
+ * to marked from a tile's ⋯ turns the toggle's number to 4, the compact chip
+ * goes, the toggle is highlighted for 2 s in `accent-soft` and `accent`, and
+ * the polite regions together say it once, with "4 filters set"; a bookmark
+ * applied is said once too; the sheet never opens.
+ */
+test('a change made with the sheet closed is said once, with the new number, and leaves the sheet closed', async ({
+  page,
+  request,
+}) => {
+  const all = { kind: 'values', values: ['completed', 'processing', 'shipped'] };
+  const status = await barBoard(page, request, 'markings', {
+    filters: [
+      { id: 'f-status-2', widget: 'checkbox', member: 'orders.status' },
+      { id: 'f-ordered', widget: 'dateRange', member: 'orders.ordered_at' },
+    ],
+    set: [
+      { id: 'f-status', member: 'orders.status', value: all },
+      { id: 'f-status-2', member: 'orders.status', value: all },
+      {
+        id: 'f-ordered',
+        member: 'orders.ordered_at',
+        value: { kind: 'dates', from: '2000-01-01', to: '2099-12-31' },
+      },
+    ],
+  });
+  const toggle = row(page).locator('button.header-toggle');
+  const count = toggle.locator('.header-toggle__count');
+  await expect(count).toHaveText('3');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+  // Kept as it is now, to apply later.
+  await page.getByRole('button', { name: 'Bookmarks' }).click();
+  await page
+    .getByRole('dialog', { name: 'Bookmarks' })
+    .getByRole('button', { name: 'Bookmark this view…' })
+    .click();
+  const naming = page.getByRole('dialog', { name: 'Save a bookmark' });
+  await naming.getByRole('textbox', { name: 'Name' }).fill('Start');
+  await naming.getByRole('button', { name: 'Save' }).click();
+  await expect(naming).toHaveCount(0);
+
+  // Marked from the keyboard; the compact chip shows it in the row.
+  await status.focus();
+  await page.keyboard.press('Space');
+  const chip = row(page).getByTestId('compact-mark-chip');
+  await expect(chip).toHaveCount(1);
+  await expect(toggle).not.toHaveClass(/header-toggle--changed/);
+
+  await listen(page);
+  await status.getByRole('button', { name: /^Actions for / }).click();
+  await status
+    .getByRole('menu', { name: /^Actions for / })
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('menuitem', { name: 'Filter to marked' })
+    .click();
+
+  // The number at once, the compact chip gone, the sheet still closed.
+  await expect(count).toHaveText('4');
+  await expect(chip).toHaveCount(0);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(headerSheet(page)).toBeHidden();
+
+  // Highlighted: the accent-soft ground and a 1 px accent border, drawn.
+  await expect(toggle).toHaveClass(/header-toggle--changed/);
+  const drawn = await toggle.evaluate((node) => {
+    const style = getComputedStyle(node);
+    const probe = document.createElement('span');
+    document.body.append(probe);
+    probe.style.color = 'var(--wc-bg-accent-soft)';
+    const soft = getComputedStyle(probe).color;
+    probe.style.color = 'var(--wc-accent)';
+    const accent = getComputedStyle(probe).color;
+    probe.remove();
+    return {
+      ground: style.backgroundColor,
+      border: style.borderTopColor,
+      width: style.borderTopWidth,
+      soft,
+      accent,
+    };
+  });
+  expect(drawn.ground).toBe(drawn.soft);
+  expect(drawn.border).toBe(drawn.accent);
+  expect(drawn.width).toBe('1px');
+
+  // For 2 s: off after 1.8 s and by 2.2 s.
+  await expect(toggle).not.toHaveClass(/header-toggle--changed/, { timeout: 4000 });
+  const lit = await page.evaluate(
+    () => (window as unknown as { lit: { on: number; off?: number }[] }).lit,
+  );
+  expect(lit).toHaveLength(1);
+  const lasted = (lit[0]?.off ?? 0) - (lit[0]?.on ?? 0);
+  expect(lasted).toBeGreaterThanOrEqual(1800);
+  expect(lasted).toBeLessThanOrEqual(2200);
+
+  // Said once, all the polite regions together, with the new number.
+  const said = await saidSince(page);
+  expect(said).toHaveLength(1);
+  expect(said[0]).toMatch(/^Filter added: Orders Status is \w+\. 4 filters set\.$/);
+  await expect(page.getByTestId('marking-announcer')).toHaveAttribute('aria-live', 'polite');
+
+  // The bookmark applied: back to 3, said once, the sheet still closed.
+  await page.getByRole('button', { name: 'Bookmarks' }).click();
+  await page
+    .getByRole('dialog', { name: 'Bookmarks' })
+    .getByRole('list', { name: 'Mine' })
+    .getByRole('button', { name: 'Start', exact: true })
+    .click();
+  await expect(count).toHaveText('3');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { said: string[] }).said.length))
+    .toBeGreaterThan(0);
+  expect(await saidSince(page)).toEqual([
+    'Bookmark applied: Start. Page Only. 3 filters set. Nothing marked.',
+  ]);
+  await expect(headerSheet(page)).toBeHidden();
 });
