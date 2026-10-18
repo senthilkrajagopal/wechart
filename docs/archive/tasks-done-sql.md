@@ -214,3 +214,20 @@
       - names read in the driver's dialect;
       - a write refused once bound is audited with its `{{name}}`s.
     - Decisions T811-1 and T811-2 are in `docs/design/decisions-sql.md`.
+
+- [x] T806 (AC-448) Find a table over the names read, saying so while pages are unread, and PK and FK tags, the FK's target in its tooltip
+  - Lane: SQL
+  - Files: `packages/web/src/workspaces/sql/SchemaTree.tsx` (+ test), `packages/web/src/workspaces/sql/findTable.ts` (+ test), `e2e/security/sql-workspace.spec.ts`.
+  - Failing test: `findTable.test.ts`: "ord" keeps every read table whose name holds it and hides the rest. `SchemaTree.test.tsx`: while a schema has unread pages the box says "Searching the n tables read". The e2e: `orders.order_id` shows **PK**, and `orders.customer_id` shows **FK** with a tooltip naming `customers` (AC-448).
+  - Depends on: T805
+  - Waits on: xcube's catalog returning foreign keys (`~/Work/xcube-exchange/to-xcube/2026-10-17-2200-catalog-foreign-keys.md`).
+  - **Built in part 2026-10-17** (lane SQL, batch 3).
+    - Find a table and the PK and FK tags are built, an opt-in `extended` of the shared `SchemaBrowser`, which the workspace turns on and the data source page doesn't.
+    - The unit tests cover both. The e2e covers Find a table and **PK** on `orders.id`; the sample database's key is `id`, not `order_id`.
+    - **What's left once xcube reports the key:** add the e2e's **FK** check on `orders.customer_id` (its tooltip "References public.customers (id)"), then tick T806 and AC-448. Today xcube's catalog answers `foreignKeys: []` for it, though PostgreSQL shows the key to that login.
+    - "Unread" counts a schema never opened, or one with pages still to show (decision T806-1).
+  - **Finished 2026-10-18** (lane SQL, batch 5), on xcube `bb188d8ada`, whose catalog reports foreign keys through a stored connection (research `xcube-bb188d8ada.md`).
+    - **AC-448 is ticked** on the e2e "Find a table keeps the read tables whose names hold the text; orders.id shows PK, orders.customer_id FK to customers (T806, AC-448)". It now also checks:
+      - `orders.customer_id`'s **FK**, with the tooltip "References public.customers (id)";
+      - every primary- and foreign-key column of the development database's own tables, as `pg_constraint` lists them, with its tag and, for a foreign key, its tooltip: `customers.id`, `orders.id` and `products.id` show **PK**, and `orders.customer_id` and `orders.product_id` show **FK**.
+    - No code changed: the tags were built in batch 3.

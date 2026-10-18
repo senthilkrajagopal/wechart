@@ -805,7 +805,7 @@ test.describe('the schema browser in the left pane (T805, AC-386)', () => {
   });
 
   // T806 (AC-448): Find a table over the names read, and PK and FK tags.
-  test('Find a table keeps the read tables whose names hold the text; orders.id shows PK (T806, AC-448)', async ({
+  test('Find a table keeps the read tables whose names hold the text; orders.id shows PK, orders.customer_id FK to customers (T806, AC-448)', async ({
     browser,
   }) => {
     const { context, page } = await signedIn(browser, 'writer');
@@ -836,10 +836,53 @@ test.describe('the schema browser in the left pane (T805, AC-386)', () => {
       const id = columns.getByRole('treeitem', { name: 'id, integer, primary key' });
       await expect(id.locator('.sql-schema__tag')).toHaveText('PK');
       await expect(columns.getByRole('treeitem', { name: 'status, text' }).locator('.sql-schema__tag')).toHaveCount(0);
-      // orders.customer_id's FK isn't checked here: xcube's catalog answers
-      // `foreignKeys: []` for it, though PostgreSQL shows the key to this
-      // login (lane SQL, 2026-10-17). T806 and AC-448 stay open until xcube
-      // reports it; the tag itself is unit-tested (SchemaTree.test.tsx).
+      // orders.customer_id references customers.id: FK, its target in the
+      // tooltip, as xcube bb188d8ada's catalog reports it through a stored
+      // connection (research xcube-bb188d8ada.md).
+      const customer = columns.getByRole('treeitem', {
+        name: 'customer_id, integer, foreign key to public.customers',
+      });
+      const fk = customer.locator('.sql-schema__tag');
+      await expect(fk).toHaveText('FK');
+      await expect(fk).toHaveAttribute('title', 'References public.customers (id)');
+
+      // Every primary- and foreign-key column of the development database's
+      // own tables carries its tag, as PostgreSQL holds the keys.
+      const keys = execFileSync(
+        'docker',
+        [
+          'exec',
+          'wechart-sample-db',
+          'psql',
+          '-U',
+          'sample',
+          '-d',
+          'sample',
+          '-Atc',
+          "SELECT c.conrelid::regclass::text, a.attname, c.contype, coalesce(c.confrelid::regclass::text, ''), coalesce(fa.attname, '') FROM pg_constraint c CROSS JOIN LATERAL unnest(c.conkey, coalesce(c.confkey, c.conkey)) AS k(own, other) JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.own LEFT JOIN pg_attribute fa ON c.contype = 'f' AND fa.attrelid = c.confrelid AND fa.attnum = k.other WHERE c.connamespace = 'public'::regnamespace AND c.contype IN ('p', 'f') ORDER BY 1, 2",
+        ],
+        { encoding: 'utf8' },
+      )
+        .trim()
+        .split('\n')
+        .map((line) => line.split('|') as [string, string, string, string, string])
+        // Not sql-runner.spec.ts's tables, which come and go while this runs.
+        .filter(([table]) => !table.startsWith('sqlrun_'));
+      expect(keys.filter(([, , kind]) => kind === 'f').length).toBeGreaterThan(0);
+      for (const [table, column, kind, target, targetColumn] of keys) {
+        const item = schema.getByRole('treeitem', { name: table, exact: true });
+        const listed = item.getByRole('group', { name: `Columns of public.${table}` });
+        if ((await listed.count()) === 0) await item.getByTestId('sql-schema-caret').first().click();
+        const row = listed.getByRole('treeitem', {
+          name: new RegExp(
+            `^${column}, [^,]+, ${kind === 'p' ? 'primary key' : `(primary key, )?foreign key to public\\.${target}`}`,
+          ),
+        });
+        const tag = row.locator('.sql-schema__tag', { hasText: kind === 'p' ? 'PK' : 'FK' });
+        await expect(tag, `${table}.${column}`).toHaveCount(1);
+        if (kind === 'f')
+          await expect(tag).toHaveAttribute('title', `References public.${target} (${targetColumn})`);
+      }
     } finally {
       await context.close();
     }
