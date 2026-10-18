@@ -373,4 +373,9 @@ main:has(.sql-workspace) {
   font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); color: var(--wc-text-secondary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* Make a cube… and Make a chart…'s reason, beside them in the result head
+   (T819, AC-461; rule 101). */
+.sql-make__why { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.sql-make__why code { font-family: var(--wc-font-code); }
 `;

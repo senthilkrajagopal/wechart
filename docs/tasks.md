@@ -1715,11 +1715,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 ### Lane SQL: Make a cube and Make a chart
 
-- [ ] T819 (AC-461) Offer Make a cube… and Make a chart… on a finished or limited SELECT on a data source to someone who may make a model, and disabled with the reason elsewhere
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/makeFrom.ts` (+ test), `packages/web/src/workspaces/sql/ResultHead.tsx` (+ test).
-  - Failing test: `makeFrom.test.ts`: both are enabled for a Finished or Limited SELECT on a data source by someone who may make a model (AC-350); disabled with "isn't data to model" on an EXPLAIN, "holds rollups Cube builds; model the source instead" on Cube Store, "Run it to the end first" on a stopped or cancelled run, and "Two columns are named `a`: give each its own name with AS, and run it again" for repeated names (AC-461).
-  - Depends on: T802
+- [x] T819 (AC-461) Offer Make a cube… and Make a chart… on a finished or limited SELECT on a data source to someone who may make a model, and disabled with the reason elsewhere
 
 - [ ] T820 (AC-462) The Make a cube pane: a checked name, the folder starting at the source's own writable one, the source fixed, the SQL that ran read-only, numeric columns as `sum` measures and the rest as typed dimensions, one key, and a draft with `count` in My workspace
   - Lane: SQL

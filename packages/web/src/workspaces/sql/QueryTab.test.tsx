@@ -774,3 +774,135 @@ describe('autocomplete in the editor (T808, AC-456)', () => {
     expect(listed(container)).toEqual([]);
   });
 });
+
+/**
+ * T819 (AC-461): Make a cube… and Make a chart… in the result's head, for
+ * someone who may make a model: enabled on a Finished or Limited SELECT on a
+ * data source, disabled with the reason elsewhere.
+ * Fails when: either is enabled on an EXPLAIN, on Cube Store, on a stopped or
+ * cancelled run, or with repeated column names; or one is disabled without
+ * its reason.
+ */
+describe('Make a cube… and Make a chart… on a result (T819, AC-461)', () => {
+  const READ_WRITE = { name: 'Ann', groups: [], superAdmin: false, readWrite: true, security: 'oidc' };
+  /** Who asks, and what the run answers. */
+  const answering = (me: unknown, outcome: unknown) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (init?.method === 'POST')
+          return Promise.resolve(new Response(JSON.stringify(outcome), { status: 200 }));
+        if (url === '/api/me') return Promise.resolve(new Response(JSON.stringify(me), { status: 200 }));
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+  };
+  const runIt = async (sql: string, source: SqlSource = EMEA) => {
+    const { container } = open(tab({ sourceId: source.id }), source);
+    typeSql(container, sql);
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    return screen.findByTestId('sql-result-head');
+  };
+  const reasonOf = (button: HTMLElement) =>
+    document.getElementById(button.getAttribute('aria-describedby') ?? '')?.textContent;
+
+  it('offers both, enabled, in the head of a Finished SELECT, beside Download CSV', async () => {
+    answering(READ_WRITE, FINISHED);
+    const head = await runIt('SELECT 1 AS one');
+
+    const cube = await within(head).findByRole('button', { name: 'Make a cube…' });
+    const chart = within(head).getByRole('button', { name: 'Make a chart…' });
+    expect(cube.getAttribute('aria-disabled')).toBeNull();
+    expect(chart.getAttribute('aria-disabled')).toBeNull();
+    expect(within(head).getByRole('button', { name: 'Download CSV' })).toBeTruthy();
+  });
+
+  it('offers both on a Limited SELECT', async () => {
+    answering(READ_WRITE, { ...FINISHED, truncated: 'rows' });
+    const head = await runIt('SELECT 1 AS one');
+
+    const cube = await within(head).findByRole('button', { name: 'Make a cube…' });
+    expect(cube.getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('disables both on an EXPLAIN, with the reason', async () => {
+    answering(READ_WRITE, {
+      ...FINISHED,
+      statement: 'explain',
+      columns: [{ name: 'QUERY PLAN', type: 'text' }],
+      rows: [['Seq Scan']],
+      rowCount: 1,
+    });
+    const head = await runIt('EXPLAIN SELECT 1');
+
+    for (const name of ['Make a cube…', 'Make a chart…']) {
+      const button = await within(head).findByRole('button', { name });
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      expect(reasonOf(button)).toBe('An EXPLAIN’s plan isn’t data to model.');
+    }
+  });
+
+  it('disables both on Cube Store, with the reason', async () => {
+    answering(READ_WRITE, FINISHED);
+    const head = await runIt('SELECT 1', CUBE_STORE);
+
+    const cube = await within(head).findByRole('button', { name: 'Make a cube…' });
+    expect(cube.getAttribute('aria-disabled')).toBe('true');
+    expect(reasonOf(cube)).toBe('Cube Store holds rollups Cube builds; model the source instead.');
+  });
+
+  it('disables both on a run stopped at 30 seconds, with or without the rows read', async () => {
+    answering(READ_WRITE, { outcome: 'timeout', durationMs: 30000 });
+    const head = await runIt('SELECT pg_sleep(40)');
+
+    const chart = await within(head).findByRole('button', { name: 'Make a chart…' });
+    expect(chart.getAttribute('aria-disabled')).toBe('true');
+    expect(reasonOf(chart)).toBe('Run it to the end first.');
+  });
+
+  it('disables both on a cancelled run with the rows read before it', async () => {
+    answering(READ_WRITE, {
+      outcome: 'cancelled',
+      durationMs: 900,
+      columns: FINISHED.columns,
+      rows: FINISHED.rows,
+      rowCount: 2,
+      truncated: 'stopped',
+    });
+    const head = await runIt('SELECT 1 AS one');
+
+    const cube = await within(head).findByRole('button', { name: 'Make a cube…' });
+    expect(cube.getAttribute('aria-disabled')).toBe('true');
+    expect(reasonOf(cube)).toBe('Run it to the end first.');
+  });
+
+  it('disables both where two columns share a name, naming it', async () => {
+    answering(READ_WRITE, {
+      ...FINISHED,
+      columns: [
+        { name: 'a', type: 'int4' },
+        { name: 'a', type: 'int4' },
+      ],
+      rows: [[1, 2]],
+      rowCount: 1,
+    });
+    const head = await runIt('SELECT 1 AS a, 2 AS a');
+
+    const cube = await within(head).findByRole('button', { name: 'Make a cube…' });
+    expect(cube.getAttribute('aria-disabled')).toBe('true');
+    expect(reasonOf(cube)).toBe(
+      'Two columns are named a: give each its own name with AS, and run it again.',
+    );
+  });
+
+  it('shows neither to someone read-only everywhere, who may not make a model', async () => {
+    answering({ ...READ_WRITE, readWrite: false }, FINISHED);
+    const head = await runIt('SELECT 1 AS one');
+
+    await within(head).findByRole('button', { name: 'Download CSV' });
+    // Who asks has been read by now: the head draws once more on its answer.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(within(head).queryByRole('button', { name: 'Make a cube…' })).toBeNull();
+    expect(within(head).queryByRole('button', { name: 'Make a chart…' })).toBeNull();
+  });
+});

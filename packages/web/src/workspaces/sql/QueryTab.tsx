@@ -1,16 +1,19 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useId, useRef, useState, type Dispatch, type ReactNode } from 'react';
 
 import { clockOf } from '../../shell/formatTime';
+import { hasWorkspace, ME_QUERY } from '../../shell/me';
 import { StatusIcon } from '../../shell/StatusIcon';
 import { CUBE_STORE_ID } from '../data-sources/cubeStore';
 import { csvFileName, csvOf } from '../data-sources/sqlCsv';
 import { SqlEditor } from '../data-sources/SqlEditor';
 import { ResultHead, seconds, SqlResult, type SqlOutcome } from '../data-sources/SqlResult';
 import { catalogRead, schemaCompletion } from './completion';
+import { makeFrom } from './makeFrom';
 import { parameterNames } from './parameterNames';
 import { heldFor, missingValues, ParameterStrip, unboundOn } from './ParameterStrip';
 import { cancelRun, GOING_QUERY, NO_CANCEL, type Going } from './going';
+import { MakeFromButtons, type MakeKind } from './ResultHead';
 import { RunLine } from './RunLine';
 import { runState, type RunState } from './runState';
 import { dialectFor, statementAt } from './statementAt';
@@ -199,6 +202,7 @@ export function QueryTab({
   onGoTo = () => undefined,
   insertion,
   runOnOpen,
+  onMake = () => undefined,
 }: {
   readonly tab: SqlTab;
   readonly source: SqlSource;
@@ -215,6 +219,8 @@ export function QueryTab({
   readonly insertion?: Insertion | undefined;
   /** Run its text as it opens, if this is that tab and it hasn't (Preview 100 rows, T807). */
   readonly runOnOpen?: RunOnOpen | undefined;
+  /** Make a cube… or Make a chart… chosen on its result (T819, AC-461). */
+  readonly onMake?: (kind: MakeKind) => void;
 }) {
   const toInsert =
     insertion !== undefined && insertion.tabId === tab.id && !inserted.has(insertion) ? insertion : undefined;
@@ -238,6 +244,16 @@ export function QueryTab({
   const running = tab.run?.kind === 'running';
   const shown = tab.run?.kind === 'done' ? tab.run : null;
   const onCubeStore = source.cubeStore === true;
+  /** Make a cube… and Make a chart…, for someone who may make a model (T819, AC-461, AC-350). */
+  const me = useQuery(ME_QUERY);
+  const make =
+    shown === null
+      ? null
+      : makeFrom({
+          outcome: shown.outcome,
+          onCubeStore,
+          mayModel: me.data !== undefined && hasWorkspace(me.data),
+        });
 
   /** Set as Run is pressed, before a render: two presses send one run (T802's review). */
   const sending = useRef(false);
@@ -588,6 +604,7 @@ export function QueryTab({
             state={state}
             // Cube Store's run on has ended, as xcube says since its answer (T548).
             ended={state.label !== 'Cube Store still finishing'}
+            actions={make === null ? null : <MakeFromButtons make={make} onMake={onMake} />}
           />
         )}
         <p className="visually-hidden" role="status" aria-live="polite">

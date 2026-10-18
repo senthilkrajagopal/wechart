@@ -254,6 +254,7 @@ function Result({
   onDownload,
   onCubeStore = false,
   ended = false,
+  actions = null,
 }: {
   result: SqlOutcome;
   /** The SQL it ran, for a refusal's words. */
@@ -264,6 +265,11 @@ function Result({
   onCubeStore?: boolean;
   /** Stopped but run on in Cube Store, it has since ended, as xcube says (T548). */
   ended?: boolean;
+  /**
+   * The workspace's Make a cube… and Make a chart…, before Download CSV in
+   * the head of a run that ended or was stopped (T819, AC-461).
+   */
+  actions?: ReactNode;
 }) {
   const at = `at ${clock(startedAt)}`;
   const named = useContext(HeadState);
@@ -287,6 +293,7 @@ function Result({
             // Named from outside, "Finished" says no rows in its detail (T804).
             detail={`${result.rowCount === 0 ? (named === undefined ? '' : 'no rows · ') : `${rows} · `}${seconds(result.durationMs)} · ${at}`}
           >
+            {actions}
             <button type="button" className="btn btn-sm" onClick={onDownload}>
               {cut === null ? 'Download CSV' : `Download CSV · ${rows}`}
             </button>
@@ -349,7 +356,9 @@ function Result({
       if (got.length === 0)
         return (
           <div className="sql-result" data-testid="sql-result">
-            <Head kind={timedOut ? 'err' : 'idle'} label={label} detail={at} />
+            <Head kind={timedOut ? 'err' : 'idle'} label={label} detail={at}>
+              {actions}
+            </Head>
             <Note>
               {why} Nothing came back.
               {timedOut ? ' Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.' : ''}
@@ -363,6 +372,7 @@ function Result({
       return (
         <div className="sql-result" data-testid="sql-result">
           <Head kind={timedOut ? 'err' : 'idle'} label={label} detail={`${rows} · ${at}`}>
+            {actions}
             <button type="button" className="btn btn-sm" onClick={onDownload}>
               Download CSV · {rows}
             </button>
