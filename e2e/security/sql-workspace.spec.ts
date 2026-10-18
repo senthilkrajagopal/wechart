@@ -253,15 +253,31 @@ test.describe('the workspace’s three panes (T797, rule 91)', () => {
     await page.goto('/sql');
     await expect(workspace(page)).toBeVisible();
     const grip = page.locator('.sql-centre__grip');
+    /**
+     * Dragged to the window's own edge, past both limits. Not beyond it:
+     * Playwright's Firefox delivers a synthetic pointer move outside the
+     * window at the wrong place (a move to y 1,329 arrived at -85) and drops
+     * its pointerup, which a person's drag doesn't (the grip holds its
+     * limits in Firefox when dragged within the window).
+     */
+    const dragToY = async (y: number) => {
+      const at = (await grip.boundingBox())!;
+      await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(at.x + at.width / 2, y, { steps: 4 });
+      await page.mouse.up();
+    };
 
-    await dragBy(page, grip, 0, 2000);
+    // To the foot of the window, which would leave the results under 50 px: they hold at 160.
+    await dragToY(899);
     const results = await boxOf(page, 'sql-results-area');
     expect(Math.round(results.height)).toBe(160);
     // Within the window: nothing pushed below its foot.
     // To the pixel: the boxes land on sub-pixels.
     expect(Math.round(results.y + results.height)).toBeLessThanOrEqual(900);
 
-    await dragBy(page, grip, 0, -2000);
+    // To the top of the window, above the editor's own top: it holds at 200.
+    await dragToY(1);
     expect(Math.round((await boxOf(page, 'sql-editor-area')).height)).toBe(200);
   });
 
