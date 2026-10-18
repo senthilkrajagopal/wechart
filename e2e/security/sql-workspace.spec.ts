@@ -605,7 +605,8 @@ test.describe('running a tab’s SQL in the workspace (T802)', () => {
       const grid = page.getByRole('table', { name: 'Result: 1 row, 2 columns' });
       await expect(grid.getByRole('columnheader')).toHaveText(['#', 'oneint4', 'lettertext']);
       await expect(page.getByTestId('sql-result-head')).toHaveText(
-        /^Finished 1 row · (under )?[\d.]+ s · at \d\d:\d\d:\d\dDownload CSV$/,
+        // Make a cube… and Make a chart… before Download CSV, for a read-write member (T819, AC-461).
+        /^Finished 1 row · (under )?[\d.]+ s · at \d\d:\d\d:\d\dMake a cube…Make a chart…Download CSV$/,
       );
       await expect(tabs(page).first()).toHaveAttribute('aria-label', `Query 1, Finished, 1 row, on ${SOURCES.on}`);
       const [download] = await Promise.all([
