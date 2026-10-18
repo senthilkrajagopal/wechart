@@ -2127,6 +2127,19 @@ function QueriesAs({
   );
 }
 
+/**
+ * A change said in a polite region afresh, even in the same words as the
+ * last thing it said (AC-493; T840's review): emptied, then set a frame
+ * later, so the region's text changes and is read again. A region left
+ * holding the same words changes nothing, and says nothing.
+ */
+function sayAfresh(say: (text: string) => void, text: string): void {
+  say('');
+  requestAnimationFrame(() => {
+    say(text);
+  });
+}
+
 export function DashboardView({
   dashboardId,
   queryItem,
@@ -3010,7 +3023,8 @@ export function DashboardView({
   /** One cross-filter, or all of them, taken back from a chip, and said (AC-493). */
   const clearCrossFilterSaid = (selection?: CrossSelection) => {
     clearCrossFilter(selection);
-    setCrossSaid(
+    sayAfresh(
+      setCrossSaid,
       filterChangeSaid({
         kind: 'cross-filter cleared',
         what: selection === undefined ? undefined : crossWords(selection),
@@ -3030,12 +3044,16 @@ export function DashboardView({
     onItemClick(tileId, chartId, item);
     if (value === undefined) {
       if (had !== undefined)
-        setCrossSaid(filterChangeSaid({ kind: 'cross-filter cleared', what: crossWords(had) }));
+        sayAfresh(
+          setCrossSaid,
+          filterChangeSaid({ kind: 'cross-filter cleared', what: crossWords(had) }),
+        );
       return;
     }
     const same = had?.member === value.member && had?.value === value.value;
     const from = chartTitleOf(chartId);
-    setCrossSaid(
+    sayAfresh(
+      setCrossSaid,
       same
         ? filterChangeSaid({ kind: 'cross-filter cleared', what: crossWords(value) })
         : filterChangeSaid({ kind: 'cross-filter', what: crossWords(value), from }),
@@ -3061,7 +3079,7 @@ export function DashboardView({
         return;
       setCrossSelections([]);
       // Said, as every change while the sheet is closed is (AC-493).
-      setCrossSaid(filterChangeSaid({ kind: 'cross-filter cleared' }));
+      sayAfresh(setCrossSaid, filterChangeSaid({ kind: 'cross-filter cleared' }));
     };
     window.document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -4360,7 +4378,8 @@ export function DashboardView({
               // Said once, with the new number set (AC-493; design 19 B2):
               // the marking's chip goes with it, unsaid, as the filter
               // holds what it held.
-              setMarkSaid(
+              sayAfresh(
+                setMarkSaid,
                 filterChangeSaid({
                   kind: 'added',
                   what: markFilterSaid(made, filterTitle),
@@ -5206,7 +5225,8 @@ export function DashboardView({
       view.markFilters,
       filterTitle,
     );
-    setMarkSaid(
+    sayAfresh(
+      setMarkSaid,
       filterChangeSaid({
         kind: 'bookmark',
         name,
@@ -6033,7 +6053,8 @@ export function DashboardView({
                         onClick={() => {
                           setMarkFilters((now) => now.filter((one) => one.id !== each.id));
                           // With the new number set (AC-493).
-                          setMarkSaid(
+                          sayAfresh(
+                            setMarkSaid,
                             filterChangeSaid({
                               kind: 'removed',
                               what: markFilterSaid(each, filterTitle),

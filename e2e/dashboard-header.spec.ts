@@ -1144,11 +1144,131 @@ test('a change made with the sheet closed is said once, with the new number, and
     .click();
   await expect(count).toHaveText('3');
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(await saidOnce(page)).toBe(
+    'Bookmark applied: Start. Page Only. 3 filters set. Nothing marked.',
+  );
+  await expect(headerSheet(page)).toBeHidden();
+
+  // The same bookmark again, with nothing between: the same words, said
+  // again rather than left unsaid (T840's review).
+  await page.getByRole('button', { name: 'Bookmarks' }).click();
+  await page
+    .getByRole('dialog', { name: 'Bookmarks' })
+    .getByRole('list', { name: 'Mine' })
+    .getByRole('button', { name: 'Start', exact: true })
+    .click();
+  expect(await saidOnce(page)).toBe(
+    'Bookmark applied: Start. Page Only. 3 filters set. Nothing marked.',
+  );
+
+  // Filter out marked, then the filter it made removed in the open sheet:
+  // each said once, with the new number.
+  await status.focus();
+  await page.keyboard.press('Space');
+  await expect(row(page).getByTestId('compact-mark-chip')).toHaveCount(1);
+  // The marking, said once as ever (AC-101).
+  expect(await saidOnce(page)).toMatch(/^Marking: 1 item marked/);
+  await status.getByRole('button', { name: /^Actions for / }).click();
+  await status
+    .getByRole('menu', { name: /^Actions for / })
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('menuitem', { name: 'Filter out marked' })
+    .click();
+  await expect(count).toHaveText('4');
+  const out = await saidOnce(page);
+  expect(out).toMatch(/^Filter added: Orders Status is not \w+\. 4 filters set\.$/);
+  await openHeaderSheet(page);
+  await headerSheet(page)
+    .getByTestId('mark-filter-chip')
+    .getByRole('button', { name: /^Remove: / })
+    .click();
+  await expect(count).toHaveText('3');
+  expect(await saidOnce(page)).toBe(
+    out.replace('Filter added:', 'Filter removed:').replace('4 filters set', '3 filters set'),
+  );
+});
+
+/**
+ * T840's review (AC-493; design 19 B4): with the sheet closed, a cross-filter
+ * set by a click on a bar, cleared by a second click, by its compact chip's ×
+ * and by Escape, each said once in the polite regions; set again in the same
+ * words, said again.
+ */
+test('a cross-filter set and cleared with the sheet closed is said once each time', async ({
+  page,
+  request,
+}) => {
+  const status = await barBoard(page, request, 'crossFilter');
+  const toggle = row(page).locator('button.header-toggle');
+  const compact = row(page).getByTestId('compact-cross-chip');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await listen(page);
+
+  const set = /^Cross-filter: Orders Status is shipped, from By status\.$/;
+  await clickStatusBar(page, status, 'shipped');
+  await expect(compact).toHaveCount(1);
+  expect(await saidOnce(page)).toMatch(set);
+
+  // The same bar again: cleared.
+  await clickStatusBar(page, status, 'shipped');
+  await expect(compact).toHaveCount(0);
+  expect(await saidOnce(page)).toBe('Cross-filter cleared: Orders Status is shipped.');
+
+  // Set again, in the same words as before (with "cleared" between).
+  await clickStatusBar(page, status, 'shipped');
+  await expect(compact).toHaveCount(1);
+  expect(await saidOnce(page)).toMatch(set);
+
+  // Its compact chip's ×.
+  await compact.getByRole('button', { name: /^Clear / }).click();
+  await expect(compact).toHaveCount(0);
+  expect(await saidOnce(page)).toBe('Cross-filter cleared: Orders Status is shipped.');
+
+  // Escape, focus outside the header.
+  await clickStatusBar(page, status, 'shipped');
+  await expect(compact).toHaveCount(1);
+  expect(await saidOnce(page)).toMatch(set);
+  await status.focus();
+  await page.keyboard.press('Escape');
+  await expect(compact).toHaveCount(0);
+  expect(await saidOnce(page)).toBe('Cross-filters cleared.');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+});
+
+/**
+ * Clicks a bar of the status tile just above its axis label, once the label
+ * has come to rest (as crossfilter.spec's own helper does).
+ */
+async function clickStatusBar(page: Page, target: Locator, category: string): Promise<void> {
+  const label = target.locator('svg text', { hasText: category }).first();
+  await expect(label).toBeVisible();
+  let last = '';
+  let box = { x: 0, y: 0, width: 0 };
+  await expect
+    .poll(async () => {
+      box = await label.evaluate((text) => {
+        const rect = text.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width };
+      });
+      const now = JSON.stringify(box);
+      const settled = box.width > 0 && now === last;
+      last = now;
+      return settled;
+    })
+    .toBe(true);
+  await page.mouse.click(box.x + box.width / 2, box.y - 10);
+}
+
+/**
+ * The one message the polite regions said since the last read: waits for the
+ * first, then a second more, so one coming a frame later is caught too.
+ */
+async function saidOnce(page: Page): Promise<string> {
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { said: string[] }).said.length))
     .toBeGreaterThan(0);
-  expect(await saidSince(page)).toEqual([
-    'Bookmark applied: Start. Page Only. 3 filters set. Nothing marked.',
-  ]);
-  await expect(headerSheet(page)).toBeHidden();
-});
+  await page.waitForTimeout(1000);
+  const said = await saidSince(page);
+  expect(said).toHaveLength(1);
+  return said[0] ?? '';
+}
