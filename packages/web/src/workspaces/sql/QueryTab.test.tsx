@@ -486,6 +486,22 @@ describe('saving the tab’s query (T812, AC-457, AC-483)', () => {
     expect(saves[1]!.body.name).toBe('Big orders (copy)');
   });
 
+  it('keeps the name as the API does, trimmed, for the next Save (T812’s review)', async () => {
+    open(typed());
+    await userEvent.click(screen.getByRole('button', { name: 'Save…' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Name' }), '  Big orders  ');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await screen.findByTestId('sql-saved-as');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => {
+      expect(saves.map((save) => [save.method, save.body.name])).toEqual([
+        ['POST', '  Big orders  '],
+        ['PUT', 'Big orders'],
+      ]);
+    });
+  });
+
   it('shows the API’s refusal in Save…, which stays open', async () => {
     answer = () =>
       new Response(JSON.stringify({ error: 'You already have a saved query named “Big orders”.' }), {

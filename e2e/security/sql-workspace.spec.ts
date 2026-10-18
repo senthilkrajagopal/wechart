@@ -118,7 +118,8 @@ test.describe('SQL runner in the switcher (T796, AC-001, AC-446)', () => {
 
       await switcher(page).getByRole('link', { name: 'SQL runner' }).click();
 
-      await expect(page).toHaveURL(/\/sql$/);
+      // /sql, which names its open tab once it has drawn (T801, AC-451): `?tab=` and the tab's id.
+      await expect(page).toHaveURL(/\/sql(\?tab=[0-9a-f]{8})?$/);
       await expect(workspace(page)).toBeVisible();
       await expect(page.getByRole('heading', { level: 1, name: 'SQL runner' })).toBeAttached();
       await expect(switcher(page).getByRole('link', { name: 'SQL runner' })).toHaveAttribute(

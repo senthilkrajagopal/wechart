@@ -371,7 +371,8 @@ export function QueryTab({
     const said = (await response.json().catch(() => null)) as { id?: unknown; error?: unknown } | null;
     if (!response.ok || typeof said?.id !== 'string')
       return typeof said?.error === 'string' ? said.error : `It couldn’t be saved (${String(response.status)}).`;
-    dispatch({ kind: 'saved', id: tab.id, saved: { id: said.id, name, description }, sql: tab.sql });
+    // Its name as the API keeps it, trimmed (T812's review).
+    dispatch({ kind: 'saved', id: tab.id, saved: { id: said.id, name: name.trim(), description }, sql: tab.sql });
     return null;
   };
   /** Save…'s dialog, open with where it starts; null while closed. */
