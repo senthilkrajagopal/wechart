@@ -121,6 +121,56 @@ export const HEADER_CSS = `
   .dashboard__header { flex-wrap: wrap; height: auto; }
 }
 
+/* The compact chips (AC-200, AC-119; design 19 pin 4, .mchip and .xchip;
+   direction §7g): 24 px pills, radius 999, 12 px, before the actions while
+   the sheet is closed. A marking's bordered 1.5 px in its colour (set
+   inline), a cross-filter's in the crossfilter colour on its tint; the
+   values cut short at 240 px, whole in the chip's tooltip. */
+.compact-chips { display: inline-flex; align-items: center; gap: 8px; }
+.compact-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 2px 0 8px;
+  border-radius: 999px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.compact-chip--mark { border: 1.5px solid var(--wc-border-strong); }
+.compact-chip--cross {
+  padding-left: 10px;
+  border: 1px solid var(--wc-crossfilter);
+  background: color-mix(in srgb, var(--wc-crossfilter) 12%, var(--wc-bg-surface));
+}
+.compact-chip__name { font-weight: 600; }
+.compact-chip__values {
+  min-width: 0;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.compact-chip--mark .compact-chip__values { color: var(--wc-text-secondary); }
+.compact-chip--cross .compact-chip__values { font-weight: 600; }
+.compact-chip .menu-button { display: inline-flex; position: relative; }
+.compact-chip__button {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--wc-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.compact-chip__button:hover { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
+/* "+n": the rest, in the sheet's bar. */
+.compact-chips__more { color: var(--wc-text-secondary); font-size: 12px; font-weight: 600; }
+
 /* The Filters toggle (AC-486; design 19 pin 6): a 32 px .btn, the funnel,
    the label and a chevron; drawn pressed on bg-subtle while the sheet is open,
    its chevron turned up (screen 2 pin 1). */

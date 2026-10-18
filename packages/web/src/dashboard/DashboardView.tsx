@@ -170,6 +170,7 @@ import { MenuButton } from '../shell/MenuButton';
 import { ExportPane, type Outline as ExportOutline } from './export/ExportPane';
 import { ExportedToast } from './export/ExportedToast';
 import { Canvas, type CanvasProps } from './grid/Canvas';
+import { CompactChips } from './header/CompactChips';
 import { filtersSet } from './header/filtersSet';
 import { PageTabsMore } from './header/PageTabsMore';
 import { useTabsThatFit } from './header/useTabsThatFit';
@@ -2514,13 +2515,30 @@ export function DashboardView({
     /**
      * The chip goes with its marking, and the control that had focus with it
      * (T220's review): on to the next chip's ×, or else the filter bar, so a
-     * keyboard is never left on the page.
+     * keyboard is never left on the page. With the header sheet closed, the
+     * next compact chip's ×, or else the Filters toggle (T838).
      */
     requestAnimationFrame(() => {
-      const next = window.document.querySelector<HTMLElement>(
+      focusFirstOf([
+        '[data-testid="compact-mark-chip"] button[aria-label^="Unmark "]',
         '[data-testid="mark-chip"] button[aria-label^="Unmark "]',
-      );
-      (next ?? window.document.querySelector<HTMLElement>('section.filter-bar'))?.focus();
+        'section.filter-bar',
+        '.dashboard__header button.header-toggle',
+      ]);
+    });
+  };
+  /**
+   * A compact cross-filter chip's × (T838): the cross-filter cleared, and
+   * focus on to the next compact chip's ×, or else the Filters toggle, rather
+   * than left on the page.
+   */
+  const clearCompactCrossFilter = (selection: CrossSelection) => {
+    clearCrossFilter(selection);
+    requestAnimationFrame(() => {
+      focusFirstOf([
+        '[data-testid="compact-cross-chip"] button[aria-label^="Clear "]',
+        '.dashboard__header button.header-toggle',
+      ]);
     });
   };
   /** How many items a marking holds now: its items and its ranges. */
@@ -5134,6 +5152,14 @@ export function DashboardView({
       clearTimeout(shown);
     };
   }, [linkNote]);
+  /** A tile marked whole, by its chart's title, for a marking's words (AC-115). */
+  const wholeTileTitle = (tileId: string): string | undefined => {
+    const element = elementAt(live, tileId);
+    return element !== null && isTile(element) && element.chartId !== undefined
+      ? chartTitleOf(element.chartId)
+      : undefined;
+  };
+
   const copyLinkWithMarks = () => {
     const said = (text: string) => {
       setLinkNote(text);
@@ -5847,6 +5873,49 @@ export function DashboardView({
           // so not counted. With no titles handed down, the field's name.
           memberTitle === undefined ? (member) => member : memberTitle,
         )}
+        // While the sheet is closed, its chips in short in the row (AC-200,
+        // AC-119; design 19 pin 4): the cross-filters in cross-filter mode,
+        // or each non-empty marking, by the same words as the full chips.
+        compact={() => (
+          <CompactChips
+            crossFilters={
+              crossFiltering
+                ? crossSelections.map((selection) => ({
+                    key: `${selection.from}:${selection.member}`,
+                    what: `${memberTitle?.(selection.member) ?? selection.member} = ${selection.value}`,
+                    from: chartTitleOfTile(selection.from) ?? selection.from,
+                    onClear: () => {
+                      clearCompactCrossFilter(selection);
+                    },
+                  }))
+                : []
+            }
+            markings={
+              marking
+                ? markings
+                    .filter((each) => !isEmptyPredicate(markingOf(marks, each.id)))
+                    .map((each) => ({
+                      id: each.id,
+                      name: each.name,
+                      colour: markingColour(each.slot, theme),
+                      values: summariseMarking(
+                        markingOf(marks, each.id),
+                        memberTitle,
+                        2,
+                        wholeTileTitle,
+                      ),
+                      from: markSourceTitle(each.id),
+                      onUnmark: () => {
+                        unmarkAll(each);
+                      },
+                      onCopyLink: copyLinkWithMarks,
+                    }))
+                : []
+            }
+            // Copy link with marks' outcome, seen here too (T838's review).
+            note={marking ? linkNote : ''}
+          />
+        )}
         // The filter bar is in the header sheet, opened by the Filters toggle
         // (F43; design 19 screen 2).
         sheet={(session) => (
@@ -5908,14 +5977,7 @@ export function DashboardView({
                           titleOf={memberTitle}
                           from={markSourceTitle(each.id)}
                           // A tile marked whole, by its title (AC-115).
-                          tileTitleOf={(tileId) => {
-                            const element = elementAt(live, tileId);
-                            return element !== null &&
-                              isTile(element) &&
-                              element.chartId !== undefined
-                              ? chartTitleOf(element.chartId)
-                              : undefined;
-                          }}
+                          tileTitleOf={wholeTileTitle}
                           onUnmark={() => {
                             unmarkAll(each);
                           }}
@@ -6101,6 +6163,19 @@ function SessionMirror({
     onEditing(editing);
   }, [editing, onEditing]);
   return null;
+}
+
+/**
+ * Focus on the first of these that can take it: a control in the closed
+ * header sheet is hidden, and takes none (T838).
+ */
+function focusFirstOf(selectors: readonly string[]): void {
+  for (const selector of selectors) {
+    const found = window.document.querySelector<HTMLElement>(selector);
+    if (found === null) continue;
+    found.focus();
+    if (window.document.activeElement === found) return;
+  }
 }
 
 /**

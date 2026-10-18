@@ -1859,10 +1859,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T837 (AC-492) In view mode, put the page tabs that don't fit behind "More ▾", the open page always inline, the strip never scrolling
 
-- [ ] T838 (AC-200, AC-119, AC-098) While the sheet is closed, show compact marking chips, at most two then "+n", or the first cross-filter's compact chip then "+n", each with its menu and ×, the source tile in its tooltip, accessible name and menu heading
-  - Files: `packages/web/src/dashboard/header/CompactChips.tsx` (+ test; from `dashboard/markings/MarkChip.tsx` and `dashboard/crossfilter/CrossFilterChip.tsx`), `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/shell/styles.ts`, `e2e/markings.spec.ts`, `e2e/crossfilter.spec.ts`.
-  - Failing test: `CompactChips.test.tsx`: with the sheet closed and three non-empty markings, two compact chips then "+1"; each names its marking and its values by the members' titles, cut at 240 px, has "from ‹tile›" in its tooltip, accessible name and menu heading, and its × unmarks (AC-200, AC-098); with two cross-filters, the first's chip then "+1", naming member and value, the source tile in its tooltip, accessible name and menu heading, its × clearing it (AC-119); with the sheet open, no compact chip in the row and the full chips in the bar. The e2e specs mark and cross-filter with the sheet closed and check the compact chips.
-  - Depends on: T829
+- [x] T838 (AC-200, AC-119, AC-098) While the sheet is closed, show compact marking chips, at most two then "+n", or the first cross-filter's compact chip then "+n", each with its menu and ×, the source tile in its tooltip, accessible name and menu heading
 
 - [ ] T839 (AC-493) Highlight the toggle's count for 2 s when its number changes while the sheet is closed, under reduced motion too
   - Files: `packages/web/src/dashboard/header/FiltersToggle.tsx` (+ test), `packages/web/src/shell/styles.ts`.

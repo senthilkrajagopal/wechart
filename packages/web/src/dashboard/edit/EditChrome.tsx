@@ -204,6 +204,13 @@ export interface EditChromeProps<T> {
    */
   readonly filtersSummary?: FiltersSet | undefined;
   /**
+   * What the row shows of the sheet's chips while the sheet is closed — a
+   * dashboard's compact marking or cross-filter chips (AC-200, AC-119; design
+   * 19 pin 4), after the room and before the actions. Not while editing,
+   * when the sheet is open.
+   */
+  readonly compact?: (() => ReactNode) | undefined;
+  /**
    * Docked under the canvas, full width — the details panel (T269, AC-240):
    * the canvas gives it room rather than go under it.
    */
@@ -249,6 +256,7 @@ export function EditChrome<T>({
   band,
   sheet,
   filtersSummary = NO_FILTERS,
+  compact,
   foot,
   children,
 }: EditChromeProps<T>) {
@@ -454,6 +462,9 @@ export function EditChrome<T>({
               then the room that puts the actions at the row's end. */}
           {tabs?.(session)}
           <span className="dashboard__header-spacer" aria-hidden="true" />
+          {/* While the sheet is closed, what its chips say, in short (AC-200,
+              AC-119; design 19 pin 4); open, the full chips in its bar. */}
+          {editing || (hasSheet && sheetOpen) ? null : compact?.()}
           {/* History and Bookmarks, before the primary (AC-484). */}
           {headerLead?.(session)}
           {editing ? (

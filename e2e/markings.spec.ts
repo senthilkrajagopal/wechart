@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
-import { openHeaderSheet } from './dashboardHeader';
+import { openHeaderSheet, openPageTab } from './dashboardHeader';
 import { ownCubeFile } from './model-files';
 import { viewAs } from './tileMenu';
 import { IN_MY_WORKSPACE } from './workspace';
@@ -882,7 +882,7 @@ test('a marking reaches a tile on a page tab that was never open', async ({ page
   await clickBar(page, tile(page, 'tile-status'), 'shipped');
   await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('1 marked');
 
-  await page.getByRole('tab', { name: 'Second' }).click();
+  await openPageTab(page, 'Second');
   const elsewhere = tile(page, 'tile-elsewhere');
   await expect(elsewhere.getByTestId('chart-canvas')).toBeVisible();
 
@@ -1357,7 +1357,7 @@ test('a bookmark keeps the page tab, the filters’ values and the marks, and re
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   await clickBar(page, tile(page, 'tile-status'), 'shipped');
   await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('1 marked');
-  await page.getByRole('tab', { name: 'Second' }).click();
+  await openPageTab(page, 'Second');
   await expect(tile(page, 'tile-elsewhere').getByTestId('mark-badge')).toContainText('1 marked');
 
   // The Bookmarks popover (T367): Mine, then Shared, and Bookmark this view… (T742).
@@ -1393,7 +1393,7 @@ test('a bookmark keeps the page tab, the filters’ values and the marks, and re
   await expect(tile(page, 'tile-elsewhere').getByTestId('mark-badge')).toContainText('1 marked');
   await expect(page.getByTestId('mark-chip')).toContainText('shipped');
   await expect.poll(inUrl).toEqual(filters);
-  await page.getByRole('tab', { name: 'Only' }).click();
+  await openPageTab(page, 'Only');
   await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('1 marked');
 
   // The dashboard, as every other reader has it, is as it was.
@@ -1438,7 +1438,7 @@ test('Copy link with marks gives a URL that opens the dashboard with the same fi
   await clickBar(page, tile(page, 'tile-status'), 'shipped');
   await clickBar(page, tile(page, 'tile-status'), 'completed', ['ControlOrMeta']);
   await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('2 marked');
-  await page.getByRole('tab', { name: 'Second' }).click();
+  await openPageTab(page, 'Second');
 
   // The marking's chip is in the filter bar, in the header sheet (T828).
   await openHeaderSheet(page);
@@ -1464,7 +1464,7 @@ test('Copy link with marks gives a URL that opens the dashboard with the same fi
   await expect.poll(() => param('filters')).toEqual(filters);
   // Taken: the view leaves the address, and the filters stay in it (AC-081).
   await expect.poll(() => param('view')).toBeNull();
-  await page.getByRole('tab', { name: 'Only' }).click();
+  await openPageTab(page, 'Only');
   await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('2 marked');
 });
 
@@ -1958,6 +1958,72 @@ test('the marking’s chip names its values by title and its tile, is bordered i
   await page.getByRole('menuitem', { name: 'Unmark' }).click();
   await expect(chip).toHaveCount(0);
   await expect(page.getByTestId('marking-announcer')).toContainText('Marking cleared');
+});
+
+/**
+ * T838 (AC-200, AC-098; design 19 screen 1 pin 4): with the header sheet
+ * closed, each non-empty marking is a compact chip in the compact row, bordered
+ * in its colour, naming the marking and its values by title, cut short at
+ * 240 px, the tile it came from in its tooltip, accessible name and menu
+ * heading; its × unmarks. (Beyond two, "+n": CompactChips.test.tsx.)
+ */
+test('with the sheet closed, each marking is a compact chip in the row, from its tile, and unmarks', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { second: true });
+  await open(page, id, title);
+  const row = page.locator('.dashboard__header');
+  const toggle = row.getByRole('button', { name: /^Filters\b|^Details$/ });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+  const chips = row.getByTestId('compact-mark-chip');
+  await expect(chips).toHaveCount(1);
+  const first = chips.first();
+  const named = 'Marking: Orders Status: shipped, from By status';
+  await expect(first).toHaveAttribute('role', 'group');
+  await expect(first).toHaveAttribute('aria-label', named);
+  await expect(first).toHaveAttribute('title', named);
+  await expect(first.locator('.compact-chip__name')).toHaveText('Marking');
+  await expect(first.locator('.compact-chip__values')).toHaveText('Orders Status: shipped');
+  await expect(first).toBeInViewport({ ratio: 1 });
+  // Bordered in its marking's colour, its swatch's; the values cut at 240 px.
+  const [border, swatch, cut] = await first.evaluate((node) => [
+    getComputedStyle(node).borderTopColor,
+    getComputedStyle(node.querySelector('.mark-chip__swatch') as HTMLElement).backgroundColor,
+    getComputedStyle(node.querySelector('.compact-chip__values') as HTMLElement).maxWidth,
+  ]);
+  expect(border).toBe(swatch);
+  expect(cut).toBe('240px');
+
+  // A second marking, from the other tile: two chips, each from its tile.
+  await clickBar(page, tile(page, 'tile-category'), 'Instruments');
+  await expect(chips).toHaveCount(2);
+  await expect(chips.nth(1)).toHaveAttribute('aria-label', /^Comparison: .+, from By category$/);
+  await expect(row.getByTestId('compact-chips-more')).toHaveCount(0);
+  expect((await row.boundingBox())?.height).toBe(48);
+
+  // Its menu, headed by its tile.
+  await first.getByRole('button', { name: 'Marking menu' }).click();
+  const menu = page.getByRole('menu', { name: 'Marking menu' });
+  await expect(menu.locator('.menu-button__head')).toHaveText('Marking, from By status');
+  await page.keyboard.press('Escape');
+
+  // Open, the full chips in the bar instead.
+  await openHeaderSheet(page);
+  await expect(chips).toHaveCount(0);
+  await expect(
+    page.getByRole('region', { name: 'Filters', exact: true }).getByTestId('mark-chip'),
+  ).toHaveCount(2);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+  // Its ×: unmarked, focus on to the next compact chip's ×.
+  await first.getByRole('button', { name: 'Unmark Marking' }).click();
+  await expect(chips).toHaveCount(1);
+  await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toHaveCount(0);
+  await expect(row.getByRole('button', { name: 'Unmark Comparison' })).toBeFocused();
 });
 
 /**

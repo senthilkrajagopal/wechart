@@ -447,6 +447,63 @@ test('cross-filters from the keyboard: arrows move, Space filters by the item, E
   );
 });
 
+/**
+ * T838 (AC-119; design 19 state B4): with the header sheet closed, the first
+ * cross-filter's compact chip in the compact row, then "+n" for the rest,
+ * naming member and value, the source tile in its tooltip, accessible name
+ * and menu heading; its × clears it. Open, the full chips in the bar.
+ */
+test('with the sheet closed, the first cross-filter is a compact chip in the row, then "+1"', async ({
+  page,
+  request,
+}) => {
+  // Highlighting, so each tile keeps its items for the keyboard.
+  const { id, title } = await crossFilterDashboard(request, { defaultAction: 'highlight' });
+  await open(page, id, title);
+  const row = page.locator('.dashboard__header');
+  const toggle = row.getByRole('button', { name: /^Filters\b|^Details$/ });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+  await tile(page, 'tile-status').focus();
+  await page.keyboard.press('Space');
+  const compact = row.getByTestId('compact-cross-chip');
+  await expect(compact).toHaveCount(1);
+  const named = (await compact.getAttribute('aria-label'))!;
+  expect(named).toMatch(/^Orders Status = .+, from By status$/);
+  await expect(compact).toHaveAttribute('role', 'group');
+  await expect(compact).toHaveAttribute('title', named);
+  await expect(compact).toBeInViewport({ ratio: 1 });
+  await expect(row.getByTestId('compact-chips-more')).toHaveCount(0);
+
+  await tile(page, 'tile-category').focus();
+  await page.keyboard.press('Space');
+  await expect(row.getByTestId('compact-chips-more')).toContainText('+1');
+  // Still the first, and the row still one 48 px line.
+  await expect(compact).toHaveCount(1);
+  await expect(compact).toHaveAttribute('aria-label', named);
+  expect((await row.boundingBox())?.height).toBe(48);
+
+  // Its menu, headed by its tile.
+  const what = named.replace(/, from By status$/, '');
+  await compact.getByRole('button', { name: `${what} menu` }).click();
+  const menu = page.getByRole('menu', { name: `${what} menu` });
+  await expect(menu.locator('.menu-button__head')).toHaveText(named);
+  await page.keyboard.press('Escape');
+
+  // Open, the full chips in the bar and none in the row.
+  await openHeaderSheet(page);
+  await expect(compact).toHaveCount(0);
+  await expect(page.getByTestId('cross-filter-chip')).toHaveCount(2);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+  // Its × clears it; the other's chip takes its place.
+  await compact.getByRole('button', { name: `Clear ${what}` }).click();
+  await expect(compact).toHaveCount(1);
+  await expect(compact).toHaveAttribute('aria-label', /, from By category$/);
+  await expect(row.getByTestId('compact-chips-more')).toHaveCount(0);
+});
+
 /** Down the open menu to `item`, from the keyboard alone. */
 async function arrowTo(page: Page, item: Locator) {
   for (let step = 0; step < 30; step += 1) {
