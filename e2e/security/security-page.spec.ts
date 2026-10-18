@@ -52,6 +52,8 @@ test.describe('Security, as a Super-Admin sees it', () => {
       'Policies',
       'Preview as groups',
       'Audit trail',
+      // Everyone's tokens, the fourth tab with sign-in on (T772, AC-470; design 18, pin 1).
+      'Access tokens',
     ]);
     await expect(tabs.getByRole('link', { name: 'Policies' })).toHaveAttribute(
       'aria-current',
