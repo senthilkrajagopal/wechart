@@ -820,7 +820,10 @@ No criteria are written for these yet. Each gets its own questions where it is o
 - **Packages and data shapes** are researched before build (design 23, "Research before build"; 23-Q10): the shape of a Cube `geo` value; min and max of time columns; `@echarts-x/custom-violin`, `@echarts-x/custom-bar-range` and an icicle custom series; an admin-1 boundary dataset and where uploaded GeoJSON is stored; ECharts' jitter seed and parallel brush; the palette validator on the waterfall's pair and the points-over-ramp pair.
 - **Not asked again:** inventorying the `.dxp` files ("Proceed without them (Recommended)") and gauges ("No gauge (Recommended)") `[R81]`.
 - *The coordinator's calls (2026-10-18), overturnable* (`docs/requirements-log.md`, R81): exactly 3 measures and a dimension make the bubble the top pick, 4 or more measures and a dimension of more than 8 members parallel coordinates; a KPI's Direction starts at Higher is better and a waterfall's "Show at most" at 6; KPI tiles are ordered by value unless the author orders them.
-- **Still open** (§P2.8, R81-1 … R81-3): who uploads a custom boundary set and where it lives; a histogram of a numeric dimension that has no bin dimension; what a timeline's duration is.
+- ~~**Still open** (§P2.8, R81-1 … R81-3): who uploads a custom boundary set and where it lives; a histogram of a numeric dimension that has no bin dimension; what a timeline's duration is.~~ **Answered 2026-10-18** (§P2.8, `[R81]`):
+  - **custom boundary sets** are folder items: a read-write member uploads one into their My workspace, and it lands in the folder through a proposal, following the folder's permissions, found along the path as models are ("Folder item via proposal (Recommended)", R81-1);
+  - **a numeric dimension with no bin dimension** is binned in the browser from its grouped values, said "Computed from n of N rows" when Cube's row limit cut them, with "Make bins in the model…" beside it ("Bin in the browser (Recommended)", R81-2);
+  - **a timeline's End** is an end-time dimension, or a numeric duration measure in a chosen unit, minutes, hours or days ("End time, or a duration measure (Recommended)", R81-3).
 
 ## P2.7 Non-goals for phase 2
 
@@ -891,9 +894,17 @@ The rest still apply: scheduled delivery and alerts, embedding, `.dxp` migration
 
 ## P2.8 Open questions
 
-### Round R81 (2026-10-18): still open
+### Round R81 (2026-10-18): settled the same day
 
-Found while specifying §P2.6 P. The spec states no value for any of them; each holds back only the task named, which carries a "Waits on" line.
+Found while specifying §P2.6 P. The user answered R81-1 … R81-3 on 2026-10-18 (`docs/requirements-log.md`, R81). The decisions are folded into §P2.6 P and the spec's AC-628, AC-631, AC-602 and AC-632; no task waits on them any more.
+
+| # | Decision |
+|---|---|
+| R81-1 | **A folder item, through a proposal:** a read-write member uploads into their My workspace; the set lands in the folder through a proposal and is found along the path as models are |
+| R81-2 | **Binned in the browser** from the dimension's grouped values, "Computed from n of N rows" when cut, with "Make bins in the model…" |
+| R81-3 | **An end time, or a duration measure** in minutes, hours or days |
+
+The questions as first asked:
 
 | # | Question | Holds back |
 |---|---|---|

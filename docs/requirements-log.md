@@ -255,6 +255,14 @@ Questions are Claude's; answers are the user's, verbatim.
     - *exactly 3 measures and a dimension make the bubble the top pick whatever the dimension's member count (sheet 5's example draws 12 products), parallel coordinates the runner-up; 4 or more measures and a dimension of more than 8 members make parallel coordinates the top pick, and of 8 or fewer its runner-up (sheets 5 and 7 overlap at 3 measures and more than 8 members);*
     - *a KPI's Direction starts at Higher is better, and a waterfall's "Show at most" at 6 steps, as design 23 draws them;*
     - *a KPI's tiles are ordered by value, highest first, unless the author orders them in Customize (sheet 1, "ordered by value; the order is in Customize").*
+- **R81's open items R81-1 … R81-3** (requirements §P2.8), answered 2026-10-18 (the user):
+  - Q: R81-1, who uploads a custom boundary set, and where it lives? A: "Folder item via proposal (Recommended)". *A read-write member of a folder uploads a boundary set into their My workspace, and it lands in the folder through a proposal, following the folder's permissions; it is found along the folder path as models are.*
+  - Q: R81-2, a histogram of a numeric dimension that has no bin dimension in the model? A: "Bin in the browser (Recommended)". *The dimension's grouped values are binned in the browser, labelled "Computed from n of N rows" when Cube's row limit cut them, with a "Make bins in the model…" link.*
+  - Q: R81-3, what a timeline's "End or a duration" takes as a duration? A: "End time, or a duration measure (Recommended)". *The End is an end-time dimension, or a numeric duration measure with a chosen unit: minutes, hours or days.*
+  - *The lane's calls while specifying (2026-10-18), overturnable:*
+    - *a dimension's browser bins mark and cross-filter as a range on the dimension, as model bins do, since a bin of the dimension's own values is exact; a bin's value sums its grouped values' Metrics measure, so Metrics takes a summed measure only;*
+    - *a duration measure is evaluated per bar: per row with One row, and per member with "First to last", that bar running from the member's earliest start;*
+    - *a duration's Unit has no default: the author chooses it ("with a chosen unit"), and no bars draw until then; an empty duration draws as an open bar and a negative one as a reversed row, as AC-603 has them.*
 
 **R80 — combo charts and rich text tiles, as a priority from phase 3** (2026-10-18, the user)
 - **Sources.** Input: `docs/inputs/2026-10-18-phase-3-advanced-analytics.md`. Studies: `docs/design/references-combo-and-rich-tiles.md` (visualization and BI expert) and `docs/design/references-spotfire-combo-textarea.md` (Spotfire expert). Research: `docs/research/rich-tiles-and-combo-tech.md`.

@@ -2321,22 +2321,22 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 **Packages.** Nothing new is imported without research: ECharts 6.1.0 (`echarts.md`, `rich-tiles-and-combo-tech.md` §2) draws the series, `d3-geo` (`country-map.md`) the projection, and R80's elements (lane TEXT, `packages/web/src/tiles/text/elements/`) the KPI's and the graphical table's micro-charts. `@echarts-x/custom-violin` and `@echarts-x/custom-bar-range` wait on research before import, and are replaced by wechart's own custom series if the research finds them unmaintained (23-Q10 (a)).
 
 **Two lanes,** each in its own worktree, touching disjoint files as far as possible. Each new type's spec lives in `packages/core/src/chart-types/‹type›.ts`, its series in `packages/charts/src/series/‹type›.ts`, its wells in `packages/web/src/editor/wells/‹type›.tsx`, its table view in `packages/web/src/tiles/tableView/‹type›.ts` and its text alternative in `packages/charts/src/describe/‹type›.ts`, each registered in one line of a shared registry.
-- **Lane CHARTS-A:** the gallery and registries (T934), the "share shown" badge, the KPI, the graphical table, the waterfall, the bullet chart, 100 % stacking, the histogram and the bubble; lane A's recommender rules, saved Auto charts, its keyboard order and its e2e (`e2e/new-charts-a.spec.ts`). Order: T934, T935, T936, T937, T938, T939, T940, T941, T942, T943, T944, T945, T946, T947, T948, T949, T950, T951, T952, T953, T954, T955, T956, T957, T958, T959, T960, T961, T962, T963, T964, T965, T966, T967, T968, T969, T970, T971, T972. T934 and T935 depend on nothing and go first.
-- **Lane CHARTS-B:** the Map, parallel coordinates, the Sankey, the box plot's points and violin, the funnel, the timeline, the calendar heatmap, and the icicle and sunburst; lane B's recommender rules, its keyboard order and its e2e (`e2e/new-charts-b.spec.ts`). Order: T973, T974, T975, T976, T977, T978, T980, T981, T982, T983, T984, T985, T986, T987, T988, T989, T990, T991, T992, T993, T994, T995, T996, T997, T998, T999, T1000, T1001, T1002, T1003, T1004, T1005, T1006, T1007, T1008, T1009, T1010, T1011, T1012, T1013, T1014; then T979, once R81-1 is answered. T990 depends on nothing; every other lane B task starts after lane A's T934.
+- **Lane CHARTS-A:** the gallery and registries (T934), the "share shown" badge, the KPI, the graphical table, the waterfall, the bullet chart, 100 % stacking, the histogram and the bubble; lane A's recommender rules, saved Auto charts, its keyboard order and its e2e (`e2e/new-charts-a.spec.ts`). Order: T934, T935, T936, T937, T938, T939, T940, T941, T942, T943, T944, T945, T946, T947, T948, T949, T950, T951, T952, T953, T954, T955, T956, T957, T958, T959, T960, T961, T962, T1018, T963, T964, T965, T966, T967, T968, T969, T970, T971, T972. T934 and T935 depend on nothing and go first.
+- **Lane CHARTS-B:** the Map, parallel coordinates, the Sankey, the box plot's points and violin, the funnel, the timeline, the calendar heatmap, and the icicle and sunburst; lane B's recommender rules, its keyboard order and its e2e (`e2e/new-charts-b.spec.ts`). Order: T973, T974, T975, T976, T977, T978, T980, T981, T982, T983, T984, T985, T986, T987, T988, T989, T990, T991, T992, T993, T994, T995, T996, T997, T998, T999, T1000, T1019, T1001, T1002, T1003, T1004, T1005, T1006, T1007, T1008, T1009, T1010, T1011, T1012, T1013, T1014; then T979 ~~, once R81-1 is answered~~ (R81-1 answered 2026-10-18). T990 depends on nothing; every other lane B task starts after lane A's T934.
 - **Shared with each other** (expect cherry-pick conflicts there only): the registries T934 creates (`packages/core/src/chart-types/index.ts`, `packages/charts/src/series/registry.ts`, `packages/web/src/editor/wells/registry.ts`, `packages/web/src/tiles/tableView/index.ts`, `packages/charts/src/describe/index.ts`), one line per type; `packages/recommender/src/recommend.ts`, `legality.ts` and `reason.ts` (T968, T969 against T1012); `packages/charts/src/interaction/keyboardMarking.ts` (T971 against T1013); `packages/charts/src/marking/partial.ts` (the marked share: T946, T951, T963 against T988); `packages/core/src/chart-spec.ts`.
 - **Shared with lanes COMBO and TEXT** (P2.26): `packages/charts/src/series/` and `packages/charts/src/optionFor.ts` (COMBO's T846 and T863 against T934's registry and every series task); `packages/recommender/` (COMBO's T861 `warnings.ts` and T865 `explain.ts` against T968, T969 and T1012); `packages/web/src/editor/Wells.tsx` (COMBO's pill menu and Split by well, TEXT's Parameters group, against T934, which routes R81's wells to `editor/wells/` once); `packages/web/src/editor/chartTypeCatalog.ts` and `ChartTypeGallery.tsx` (T934 only, against nothing in COMBO or TEXT); `packages/core/src/render-spec.ts` (COMBO's T845 and T852 against T934's `ChartType` union); `packages/web/src/tiles/DataTable.tsx` and `ChartCanvas.tsx` (COMBO's T864 against T934's table-view and describe registries). KPI and graphical-table tasks import lane TEXT's elements, so they depend on T884, T885 and T886.
-- **Migrations:** none in lane A. Lane B's T979, if R81-1 puts custom boundary sets in wechart's database, numbers from 1758710000000.
+- **Migrations:** none in lane A. Lane B's T979, if the research puts custom boundary sets in wechart's database, asks the coordinator for its migration number first (lane SQL holds 1758700000000 and up, lane MCP 1758710000000 and up).
 
 **Research before build** (design 23's last section; CLAUDE.md: "Every claim about third-party behavior needs a source in `docs/research/`"). Each task below that needs one carries a "Waits on: research …" line and starts only once that doc lands:
 - the shape of a Cube `geo` value in a `/v1/load` row, and the client types: T976, T977;
-- whether Cube returns min and max of a time column as a timestamp: T999;
+- whether Cube returns min and max of a time column as a timestamp: T999; how it returns a measure in an ungrouped query: T1019;
 - `@echarts-x/custom-violin`: T992; `@echarts-x/custom-bar-range`: T1000; an icicle custom series: T1008;
 - an admin-1 boundary dataset (source, licence, detail), and where uploaded GeoJSON is stored and checked: T975, T979;
 - ECharts 6.1's jitter seed: T991; its `parallel` brush events: T983;
 - the palette validator (`palette-validation.md`) on the waterfall's blue and red pair: T949; on the points-over-ramp pair: T976.
 - *Not in design 23's list, raised with the coordinator:* how the browser gives a locale's first weekday: T1003.
 
-**Waiting on answers** (`docs/requirements.md` §P2.8, R81): T979 waits on R81-1 (who uploads a custom boundary set, and where it lives). R81-2 and R81-3 hold back no task yet; each gets a criterion and a task once answered.
+~~**Waiting on answers** (`docs/requirements.md` §P2.8, R81): T979 waits on R81-1 (who uploads a custom boundary set, and where it lives). R81-2 and R81-3 hold back no task yet; each gets a criterion and a task once answered.~~ **Answered 2026-10-18** (`docs/requirements.md` §P2.8, R81): R81-1 (a folder item through a proposal) is in T979 and AC-628; R81-2 (a numeric dimension binned in the browser) in lane A's T1018 and AC-631; R81-3 (an end time or a duration measure) in lane B's T1019, AC-602 and AC-632. No task in this section waits on the user any more.
 
 ### Lane CHARTS-A: the gallery and what every type shares
 
@@ -2508,6 +2508,11 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Failing test: (describe) "Histogram of Order value, 10 bins of $50 from $0 to $500. Most orders $100 to under $150 (4,100); counts fall toward $500."; (table view) Order value, Count, Share, the first row "from $0 to under $50"; with nothing to bin, "Put a numeric dimension in Value, or a measure with Each point is." with Value as its action (AC-590).
   - Depends on: T961
 
+- [ ] T1018 (AC-631) Bin a numeric dimension with no bin dimension in the browser from its grouped values, with "Make bins in the model…" beside it and "Computed from n of N rows" when cut
+  - Files: `packages/core/src/chart-types/histogram.ts` (`dimensionBins`, its query; + test), `packages/web/src/tiles/HistogramCut.tsx` (+ test), `packages/web/src/editor/wells/histogram.tsx` (Metrics summed only; + test).
+  - Failing test: `histogram.test.ts`: Order value with no bin dimension asks Cube for Order value grouped with Count, and 120 grouped values bin at $50 into counts equal to the sum of each range's grouped counts; Average order value is refused in Metrics; a bin marks and filters as Order value ≥ 100 and < 150; `HistogramCut.test.tsx`: 10,000 of 48,210 grouped rows reads "Computed from 10,000 of 48,210 rows (Cube's row limit). Bin counts are of those rows only.", and "Make bins in the model…" shows beside the chart (AC-631).
+  - Depends on: T962, T960
+
 ### Lane CHARTS-A: the bubble
 
 - [ ] T965 (AC-594, AC-037) Size and Shape wells on a scatter, a Bubble while Size is set, Colour at most 3 and Shape at most 6 with their reasons, and Shape never filled by Auto
@@ -2587,11 +2592,11 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Failing test: `mapMarking.test.ts`: a lasso over 3 stores marks those 3 and no region; with no Points layer it marks the regions it touches; a marked region keeps its fill and gains the outline while others fade; in cross-filter mode a region filters to its member and a store to its store (AC-627).
   - Depends on: T976
 
-- [ ] T979 (AC-628) Upload a custom GeoJSON boundary set, checked for polygons, the key property and unique keys, and offer it in Boundary set
-  - Files: `packages/core/src/geo/boundarySet.ts` (+ test); the route, storage and page as R81-1's answer and the research place them.
-  - Failing test: `boundarySet.test.ts`: a FeatureCollection of polygons each with `territory_id` passes; one with a Point feature, a feature without `territory_id`, or two features of one key is refused naming the first failing feature; an accepted set is listed in Boundary set under its name (AC-628).
+- [ ] T979 (AC-628) A read-write member uploads a custom GeoJSON boundary set into their My workspace, checked for polygons, the key property and unique keys; it lands in the folder through a proposal and is offered in Boundary set along the folder path
+  - Files: `packages/core/src/geo/boundarySet.ts` (+ test); the folder-item kind, its route and its storage as the research places them, through the existing My workspace and proposal paths (F29, F30); the upload page.
+  - Failing test: `boundarySet.test.ts`: a FeatureCollection of polygons each with `territory_id` passes; one with a Point feature, a feature without `territory_id`, or two features of one key is refused naming the first failing feature; an API test: a folder's read-write member uploads Territories into My workspace, a read-only member is refused with 403, and the set reaches the folder only once its proposal is approved; a chart in that folder and one in a folder under it list Territories in Boundary set, and one in a sibling folder doesn't (AC-628).
   - Depends on: T975
-  - Waits on: R81-1 (who uploads a custom boundary set, and where it lives).
+  - ~~Waits on: R81-1 (who uploads a custom boundary set, and where it lives).~~ R81-1 answered 2026-10-18: "Folder item via proposal (Recommended)".
   - Waits on: research: where uploaded GeoJSON is stored and checked.
 
 - [ ] T980 (AC-629) The map's text alternative and table view
@@ -2723,6 +2728,12 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Files: `packages/charts/src/describe/timeline.ts` (+ test), `packages/web/src/tiles/tableView/timeline.ts` (+ test).
   - Failing test: (describe) "Timeline of 8 batches, Oct 1 to Oct 12 2026, coloured by Plant. Longest B-1043, 4 days. B-1048 still running."; (table view) B-1044's duration "1 day 12 hours", B-1048's end "Still running" and duration "2 days 12 hours so far" (AC-605).
   - Depends on: T1000
+
+- [ ] T1019 (AC-602, AC-632) A timeline's End as a duration measure in minutes, hours or days, each bar ending at its Start plus the duration
+  - Files: `packages/core/src/chart-types/timeline.ts` (`durationEnd`; + test), `packages/web/src/editor/wells/timeline.tsx` (End taking a numeric measure, and Unit; + test), `packages/web/src/tiles/tableView/timeline.ts`.
+  - Failing test: `timeline.test.ts`: Run time (hours) of 36 on a batch started Oct 5, 12:00 ends Oct 7, 00:00; in minutes 90 ends 1 h 30 min after Start; First to last per Batch evaluates the measure per Batch from its earliest start; an empty duration draws as running and −2 as a reversed row; `timeline.test.tsx` (wells): End takes Finished at or Run time and refuses Plant and a string measure; Unit offers minutes, hours and days with none chosen, saying "Choose the unit Run time is in." and drawing no bars; End empty reads "A timeline needs an end for each bar. Put an end time or a duration in End."; (table view) the end column shows the computed end (AC-602, AC-632).
+  - Depends on: T999, T1000
+  - Waits on: research: how Cube returns a measure in an ungrouped query (One row), each row's own value or an error, in the form the research on T999 documents.
 
 ### Lane CHARTS-B: the calendar heatmap
 
@@ -2952,7 +2963,8 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 | AC-619 | T1008, T1009 | AC-620 | T1010, T1014 | AC-621 | T1011 |
 | AC-622 | T973, T1014 | AC-623 | T974 | AC-624 | T975 |
 | AC-625 | T976 | AC-626 | T977 | AC-627 | T978 |
-| AC-628 | T979 (waits on R81-1) | AC-629 | T980 | | |
+| AC-628 | T979 (R81-1 answered) | AC-629 | T980 | AC-631 (R81-2) | T1018 |
+| AC-632 (R81-3) | T1019 | AC-602 (again, End as a duration, R81-3) | T1019 | AC-586 (again, browser bins, R81-2) | T1018 |
 | AC-028 (again, R81's rules, `[R81]`) | T968, T970 | AC-031 (again, R81's caps, `[R81]`) | T968, T969, T1012 | AC-037 (again, R81's types, `[R81]`) | each type's spec task: T936, T943, T948, T953, T957, T959, T965, T973, T981, T986, T994, T998, T1003, T1007; T972, T1014 |
 | AC-098 (again, "share shown", `[R81]`) | T935, T972 | AC-217 (again, the nine shelves, `[R81]`) | T934 | AC-305 (again, the Map, `[R81]`) | T973, T1012, T1014 |
 | AC-306 (again, points and violin, `[R81]`) | T990, T991 | | | | |
