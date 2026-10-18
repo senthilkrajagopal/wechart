@@ -21,6 +21,7 @@
  */
 
 import { emptySpec, type ChartFilter, type ChartSpec } from './chart-spec';
+import { comboProblems } from './combo';
 import { GRANULARITY_NAMES, type TimeGranularity } from './format';
 import { readQuickCalcs, type QuickCalc } from './quickCalc';
 import type { Channel, ChartType } from './render-spec';
@@ -206,9 +207,7 @@ export function readChartDocument(body: unknown): ChartDocument {
       ...(definition['encoding'] === undefined
         ? {}
         : { encoding: definition['encoding'] as EncodingOverrides }),
-      ...(definition['options'] === undefined
-        ? {}
-        : { options: definition['options'] as Record<string, unknown> }),
+      ...(definition['options'] === undefined ? {} : { options: optionsOf(definition['options']) }),
       ...(definition['granularities'] === undefined
         ? {}
         : { granularities: grainsOf(definition['granularities']) }),
@@ -218,6 +217,18 @@ export function readChartDocument(body: unknown): ChartDocument {
         : { calculations: calculationsOf(definition['calculations']) }),
     },
   };
+}
+
+/**
+ * A chart's drawing options, or a refusal where a combo series is stored with
+ * a mark or an axis the combo doesn't have (AC-497). Otherwise taken as they
+ * are: they're a sparse layer read by each renderer.
+ */
+function optionsOf(value: unknown): Record<string, unknown> {
+  const options = value as Record<string, unknown>;
+  const [problem] = comboProblems(options);
+  if (problem !== undefined) throw new ChartDocumentError(problem);
+  return options;
 }
 
 /** A chart's quick calculations (AC-047), each one wechart offers, or a refusal. */

@@ -82,9 +82,22 @@ export {
   type Encoding,
   type ChartHighlight,
   type ChartMarking,
+  type ComboAxis,
+  type ComboMark,
   type RenderSpec,
   type SeriesData,
+  type SeriesOptions,
 } from './render-spec';
+
+export {
+  COMBO_AXES,
+  COMBO_MARKS,
+  comboProblems,
+  comboSeriesOf,
+  withComboAuto,
+  withComboSeries,
+  type ComboSeries,
+} from './combo';
 
 export { compile, defaultEncoding, type CompileOptions } from './compile';
 

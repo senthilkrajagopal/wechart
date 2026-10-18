@@ -113,6 +113,29 @@ export function membersOn(encoding: Encoding, channel: Channel): readonly string
   return encoding[channel] ?? [];
 }
 
+/** How a combo draws one measure (AC-497): four marks, and no fifth. */
+export type ComboMark = 'bar' | 'line' | 'area' | 'point';
+
+/** Which value axis a combo measure is read against (AC-497): two, and no third. */
+export type ComboAxis = 'left' | 'right';
+
+/**
+ * One series' settings in a chart's `options.series`, keyed by the series'
+ * name (AC-219). Sparse: absent means the default.
+ *
+ * - `colour`, `hidden`: Customize › Series, for any chart on axes.
+ * - `mark`, `axis`: a combo's, keyed by the measure (AC-497). Absent means
+ *   Auto (`comboSeriesOf`); present, the author chose it, and it stays with
+ *   its measure through field changes (AC-498). Inert on any other type, so
+ *   switching away and back keeps them.
+ */
+export interface SeriesOptions {
+  readonly colour?: string;
+  readonly hidden?: boolean;
+  readonly mark?: ComboMark;
+  readonly axis?: ComboAxis;
+}
+
 /** Everything a renderer needs to draw one chart. */
 export interface RenderSpec {
   readonly chartType: ChartType;
@@ -203,6 +226,9 @@ export interface RenderSpec {
    * currently selected stays inert rather than becoming invalid, which is what
    * lets a user switch type and switch back. Grafana and Metabase both leave
    * the equivalent field untyped for the same reason.
+   *
+   * `series` holds `SeriesOptions` by series name; a combo reads its marks
+   * and axes from there (`comboSeriesOf`, AC-497).
    */
   readonly options?: Record<string, unknown>;
   /**
