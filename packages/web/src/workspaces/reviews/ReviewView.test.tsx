@@ -68,7 +68,7 @@ const proposal = (over: Partial<ProposalDetail>): ProposalDetail => ({
       snapshot: {
         schemaVersion: 1,
         title: 'Revenue overview v2',
-        pages: [{ id: 'p1', items: [{ id: 't-new', kind: 'text', text: 'Hi' }] }],
+        pages: [{ id: 'p1', items: [{ id: 't-new', kind: 'markdown', text: 'Hi' }] }],
       },
     },
     {

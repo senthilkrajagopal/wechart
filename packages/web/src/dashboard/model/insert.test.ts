@@ -5,7 +5,7 @@ import { isSized, pageKey, sectionKey, tabKey, type DashboardDocument } from './
 
 /**
  * T064 / AC-058: WHEN the user adds an element from the sidebar, THE SYSTEM
- * SHALL offer chart, chart from folders, section, tab group, markdown, header,
+ * SHALL offer chart, chart from folders, section, tab group, text, header,
  * divider, image, link and filter, and insert the chosen one after the
  * selection or into the chosen "+ Add" slot.
  * `Fails when: an element type is missing, or an insert lands somewhere other
@@ -75,7 +75,7 @@ describe('what the palette offers', () => {
       'library',
       'section',
       'tabs',
-      'markdown',
+      'text',
       'header',
       'divider',
       'image',
@@ -99,7 +99,7 @@ describe('what each entry makes', () => {
   };
 
   it('makes a tile of the kind that was chosen', () => {
-    expect(newElement('markdown', mint()).kind).toBe('markdown');
+    expect(newElement('text', mint()).kind).toBe('text');
     expect(newElement('divider', mint()).kind).toBe('divider');
   });
 
@@ -125,7 +125,7 @@ describe('what each entry makes', () => {
 
   it('gives a size only to the kinds that have one', () => {
     // A header, a divider and a filter are as tall as their content, exactly
-    // as a section is; only chart, markdown, image and link are dragged to a
+    // as a section is; only chart, text, image and link are dragged to a
     // size of their own.
     for (const entry of PALETTE) {
       const made = newElement(entry.id, mint());

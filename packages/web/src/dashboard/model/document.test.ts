@@ -9,11 +9,15 @@ import {
   removeElement,
   resizeTile,
   sectionKey,
+  SIZED_KINDS,
   tabKey,
+  TILE_KINDS,
   tileShowing,
   type DashboardDocument,
   type Element_,
 } from './document';
+import { SECTION_TEMPLATES, templateElements } from '../edit/templates';
+import { PALETTE, newElement } from './insert';
 
 /**
  * T061 / AC-055, the document half: a resize has to *change the dashboard*,
@@ -342,5 +346,26 @@ describe('moving a tile to another container', () => {
       'Overview › Detail',
       'Overview › Detail › T',
     ]);
+  });
+});
+
+/**
+ * T874 / AC-058 (R80): the Text tile is a kind of the dashboard's own, and
+ * nothing a new dashboard is given is a markdown tile.
+ */
+describe('the text tile kind (AC-058)', () => {
+  it('holds text among the tile kinds, sized as the markdown tile was', () => {
+    expect(TILE_KINDS).toContain('text');
+    expect(SIZED_KINDS).toContain('text');
+  });
+
+  it('never makes a markdown tile, from any palette entry or template', () => {
+    let n = 0;
+    const mint = () => `m${String(n++)}`;
+    const made = [
+      ...PALETTE.map((entry) => newElement(entry.id, mint)),
+      ...SECTION_TEMPLATES.flatMap((template) => templateElements(template.id, mint)),
+    ];
+    expect(made.map((element) => element.kind)).not.toContain('markdown');
   });
 });

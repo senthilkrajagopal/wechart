@@ -1,3 +1,4 @@
+import { emptyTextDocument } from '../../tiles/text/documents';
 import {
   isSection,
   isTabGroup,
@@ -33,7 +34,7 @@ export type PaletteId =
   | 'library'
   | 'section'
   | 'tabs'
-  | 'markdown'
+  | 'text'
   | 'header'
   | 'divider'
   | 'image'
@@ -51,7 +52,8 @@ export const PALETTE: readonly PaletteEntry[] = [
   { id: 'library', label: 'Chart from folders', hint: 'Reuse a shared chart' },
   { id: 'section', label: 'Section', hint: 'A titled, collapsible group' },
   { id: 'tabs', label: 'Tabs', hint: 'A tab group inside a section' },
-  { id: 'markdown', label: 'Markdown', hint: 'Text with live values' },
+  // The Text element, in Markdown's place (R80, design 21, rule 127).
+  { id: 'text', label: 'Text', hint: 'Text with live values' },
   { id: 'header', label: 'Header', hint: 'A heading' },
   { id: 'divider', label: 'Divider', hint: 'A horizontal rule' },
   { id: 'image', label: 'Image', hint: 'A logo or picture' },
@@ -62,7 +64,7 @@ export const PALETTE: readonly PaletteEntry[] = [
 /**
  * A new element of the chosen kind.
  *
- * Sizes are the prototype's. Only chart, markdown, image and link carry one;
+ * Sizes are the prototype's. Only chart, text, image and link carry one;
  * a header, a divider and a filter are as tall as their content, exactly as a
  * section is.
  *
@@ -88,14 +90,10 @@ export function newElement(id: PaletteId, mintId: () => string): Element_ {
           { id: `${key}-b`, title: 'Tab 2', items: [] },
         ],
       };
-    case 'markdown':
-      return {
-        id: key,
-        kind: 'markdown',
-        w: 6,
-        h: 18,
-        text: '## New text\nDescribe what this part of the dashboard shows.',
-      };
+    case 'text':
+      // Empty, at the markdown tile's size: an empty Text tile shows its
+      // placeholder in edit mode and nothing in view mode (design 21 G6).
+      return { id: key, kind: 'text', w: 6, h: 18, document: emptyTextDocument() };
     case 'header':
       return { id: key, kind: 'header', w: 12, text: 'New heading' };
     case 'divider':

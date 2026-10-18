@@ -1939,10 +1939,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T873 (AC-208, AC-513) Read mode: render a Text tile through Tiptap's JSON static renderer into React elements, with wechart's own link check
 
-- [ ] T874 (AC-058) The `text` tile kind, and the Text element in Add in place of Markdown, inserting an empty Text tile
-  - Files: `packages/web/src/dashboard/model/document.ts` (+ test), `packages/web/src/dashboard/edit/AddPanel.tsx`, `packages/web/src/dashboard/edit/templates.ts` (+ test), `packages/web/src/dashboard/model/insert.ts`, `packages/web/src/dashboard/edit/Outline.tsx`.
-  - Failing test: `templates.test.ts`: Add's elements are chart, chart from folders, section, tab group, text, header, divider, image, link and filter, with no markdown; inserting Text after the selection adds a `text` tile with an empty document; `document.test.ts`: `TILE_KINDS` holds `text` and a new dashboard's tiles are never `markdown` (AC-058).
-  - Depends on: T873
+- [x] T874 (AC-058) The `text` tile kind, and the Text element in Add in place of Markdown, inserting an empty Text tile
 
 - [ ] T875 (AC-512) A markdown tile shown as a Text tile, converted on open, and stored as a document on the next save
   - Files: `packages/web/src/dashboard/model/document.ts`, `packages/web/src/dashboard/model/stored.ts` (+ test), `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/Markdown.tsx` (removed with its test, whose cases move to T869's), `e2e/text-tile.spec.ts`.

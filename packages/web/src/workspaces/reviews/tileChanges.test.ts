@@ -24,11 +24,11 @@ const current = {
   body: board([
     { id: 't1', kind: 'chart', chartId: 'c1', layout: { w: 6 } },
     { id: 't2', kind: 'chart', chartId: 'c2', layout: { w: 6 } },
-    { id: 't3', kind: 'text', text: 'Notes' },
+    { id: 't3', kind: 'markdown', text: 'Notes' },
     {
       id: 's1',
       kind: 'section',
-      items: [{ id: 't4', kind: 'text', text: 'Inside' }],
+      items: [{ id: 't4', kind: 'markdown', text: 'Inside' }],
     },
   ]),
   charts: {
@@ -43,8 +43,8 @@ describe('which tiles a proposal changes or adds (T356, AC-341)', () => {
       body: board([
         { id: 't1', kind: 'chart', chartId: 'w1', layout: { w: 6 } },
         { id: 't2', kind: 'chart', chartId: 'w2', layout: { w: 6 } },
-        { id: 't3', kind: 'text', text: 'Notes' },
-        { id: 's1', kind: 'section', items: [{ id: 't4', kind: 'text', text: 'Inside' }] },
+        { id: 't3', kind: 'markdown', text: 'Notes' },
+        { id: 's1', kind: 'section', items: [{ id: 't4', kind: 'markdown', text: 'Inside' }] },
       ]),
       charts: {
         // The workspace's copies, placed elsewhere but the same charts.
@@ -60,13 +60,13 @@ describe('which tiles a proposal changes or adds (T356, AC-341)', () => {
       body: board([
         { id: 't1', kind: 'chart', chartId: 'w1', layout: { w: 12 } },
         { id: 't2', kind: 'chart', chartId: 'w2', layout: { w: 6 } },
-        { id: 't3', kind: 'text', text: 'Notes' },
+        { id: 't3', kind: 'markdown', text: 'Notes' },
         {
           id: 's1',
           kind: 'section',
           items: [
-            { id: 't4', kind: 'text', text: 'Inside' },
-            { id: 't5', kind: 'text', text: 'New inside' },
+            { id: 't4', kind: 'markdown', text: 'Inside' },
+            { id: 't5', kind: 'markdown', text: 'New inside' },
           ],
         },
       ]),
@@ -83,7 +83,7 @@ describe('which tiles a proposal changes or adds (T356, AC-341)', () => {
   });
 
   it('marks every tile new when there is no current version', () => {
-    const proposed = { body: board([{ id: 't9', kind: 'text', text: 'Hi' }]), charts: {} };
+    const proposed = { body: board([{ id: 't9', kind: 'markdown', text: 'Hi' }]), charts: {} };
     expect(tileChangesOf(proposed, undefined)).toEqual({ t9: 'new' });
   });
 });

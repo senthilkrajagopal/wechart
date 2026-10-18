@@ -48,7 +48,7 @@ async function makeDashboard(request: APIRequestContext) {
   return { id: dashboard.id, title };
 }
 
-async function editWithSidebar(page: Page, panel: 'Add' | 'Properties') {
+async function editWithSidebar(page: Page, panel: 'Add' | 'Properties' | 'Outline') {
   await page
     .getByRole('complementary', { name: 'Edit sidebar' })
     .getByRole('tab', { name: panel })
@@ -302,38 +302,26 @@ test('a link tile refuses a web address that is not http(s)', async ({ page, req
 });
 
 /**
- * T394, AC-302: WHEN the user selects a markdown tile in edit mode, THE
- * SYSTEM SHALL let them edit its text, and render the change (gap 12).
- * `Fails when: a markdown tile's text can't be changed in the UI.`
+ * T874, AC-058 (amended by R80): Add offers Text in place of Markdown, and
+ * inserts an empty Text tile — its placeholder in edit mode, nothing in view
+ * mode (design 21 G6) — stored as a `text` tile with an empty document. Its
+ * text is edited on the canvas (AC-302, T876), which replaced the markdown
+ * tile's Properties textarea this test covered before (T394).
  */
-test('a markdown tile’s text is edited in Properties, drawn as it is typed, and kept', async ({
-  page,
-  request,
-}) => {
+test('Add’s Text inserts an empty Text tile, saved as a document', async ({ page, request }) => {
   const { id, title } = await makeDashboard(request);
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await editWithSidebar(page, 'Add');
-  await page.getByTestId('add-markdown').click();
+  await expect(page.getByTestId('add-markdown')).toHaveCount(0);
+  await page.getByTestId('add-text').click();
 
-  const tile = page.locator('[data-tile]').filter({ has: page.getByText('New text') });
+  const placeholder = 'Type, or press / to insert a live value';
+  const tile = page.locator('[data-tile]').filter({ has: page.getByText(placeholder) });
   await expect(tile).toBeVisible();
-  await tile.click();
-  await editWithSidebar(page, 'Properties');
-  const text = sidebar(page).getByLabel('Markdown text', { exact: true });
-  await expect(text).toHaveValue(/^## New text\n/);
-  // Typed, key by key, Enter and all: nothing on the page takes the keys.
-  await text.fill('');
-  await text.pressSequentially('## Revenue');
-  await text.press('Enter');
-  await text.pressSequentially('Up **12%** on last quarter.');
-  await expect(text).toHaveValue('## Revenue\nUp **12%** on last quarter.');
-
-  // Drawn as typed: its heading, and the bold run.
-  const edited = page.locator('[data-tile]').filter({ has: page.getByText('Revenue') });
-  await expect(edited.getByRole('heading', { name: 'Revenue' })).toBeVisible();
-  await expect(edited.locator('strong')).toHaveText('12%');
+  await editWithSidebar(page, 'Outline');
+  await expect(sidebar(page).getByRole('button', { name: /^Empty text/ })).toBeVisible();
 
   await page
     .getByRole('toolbar', { name: 'Dashboard editing' })
@@ -341,8 +329,16 @@ test('a markdown tile’s text is edited in Properties, drawn as it is typed, an
     .click();
   await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeHidden();
 
-  // Kept: after a reload, the new text.
-  await page.reload();
-  await expect(page.getByRole('heading', { name: 'Revenue' })).toBeVisible();
-  await expect(page.getByText('New text')).toHaveCount(0);
+  // In view mode an empty Text tile draws nothing, placeholder included.
+  await expect(page.getByText(placeholder)).toHaveCount(0);
+  const stored = (await (await request.get(`${API}/documents/dashboard/${id}`)).json()) as {
+    body: { pages: { items: { kind?: string; document?: unknown; text?: unknown }[] }[] };
+  };
+  const added = stored.body.pages[0]?.items.at(-1);
+  expect(added?.kind).toBe('text');
+  expect(added?.text).toBeUndefined();
+  expect(added?.document).toEqual({
+    version: 1,
+    doc: { type: 'doc', content: [{ type: 'paragraph' }] },
+  });
 });

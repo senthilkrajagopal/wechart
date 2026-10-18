@@ -746,7 +746,7 @@ test('the Add panel offers every element type and inserts one', async ({ page })
     'Chart from folders',
     'Section',
     'Tabs',
-    'Markdown',
+    'Text',
     'Header',
     'Divider',
     'Image',

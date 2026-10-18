@@ -39,6 +39,8 @@ export const TEXT_CSS = `
 .text-tile a { color: var(--wc-accent); text-decoration: underline; }
 .text-tile > :first-child { margin-top: 0; }
 .text-tile > :last-child { margin-bottom: 0; }
+/* An empty tile's placeholder, in edit mode only (design 21 G6). */
+.text-tile--empty { margin: 0; color: var(--wc-text-muted); }
 /* Under its kind head in edit mode, the text fills the rest, as the markdown
    tile's did. */
 .grid-tile > .tile-head--kind ~ .text-tile { flex: 1 1 0; min-height: 0; height: auto; }

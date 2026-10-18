@@ -94,7 +94,7 @@ describe('adding a section template', () => {
     }
   });
 
-  it('lays out the notes template as a chart and a markdown tile', async () => {
+  it('lays out the notes template as a chart and a Text tile', async () => {
     await edit();
 
     await userEvent.click(screen.getByTestId('template-notes'));

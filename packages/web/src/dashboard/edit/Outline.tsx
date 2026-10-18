@@ -1,4 +1,5 @@
 import { firstReadingOf } from '../../tiles/Markdown';
+import { firstReadingOfDocument } from '../../tiles/text/documents';
 import { KIND_ICON } from './kindIcon';
 import { elementAt, placeOf, type DashboardDocument, type Element_ } from '../model/document';
 
@@ -30,6 +31,7 @@ export interface OutlineProps {
 
 const KIND_LABEL: Record<string, string> = {
   chart: 'Chart',
+  text: 'Text',
   markdown: 'Markdown',
   header: 'Header',
   divider: 'Divider',
@@ -46,6 +48,14 @@ export function outlineNameOf(
   chartTitleOf: OutlineProps['chartTitleOf'],
 ): string {
   const kind = KIND_LABEL[element.kind] ?? element.kind;
+  if (element.kind === 'text') {
+    // By its first line, or "Empty text" for a tile with no words yet
+    // (design 21 G6).
+    const read = firstReadingOfDocument(element.document);
+    return read === ''
+      ? 'Empty text'
+      : `${kind}: ${read.length > 40 ? `${read.slice(0, 40)}…` : read}`;
+  }
   if (element.kind === 'tabs') return `${kind}: ${element.tabs.map((tab) => tab.title).join(', ')}`;
   const own =
     element.kind === 'section'

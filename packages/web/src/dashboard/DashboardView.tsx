@@ -113,6 +113,8 @@ import { activeFilters, withFilters, withLimit, type ActiveFilter } from '../fil
 import { GeneratedSql } from '../workspaces/security/GeneratedSql';
 import { ViewQuery } from './ViewQuery';
 import { Markdown, type TokenRender } from '../tiles/Markdown';
+import { emptyTextDocument, isEmptyTextDocument, tokenOfElement } from '../tiles/text/documents';
+import { TextTile } from '../tiles/text/TextTile';
 import { MarkingToken, MeasureToken, UnknownMarkingToken } from './tiles/LiveToken';
 import { measureQueryOf } from './tiles/TextTokens';
 import { coverageOf, type Reach } from '../filters/coverage';
@@ -834,6 +836,26 @@ function TileBody({
           {editing ? <KindHead kind="Markdown" /> : null}
           {/* Its tokens as live values: the markings and measures (T389, AC-116). */}
           <Markdown text={tile.text ?? ''} tokens={tokens} />
+        </>
+      );
+    case 'text':
+      // The Text tile (F45): its document through the static renderer, never
+      // as HTML (AC-208, AC-513); empty, a placeholder in edit mode and
+      // nothing in view mode (design 21 G6).
+      return (
+        <>
+          {editing ? <KindHead kind="Text" /> : null}
+          {editing && isEmptyTextDocument(tile.document) ? (
+            <p className="text-tile text-tile--empty">Type, or press / to insert a live value</p>
+          ) : (
+            <TextTile
+              document={tile.document ?? emptyTextDocument()}
+              renderElement={(node, key) => {
+                const token = tokenOfElement(node);
+                return token === undefined ? null : tokens?.(token, key);
+              }}
+            />
+          )}
         </>
       );
     case 'header':

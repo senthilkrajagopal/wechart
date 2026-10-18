@@ -26,3 +26,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/package.json` (the `@tiptap/*` packages at 3.32.0), `packages/web/src/tiles/text/TextTile.tsx` (+ test), `packages/web/src/tiles/text/readMapping.tsx`, `packages/web/src/tiles/text/SafeLink.tsx` (+ test).
   - Failing test: `TextTile.test.tsx`: headings render as `h3`, `h4` and `h5` at `text-xl`, `text-lg` and `text-md` (levels 1, 2 and 3; a converted markdown tile's levels are by rank, so its lone `##` is level 1 and `h3`: decision T869-1), Large value at 32/40 tabular, lists as `ul` and `ol`, bold as `strong`; no element under the tile has `innerHTML` set from data (a document holding the text "<b>x</b>" renders that text); `SafeLink.test.tsx`: `javascript:alert(1)` renders as plain text with no `href`, `https://` and a dashboard link as links (AC-208, AC-513).
   - Depends on: T868
+
+- [x] T874 (AC-058) The `text` tile kind, and the Text element in Add in place of Markdown, inserting an empty Text tile
+  - Files: `packages/web/src/dashboard/model/document.ts` (+ test), `packages/web/src/dashboard/edit/AddPanel.tsx`, `packages/web/src/dashboard/edit/templates.ts` (+ test), `packages/web/src/dashboard/model/insert.ts`, `packages/web/src/dashboard/edit/Outline.tsx`.
+  - Failing test: `templates.test.ts`: Add's elements are chart, chart from folders, section, tab group, text, header, divider, image, link and filter, with no markdown; inserting Text after the selection adds a `text` tile with an empty document; `document.test.ts`: `TILE_KINDS` holds `text` and a new dashboard's tiles are never `markdown` (AC-058).
+  - Depends on: T873

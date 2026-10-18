@@ -6,6 +6,7 @@
 export const KIND_ICON: Readonly<Record<string, string>> = {
   chart: '▦',
   library: '⛓',
+  text: 'T',
   markdown: 'M↓',
   header: 'H',
   divider: '—',

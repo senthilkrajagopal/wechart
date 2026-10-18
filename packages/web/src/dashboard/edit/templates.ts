@@ -1,4 +1,4 @@
-import { CHART_TYPES, type ChartType } from '@wechart/core';
+import { CHART_TYPES, textDocumentFromMarkdown, type ChartType } from '@wechart/core';
 import { describeMissing } from '@wechart/recommender';
 
 import type { Element_ } from '../model/document';
@@ -38,7 +38,7 @@ export interface TemplateEntry {
 export const SECTION_TEMPLATES: readonly TemplateEntry[] = [
   { id: 'kpis', label: 'KPI row', hint: 'Four empty KPI tiles, 3 columns each' },
   { id: 'two', label: 'Two charts', hint: 'Two empty charts side by side, 6 + 6' },
-  { id: 'notes', label: 'Chart with notes', hint: 'Empty chart 8 + markdown 4' },
+  { id: 'notes', label: 'Chart with notes', hint: 'Empty chart 8 + text 4' },
 ];
 
 /**
@@ -108,12 +108,14 @@ export function templateElements(id: TemplateId, mintId: () => string): readonly
     default:
       return [
         emptyChart(mintId(), 8, 40),
+        // A Text tile (R80), with the prompting text the markdown one had,
+        // read by the same conversion an old markdown tile is (T869).
         {
           id: mintId(),
-          kind: 'markdown',
+          kind: 'text',
           w: 4,
           h: 40,
-          text: '## Notes\nDescribe what this chart shows.',
+          document: textDocumentFromMarkdown('## Notes\n\nDescribe what this chart shows.'),
         },
       ];
   }

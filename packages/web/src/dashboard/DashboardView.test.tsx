@@ -455,7 +455,9 @@ describe('adding an element from the sidebar (AC-058)', () => {
         .getAllByRole('button')
         .map((button) => button.textContent),
     ).toHaveLength(10);
-    expect(screen.getByTestId('add-markdown')).toBeTruthy();
+    // The Text element, in Markdown's place (T874, R80).
+    expect(screen.getByTestId('add-text')).toBeTruthy();
+    expect(screen.queryByTestId('add-markdown')).toBeNull();
   });
 
   it('says where the element will land before it is clicked', async () => {

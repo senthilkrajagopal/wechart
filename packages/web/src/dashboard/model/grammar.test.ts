@@ -108,15 +108,7 @@ describe('everything that is already legal', () => {
   });
 
   it('leaves every other kind alone, wherever it goes', () => {
-    for (const id of [
-      'chart',
-      'markdown',
-      'header',
-      'divider',
-      'image',
-      'link',
-      'filter',
-    ] as const) {
+    for (const id of ['chart', 'text', 'header', 'divider', 'image', 'link', 'filter'] as const) {
       const element = newElement(id, mint());
       const placed = placeInGrammar(DOC, element, { key: pageKey('p1'), index: null }, mint());
 

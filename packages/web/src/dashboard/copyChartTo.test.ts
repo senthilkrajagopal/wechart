@@ -42,7 +42,9 @@ describe('copying a tile’s chart to another dashboard', () => {
               schemaVersion: 1,
               title: 'Sales',
               settings: { width: 'full' },
-              pages: [{ id: 'p1', title: 'Overview', items: [{ id: 't0', kind: 'text', w: 12 }] }],
+              pages: [
+                { id: 'p1', title: 'Overview', items: [{ id: 't0', kind: 'divider', w: 12 }] },
+              ],
             },
           }),
         );
@@ -71,7 +73,7 @@ describe('copying a tile’s chart to another dashboard', () => {
     // At the end of its first page, the size the tile had.
     expect(saved.dashboard.version).toBe(7);
     expect(saved.dashboard.body.pages[0]?.items).toEqual([
-      { id: 't0', kind: 'text', w: 12 },
+      { id: 't0', kind: 'divider', w: 12 },
       { id: 'tile-copy', kind: 'chart', chartId: 'chart-copy', w: 6, h: 40 },
     ]);
     // A chart of its own, created with the save: the source's definition,

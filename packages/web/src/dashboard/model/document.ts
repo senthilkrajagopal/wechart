@@ -22,6 +22,7 @@ import type {
   LimitCombination,
   Marking,
   RenderSpec,
+  TextDocument,
 } from '@wechart/core';
 
 import type { DashboardFilter } from '../../filters/model';
@@ -31,9 +32,14 @@ import type { NothingMarkedState } from '../tiles/NothingMarked';
 
 export const DASHBOARD_DOCUMENT_VERSION = 1;
 
-/** The element kinds the Add palette offers (AC-058). */
+/**
+ * The tile kinds a dashboard holds (AC-058). `text` is the Text tile (F45),
+ * which replaces the markdown tile; a `markdown` tile is one saved before R80,
+ * which Add never makes.
+ */
 export const TILE_KINDS = [
   'chart',
+  'text',
   'markdown',
   'header',
   'divider',
@@ -50,7 +56,7 @@ export type TileKind = (typeof TILE_KINDS)[number];
  * exactly as a section is — taken from the prototype's `SIZED` list in
  * `docs/design/prototype/dashboard.js`, which is where this was decided.
  */
-export const SIZED_KINDS: readonly TileKind[] = ['chart', 'markdown', 'image', 'link'];
+export const SIZED_KINDS: readonly TileKind[] = ['chart', 'text', 'markdown', 'image', 'link'];
 
 export const isSized = (element: Element_): boolean =>
   isTile(element) && SIZED_KINDS.includes(element.kind);
@@ -68,6 +74,11 @@ export interface Tile extends GridTile {
   readonly chartType?: ChartType;
   /** For markdown, header and link tiles. */
   readonly text?: string;
+  /**
+   * For a Text tile (F45, AC-513): its document, in wechart's schema, checked
+   * by the API on every save (T871).
+   */
+  readonly document?: TextDocument;
   /**
    * For an image tile (AC-063): the stored image (`/api/images/<id>`), its
    * alternative text — flagged on the tile in edit mode until set — and how

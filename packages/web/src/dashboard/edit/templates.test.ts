@@ -2,7 +2,10 @@ import type { ChartType } from '@wechart/core';
 import { REQUIREMENTS } from '@wechart/recommender';
 import { describe, expect, it } from 'vitest';
 
-import { isTile } from '../model/document';
+import { elementsOf, textDocumentProblems } from '@wechart/core';
+
+import { isTile, type DashboardDocument } from '../model/document';
+import { PALETTE, insertElement, insertionPoint, newElement } from '../model/insert';
 import {
   NOTHING_CHOSEN,
   SECTION_TEMPLATES,
@@ -37,6 +40,71 @@ const everyElement = () =>
 
 const everyChart = () =>
   everyElement().filter((element) => isTile(element) && element.kind === 'chart');
+
+/**
+ * T874 / AC-058 (amended by R80): Add offers chart, chart from folders,
+ * section, tab group, text, header, divider, image, link and filter — the
+ * Text element in place of Markdown — and inserts the chosen one after the
+ * selection. Fails when a "Markdown" element is still offered.
+ */
+describe('the Text element in Add (AC-058)', () => {
+  it('offers the ten elements with text in place of markdown', () => {
+    expect(PALETTE.map((entry) => entry.id)).toEqual([
+      'chart',
+      'library',
+      'section',
+      'tabs',
+      'text',
+      'header',
+      'divider',
+      'image',
+      'link',
+      'filter',
+    ]);
+    expect(PALETTE.map((entry) => entry.label)).toContain('Text');
+    expect(PALETTE.map((entry) => entry.label.toLowerCase())).not.toContain('markdown');
+  });
+
+  it('inserts an empty Text tile after the selection', () => {
+    const document: DashboardDocument = {
+      schemaVersion: 1,
+      title: 'D',
+      settings: { width: 'fixed' },
+      pages: [
+        {
+          id: 'p1',
+          title: 'P',
+          items: [
+            { id: 'a', kind: 'chart', w: 6, h: 40 },
+            { id: 'b', kind: 'chart', w: 6, h: 40 },
+          ],
+        },
+      ],
+    };
+    const made = newElement('text', () => 'new-text');
+    const after = insertElement(
+      document,
+      made,
+      insertionPoint(document, { selected: 'a', pageId: 'p1' }),
+    );
+    const items = after.pages[0]?.items ?? [];
+    expect(items.map((item) => item.id)).toEqual(['a', 'new-text', 'b']);
+    const tile = items[1];
+    expect(tile?.kind).toBe('text');
+    const stored = tile !== undefined && isTile(tile) ? tile.document : undefined;
+    expect(stored).toEqual({ version: 1, doc: { type: 'doc', content: [{ type: 'paragraph' }] } });
+    expect(textDocumentProblems(stored)).toEqual([]);
+    expect(stored === undefined ? [] : elementsOf(stored)).toEqual([]);
+  });
+
+  it('lays out the notes template’s notes as a Text tile, never markdown', () => {
+    let n = 0;
+    const [, notes] = templateElements('notes', () => `n${String(n++)}`);
+    expect(notes?.kind).toBe('text');
+    const stored = notes !== undefined && isTile(notes) ? notes.document : undefined;
+    expect(textDocumentProblems(stored)).toEqual([]);
+  });
+});
 
 describe('section templates', () => {
   it('offers the three the prototype defines', () => {
@@ -124,7 +192,7 @@ describe('section templates', () => {
       SECTION_TEMPLATES.find((template) => template.id === id)?.hint ?? '';
     expect(hint('kpis')).toContain('3 columns each');
     expect(hint('two')).toContain('6 + 6');
-    expect(hint('notes')).toContain('8 + markdown 4');
+    expect(hint('notes')).toContain('8 + text 4');
   });
 
   it('survives a stored type it does not recognise', () => {
