@@ -1838,10 +1838,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T843 (AC-496) Measure the chrome with sign-in on: at most 96 px closed, 128 px in My workspace and 205 px open, at 1,440 × 900 and 1,280 × 720
 
-- [ ] T844 (AC-352, AC-343, AC-187) Check the dashboard's header, page tabs and filter band against design 19 and direction.md §7g in the conformance spec
-  - Files: `e2e/design-conformance.spec.ts`, `packages/web/src/shell/styles.ts` (only where a value differs).
-  - Failing test: `design-conformance.spec.ts`: the compact row (48 px, padded 0 24, `border-subtle` rule), the title (20/26/600), the page tabs (13/600, 2 px `accent` underline), the toggle (32 px, radius 6) and its count pill (18 px, 12/600), a compact chip (24 px, radius 999, 12 px, 1.5 px border) and the sheet's description (`text-sm`, at most 860 px) and ownership line (12/16) each measure as §7g's table gives them, and design 04's crumbs row and separate tab row are gone (AC-352, AC-343, AC-187).
-  - Depends on: T830, T831, T832, T838, T841, T842
+- [x] T844 (AC-352, AC-343, AC-187) Check the dashboard's header, page tabs and filter band against design 19 and direction.md §7g in the conformance spec
 
 ## P2.26 Combo charts, the Text tile, dashboard parameters and AI summaries (F44–F48, added 2026-10-18, `[R80]`)
 

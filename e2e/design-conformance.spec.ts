@@ -1676,6 +1676,161 @@ test.describe('T246: the dashboard header and the filter band', () => {
 });
 
 /**
+ * T844 (AC-352, AC-343, AC-187): the dashboard's compact row, its Filters
+ * toggle, a compact chip and the header sheet measured against direction.md
+ * §7g's table (design 19); design 04's crumbs row and separate page-tab row
+ * are gone. The title and the page tabs are T203's above.
+ */
+test.describe('T844: design 19’s compact row, toggle, compact chip and sheet (§7g)', () => {
+  test('the row, the toggle and its count, and the sheet’s description and ownership line', async ({
+    page,
+    request,
+  }) => {
+    const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+    const id = await sharedIn(request, 'dashboard', 'root', {
+      title: `Compact ${unique}`,
+      description: 'Monthly revenue and orders for the EMEA region.',
+      pages: [
+        { id: 'p1', title: 'Overview', items: [] },
+        { id: 'p2', title: 'Detail', items: [] },
+      ],
+      filters: [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }],
+    });
+    const filters = [
+      { id: 'f-status', member: 'orders.status', value: { kind: 'values', values: ['shipped'] } },
+    ];
+    await page.goto(
+      `/explore/dashboards/${id}?filters=${encodeURIComponent(JSON.stringify(filters))}`,
+    );
+    const row = page.locator('.dashboard__header');
+    await expect(row.getByRole('heading', { level: 1 })).toBeVisible();
+
+    // The compact row: 48 px, padded 0 24, on bg-page, ruled in border-subtle.
+    expect((await row.boundingBox())?.height).toBe(48);
+    expect(
+      await style(
+        row,
+        'padding-top',
+        'padding-right',
+        'padding-bottom',
+        'padding-left',
+        'background-color',
+        'border-bottom-width',
+        'border-bottom-color',
+      ),
+    ).toEqual({
+      'padding-top': '0px',
+      'padding-right': '24px',
+      'padding-bottom': '0px',
+      'padding-left': '24px',
+      'background-color': await token(page, 'bg-page', 'background-color'),
+      'border-bottom-width': '1px',
+      'border-bottom-color': await token(page, 'border-subtle'),
+    });
+    // Design 04's crumbs row and separate tab row are gone: the tabs are in
+    // the row, and nothing else stands between it and the canvas.
+    await expect(row.getByRole('tablist', { name: 'Pages' })).toHaveCount(1);
+    await expect(page.getByRole('tablist', { name: 'Pages' })).toHaveCount(1);
+    await expect(page.locator('.dashboard__crumbs, nav[aria-label="Breadcrumb"]')).toHaveCount(0);
+    expect((await page.getByTestId('canvas-scroll').boundingBox())?.y).toBe(
+      ((await row.boundingBox())?.y ?? 0) + 48,
+    );
+
+    // The toggle: a 32 px .btn, radius 6; its count an 18 px pill, 12/600,
+    // accent on text-on-accent.
+    const toggle = row.getByRole('button', { name: 'Filters, 1 set' });
+    expect(await style(toggle, 'height', 'border-radius')).toEqual({
+      height: '32px',
+      'border-radius': '6px',
+    });
+    expect(
+      await style(
+        toggle.locator('.header-toggle__count'),
+        'height',
+        'min-width',
+        'font-size',
+        'font-weight',
+        'background-color',
+        'color',
+      ),
+    ).toEqual({
+      height: '18px',
+      'min-width': '18px',
+      'font-size': '12px',
+      'font-weight': '600',
+      'background-color': await token(page, 'accent', 'background-color'),
+      color: await token(page, 'text-on-accent'),
+    });
+
+    // Open: pressed on bg-subtle; the description text-sm in text-secondary,
+    // at most 860 px; the ownership line 12/16 in text-secondary.
+    await openHeaderSheet(page);
+    // The pointer off it, so its hover doesn't stand in for the pressed ground.
+    await page.mouse.move(0, 400);
+    const subtle = await token(page, 'bg-subtle', 'background-color');
+    await expect
+      .poll(async () => (await style(toggle, 'background-color'))['background-color'])
+      .toBe(subtle);
+    const description = page.locator('.header-sheet .dashboard__description');
+    const sm = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--wc-text-sm-size').trim(),
+    );
+    expect(await style(description, 'font-size', 'color', 'max-width')).toEqual({
+      'font-size': sm,
+      color: await token(page, 'text-secondary'),
+      'max-width': '860px',
+    });
+    expect(
+      await style(
+        page.locator('.header-sheet .dashboard__ownership'),
+        'font-size',
+        'line-height',
+        'color',
+      ),
+    ).toEqual({
+      'font-size': '12px',
+      'line-height': '16px',
+      color: await token(page, 'text-secondary'),
+    });
+  });
+
+  test('a compact marking chip: 24 px, radius 999, 12 px, bordered 1.5 px in its marking’s colour', async ({
+    page,
+  }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    const status = page.locator('[data-tile="tile-status"]');
+    await expect(status.getByTestId('chart-canvas')).toBeVisible();
+    await status.focus();
+    await page.keyboard.press('Space');
+    const chip = page.locator('.dashboard__header').getByTestId('compact-mark-chip');
+    await expect(chip).toHaveCount(1);
+    expect(await style(chip, 'height', 'border-top-left-radius', 'font-size')).toEqual({
+      height: '24px',
+      'border-top-left-radius': '999px',
+      'font-size': '12px',
+    });
+    // The 1.5 px as the stylesheet declares it: a browser at a scale of one
+    // draws it as a whole pixel.
+    expect(
+      await page.evaluate(() => {
+        for (const sheet of [...document.styleSheets]) {
+          for (const rule of [...sheet.cssRules]) {
+            // The shorthand: its longhands read empty while it holds a var().
+            if (rule instanceof CSSStyleRule && rule.selectorText === '.compact-chip--mark')
+              return rule.style.getPropertyValue('border');
+          }
+        }
+        return undefined;
+      }),
+    ).toMatch(/^1\.5px solid /);
+    // In its marking's colour: the swatch's.
+    const colour = await style(chip, 'border-top-color');
+    const swatch = await style(chip.locator('.mark-chip__swatch'), 'background-color');
+    expect(colour['border-top-color']).toBe(swatch['background-color']);
+  });
+});
+
+/**
  * T247: a tab group, the Header and Divider, Markdown and the section band as
  * dashboard.js draws them (recheck-dashboard N1, N5, N6, N9; mismatches
  * 15–18).
