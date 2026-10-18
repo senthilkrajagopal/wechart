@@ -223,6 +223,33 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R80 — combo charts and rich text tiles, as a priority from phase 3** (2026-10-18, the user)
+- **Sources.** Input: `docs/inputs/2026-10-18-phase-3-advanced-analytics.md`. Studies: `docs/design/references-combo-and-rich-tiles.md` (visualization and BI expert) and `docs/design/references-spotfire-combo-textarea.md` (Spotfire expert). Research: `docs/research/rich-tiles-and-combo-tech.md`.
+- **The request:** "let us work on combo charts and rich text charts... make it modern.. use the best technologies available. start working on this on priority..use ui/visualization/bi expert as well as spotfire expert."
+- **Questions and answers:**
+  - Q: Which rich text editor library (a new dependency)? A: "Tiptap 3 (Recommended)".
+  - Q: How many value axes may a combo chart have? A: "2: left and right (Recommended)".
+  - Q: Splitting a combo by a dimension? A: "One dimension, all measures". Series are measure × member, capped at 8 series.
+  - Q: What may a rich text tile contain beyond formatted text and live values? A: "Spotfire parity (Recommended)". That means:
+    - live values, sparklines, icons and bullet graphs;
+    - filter controls;
+    - declarative action buttons: page, bookmark, reset filters, export;
+    - parameter controls bound to a new dashboard-parameter object;
+    - no scripts.
+  - Q: AI-written narrative in rich tiles? A: "Now, with LLM settings". The Super-Admin provider, model and key settings (from the parked copilot) are built in this round. The design keeps facts computed through Cube, every number a live value, review by the author, and no silent regeneration.
+  - Q: Dashboard parameters? A: "Field switch now, what-if later (Recommended)".
+  - Q: Live elements per tile, and values in a list control? A: "10 elements, 1,000 values (Recommended)".
+  - Q: Combo extras this round? A: "Area as a series mark, Log scale per axis, Reference lines and bands, Synchronize axes toggle".
+- **Agreed by both experts, taken as given:**
+  - each series chooses its own mark and axis;
+  - a second axis is never automatic, and when drawn its zero and ticks align;
+  - AC-218 warns only while a combo draws more than one unsynchronized value axis;
+  - the rich tile replaces today's markdown tile in place, so existing tiles keep working;
+  - no raw HTML or scripts;
+  - inline sparklines are wechart's own SVG;
+  - trend lines are computed by wechart.
+- **Lifted non-goal:** "Spotfire-style controls inside text tiles" (phase 1) is lifted for rich tiles.
+
 **R79 — a compact dashboard header** (2026-10-17, the user; input `docs/inputs/2026-10-17-compact-dashboard-header.md`; design study `docs/design/references-compact-header.md`; design 19 in `docs/design/reviews/2026-10-17/designs/index.md`)
 - **The request:** "in the on the dashboard page.. nearly 30% of the page goes away for the dashboard header and the filters. Can we have a more compressed header that can be expanded with a slide down so that the complete header can be seen... default will be the compressed header. use a UI expert who can specify what this behavior should look like."
   - *Measured from today's CSS (the study's §1): 274 px of chrome above the tiles, 30.4 % of 1,440 × 900 and 38.1 % of 1,280 × 720. Design 19 draws 96 px compact (10.7 %) and 205 px expanded.*
