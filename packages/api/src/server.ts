@@ -151,6 +151,7 @@ import { bearerAuth } from './mcp/auth';
 import { mcpCaller } from './mcp/caller';
 import { mcpUrlOf, registerMcp } from './mcp/plugin';
 import type { McpTool } from './mcp/server';
+import { READ_TOOLS } from './mcp/tools/read';
 import {
   type RateLimitCounter,
   RateLimited,
@@ -4530,7 +4531,8 @@ export function buildServer({
       // And bad or missing tokens by address (T780, AC-474).
       ...(config.mcpBadTokenLimit === undefined ? {} : { badTokenLimit: config.mcpBadTokenLimit }),
       // Its tools, each call recorded in the audit trail (T781, AC-478).
-      ...(mcpTools === undefined ? {} : { tools: mcpTools }),
+      // wechart's own, reading and exploring from T782.
+      tools: mcpTools ?? READ_TOOLS,
       ...(audit === undefined ? {} : { audit }),
       // A token acts as its owner, with their latest sign-in's groups (T777,
       // AC-471); with none kept, no token is taken with sign-in on.

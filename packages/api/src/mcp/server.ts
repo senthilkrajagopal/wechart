@@ -36,6 +36,18 @@ export interface McpCall {
     readonly name: string;
     readonly scopes: readonly TokenScope[];
   };
+  /**
+   * Asks the web app's own route at `url` as the caller, and gives its
+   * status and JSON (T782): what the caller would be answered in the web
+   * app, behind its checks, with My workspace named `mine`.
+   */
+  ask(url: string): Promise<WebAnswer>;
+}
+
+/** A web route's answer to a tool's ask (T782). */
+export interface WebAnswer {
+  readonly status: number;
+  readonly body: unknown;
 }
 
 /**
@@ -65,6 +77,8 @@ export interface McpServices {
   readonly tools: readonly McpTool[];
   readonly audit?: Pick<AuditStore, 'record'>;
   readonly log: FastifyBaseLogger;
+  /** Asks the web app's route at `url` as `user` (T782; the plugin's, by `inject`). */
+  readonly ask: (user: WechartUser, url: string) => Promise<WebAnswer>;
 }
 
 const refusal = (text: string): CallToolResult => ({
@@ -114,6 +128,7 @@ async function called(
   const call: McpCall = {
     caller,
     token: { id: token.id, name: token.name, scopes: token.scopes },
+    ask: (url) => services.ask(caller, url),
   };
   let outcome: McpOutcome;
   let result: CallToolResult;
@@ -121,7 +136,13 @@ async function called(
     // Arguments checked here, not by the SDK, so a call that doesn't fit is
     // recorded too (T781's review): refused, saying what doesn't fit.
     const unfit = await unfitIn(tool, args);
-    if (unfit === undefined) {
+    // Each tool needs its scope (T782, AC-469): without it, nothing runs.
+    if (!token.scopes.includes(tool.scope)) {
+      result = refusal(
+        `This token wasn’t given the ${tool.scope} scope, which ${tool.name} needs.`,
+      );
+      outcome = 'refused';
+    } else if (unfit === undefined) {
       result = await tool.run(args, call);
       outcome = result.isError === true ? 'refused' : 'ok';
     } else {

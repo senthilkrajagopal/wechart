@@ -5,7 +5,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { viaMcp } from '../audit/record';
 import { PUBLIC } from '../auth/guard';
-import { Unauthenticated } from '../auth/user';
+import { asUser, Unauthenticated } from '../auth/user';
 import type { AuditStore } from '../repos/audit';
 import { type McpAuth, noTokens } from './auth';
 import { mcpGuard } from './guard';
@@ -118,6 +118,19 @@ export function registerMcp(app: FastifyInstance, options: McpOptions): void {
     tools: options.tools ?? [],
     ...(options.audit === undefined ? {} : { audit: options.audit }),
     log: app.log,
+    // A tool reads through the web app's own routes, as its caller (T782).
+    ask: (user, url) =>
+      asUser(user, async (headers) => {
+        const answer = await app.inject({ method: 'GET', url, headers });
+        const json = () => {
+          try {
+            return answer.json<unknown>();
+          } catch {
+            return null;
+          }
+        };
+        return { status: answer.statusCode, body: json() };
+      }),
   });
   const node = toNodeHandler(handler, { onerror: (error) => app.log.error({ err: error }, 'MCP') });
   app.addHook('onClose', async () => {

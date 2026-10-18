@@ -1618,11 +1618,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 ### Lane MCP: the tools
 
-- [ ] T782 (AC-437, AC-432, AC-469) Read and explore through MCP: list folders and their items, and read a dashboard's, chart's, cube's, view's or data source's definition, as its owner may, with no credential ever
-  - Lane: MCP
-  - Files: `packages/api/src/mcp/tools/read.ts` (+ `read.test.ts`), `packages/api/src/mcp/server.ts`.
-  - Failing test: `read.test.ts`, through an in-process client (`mcp-typescript-sdk.md`, Testing): a read-write member's token lists the folders and items they see in the web app, and none of another user's workspace or of a folder they can't reach, which reads as not found (AC-432); each definition read returns what the web app's own route returns for that user (AC-437); a data source's definition holds no password, key or secret, nor any part of one (AC-437); each read tool needs the read scope (AC-469).
-  - Depends on: T777, T781
+- [x] T782 (AC-437, AC-432, AC-469) Read and explore through MCP: list folders and their items, and read a dashboard's, chart's, cube's, view's or data source's definition, as its owner may, with no credential ever
 
 - [ ] T783 (AC-443) Return user-written text and rows only in marked data fields, and keep the server's instructions and every tool's name and description fixed
   - Lane: MCP

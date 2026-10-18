@@ -1,5 +1,7 @@
+import { randomBytes } from 'node:crypto';
+
 import { isSuperAdmin } from '@wechart/core';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { TOKEN_PREFIX } from '../mcp/tokenText';
 
@@ -71,6 +73,40 @@ export function userOf(request: { wechartUser: WechartUser | null }): WechartUse
   return request.wechartUser;
 }
 
+/** The header carrying a pass to act as a user, on the server's requests of itself (T782). */
+export const ACT_AS_HEADER = 'x-wechart-act-as';
+const passes = new Map<string, WechartUser>();
+
+/**
+ * Asks the server's own routes as `user` (T782, AC-432, AC-437): an MCP
+ * tool reads through the web app's route, by `inject`, so its answer is the
+ * route's own, behind the same permission checks. `work` gets the header to
+ * send: a pass of 32 random bytes, kept only in this process, taken by the
+ * first request bearing it, and gone once `work` ends. A request bearing an
+ * unknown pass gets nothing from it.
+ */
+export async function asUser<T>(
+  user: WechartUser,
+  work: (headers: Record<string, string>) => Promise<T>,
+): Promise<T> {
+  const pass = randomBytes(32).toString('base64url');
+  passes.set(pass, user);
+  try {
+    return await work({ [ACT_AS_HEADER]: pass });
+  } finally {
+    passes.delete(pass);
+  }
+}
+
+/** The user a request's pass names, taking the pass; none without one. */
+function passedUser(request: FastifyRequest): WechartUser | undefined {
+  const pass = request.headers[ACT_AS_HEADER];
+  if (typeof pass !== 'string') return undefined;
+  const user = passes.get(pass);
+  passes.delete(pass);
+  return user;
+}
+
 /**
  * Gives every request its user, before any route sees it. With security on it
  * is read in `preParsing`, which runs after every `onRequest` hook, the
@@ -99,11 +135,17 @@ export function registerUser(
   });
   if (security === 'off') {
     app.addHook('onRequest', async (request) => {
-      request.wechartUser = SINGLE_USER;
+      request.wechartUser = passedUser(request) ?? SINGLE_USER;
     });
     return;
   }
   app.addHook('preParsing', async (request) => {
+    // The server asking its own route as an MCP caller (T782): that user, no cookie.
+    const passed = passedUser(request);
+    if (passed !== undefined) {
+      request.wechartUser = passed;
+      return;
+    }
     const user = (request as { session?: { user?: Omit<WechartUser, 'superAdmin'> } }).session
       ?.user;
     request.wechartUser =

@@ -12,12 +12,22 @@ import { mintToken } from './tokenText';
  * T778 (AC-434): MCP at `/mcp` over Streamable HTTP, protocol revision
  * 2026-07-28, with 2025-era clients served through the SDK's stateless
  * fallback; GET and DELETE answer 405; the server's instructions are fixed
- * text. No tool is served until T782, so the list is empty.
+ * text. From T782 the tools are the read tools, in their fixed order.
  *
  * The SDK's own client speaks to the wechart API through `inject`, so the
  * request carries the MCP host as its `Host`, which `fetch` can't set.
  */
 const HOST = 'mcp.wechart.example.com';
+/** The read tools (T782), in the order they're listed. */
+const TOOL_NAMES = [
+  'list_folders',
+  'list_folder_items',
+  'read_dashboard',
+  'read_chart',
+  'read_cube',
+  'read_view',
+  'read_data_source',
+];
 const NAME = 't778 transport';
 let token = '';
 
@@ -107,7 +117,7 @@ describe('MCP over Streamable HTTP (T778, AC-434)', () => {
       try {
         expect(client.getNegotiatedProtocolVersion()).toBe('2026-07-28');
         expect(client.getInstructions()).toBe(MCP_INSTRUCTIONS);
-        expect((await client.listTools()).tools).toEqual([]);
+        expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(TOOL_NAMES);
       } finally {
         await client.close();
       }
@@ -124,7 +134,7 @@ describe('MCP over Streamable HTTP (T778, AC-434)', () => {
         expect(client.getNegotiatedProtocolVersion()).not.toBe('2026-07-28');
         expect(client.getNegotiatedProtocolVersion()).toMatch(/^2025-/);
         expect(client.getInstructions()).toBe(MCP_INSTRUCTIONS);
-        expect((await client.listTools()).tools).toEqual([]);
+        expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(TOOL_NAMES);
       } finally {
         await client.close();
       }
