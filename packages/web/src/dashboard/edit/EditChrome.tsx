@@ -2,6 +2,7 @@ import { isValidElement, useEffect, useId, useRef, useState, type ReactNode } fr
 
 import { canRedo, canUndo, discard, historyOf, push, redo, undo } from '../../editor/history';
 import { BackToFolder } from '../header/BackToFolder';
+import type { FiltersSet } from '../header/filtersSet';
 import { FiltersToggle } from '../header/FiltersToggle';
 import { HeaderSheet } from '../header/HeaderSheet';
 import { HeaderTitle } from '../header/HeaderTitle';
@@ -196,12 +197,20 @@ export interface EditChromeProps<T> {
    */
   readonly sheet?: ((session: EditSession<T>) => ReactNode) | undefined;
   /**
+   * The filters in summary, for the toggle's count, name and description
+   * (AC-486). None reads "Details".
+   */
+  readonly filtersSummary?: FiltersSet | undefined;
+  /**
    * Docked under the canvas, full width — the details panel (T269, AC-240):
    * the canvas gives it room rather than go under it.
    */
   readonly foot?: ReactNode;
   readonly children: (session: EditSession<T>) => ReactNode;
 }
+
+/** No filters: the toggle reads "Details" (AC-486). */
+const NO_FILTERS: FiltersSet = { set: 0, of: 0, names: [] };
 
 /** The prototype's pencil, on Edit and on "Edit in my workspace" (AC-187; design 04, state E). */
 export function PencilIcon() {
@@ -237,6 +246,7 @@ export function EditChrome<T>({
   readOnly = false,
   band,
   sheet,
+  filtersSummary = NO_FILTERS,
   foot,
   children,
 }: EditChromeProps<T>) {
@@ -490,6 +500,7 @@ export function EditChrome<T>({
             <FiltersToggle
               open={sheetOpen}
               controls={sheetId}
+              summary={filtersSummary}
               onToggle={() => {
                 setSheetOpen((was) => !was);
               }}

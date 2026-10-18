@@ -289,9 +289,11 @@ test.describe('T203: the dashboard header, page tabs and tiles', () => {
             null,
         )
         .filter((label) => label !== null)
-        .slice(-2),
+        .slice(-3),
     );
-    expect(last).toEqual(['Dashboard settings', 'More']);
+    // Then the toggle, last in the compact row (design 19 pin 6; T829, T831):
+    // "Details", the seeded dashboard having no filters.
+    expect(last).toEqual(['Dashboard settings', 'More', 'Details']);
 
     // <button class="btn primary" data-edit>${PENCIL} Edit</button>: on the
     // shared one, the way to change it is that primary with its pencil, "Edit

@@ -96,6 +96,21 @@ export const HEADER_CSS = `
 .header-toggle { gap: 6px; padding: 0 8px 0 10px; flex: none; }
 .header-toggle--open { background: var(--wc-bg-subtle); }
 .header-toggle__chevron { color: var(--wc-text-secondary); }
+/* The number set, in a pill: 18 px, 12/600, accent on text-on-accent
+   (direction §7g; design 18's .count). */
+.header-toggle__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+}
 .header-toggle--open .header-toggle__chevron { transform: rotate(180deg); }
 
 /* The header sheet (AC-487; design 19 screen 2): directly under the row, the

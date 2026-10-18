@@ -70,6 +70,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  // A layout spy left by a failing test must not reach the next (T830's review).
+  vi.restoreAllMocks();
 });
 
 function view() {
@@ -84,6 +86,8 @@ function view() {
         documents={{ 'c-kpi': kpi }}
         onSave={vi.fn()}
         place={{ line: OWNERSHIP, editsElsewhere: false }}
+        // The model's titles, as DashboardPage hands them down.
+        memberTitle={(member) => (member === 'orders.status' ? 'Status' : undefined)}
       />
     </QueryClientProvider>
   );
@@ -236,6 +240,43 @@ describe('the header sheet', () => {
     expect(sheet().querySelector('.header-sheet__title')).toBeNull();
     scroll.mockRestore();
     client.mockRestore();
+  });
+
+  it('counts a filter once it holds a value, named and described by it (T831, AC-486)', async () => {
+    render(view());
+    expect(screen.getByRole('button', { name: 'Filters, none set' })).toBeTruthy();
+
+    await userEvent.click(toggle());
+    const bar = screen.getByRole('region', { name: 'Filters' });
+    await userEvent.click(within(bar).getByRole('button', { name: /Status/ }));
+    await userEvent.click(await within(bar).findByRole('checkbox', { name: 'completed' }));
+
+    const counted = screen.getByRole('button', { name: 'Filters, 1 set' });
+    expect(counted.getAttribute('title')).toBe('1 of 1 filters set: Status');
+    expect(counted.querySelector('.header-toggle__count')?.textContent).toBe('1');
+  });
+
+  it('reads "Details" on a dashboard with no filters, and still opens the sheet (T831, AC-486)', async () => {
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <DashboardView
+          dashboardId="d1"
+          document={{ ...DOC, filters: [] }}
+          specs={{ 'c-kpi': spec }}
+          documents={{ 'c-kpi': kpi }}
+          onSave={vi.fn()}
+          place={{ line: OWNERSHIP, editsElsewhere: false }}
+        />
+      </QueryClientProvider>,
+    );
+
+    const details = screen.getByRole('button', { name: 'Details' });
+    expect(screen.queryByRole('button', { name: /^Filters\b/ })).toBeNull();
+    await userEvent.click(details);
+    expect(details.getAttribute('aria-expanded')).toBe('true');
+    expect(isInaccessible(description())).toBe(false);
   });
 
   it('comes back open after editing when the reader had left it open', async () => {

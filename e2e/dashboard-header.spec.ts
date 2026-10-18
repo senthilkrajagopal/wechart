@@ -111,6 +111,82 @@ for (const size of [
 }
 
 /**
+ * T831 (AC-486; design 19 pin 6, states B3 and E): the toggle, last in the
+ * row, a disclosure button for the sheet, counting the filters set, named and
+ * described by them; Enter and Space open and close it, focus staying on it.
+ */
+test('the Filters toggle counts the filters set, says which, and opens and closes the sheet by the keyboard', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await sharedDashboard(request);
+  const filters = [
+    { id: 'f-status', member: 'orders.status', value: { kind: 'values', values: ['shipped'] } },
+  ];
+  await page.goto(
+    `/explore/dashboards/${id}?filters=${encodeURIComponent(JSON.stringify(filters))}`,
+  );
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+
+  const toggle = row(page).getByRole('button', { name: 'Filters, 1 set' });
+  await expect(toggle).toHaveAccessibleDescription('1 of 1 filters set: Orders Status');
+  await expect(toggle).toHaveAttribute('title', '1 of 1 filters set: Orders Status');
+  await expect(toggle.locator('.header-toggle__count')).toHaveText('1');
+  await expect(toggle.locator('.header-toggle__funnel')).toBeVisible();
+  await expect(toggle.locator('.header-toggle__chevron')).toBeVisible();
+  // Last in the row.
+  await expect(row(page).locator(':scope > :visible').last()).toHaveClass(/header-toggle/);
+  // aria-controls names the sheet.
+  const controls = (await toggle.getAttribute('aria-controls')) ?? '';
+  await expect(page.locator(`[id="${controls}"]`)).toHaveAttribute(
+    'aria-label',
+    'Filters and details',
+  );
+
+  // Enter and Space, focus kept on it.
+  await toggle.focus();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(headerSheet(page)).toBeVisible();
+  await expect(toggle).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(headerSheet(page)).toBeHidden();
+  await expect(toggle).toBeFocused();
+
+  // Cleared in the open sheet: none set, and no count.
+  await page.keyboard.press('Space');
+  await headerSheet(page).getByRole('button', { name: 'Clear Orders Status' }).click();
+  const none = row(page).getByRole('button', { name: 'Filters, none set' });
+  await expect(none).toHaveAccessibleDescription('0 of 1 filters set');
+  await expect(none.locator('.header-toggle__count')).toHaveCount(0);
+});
+
+test('a dashboard with no filters reads "Details", with the info icon and no count', async ({
+  page,
+  request,
+}) => {
+  const title = `Details ${String(Date.now())}`;
+  const id = await sharedIn(request, 'dashboard', 'root', {
+    title,
+    description: 'Notes for the EMEA leads.',
+    pages: [{ id: 'only', title: 'Only', items: [] }],
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+
+  const details = row(page).getByRole('button', { name: 'Details', exact: true });
+  await expect(details).toHaveText('Details');
+  await expect(details.locator('.header-toggle__info')).toBeVisible();
+  await expect(details.locator('.header-toggle__count')).toHaveCount(0);
+  await expect(row(page).getByRole('button', { name: /^Filters\b/ })).toHaveCount(0);
+  // It still opens the sheet, with the description in it.
+  await details.click();
+  await expect(headerSheet(page).getByText('Notes for the EMEA leads.')).toBeVisible();
+});
+
+/**
  * T830 (AC-485; design 19 pins 1 and 2, state G): the title at text-lg
  * 20/26/600, cut short with "…" when the row has no room, never under
  * 160 px, whole in its tooltip and name, and whole at the top of the open

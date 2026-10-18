@@ -1905,10 +1905,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T830 (AC-485, AC-195) The way back "← ‹folder›" naming the whole path, and the title at `text-lg`, cut short with its tooltip and shown whole at the top of the open sheet only when cut
 
-- [ ] T831 (AC-486) The toggle's count of filters set, its name and description, "Filters, none set", and "Details" on a dashboard with no filters
-  - Files: `packages/web/src/dashboard/header/filtersSet.ts` (+ test), `packages/web/src/dashboard/header/FiltersToggle.tsx` (+ test), `packages/web/src/dashboard/DashboardView.tsx`.
-  - Failing test: `filtersSet.test.ts`: four dashboard filters, three holding a value, and one filter made from a marking count 4 of 5, named in the bar's order. `FiltersToggle.test.tsx`: it shows "Filters" and 4, its accessible name is "Filters, 4 set" and its description and tooltip "4 of 5 filters set: Ordered at, Country, Category, Product"; with filters but none set, "Filters, none set" and no count; with no filters at all, "Details" with the info icon and no count (AC-486).
-  - Depends on: T828
+- [x] T831 (AC-486) The toggle's count of filters set, its name and description, "Filters, none set", and "Details" on a dashboard with no filters
 
 - [ ] T832 (AC-487) The open sheet pushes the tiles down, covers none of them, keeps the canvas's scroll position, and grows as its pills wrap
   - Files: `packages/web/src/dashboard/header/HeaderSheet.tsx`, `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.

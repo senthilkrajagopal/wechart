@@ -170,6 +170,7 @@ import { MenuButton } from '../shell/MenuButton';
 import { ExportPane, type Outline as ExportOutline } from './export/ExportPane';
 import { ExportedToast } from './export/ExportedToast';
 import { Canvas, type CanvasProps } from './grid/Canvas';
+import { filtersSet } from './header/filtersSet';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
 import { COLUMNS, ROW_UNIT_PX } from './grid/geometry';
 import { actionFor } from './grid/keyboard';
@@ -5831,6 +5832,16 @@ export function DashboardView({
             />
           ) : undefined
         }
+        // The toggle's count, name and description (AC-486): the filters
+        // holding a value, and those made from a marking, by the bar's titles.
+        filtersSummary={filtersSet(
+          document.filters ?? [],
+          filterValues,
+          markFilters,
+          // The model's titles, as the bar's pills read them (DashboardPage's
+          // memberTitle is the same meta's).
+          (member) => memberTitle?.(member) ?? member,
+        )}
         // The filter bar is in the header sheet, opened by the Filters toggle
         // (F43; design 19 screen 2).
         sheet={(session) => (

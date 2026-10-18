@@ -2597,9 +2597,16 @@ test('Filter to marked and Filter out marked filter every tile they reach, clear
   expect(Object.keys(byStatus).sort()).toEqual(['completed', 'processing', 'shipped']);
 
   // To marked: only shipped is left, on both tiles, and the marking is gone.
+  // The header's toggle: its one filter holds no value, then it counts the
+  // filter made from the marking too (T831, AC-486).
+  const toggle = page.locator('.dashboard__header button.header-toggle');
+  await expect(toggle).toHaveAccessibleName('Filters, none set');
   await clickBar(page, status, 'shipped');
   await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
   await act('Filter to marked');
+  await expect(toggle).toHaveAccessibleName('Filters, 1 set');
+  await expect(toggle).toHaveAccessibleDescription('1 of 2 filters set: Orders Status');
+  await expect(toggle.locator('.header-toggle__count')).toHaveText('1');
   const chip = page.getByTestId('mark-filter-chip');
   await expect(chip).toContainText('Filtered to Marking');
   await expect(chip).toContainText('shipped');
@@ -2637,6 +2644,9 @@ test('Filter to marked and Filter out marked filter every tile they reach, clear
   await openHeaderSheet(page);
   await chip.getByRole('button', { name: /^Remove: / }).click();
   await expect(chip).toHaveCount(0);
+  // The marking's filter gone: none set again (AC-486).
+  await expect(toggle).toHaveAccessibleName('Filters, none set');
+  await expect(toggle).toHaveAccessibleDescription('0 of 1 filters set');
   await expect(page.getByRole('region', { name: 'Filters', exact: true })).toBeFocused();
   await expect.poll(() => labels(status)).toEqual(['completed', 'processing', 'shipped']);
 

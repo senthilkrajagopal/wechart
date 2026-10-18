@@ -484,8 +484,9 @@ test.describe('one button rule and one pressed state (T684)', () => {
       /^Bookmarks/,
       /^(Edit in my workspace|Open my copy)$/,
       '⋯',
-      // Last, the Filters toggle (T828, AC-486).
-      /^Filters/,
+      // Last, the toggle (T828, AC-486): "Details", this dashboard having no
+      // filters (T831).
+      'Details',
     ]);
     for (const at of [0, 1, 2]) {
       const button = buttons.nth(at);

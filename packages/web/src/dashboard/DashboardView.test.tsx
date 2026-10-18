@@ -241,8 +241,10 @@ describe('opening a saved dashboard (AC-018)', () => {
     // Flattening the error to its message shows the text and loses the
     // diagnosis, and the tile cannot tell the difference.
     expect(screen.getByRole('alert').textContent).toContain('Cube said no');
-    // The control is the error's "Details" disclosure since T251.
-    expect(screen.getByRole('button', { name: 'Details' })).toBeTruthy();
+    // The control is the error's "Details" disclosure since T251 — on the
+    // canvas, apart from the header's "Details" toggle (T831, AC-486).
+    const canvas = screen.getByTestId('canvas-scroll');
+    expect(within(canvas).getByRole('button', { name: 'Details' })).toBeTruthy();
   });
 
   it('renders a saved tab group, showing its first tab', async () => {
