@@ -61,18 +61,27 @@ const converted = (markdown: string) => {
 };
 
 describe('a markdown tile’s text as a Text document (T869, AC-512)', () => {
-  // The marks' count is the style, as AC-516 types them: # large, ## medium,
-  // ### small. The Text tile draws them at h3, h4 and h5 (T873); a fourth
-  // level or deeper, which the markdown tile drew smaller still, is the
-  // smallest heading there is.
-  it('reads #, ## and ### as Heading large, medium and small, and deeper as small', () => {
+  // The markdown tile placed each heading in the outline by its rank among
+  // the tile's own levels, from h3 (T247). So a converted tile keeps those
+  // places (the coordinator's call, T869-1): its shallowest level is Heading
+  // large (h3), the next Heading medium (h4), and any deeper Heading small
+  // (h5), the smallest there is. A lone `##` is h3 still.
+  it('reads the tile’s shallowest heading as Heading large, and each deeper one a level down', () => {
     expect(converted('# Top')).toEqual(doc(h(1, text('Top'))));
-    expect(converted('## Title')).toEqual(doc(h(2, text('Title'))));
-    expect(converted('### Sub')).toEqual(doc(h(3, text('Sub'))));
-    expect(converted('# A\n### B')).toEqual(doc(h(1, text('A')), h(3, text('B'))));
+    expect(converted('## Title')).toEqual(doc(h(1, text('Title'))));
+    expect(converted('### Sub')).toEqual(doc(h(1, text('Sub'))));
+    expect(converted('# A\n### B')).toEqual(doc(h(1, text('A')), h(2, text('B'))));
     expect(converted('## A\n### B\n# C\n#### D')).toEqual(
       doc(h(2, text('A')), h(3, text('B')), h(1, text('C')), h(3, text('D'))),
     );
+  });
+
+  // Markdown T870 wrote names each heading's style by its marks, as AC-516
+  // types them: # large, ## medium, ### small.
+  it('reads exported markdown’s #, ## and ### as Heading large, medium and small', () => {
+    const exported = (markdown: string) => textDocumentFromMarkdown(markdown, { exported: true });
+    expect(exported('## Title')).toEqual(doc(h(2, text('Title'))));
+    expect(exported('### Sub\n# Top')).toEqual(doc(h(3, text('Sub')), h(1, text('Top'))));
   });
 
   // A code span isn't among the Text tile's marks (AC-208 amended, AC-515),
@@ -144,7 +153,7 @@ describe('a markdown tile’s text as a Text document (T869, AC-512)', () => {
   });
 
   it('reads Windows line endings as lines', () => {
-    expect(converted('## A\r\nb')).toEqual(doc(h(2, text('A')), p(text('b'))));
+    expect(converted('## A\r\nb')).toEqual(doc(h(1, text('A')), p(text('b'))));
   });
 
   // T869's review: a markdown tile had no escapes, so its backslashes are
@@ -162,9 +171,9 @@ describe('a markdown tile’s text as a Text document (T869, AC-512)', () => {
 
   // What T870 writes for typed markdown characters (decision T869-1): read
   // so only where asked, for markdown written through MCP (AC-527).
-  it('with escapes, reads a backslash before punctuation as that character, never as a mark', () => {
+  it('exported, reads a backslash before punctuation as that character, never as a mark', () => {
     const escaped = (markdown: string) => {
-      const result = textDocumentFromMarkdown(markdown, { escapes: true });
+      const result = textDocumentFromMarkdown(markdown, { exported: true });
       expect(textDocumentProblems(result)).toEqual([]);
       return result;
     };
@@ -228,7 +237,7 @@ describe('a markdown tile’s tokens as elements (T869, AC-512, AC-116)', () => 
       ),
     ).toEqual(
       doc(
-        h(2, text('Marked share')),
+        h(1, text('Marked share')),
         p(
           { type: 'value', attrs: { measure: 'orders.revenue', marking: 'Marking' } },
           text(' of '),
@@ -254,7 +263,7 @@ describe('a markdown tile’s tokens as elements (T869, AC-512, AC-116)', () => 
       converted('## {{marking:A.count}} marked\n\n- **{{measure:orders.count}}** in all'),
     ).toEqual(
       doc(
-        h(2, { type: 'marking', attrs: { marking: 'A', show: 'count' } }, text(' marked')),
+        h(1, { type: 'marking', attrs: { marking: 'A', show: 'count' } }, text(' marked')),
         ul(
           li({ type: 'value', attrs: { measure: 'orders.count' }, marks: [bold] }, text(' in all')),
         ),

@@ -96,7 +96,7 @@ const everything = doc(
 
 /** The markdown kinds' text and elements, as T869 reads them back. */
 const roundTrip = (document: TextDocument) =>
-  textDocumentFromMarkdown(textDocumentToMarkdown(document), { escapes: true });
+  textDocumentFromMarkdown(textDocumentToMarkdown(document), { exported: true });
 
 describe('a Text document written as markdown (T870, AC-527)', () => {
   it('writes every block, mark and element, each element as a token naming its kind and source', () => {

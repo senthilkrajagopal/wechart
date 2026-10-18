@@ -8,8 +8,8 @@
  * (`packages/web/src/tiles/Markdown.tsx`, AC-208), by the same rules, plus
  * links, which the Text tile has:
  *
- * - `#`, `##` and `###` are Heading large, medium and small, as AC-516 types
- *   them; a deeper heading is the smallest there is;
+ * - headings keep their places in the outline: the tile's shallowest level
+ *   is Heading large, the next Heading medium, any deeper Heading small;
  * - `-` or `*`, and `1.` or `1)`, are bulleted and numbered lists, numbered
  *   from the first item;
  * - a blank line ends a paragraph, and a single newline is a line break;
@@ -67,7 +67,7 @@ function withMark(marks: readonly TextMark[], mark: TextMark): TextMark[] {
 }
 
 /**
- * With escapes (markdown T870 wrote, given through MCP: AC-527), a backslash
+ * Exported (markdown T870 wrote, given through MCP: AC-527), a backslash
  * before ASCII punctuation is that character as text, so a typed `**` or
  * `{{` reads back as typed. A markdown tile had no escapes, so its
  * backslashes are read as the text they were (AC-512, T869's review).
@@ -206,14 +206,32 @@ const withContent = (node: TextNode, content: readonly TextNode[]): TextNode =>
 
 /**
  * A markdown tile's text as a Text tile's document, read as that tile drew it
- * (AC-512); with `escapes`, markdown as T870 writes it (AC-527).
+ * (AC-512); or, `exported`, markdown as T870 writes it (AC-527), with its
+ * backslash escapes and each heading's style named by its marks.
+ *
+ * A markdown tile placed each heading in the page's outline by its rank among
+ * the tile's own heading levels, from h3 (T247). So, read from a tile, its
+ * shallowest level is Heading large (h3), the next Heading medium (h4) and any
+ * deeper Heading small (h5): its headings keep their places, a lone `##`
+ * staying h3 (the coordinator's call, decision T869-1). Exported markdown's
+ * `#`, `##` and `###` are large, medium and small, as AC-516 types them.
  */
 export function textDocumentFromMarkdown(
   markdown: string,
-  { escapes = false }: { readonly escapes?: boolean } = {},
+  { exported = false }: { readonly exported?: boolean } = {},
 ): TextDocument {
   const inline = (text: string) =>
-    joined(inlineOf(escapes ? hidden(cleaned(text)) : cleaned(text), []));
+    joined(inlineOf(exported ? hidden(cleaned(text)) : cleaned(text), []));
+  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
+  const ranks = [
+    ...new Set(
+      lines.flatMap((line) => {
+        const heading = HEADING.exec(line);
+        return heading === null ? [] : [(heading[1] ?? '#').length];
+      }),
+    ),
+  ].sort((a, b) => a - b);
+  const levelOf = (marks: number) => Math.min((exported ? marks - 1 : ranks.indexOf(marks)) + 1, 3);
   const blocks: TextNode[] = [];
   let paragraph: string[] = [];
   let list: { ordered: boolean; start: number; items: string[] } | null = null;
@@ -242,7 +260,7 @@ export function textDocumentFromMarkdown(
     list = null;
   };
 
-  for (const line of markdown.replace(/\r\n?/g, '\n').split('\n')) {
+  for (const line of lines) {
     if (line.trim() === '') {
       flushParagraph();
       flushList();
@@ -252,7 +270,7 @@ export function textDocumentFromMarkdown(
     if (heading !== null) {
       flushParagraph();
       flushList();
-      const level = Math.min((heading[1] ?? '#').length, 3);
+      const level = levelOf((heading[1] ?? '#').length);
       blocks.push(withContent({ type: 'heading', attrs: { level } }, inline(heading[2] ?? '')));
       continue;
     }
