@@ -539,6 +539,16 @@
     - The `helm template` tests take 1–2 s each, so the file's suites run with a 60 s timeout.
     - `helm lint` with mode A's values, ranges and detection: 0 failed.
 
+- [x] T794 (AC-476) Give the MCP route 130 s timeouts, tell the API its host, answer `/mcp` on the web app's host with 404, and render nothing for MCP when no host is named
+  - Lane: MCP
+  - Files: `deploy/helm/wechart/templates/mcp-gateway.yaml`, `deploy/helm/wechart/templates/api.yaml`, `deploy/helm/wechart/templates/web-config.yaml`, `packages/api/src/deploy/mcp-gateway.test.ts`.
+  - Failing test: `mcp-gateway.test.ts`: the HTTPRoute rule's `timeouts.request` and `backendRequest` are 130 s, past Envoy's 15 s default (`gateway-api.md`, finding 4); with a host, the API container has `WECHART_MCP_HOST`; the web nginx config has `location = /mcp { return 404; }`; with no `mcp.host`, the render has no Gateway, HTTPRoute or policy and the API no `WECHART_MCP_HOST` (AC-476).
+  - Depends on: T792, T774
+  - **Built 2026-10-18** (lane MCP, batch 7). No AC ticked: AC-476 waits on T795's deploy.
+    - **Chart:** the route's one rule has `timeouts: {request: 130s, backendRequest: 130s}`; `api.yaml` sets `WECHART_MCP_HOST` from `mcp.host` where one is named; `web-config.yaml` answers `location = /mcp` with `return 404`, whatever the MCP values (T794-1).
+    - **Tests** (4 more, 12 in the file): the timeouts in both modes; the API's `WECHART_MCP_HOST`; nginx's 404 with and without a host; with every other MCP value set but the host, no Gateway, HTTPRoute, SecurityPolicy or ClientTrafficPolicy, and no `WECHART_MCP_HOST`. Red first for the first three. The last passed at once: T792's and T793's templates already rendered nothing without a host, and `api.yaml` had no such variable; it stays as the guard AC-476's "no host" half asks for.
+    - Deploy tests: 38/38 (`cube-image`, `credential-key-job`, `trust-proxy`, `mcp-gateway`).
+
 ## Security specs failing alone: xcube's folder tree stuck (lane MCP, batch 7, at the coordinator's request)
 
 - **Asked:** why `calc-request-resolve.spec.ts:200`, `reviews.spec.ts:168` and `export-import.spec.ts:393` (422, "No folder on the path holds ‹run›_margin") fail when run alone on feat/xcube.

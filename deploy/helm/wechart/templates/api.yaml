@@ -100,6 +100,12 @@ spec:
             - name: WECHART_TRUST_PROXY
               value: {{ if kindIs "slice" . }}{{ join "," . | quote }}{{ else }}{{ . | quote }}{{ end }}
             {{- end }}
+            {{- with .Values.mcp.host }}
+            # MCP's host (T774, AC-476): /mcp is served, and only to requests
+            # naming it, which reach the API through the MCP HTTPRoute alone.
+            - name: WECHART_MCP_HOST
+              value: {{ . | quote }}
+            {{- end }}
             # The refresh worker's own /readyz and /livez (T162, AC-156).
             - name: CUBE_WORKER_URL
               value: {{ printf "http://%s:%d" (include "wechart.host" (list . "cube-refresh-worker")) (int .Values.cube.port) | quote }}

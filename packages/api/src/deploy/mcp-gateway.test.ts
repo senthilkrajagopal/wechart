@@ -231,3 +231,65 @@ describe('the MCP allow-list and client IP (T793, AC-476, AC-474)', SLOW, () => 
     expect(refused.stderr).toMatch(/mcp\.clientIPDetection is mode A's alone/);
   });
 });
+
+/**
+ * T794 (AC-476): the MCP route's timeouts are 130 s, as `/api`'s are behind
+ * nginx, past Envoy's 15 s default, which would cut a tool call short
+ * (`gateway-api.md`, finding 4 and Gotcha 5). The API is told its MCP host,
+ * the web app's own nginx answers `/mcp` with 404, and with no host nothing
+ * for MCP is rendered and the API has none.
+ */
+
+/** The API Deployment's container env, by name. */
+function apiEnv(manifests: Manifest[]): Map<string, unknown> {
+  const api = ofKind(manifests, 'Deployment').find((each) => each.metadata.name === 'wechart-api');
+  expect(api, 'the API Deployment').toBeDefined();
+  const pod = (api!.spec['template'] as { spec: { containers: unknown[] } }).spec;
+  const container = (
+    pod.containers as { name: string; env: { name: string; value?: unknown }[] }[]
+  ).find((each) => each.name === 'api');
+  return new Map(container!.env.map((each) => [each.name, each.value]));
+}
+
+/** The web server's nginx configuration. */
+function nginxConf(manifests: Manifest[]): string {
+  const config = ofKind(manifests, 'ConfigMap').find(
+    (each) => each.metadata.name === 'wechart-web',
+  );
+  expect(config, 'the web ConfigMap').toBeDefined();
+  return (config as unknown as { data: Record<string, string> }).data['default.conf']!;
+}
+
+const MCP_KINDS = ['Gateway', 'HTTPRoute', 'SecurityPolicy', 'ClientTrafficPolicy'];
+
+describe('the MCP host’s timeouts, the API and the web host (T794, AC-476)', SLOW, () => {
+  it('gives the route’s rule 130 s for the request and for the backend', () => {
+    for (const mode of [MODE_A, MODE_B]) {
+      const route = ofKind(render([...mode, ...RANGES]), 'HTTPRoute')[0]!;
+      const [rule] = route.spec['rules'] as { timeouts: unknown }[];
+      expect(rule!.timeouts).toEqual({ request: '130s', backendRequest: '130s' });
+    }
+  });
+
+  it('tells the API its MCP host', () => {
+    expect(apiEnv(render([...MODE_A, ...RANGES])).get('WECHART_MCP_HOST')).toBe(HOST);
+  });
+
+  it('answers /mcp on the web app’s host with 404, whatever the MCP values', () => {
+    for (const values of [[], [...MODE_A, ...RANGES]])
+      expect(nginxConf(render(values))).toMatch(/location = \/mcp \{\s*return 404;\s*\}/);
+  });
+
+  it('renders nothing for MCP with no host, and the API has none', () => {
+    // Every other MCP value set, the host alone left out.
+    const manifests = render([
+      ...MODE_A.filter((each) => !each.startsWith('mcp.host=')),
+      ...RANGES,
+      'mcp.allowAnthropicEgress=true',
+      'mcp.clientIPDetection.directSourceIP.enabled=true',
+    ]);
+    for (const kind of MCP_KINDS) expect(ofKind(manifests, kind), kind).toHaveLength(0);
+    expect(apiEnv(manifests).has('WECHART_MCP_HOST')).toBe(false);
+    expect(apiEnv(manifests).has('PORT')).toBe(true);
+  });
+});

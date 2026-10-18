@@ -1651,11 +1651,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T793 (AC-476, AC-474) Let in only the listed source addresses with an Envoy Gateway SecurityPolicy, Anthropic's range a value off by default, and pass the client's address to the API
 
-- [ ] T794 (AC-476) Give the MCP route 130 s timeouts, tell the API its host, answer `/mcp` on the web app's host with 404, and render nothing for MCP when no host is named
-  - Lane: MCP
-  - Files: `deploy/helm/wechart/templates/mcp-gateway.yaml`, `deploy/helm/wechart/templates/api.yaml`, `deploy/helm/wechart/templates/web-config.yaml`, `packages/api/src/deploy/mcp-gateway.test.ts`.
-  - Failing test: `mcp-gateway.test.ts`: the HTTPRoute rule's `timeouts.request` and `backendRequest` are 130 s, past Envoy's 15 s default (`gateway-api.md`, finding 4); with a host, the API container has `WECHART_MCP_HOST`; the web nginx config has `location = /mcp { return 404; }`; with no `mcp.host`, the render has no Gateway, HTTPRoute or policy and the API no `WECHART_MCP_HOST` (AC-476).
-  - Depends on: T792, T774
+- [x] T794 (AC-476) Give the MCP route 130 s timeouts, tell the API its host, answer `/mcp` on the web app's host with 404, and render nothing for MCP when no host is named
 
 - [ ] T795 (AC-476, AC-474) Deploy the MCP host on docker-desktop through Envoy Gateway v1.9.2, with the patched Envoy image, and check it end to end
   - Lane: MCP

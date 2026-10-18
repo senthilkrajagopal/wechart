@@ -58,6 +58,11 @@ spec:
       backendRefs:
         - name: {{ include "wechart.component" (list $ "api") }}
           port: {{ int $.Values.api.port }}
+      # As /api's behind nginx (130 s), past Envoy's 15 s default, which
+      # would cut a tool call short (gateway-api.md, finding 4, Gotcha 5).
+      timeouts:
+        request: 130s
+        backendRequest: 130s
 ---
 # Only the listed sources reach /mcp (AC-476): everything is denied but one
 # Allow rule, the first match winning; a denied request answers 403

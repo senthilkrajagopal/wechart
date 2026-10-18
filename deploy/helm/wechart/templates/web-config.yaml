@@ -33,6 +33,12 @@ data:
             return 200 "ok\n";
         }
 
+        # MCP is served on its own host alone, through its HTTPRoute, never
+        # on the web app's (AC-476): not the app's index.html either.
+        location = /mcp {
+            return 404;
+        }
+
         {{- if (.Values.security).enabled }}
         # With security on, every page and every file of the app asks the API
         # whether anyone is signed in, and a page nobody is signed in to goes
