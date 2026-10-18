@@ -1,6 +1,8 @@
 import { isSuperAdmin } from '@wechart/core';
 import type { FastifyInstance } from 'fastify';
 
+import { TOKEN_PREFIX } from '../mcp/tokenText';
+
 /**
  * Who a request is for (phase 2, T311). Every handler reads the user from
  * here and from nowhere else, so single-user mode and signed-in mode differ
@@ -17,6 +19,9 @@ export interface WechartUser {
   readonly groups: readonly string[];
   readonly superAdmin: boolean;
 }
+
+/** An Authorization header bearing a personal access token (`mcp/tokenText.ts`'s prefix). */
+const PAT_BEARER = new RegExp(`^bearer\\s+${TOKEN_PREFIX}`, 'i');
 
 /** `off` is phase 1's single-user mode; `oidc` signs every user in (AC-251, AC-254). */
 export type SecurityMode = 'off' | 'oidc';
@@ -79,6 +84,19 @@ export function registerUser(
   superAdminGroup?: string,
 ): void {
   app.decorateRequest('wechartUser', null);
+  // A personal access token is taken on `/mcp` alone, in either mode (T776,
+  // AC-435): anywhere else, a request bearing one is answered 401 before
+  // anything else is read, whatever cookie it also carries. Told by its
+  // prefix, so the install Job's own Bearer token is untouched.
+  app.addHook('onRequest', async (request, reply) => {
+    const authorization = request.headers.authorization;
+    if (
+      authorization !== undefined &&
+      PAT_BEARER.test(authorization) &&
+      request.routeOptions.url !== '/mcp'
+    )
+      await reply.code(401).send({ error: 'A personal access token is taken on /mcp alone.' });
+  });
   if (security === 'off') {
     app.addHook('onRequest', async (request) => {
       request.wechartUser = SINGLE_USER;

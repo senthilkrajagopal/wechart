@@ -147,6 +147,7 @@ import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
 import type { ModelOrigin } from './db/schema';
 import type { StoredModelFile, WorkspaceModelFile } from './repos/model-files';
 import { workspaceModels } from './routes/workspace-models';
+import { bearerAuth } from './mcp/auth';
 import { mcpUrlOf, registerMcp } from './mcp/plugin';
 import { registerAccessTokens } from './routes/access-tokens';
 import type { AccessTokenStore } from './repos/access-tokens';
@@ -4501,8 +4502,12 @@ export function buildServer({
       mcpUrl: mcpUrlOf(config.mcpHost),
     });
   // MCP only where the deployment names its host (T774, AC-476).
-  // Its Host and Origin are checked first (T775, AC-436).
-  if (config.mcpHost !== undefined) registerMcp(app, { host: config.mcpHost });
+  // Its Host and Origin are checked first (T775, AC-436), then its token (T776, AC-435).
+  if (config.mcpHost !== undefined)
+    registerMcp(app, {
+      host: config.mcpHost,
+      ...(accessTokens === undefined ? {} : { verifyToken: bearerAuth(accessTokens, now) }),
+    });
 
   /**
    * Calculation requests (T383, AC-050): asked of the read-write members of

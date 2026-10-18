@@ -59,6 +59,14 @@ export interface TokenOwned {
   readonly owner: { readonly key: string; readonly name: string };
 }
 
+/** A working token presented on `/mcp`: whose it is and what it may do (T776). */
+export interface PresentedToken {
+  readonly id: string;
+  readonly scopes: readonly TokenScope[];
+  readonly expiresAt: Date;
+  readonly owner: { readonly key: string; readonly name: string };
+}
+
 export interface NewAccessToken {
   readonly owner: { readonly key: string; readonly name: string };
   readonly name: string;
@@ -105,6 +113,38 @@ export function accessTokenStore(db: Kysely<Database>) {
       .where('expires_at', '>', now);
 
   return {
+    /**
+     * The working token whose text has this digest, with its owner (T776,
+     * AC-435, AC-431): none for a digest no token has, or a token revoked
+     * or past its expiry at `now`. Found by the digest's unique index.
+     */
+    async presented(digest: Buffer, now: Date): Promise<PresentedToken | undefined> {
+      const row = await db
+        .selectFrom('personal_access_tokens')
+        .select(['id', 'scopes', 'expires_at', 'owner_key', 'owner_name'])
+        .where('digest', '=', digest)
+        .where('revoked_at', 'is', null)
+        .where('expires_at', '>', now)
+        .executeTakeFirst();
+      return row === undefined
+        ? undefined
+        : {
+            id: row.id,
+            scopes: row.scopes as TokenScope[],
+            expiresAt: row.expires_at,
+            owner: { key: row.owner_key, name: row.owner_name },
+          };
+    },
+
+    /** Records a token's use at `at`, its list's Last used (AC-430). */
+    async used(id: string, at: Date): Promise<void> {
+      await db
+        .updateTable('personal_access_tokens')
+        .set({ last_used_at: at })
+        .where('id', '=', id)
+        .execute();
+    },
+
     /** A token's owner and name, by id; none for an id no token has. */
     async owned(id: string): Promise<TokenOwned | undefined> {
       if (!UUID.test(id)) return undefined;

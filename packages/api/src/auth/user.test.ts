@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 import { ConfigError, loadConfig } from '../config';
+import { closeDb, getDb } from '../db/client';
+import { mintToken } from '../mcp/tokenText';
+import { accessTokenStore } from '../repos/access-tokens';
 import { buildServer } from '../server';
 import { PUBLIC, USER } from './guard';
 
@@ -186,5 +189,47 @@ describe('with security on and nobody signed in, no one is the Super-Admin (T311
     expect(response.statusCode).toBe(401);
     expect(created).toEqual([]);
     await app.close();
+  });
+});
+
+describe('a personal access token anywhere but /mcp (T776, AC-435)', () => {
+  afterAll(async () => {
+    await getDb().deleteFrom('personal_access_tokens').where('name', '=', 't776 user.test').execute();
+    await closeDb();
+  });
+
+  it('is refused with 401 on the web app’s routes, in both security modes', async () => {
+    const { text, digest } = mintToken();
+    await accessTokenStore(getDb()).create({
+      owner: { key: 'admin', name: 'admin' },
+      name: 't776 user.test',
+      scopes: ['read', 'workspace-edit', 'proposals-and-jobs'],
+      expiresAt: new Date(Date.now() + 30 * 86_400_000),
+      digest,
+    });
+    for (const security of ['off', 'oidc'] as const) {
+      const app = buildServer({
+        config: { ...secured, security, mcpHost: 'mcp.wechart.example.com' },
+        accessTokens: accessTokenStore(getDb()),
+      });
+      try {
+        const answer = await app.inject({
+          method: 'GET',
+          url: '/api/folders',
+          headers: { authorization: `Bearer ${text}` },
+        });
+        expect(answer.statusCode, security).toBe(401);
+        expect(answer.json<{ error: string }>().error, security).toBe(
+          'A personal access token is taken on /mcp alone.',
+        );
+        // Without it, the single user is let in as ever.
+        if (security === 'off') {
+          const plain = await app.inject({ method: 'GET', url: '/api/folders' });
+          expect(plain.statusCode).toBe(200);
+        }
+      } finally {
+        await app.close();
+      }
+    }
   });
 });

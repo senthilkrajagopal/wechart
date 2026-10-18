@@ -1,3 +1,4 @@
+import { OAuthError, OAuthErrorCode } from '@modelcontextprotocol/server';
 import Fastify from 'fastify';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
@@ -16,7 +17,9 @@ const HOST = 'mcp.wechart.example.com';
 
 /** `/mcp` alone on a bare app, its token check a spy that turns everyone away. */
 async function mcpApp() {
-  const verifyToken = vi.fn(async (_authorization: string | undefined) => null);
+  const verifyToken = vi.fn(async (_authorization: string | undefined): Promise<never> => {
+    throw new OAuthError(OAuthErrorCode.InvalidToken, 'no token is taken here');
+  });
   const app = Fastify();
   registerMcp(app, { host: HOST, verifyToken });
   await app.ready();
@@ -92,7 +95,9 @@ describe('the Host and Origin guard on /mcp (T775, AC-436)', () => {
           payload: tools,
         });
         expect(answer.statusCode, JSON.stringify(headers)).toBe(401);
-        expect(answer.headers['www-authenticate']).toBe('Bearer');
+        expect(answer.headers['www-authenticate']).toBe(
+          'Bearer error="invalid_token", error_description="no token is taken here"',
+        );
       }
       expect(verifyToken).toHaveBeenCalledTimes(cases.length);
       expect(verifyToken).toHaveBeenLastCalledWith('Bearer wct_anything');

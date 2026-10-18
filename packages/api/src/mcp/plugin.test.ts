@@ -113,7 +113,10 @@ describe('/mcp with an MCP host (T774, AC-476)', () => {
         payload: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
       });
       expect(answer.statusCode).toBe(401);
-      expect(answer.headers['www-authenticate']).toBe('Bearer');
+      // With no token store, no token is taken (T776).
+      expect(answer.headers['www-authenticate']).toBe(
+        'Bearer error="invalid_token", error_description="Missing Authorization header"',
+      );
       // GET and DELETE: 405, as the Streamable HTTP transport asks.
       for (const method of ['GET', 'DELETE'] as const) {
         const other = await app.inject({

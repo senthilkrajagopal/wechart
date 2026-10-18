@@ -1604,11 +1604,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T775 (AC-436) Answer a request to `/mcp` with a foreign `Host` or a foreign `Origin` with 403, before its token is read
 
-- [ ] T776 (AC-435, AC-431, AC-430) Take a token only from `Authorization: Bearer` on `/mcp`: 401 with `WWW-Authenticate: Bearer` for none, a bad, revoked or expired one, the query string or the session cookie; refuse tokens on every other route; record Last used
-  - Lane: MCP
-  - Files: `packages/api/src/mcp/auth.ts` (+ `auth.test.ts`; `verifyBearerToken` with an `OAuthTokenVerifier` that sets `expiresAt`, research Gotcha 7), `packages/api/src/mcp/plugin.ts`, `packages/api/src/auth/user.ts` (+ `user.test.ts`), `packages/api/src/repos/access-tokens.ts`.
-  - Failing test: `auth.test.ts`: a request with no token, a malformed one, a revoked one, an expired one, `?token=<valid>` only, or the web session cookie only, answers 401 with a `WWW-Authenticate: Bearer` header and runs nothing (AC-435, AC-431); a valid one passes and its Last used moves to the request's time (AC-430). `user.test.ts`: in both security modes, `GET /api/folders` bearing only a valid token in `Authorization` answers 401 (AC-435).
-  - Depends on: T767, T775
+- [x] T776 (AC-435, AC-431, AC-430) Take a token only from `Authorization: Bearer` on `/mcp`: 401 with `WWW-Authenticate: Bearer` for none, a bad, revoked or expired one, the query string or the session cookie; refuse tokens on every other route; record Last used
 
 - [ ] T777 (AC-471, AC-432) Act on `/mcp` as the token's owner, with the groups of the owner's latest web sign-in
   - Lane: MCP

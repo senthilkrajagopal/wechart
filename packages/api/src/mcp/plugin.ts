@@ -1,6 +1,8 @@
+import { bearerAuthChallengeResponse } from '@modelcontextprotocol/server';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { PUBLIC } from '../auth/guard';
+import { type McpAuth, noTokens } from './auth';
 import { mcpGuard } from './guard';
 
 /** Where MCP is served, on its host (AC-476). */
@@ -14,13 +16,19 @@ export interface McpOptions {
   /** The MCP host the deployment names (AC-476); the only `Host` and `Origin` let in (AC-436). */
   readonly host: string;
   /**
-   * Reads the `Authorization` header's token; null turns the request away.
-   * Until the token check is built (T776), no token is taken.
+   * Takes the token from the `Authorization` header (T776, `auth.ts`'s
+   * `bearerAuth`), throwing the SDK's `OAuthError` to turn the request
+   * away. Unset, no token is taken.
    */
-  readonly verifyToken?: (authorization: string | undefined) => Promise<unknown>;
+  readonly verifyToken?: (authorization: string | undefined) => Promise<McpAuth>;
 }
 
-const noToken = async () => null;
+declare module 'fastify' {
+  interface FastifyRequest {
+    /** The caller of `/mcp`, once its token is taken (T776); null everywhere else. */
+    mcpAuth: McpAuth | null;
+  }
+}
 
 /**
  * The MCP endpoint (T774, AC-476), registered only where the deployment
@@ -30,24 +38,32 @@ const noToken = async () => null;
  * Its routes are public to the session guard: a client signs in with its
  * token in the Authorization header alone, never the web app's cookie
  * (design 18, E3). Each route first checks the Host and Origin (T775,
- * AC-436), then, for a POST, the token, all in `onRequest`, before the body
- * is read.
+ * AC-436), then, for a POST, the token (T776, AC-435), all in `onRequest`,
+ * before the body is read. A refused token is answered as the SDK's
+ * `bearerAuthChallengeResponse` builds it: 401 with its
+ * `WWW-Authenticate: Bearer` challenge.
  */
 export function registerMcp(app: FastifyInstance, options: McpOptions): void {
   const guard = mcpGuard(options.host);
-  const verifyToken = options.verifyToken ?? noToken;
+  const verifyToken = options.verifyToken ?? noTokens;
+  app.decorateRequest('mcpAuth', null);
   const tokenCheck = async (request: FastifyRequest, reply: FastifyReply) => {
-    const caller = await verifyToken(request.headers.authorization);
-    if (caller === null)
-      return reply
-        .status(401)
-        .header('www-authenticate', 'Bearer')
-        .send({ error: 'A personal access token is needed, in the Authorization header.' });
+    try {
+      request.mcpAuth = await verifyToken(request.headers.authorization);
+    } catch (error) {
+      const refusal = bearerAuthChallengeResponse(error);
+      reply.status(refusal.status);
+      refusal.headers.forEach((value, name) => {
+        reply.header(name, value);
+      });
+      return reply.send(await refusal.text());
+    }
   };
   // One JSON-RPC request per POST (the 2026-07-28 Streamable HTTP transport,
-  // `mcp-typescript-sdk.md`, "Transports and client support").
+  // `mcp-typescript-sdk.md`, "Transports and client support"). Until T778
+  // serves it, a request past the token check is answered 501.
   app.post(MCP_PATH, { ...PUBLIC, onRequest: [...guard, tokenCheck] }, async (_request, reply) =>
-    reply.status(401).header('www-authenticate', 'Bearer').send({ error: 'Nothing is served yet.' }),
+    reply.status(501).send({ error: 'MCP isn’t served here yet.' }),
   );
   // "GET and DELETE should be answered with 405" (same source).
   const notAllowed = async (_request: unknown, reply: FastifyReply) =>

@@ -92,7 +92,9 @@ export function registerGuard(
     // A request from another site that would change something is refused,
     // whatever cookie it carries: sign-out included (T412, AC-317; the user's
     // R25). A tool that sends neither header is let through to the checks below.
-    if (UNSAFE.has(request.method)) {
+    // `/mcp` checks its own Origin, against the MCP host, and takes no
+    // cookie (T775, T776; AC-436, AC-435).
+    if (UNSAFE.has(request.method) && request.routeOptions.url !== '/mcp') {
       const site = request.headers['sec-fetch-site'];
       const origin = request.headers['origin'];
       if (site === 'cross-site' || (origin !== undefined && origin !== ours)) {

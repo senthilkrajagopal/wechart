@@ -182,3 +182,29 @@
       - GET and DELETE are guarded too, so a foreign Host gets 403 before their 405.
     - **Tests changed:** `auth/guard.test.ts`'s sweep and `mcp/plugin.test.ts` send the MCP host on `/mcp`, since a request without it is now refused 403 first.
     - **Tests:** `mcp/guard.test.ts` (5, new).
+    - **After the cold review:** it passed, with no change asked. Its finding that, with sign-in on, the web app's cross-site check would refuse a POST whose `Origin` is the MCP host was fixed in T776, where it first became reachable.
+
+- [x] T776 (AC-435, AC-431, AC-430) Take a token only from `Authorization: Bearer` on `/mcp`: 401 with `WWW-Authenticate: Bearer` for none, a bad, revoked or expired one, the query string or the session cookie; refuse tokens on every other route; record Last used
+  - Lane: MCP
+  - Files: `packages/api/src/mcp/auth.ts` (+ `auth.test.ts`; `verifyBearerToken` with an `OAuthTokenVerifier` that sets `expiresAt`, research Gotcha 7), `packages/api/src/mcp/plugin.ts`, `packages/api/src/auth/user.ts` (+ `user.test.ts`), `packages/api/src/repos/access-tokens.ts`.
+  - Failing test: `auth.test.ts`: a request with no token, a malformed one, a revoked one, an expired one, `?token=<valid>` only, or the web session cookie only, answers 401 with a `WWW-Authenticate: Bearer` header and runs nothing (AC-435, AC-431); a valid one passes and its Last used moves to the request's time (AC-430). `user.test.ts`: in both security modes, `GET /api/folders` bearing only a valid token in `Authorization` answers 401 (AC-435).
+  - Depends on: T767, T775
+  - **Built 2026-10-17** (lane MCP, batch 3). **AC-435, AC-431 and AC-470 are ticked.**
+    - AC-435 and AC-431: `mcp/auth.test.ts` and `auth/user.test.ts`, through `buildServer`.
+    - AC-470: a token a Super-Admin revokes through `DELETE /api/security/tokens/:id`, signed in at Dex, then gets 401 on `/mcp`. The list halves of AC-431 and AC-470 were shown by T771 and T772.
+    - AC-430 was already ticked. Last used now moves on every request a token is taken for.
+    - **AC-479 stays open** until T777 (serving as the single user) and T779 (the rate limit). AC-474 waits on T779 and AC-476 on T792 on.
+    - **`mcp/auth.ts`:**
+      - `tokenVerifier(store, now)` is the SDK's `OAuthTokenVerifier`. A token of the wrong shape (`wellFormed`) is refused without the database. Otherwise `store.presented(digest, now)` finds a working token by the digest's unique index. `expiresAt` is set in seconds, and `extra.token` carries the token's id, scopes, expiry and owner for T777.
+      - `bearerAuth(store, now)` is `verifyBearerToken` with that verifier, followed by `store.used(id, now)`.
+      - `noTokens` turns every request away with the same challenges. `/mcp` uses it when `buildServer` is given no token store.
+    - **One refusal for every token that doesn't work: "The token is unknown, revoked or expired."** (the lane's call). So the answer doesn't tell an unknown token from a stopped one. The SDK's own messages stay for a missing header ("Missing Authorization header") and a scheme other than Bearer.
+    - **The challenge is the SDK's:** `bearerAuthChallengeResponse` gives `WWW-Authenticate: Bearer error="invalid_token", error_description="…"` and an OAuth error body. It has no `resource_metadata`, since wechart publishes no protected-resource metadata. T774's bare `Bearer` is gone, and the tests that expected it now expect the full challenge.
+    - **Last used is written on every request a token is taken for** (the lane's call, overturnable). AC-430 doesn't say how fine it must be. At 60 requests a minute per token by default (AC-472), the cost is one indexed update per request. GitLab's every-10-minutes is the alternative (`mcp-deployment-and-tokens.md` §4).
+    - **The plugin:** the token check is a route-level `onRequest` hook after the guard, so it runs before the body is read. A body of another content type gets the 401 and not a 415, which T774 left for this task. A taken token is on `request.mcpAuth` for T778.
+      - Until T778, a request past the check is answered 501 ("MCP isn't served here yet.").
+    - **Tokens elsewhere (`auth/user.ts`):** in either security mode, an `onRequest` hook answers 401 ("A personal access token is taken on /mcp alone.") to any request outside `/mcp` whose `Authorization` is `Bearer wct_…`, whatever cookie it also carries.
+      - It is told by the token's prefix, so the install Job's own Bearer seed token is untouched.
+    - **The web app's cross-site check (`auth/guard.ts`) skips `/mcp`.** `/mcp` checks its own Origin against the MCP host (T775) and takes no cookie, so the cookie-based CSRF check isn't needed there. Without the skip, with sign-in on, a POST with the MCP host's own `Origin` was refused 403. (This was the T775 review's finding.)
+    - **Research:** what the installed helpers do (the order of checks, the challenge format, the real clock for expiry) is in `docs/research/mcp-sdk-installed-notes.md`, items 4–7.
+    - **Tests:** `mcp/auth.test.ts` (5, new), `auth/user.test.ts` (1 new). Changed: `mcp/guard.test.ts`'s spy now throws `OAuthError`, and `mcp/plugin.test.ts` expects the SDK's challenge.
