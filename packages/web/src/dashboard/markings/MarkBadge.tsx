@@ -21,9 +21,15 @@ export interface MarkBadgeProps {
   /** The marking's own colour, from its slot. */
   readonly colour: string;
   readonly markedCount: number;
+  /**
+   * Whose share the tile shows, where its items are all only partly marked
+   * (T935, AC-098, rule 50 as R81 amends it): "EMEA" reads "EMEA's share
+   * shown", in place of a count that would be 0 of the tile's own items.
+   */
+  readonly shareShown?: string | undefined;
 }
 
-export function MarkBadge({ marking, colour, markedCount }: MarkBadgeProps) {
+export function MarkBadge({ marking, colour, markedCount, shareShown }: MarkBadgeProps) {
   // Rule 50 is about tiles using a *non-empty* marking. "0 marked" on every
   // tile of an untouched dashboard is noise that would teach people to ignore
   // the badge — which is the one thing it cannot afford.
@@ -37,8 +43,11 @@ export function MarkBadge({ marking, colour, markedCount }: MarkBadgeProps) {
         aria-hidden="true"
         style={{ background: colour }}
       />
-      {/* Grouped, as the 1,000-item limit it is read against is (AC-102). */}
-      {marking.name}: {markedCount.toLocaleString('en-GB')} marked
+      {shareShown === undefined
+        ? // Grouped, as the 1,000-item limit it is read against is (AC-102).
+          `${marking.name}: ${markedCount.toLocaleString('en-GB')} marked`
+        : // "EMEA's", but "3 items'" (T935's review).
+          `${marking.name}: ${shareShown}${shareShown.endsWith('items') ? "'" : "'s"} share shown`}
     </span>
   );
 }

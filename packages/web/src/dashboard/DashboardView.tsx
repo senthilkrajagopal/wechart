@@ -138,7 +138,7 @@ import {
   type MarkFilter,
 } from './markings/filterToMarked';
 import { DOWNLOADED, MarkedRows } from './markings/MarkedRows';
-import { markedValuesTsv } from './markings/markedValues';
+import { markedValuesTsv, shareShownOf, showsShareOnly } from './markings/markedValues';
 import { CopyToDashboard } from './CopyToDashboard';
 import { clockTimeOf, dataAsOf, type DataAsOfSaid, type ScheduleSaid } from './dataAsOf';
 import { WhyNotAccelerated } from './WhyNotAccelerated';
@@ -987,6 +987,8 @@ interface TileCharts {
             marking: Marking;
             colour: string;
             markedCount: number;
+            /** Whose share the tile shows, where it only shows a share (T935, AC-098). */
+            shareShown?: string;
             /** What it holds, by the members' titles, for the menu's heading (AC-247). */
             values?: string;
             /**
@@ -1673,6 +1675,7 @@ function Elements({
                           marking={shown.marking}
                           colour={shown.colour}
                           markedCount={shown.markedCount}
+                          shareShown={shown.shareShown}
                         />
                       );
                     })()
@@ -4482,10 +4485,18 @@ export function DashboardView({
                 ? undefined
                 : { marked: marked.length, of: items.length };
             };
+            // R81's types that only show its share say whose (T935, AC-098).
+            const chartId = element.chartId;
+            const shareShown =
+              chartId !== undefined &&
+              showsShareOnly(drawn.specs[chartId]?.chartType ?? '', chartId in markedShareReached)
+                ? shareShownOf(predicate)
+                : undefined;
             return {
               marking: found,
               colour: markingColour(found.slot, theme),
               markedCount: markedCount(predicate),
+              ...(shareShown === undefined ? {} : { shareShown }),
               values: summariseMarking(predicate, memberTitle, 5, (id) => chartTitleOfTile(id)),
               // Copy › Marked values (T271, AC-241): a whole tile's items as
               // that tile draws them.

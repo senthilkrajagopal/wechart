@@ -1,4 +1,4 @@
-import type { MarkedItem, MarkingPredicate } from '@wechart/core';
+import { markedCount, type MarkedItem, type MarkingPredicate } from '@wechart/core';
 
 /**
  * A marking's items as tab-separated text (T271, AC-241): a header row of the
@@ -48,6 +48,53 @@ export function markedValuesTsv(
     members.map((member) => field(titleOf(member) ?? member)).join('\t'),
     ...rows.map((row) => members.map((member) => row.get(member) ?? '').join('\t')),
   ].join('\n');
+}
+
+/**
+ * R81's types that show another tile's marked share in their own items — a
+ * graphical table's cells, a waterfall's steps, a histogram's bins — rather
+ * than marking items whole (AC-098; design 23 screen 2 pin 12). While their
+ * items are all only partly marked, their badge says whose share they show
+ * in place of a count. 100 % stacking joins them with its Stack setting (T957).
+ */
+const SHARE_SHOWN_TYPES: ReadonlySet<string> = new Set([
+  'graphicalTable',
+  'waterfall',
+  'histogram',
+]);
+
+/**
+ * Whether a tile's badge says "‹marking›'s share shown" (T935, AC-098): one
+ * of R81's share-showing types, its items all only partly marked — it groups
+ * by none of what the marking names, so its marked share is asked of Cube
+ * (`needsMarkedShare`).
+ */
+export function showsShareOnly(chartType: string, partlyMarked: boolean): boolean {
+  return partlyMarked && SHARE_SHOWN_TYPES.has(chartType);
+}
+
+/**
+ * Whose share a tile shows, for its badge (T935, AC-098): the marked values,
+ * two by name and the rest counted ("EMEA, APAC +2"), a range by its bounds;
+ * items of several members, or a whole tile marked (Mark all, AC-115),
+ * counted as the badge counts them (`markedCount`).
+ */
+export function shareShownOf(predicate: MarkingPredicate): string {
+  const wholes = predicate.wholes ?? [];
+  const single = wholes.length === 0 && predicate.items.every((item) => item.length === 1);
+  const named = single
+    ? [
+        ...predicate.items.map((item) => field(item[0]?.value)),
+        ...predicate.ranges.map((range) => `${field(range.from)} – ${field(range.to)}`),
+      ]
+    : [];
+  if (!single || named.length === 0) {
+    const n = markedCount(predicate);
+    return n === 1 ? '1 item' : `${n.toLocaleString('en-GB')} items`;
+  }
+  if (named.length === 1) return named[0] ?? '';
+  if (named.length === 2) return `${named[0] ?? ''} and ${named[1] ?? ''}`;
+  return `${named.slice(0, 2).join(', ')} +${String(named.length - 2)}`;
 }
 
 function field(value: unknown): string {

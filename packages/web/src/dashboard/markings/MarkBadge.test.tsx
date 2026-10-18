@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { MarkBadge } from './MarkBadge';
 import { MarkChip, summariseMarking } from './MarkChip';
+import { shareShownOf, showsShareOnly } from './markedValues';
 
 /**
  * T104 / AC-098: THE SYSTEM SHALL convey marking state by more than colour:
@@ -67,6 +68,74 @@ describe('the badge on a tile that uses a marking', () => {
     render(<MarkBadge marking={marking} colour="#151107" markedCount={0} />);
 
     expect(screen.queryByTestId('mark-badge')).toBeNull();
+  });
+});
+
+/**
+ * T935 / AC-098 (R81): … From R81, a tile whose items are all only partly
+ * marked (a graphical table, waterfall, histogram or 100 % stack showing
+ * another tile's marked share) SHALL show "● ‹marking summary›'s share
+ * shown", such as "● EMEA's share shown", in place of a count of 0.
+ * `Fails when: … a tile whose items are all partly marked shows "0 marked",
+ * or no share line.`
+ */
+describe('a tile that only shows a marking’s share (AC-098, R81)', () => {
+  const emea = withItem(EMPTY_PREDICATE, [{ member: 'orders.region', value: 'EMEA' }]);
+
+  it('says whose share it shows, and never a count', () => {
+    render(
+      <MarkBadge
+        marking={marking}
+        colour="#151107"
+        markedCount={1}
+        shareShown={shareShownOf(emea)}
+      />,
+    );
+    const badge = screen.getByTestId('mark-badge');
+    // In the spec's words, its apostrophe as written there (AC-098).
+    expect(badge.textContent).toBe("Marking: EMEA's share shown");
+    expect(badge.textContent).not.toMatch(/\d+ marked/);
+    // The swatch still decorative: the words carry it.
+    expect(screen.getByTestId('mark-swatch').getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('still counts on a tile with a whole item marked', () => {
+    render(<MarkBadge marking={marking} colour="#151107" markedCount={1} />);
+    expect(screen.getByTestId('mark-badge').textContent).toBe('Marking: 1 marked');
+  });
+
+  it('names the marking’s values, at most two, then how many more', () => {
+    const region = (value: string) => [{ member: 'orders.region', value }];
+    const two = withItem(emea, region('APAC'));
+    const four = withItem(withItem(two, region('LATAM')), region('North America'));
+    expect(shareShownOf(two)).toBe('EMEA and APAC');
+    expect(shareShownOf(four)).toBe('EMEA, APAC +2');
+    expect(
+      shareShownOf(withRange(EMPTY_PREDICATE, { member: 'orders.amount', from: 100, to: 150 })),
+    ).toBe('100 – 150');
+    // A tuple names no one value: counted, as the chip counts it.
+    expect(shareShownOf(withItem(EMPTY_PREDICATE, [...paid, ...region('EMEA')]))).toBe('1 item');
+    // A tile marked whole (Mark all) counts its items, as the badge does —
+    // never "0 items" (T935's review).
+    const whole = { ...emea, wholes: [{ tileId: 't1', filters: [], count: 30 }] };
+    expect(shareShownOf(whole)).toBe('31 items');
+    expect(shareShownOf({ ...whole, items: [] })).toBe('30 items');
+  });
+
+  it('writes a count’s possessive as English does', () => {
+    render(<MarkBadge marking={marking} colour="#151107" markedCount={3} shareShown="3 items" />);
+    expect(screen.getByTestId('mark-badge').textContent).toBe("Marking: 3 items' share shown");
+  });
+
+  it('shows the share only on R81’s types that draw it, and only where its items are partly marked', () => {
+    expect(showsShareOnly('graphicalTable', true)).toBe(true);
+    expect(showsShareOnly('waterfall', true)).toBe(true);
+    expect(showsShareOnly('histogram', true)).toBe(true);
+    // Grouped by what the marking names: its items wholly in it or out.
+    expect(showsShareOnly('graphicalTable', false)).toBe(false);
+    // Today's types keep their count (AC-564 keeps a KPI's badge as it is).
+    expect(showsShareOnly('bar', true)).toBe(false);
+    expect(showsShareOnly('kpi', true)).toBe(false);
   });
 });
 

@@ -2331,10 +2331,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T934 [P] (AC-559, AC-217) Register R81's types, names, needs and nine shelves, Flow among them and Map in place of Country map, with no gauge; a greyed card stays choosable and highlights the well it needs
 
-- [ ] T935 [P] (AC-098) Say "● ‹marking›'s share shown" on a tile whose items are all only partly marked, in place of "0 marked"
-  - Files: `packages/web/src/dashboard/markings/MarkBadge.tsx` (+ test), `packages/web/src/dashboard/markings/markedValues.ts`.
-  - Failing test: `MarkBadge.test.tsx`: a tile whose every item has a marked share between 0 and its whole, with Region = EMEA marked elsewhere, reads "● EMEA's share shown" and never "0 marked"; a tile with 1 whole item marked still reads "● 1 marked" (AC-098).
-  - Depends on: none
+- [x] T935 [P] (AC-098) Say "● ‹marking›'s share shown" on a tile whose items are all only partly marked, in place of "0 marked"
 
 ### Lane CHARTS-A: the KPI
 
