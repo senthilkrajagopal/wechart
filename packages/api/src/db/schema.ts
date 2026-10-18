@@ -183,7 +183,8 @@ export interface McpResultPagesTable {
   id: string;
   token_id: string;
   made_at: Generated<Date>;
-  pages: JSONColumnType<unknown[], string, string>;
+  /** The pages as JSON text: `jsonb` can't hold a NUL or a lone surrogate (T784's review). */
+  pages: string;
 }
 
 /** A user's own saved SQL runner query (T812, AC-457): never shared. */

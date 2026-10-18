@@ -23,6 +23,7 @@ import { forgetTestCounts, testCounter } from '../counter.fixture';
 import { MAX_ROWS } from '../paging';
 import { USER_DATA, USER_DATA_NOTICE } from '../result';
 import { mintToken } from '../tokenText';
+import { MAX_WAITS, QUERY_STILL_RUNNING } from './query';
 
 /**
  * T784 (AC-437, AC-475, AC-443): querying cubes and views through MCP as
@@ -62,6 +63,10 @@ const config = {
 
 /** What Cube was asked to load, with the groups it was asked as. */
 const loads: { groups: unknown; query: Record<string, unknown> }[] = [];
+/** How many loads Cube answers "Continue wait" before it answers rows (T784's review). */
+let continueWaits = 0;
+/** Rows in each result of a compared query: two results of them pass 1,000 in all. */
+const COMPARED = 700;
 
 /**
  * A Cube answering `/v1/load` with rows of the groups it is asked as, one
@@ -84,8 +89,31 @@ const cube = new CubeClient({
       });
     const { query } = JSON.parse(String(init?.body)) as { query: Record<string, unknown> };
     loads.push({ groups: claims['groups'], query });
+    // Still running: Cube's long poll answered, to be asked again (`cube/data-apis.md` §4).
+    if (continueWaits > 0) {
+      continueWaits -= 1;
+      return new Response(JSON.stringify({ error: 'Continue wait' }), { status: 200 });
+    }
     const groups = (claims['groups'] as string[] | undefined) ?? [];
     const limit = typeof query['limit'] === 'number' ? query['limit'] : 0;
+    // A query of two date ranges: one result per range, each row tagged with its
+    // range (`cube/data-apis.md`, "compareDateRange").
+    const compared = (query['timeDimensions'] as { compareDateRange?: string[] }[] | undefined)?.[0]
+      ?.compareDateRange;
+    if (compared !== undefined)
+      return new Response(
+        JSON.stringify({
+          queryType: 'compareDateRangeQuery',
+          results: compared.map((_, at) => ({
+            query,
+            // Short rows, so 1,400 of them are well under 50,000 characters:
+            // only the 1,000-row cap cuts them.
+            data: Array.from({ length: COMPARED }, (__, n) => ({ 'orders.n': at * COMPARED + n })),
+            annotation: { measures: { 'orders.count': { title: `${MARK} Orders` } } },
+          })),
+        }),
+        { status: 200 },
+      );
     const data =
       limit > 1
         ? Array.from({ length: limit }, (_, n) => ({ 'orders.n': n, 'orders.note': ROW_TEXT }))
@@ -312,6 +340,67 @@ describe('querying cubes and views through MCP, as the owner (T784, AC-437, AC-4
         cursor = (next.outside['page'] as { cursor: string | null }).cursor;
       }
       expect(rows.map((row) => row['orders.n'])).toEqual(Array.from({ length: MANY }, (_, n) => n));
+    });
+  });
+
+  it('asks again while Cube says to wait, as the web app does, and says when it is still running', async () => {
+    const forChart = { kind: 'chart', id: at.reached };
+    await withClient(tokens.read!, async (client) => {
+      continueWaits = 2;
+      const before = loads.length;
+      const { data } = marked(
+        await client.callTool({ name: 'query', arguments: { query: QUERY, for: forChart } }),
+      );
+      expect(data.rows.map((row) => row['orders.group'])).toEqual(['sales-rw']);
+      expect(loads.length - before).toBe(3);
+
+      continueWaits = 1_000;
+      const still = loads.length;
+      const running = await client.callTool({
+        name: 'query',
+        arguments: { query: QUERY, for: forChart },
+      });
+      continueWaits = 0;
+      expect(running.isError).toBe(true);
+      expect(running.structuredContent).toBeUndefined();
+      expect(JSON.stringify(running.content)).toContain(QUERY_STILL_RUNNING);
+      expect(loads.length - still).toBe(MAX_WAITS);
+    });
+  });
+
+  it('pages a compared query’s results past 1,000 rows in all, every row once', async () => {
+    const forChart = { kind: 'chart', id: at.reached };
+    const query = {
+      measures: ['orders.count'],
+      timeDimensions: [
+        {
+          dimension: 'orders.created_at',
+          granularity: 'day',
+          compareDateRange: ['2026-01-01 - 2026-01-31', '2026-02-01 - 2026-02-28'],
+        },
+      ],
+    };
+    await withClient(tokens.read!, async (client) => {
+      const first = marked(
+        await client.callTool({ name: 'query', arguments: { query, for: forChart } }),
+      );
+      expect(first.data.rows).toHaveLength(MAX_ROWS);
+      expect((first.data as unknown as { rowsPerResult: number[] }).rowsPerResult).toEqual([
+        COMPARED,
+        COMPARED,
+      ]);
+      const page = first.outside['page'] as { leftOut: { rows: number }; cursor: string };
+      expect(page.leftOut.rows).toBe(2 * COMPARED - first.data.rows.length);
+      const rows = [...first.data.rows];
+      for (let cursor: string | null = page.cursor; cursor !== null;) {
+        const next = marked(await client.callTool({ name: 'next_page', arguments: { cursor } }));
+        expect(next.data.rows.length).toBeLessThanOrEqual(MAX_ROWS);
+        rows.push(...next.data.rows);
+        cursor = (next.outside['page'] as { cursor: string | null }).cursor;
+      }
+      expect(rows.map((row) => row['orders.n'])).toEqual(
+        Array.from({ length: 2 * COMPARED }, (_, n) => n),
+      );
     });
   });
 

@@ -40,16 +40,16 @@ export function mcpPageStore(db: Kysely<Database>): McpPageStore {
     async load(tokenId, id, index) {
       const row = await db
         .selectFrom('mcp_result_pages')
-        .select([
-          sql<unknown>`pages -> ${index}::int`.as('page'),
-          sql<number>`jsonb_array_length(pages)`.as('count'),
-        ])
+        .select('pages')
         .where('id', '=', id)
         .where('token_id', '=', tokenId)
         .where(sql<boolean>`made_at > now() - ${PAGE_LIFETIME_MS}::int * interval '1 millisecond'`)
         .executeTakeFirst();
-      if (row === undefined || row.page === null || row.page === undefined) return null;
-      return { page: row.page, count: Number(row.count) };
+      if (row === undefined) return null;
+      // Kept as JSON text, which holds what `jsonb` can't (T784's review).
+      const pages = JSON.parse(row.pages) as unknown[];
+      if (!Number.isInteger(index) || index < 0 || index >= pages.length) return null;
+      return { page: pages[index], count: pages.length };
     },
     async removeBefore(cutoff) {
       const result = await db

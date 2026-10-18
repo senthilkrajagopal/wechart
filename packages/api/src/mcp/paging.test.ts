@@ -103,8 +103,22 @@ const TEST_TOOLS: McpTool[] = [
       return dataResult({ item: { text: 'x"'.repeat(count) } });
     },
   },
+  {
+    name: 'test_odd_rows',
+    description: 'Gives rows of text Postgres’s jsonb can’t hold, for the test.',
+    scope: 'read',
+    inputSchema: COUNT,
+    rows: 'rows',
+    async run(args) {
+      const { count } = args as { count: number };
+      return dataResult({ rows: Array.from({ length: count }, (_, n) => oddRowOf(n)) });
+    },
+  },
   NEXT_PAGE,
 ];
+
+/** Row `n` of odd text: a NUL, a lone surrogate, and a character outside the BMP (T784's review). */
+const oddRowOf = (n: number) => ({ n, text: `${n}\u0000\ud800😀` });
 
 let app: FastifyInstance;
 let token = '';
@@ -227,8 +241,9 @@ function pageOf(result: Awaited<ReturnType<Client['callTool']>>): Page {
   expect(JSON.parse(text)).toEqual(result.structuredContent);
   const page = result.structuredContent as unknown as Page;
   expect(page.notice).toBe(USER_DATA_NOTICE);
-  const rows = page[USER_DATA]['rows'];
-  if (Array.isArray(rows)) expect(rows.length).toBeLessThanOrEqual(MAX_ROWS);
+  // Whatever its rows are called (T784's review).
+  for (const value of Object.values(page[USER_DATA]))
+    if (Array.isArray(value)) expect(value.length).toBeLessThanOrEqual(MAX_ROWS);
   return page;
 }
 
@@ -269,6 +284,22 @@ describe('the pages of an answer (T784, AC-475)', () => {
     );
     expect(pieces.at(-1)!.userData).toEqual({ rows: [data.rows[2]] });
     expect(pieces.at(-1)!.leftOut).toEqual({ rows: 0, parts: 0 });
+  });
+});
+
+describe('the parts of an answer too large for a page (T784’s review)', () => {
+  it('never splits a character outside the BMP between parts', () => {
+    const data = { text: '😀"'.repeat(40_000) };
+    const pieces = piecesOf(data, undefined);
+    expect(pieces.length).toBeGreaterThan(1);
+    for (const piece of pieces) {
+      const part = piece.userData['part'] as string;
+      // A lone surrogate, half a split character, can't be URI-encoded.
+      expect(() => encodeURIComponent(part)).not.toThrow();
+    }
+    expect(JSON.parse(pieces.map((piece) => piece.userData['part'] as string).join(''))).toEqual(
+      data,
+    );
   });
 });
 
@@ -362,5 +393,34 @@ describe('paging a tool’s result past 1,000 rows or 50,000 characters (T784, A
       expect(refused.isError).toBe(true);
       expect(refused.structuredContent).toBeUndefined();
     }, otherToken);
+  });
+
+  it('gives no page past the last, nor once its hour is over', async () => {
+    await withClient(async (client) => {
+      const first = pageOf(
+        await client.callTool({ name: 'test_rows', arguments: { count: 1_200 } }),
+      );
+      const cursor = first.page!.cursor!;
+      const [id] = cursor.split('.');
+      const past = await client.callTool({ name: 'next_page', arguments: { cursor: `${id!}.2` } });
+      expect(past.isError).toBe(true);
+      expect(past.structuredContent).toBeUndefined();
+      pageOf(await client.callTool({ name: 'next_page', arguments: { cursor } }));
+      await sql`UPDATE mcp_result_pages SET made_at = now() - interval '61 minutes' WHERE id = ${id!}::uuid`.execute(
+        getDb(),
+      );
+      const expired = await client.callTool({ name: 'next_page', arguments: { cursor } });
+      expect(expired.isError).toBe(true);
+      expect(expired.structuredContent).toBeUndefined();
+    });
+  });
+
+  it('keeps and gives pages of text Postgres’s jsonb can’t hold: a NUL, a lone surrogate', async () => {
+    await withClient(async (client) => {
+      const pages = await allPages(client, 'test_odd_rows', { count: 1_500 });
+      expect(pages.length).toBeGreaterThan(1);
+      const rows = pages.flatMap((page) => page[USER_DATA]['rows'] as unknown[]);
+      expect(rows).toEqual(Array.from({ length: 1_500 }, (_, n) => oddRowOf(n)));
+    });
   });
 });

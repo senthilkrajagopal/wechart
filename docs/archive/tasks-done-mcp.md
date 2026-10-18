@@ -379,6 +379,13 @@
     - **Never seen red for their own reasons:** both new test files first failed on missing modules. The shared test database then refused to run this branch's migrations until `1758680001000` was picked, and by then the code was written. Three assumptions in the tests were wrong and were corrected, none weakening what they show: a row of `rowOf(0, 30_000)` is over 50,000 characters of JSON, so it is now `rowOf(0, 20_000)`; and a page of 1,001 folder items, or of 2,500 query rows with their text, is cut by the 50,000 characters before the 1,000 rows, so both now check "at most 1,000, and the rest counted as left out".
     - **Tests changed:** `mcp/transport.test.ts` lists `query` and `next_page` after the read tools.
     - **Unit suite:** all green: api 2,020, web 3,117, core 550, charts 556, recommender 133, ui 47.
+    - **The cold review:** FAIL, on three real bugs. All three are fixed in the follow-up commit, each test seen red first:
+      - **"Continue wait"** (`query.ts`): Cube's answer to a query still running came back as a successful `answer`, with no rows. The tool now asks again, up to 12 times, then refuses with fixed text (decision T784-7). New test: two waits, then the rows, with Cube asked 3 times; endless waits are refused after 12.
+      - **Several results** (`query.ts`): a compareDateRange answer came back whole, past the 1,000-row cap. Its rows now come in one `rows` list, with `rowsPerResult` and `annotations` (T784-8). New test: 2 × 700 short rows page as 1,000 and 400, every row once.
+      - **`jsonb`** (`repos/mcp-pages.ts`): it refuses a NUL and a lone surrogate, so such rows couldn't be paged. Pages are now kept as text (migration `1758690001000`, T784-9). New test: 1,500 rows, each holding a NUL, a lone surrogate and an emoji, page and come back equal.
+      - **Test gaps closed:** a cursor past the last page, or an hour old, gives nothing; parts never split a character outside the BMP; every array in a page is checked against the 1,000-row cap, not only `rows`.
+      - **Left as is:** MCP queries send no `x-request-id`, so their query-history rows say "unknown", as any request without one does. Error results aren't paged: they are short, fixed text or a route's one-line reason.
+      - **Unit suite with the follow-up:** all green: api 2,031, web 3,117, core 550, charts 556, recommender 133, ui 47.
 
 - [x] T785 (AC-438, AC-433, AC-469, AC-432) Edit in my workspace through MCP: copy a shared dashboard, chart or model into its project folder in the owner's workspace; refuse with 403 `insufficient_scope` without workspace-edit
   - Lane: MCP
