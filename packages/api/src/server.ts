@@ -4501,8 +4501,8 @@ export function buildServer({
       mcpUrl: mcpUrlOf(config.mcpHost),
     });
   // MCP only where the deployment names its host (T774, AC-476).
-  // Its own Host check is T775's (AC-436).
-  if (config.mcpHost !== undefined) registerMcp(app);
+  // Its Host and Origin are checked first (T775, AC-436).
+  if (config.mcpHost !== undefined) registerMcp(app, { host: config.mcpHost });
 
   /**
    * Calculation requests (T383, AC-050): asked of the read-write members of

@@ -168,3 +168,17 @@
       - The page's Copy for the server URL says when it can't copy, as the shown-once dialog does, and announces "Copied" politely.
       - **Left for T776:** the token check must run before the body is parsed (`onRequest` or `preParsing`). Today Fastify parses a JSON POST, and answers 415 for another content type, before the 401.
       - **Left as is:** the "MCP isn't set up" line has no "Server URL" heading over it, unlike G3. While the list is loading, or fails to load, neither state shows.
+
+- [x] T775 (AC-436) Answer a request to `/mcp` with a foreign `Host` or a foreign `Origin` with 403, before its token is read
+  - Lane: MCP
+  - Files: `packages/api/src/mcp/plugin.ts`, `packages/api/src/mcp/guard.ts` (+ `guard.test.ts`; `hostHeaderValidation` from `@modelcontextprotocol/fastify` 2.0.1 and an Origin check, per `mcp-typescript-sdk.md`).
+  - Failing test: `guard.test.ts`: `Host: evil.example` answers 403, and so does an `Origin` the deployment doesn't allow, each with the token verifier never called (a spy) and no tool run; the configured host with no `Origin`, or an allowed one, passes on to the token check (AC-436).
+  - Depends on: T774
+  - **Built 2026-10-17** (lane MCP, batch 3). **AC-436 is ticked:** in the wechart API with an MCP host, a foreign `Host` and a foreign `Origin` each answer 403 (`mcp/guard.test.ts`, through `buildServer`), and on `registerMcp` a spy token check is never called for either.
+    - **Packages:** `@modelcontextprotocol/fastify` 2.0.1 and its peer `@modelcontextprotocol/server` 2.3.1, both pinned exactly, come in here rather than at T778, since the guard uses the adapter's hooks (the lane's call). T778 adds `@modelcontextprotocol/node` and the dev `@modelcontextprotocol/client`.
+    - **The guard (`mcp/guard.ts`):** `mcpGuard(host)` is the adapter's `hostHeaderValidation([host])` and `originValidation([host])`. The research said no Fastify Origin hook was known; the installed 2.0.1 exports one. That correction, and how both hooks compare hostnames, are in `docs/research/mcp-sdk-installed-notes.md`.
+      - **Allowed Origins: the MCP host's own only** (the lane's call, overturnable). No wechart page calls `/mcp`, and the deployment names no other. A request with no `Origin`, as Claude Code sends, passes. The hooks compare hostnames, so the port and the `http`/`https` scheme aren't compared.
+    - **The plugin:** `registerMcp(app, { host, verifyToken? })`. Each `/mcp` route has route-level `onRequest` hooks: the guard first, then, for POST, the token check. So the token is read before the body is parsed, as T776 needs. `verifyToken` stands in until T776 builds it; unset, it takes no token, and every POST still answers 401 with `WWW-Authenticate: Bearer`.
+      - GET and DELETE are guarded too, so a foreign Host gets 403 before their 405.
+    - **Tests changed:** `auth/guard.test.ts`'s sweep and `mcp/plugin.test.ts` send the MCP host on `/mcp`, since a request without it is now refused 403 first.
+    - **Tests:** `mcp/guard.test.ts` (5, new).

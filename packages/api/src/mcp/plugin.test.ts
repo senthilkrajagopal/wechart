@@ -116,7 +116,11 @@ describe('/mcp with an MCP host (T774, AC-476)', () => {
       expect(answer.headers['www-authenticate']).toBe('Bearer');
       // GET and DELETE: 405, as the Streamable HTTP transport asks.
       for (const method of ['GET', 'DELETE'] as const) {
-        const other = await app.inject({ method, url: '/mcp' });
+        const other = await app.inject({
+          method,
+          url: '/mcp',
+          headers: { host: 'mcp.wechart.example.com' },
+        });
         expect(other.statusCode).toBe(405);
         expect(other.headers['allow']).toBe('POST');
       }

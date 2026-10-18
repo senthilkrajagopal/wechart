@@ -155,7 +155,8 @@ describe('with security on and no session (T318, AC-251)', () => {
       'public POST /mcp',
     ]);
     for (const method of ['POST', 'GET', 'DELETE'] as const) {
-      const mcp = await app.inject({ method, url: '/mcp' });
+      // On the MCP host: any other is refused first (T775, AC-436).
+      const mcp = await app.inject({ method, url: '/mcp', headers: { host: 'mcp.example.com' } });
       expect(mcp.statusCode, method).toBe(method === 'POST' ? 401 : 405);
     }
     const health = await app.inject({ method: 'GET', url: '/api/health' });

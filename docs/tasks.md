@@ -1602,11 +1602,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T774 (AC-476) Serve `/mcp` only where an MCP host is configured, and say on the token pages that MCP isn't set up where none is
 
-- [ ] T775 (AC-436) Answer a request to `/mcp` with a foreign `Host` or a foreign `Origin` with 403, before its token is read
-  - Lane: MCP
-  - Files: `packages/api/src/mcp/plugin.ts`, `packages/api/src/mcp/guard.ts` (+ `guard.test.ts`; `hostHeaderValidation` from `@modelcontextprotocol/fastify` 2.0.1 and an Origin check, per `mcp-typescript-sdk.md`).
-  - Failing test: `guard.test.ts`: `Host: evil.example` answers 403, and so does an `Origin` the deployment doesn't allow, each with the token verifier never called (a spy) and no tool run; the configured host with no `Origin`, or an allowed one, passes on to the token check (AC-436).
-  - Depends on: T774
+- [x] T775 (AC-436) Answer a request to `/mcp` with a foreign `Host` or a foreign `Origin` with 403, before its token is read
 
 - [ ] T776 (AC-435, AC-431, AC-430) Take a token only from `Authorization: Bearer` on `/mcp`: 401 with `WWW-Authenticate: Bearer` for none, a bad, revoked or expired one, the query string or the session cookie; refuse tokens on every other route; record Last used
   - Lane: MCP
