@@ -18,7 +18,7 @@ import type { McpCall, McpTool, WebAnswer } from '../server';
  * the result's marked field (AC-443, `result.ts`).
  */
 
-const READ_ONLY: ToolAnnotations = {
+export const READ_ONLY: ToolAnnotations = {
   readOnlyHint: true,
   destructiveHint: false,
   idempotentHint: true,
@@ -31,7 +31,7 @@ const READ_ONLY: ToolAnnotations = {
  * route by dot segments. Every wechart id fits: uuids, "root", "mine",
  * `ws:‹key›`.
  */
-const ID = '^[A-Za-z0-9][A-Za-z0-9_.:@~+=-]*$';
+export const ID = '^[A-Za-z0-9][A-Za-z0-9_.:@~+=-]*$';
 
 const BY_ID = fromJsonSchema<{ id: string }>({
   type: 'object',
@@ -74,7 +74,7 @@ const NOT_THERE = 'There’s no such item, or it isn’t yours to see.';
  * The route's refusal, in its own words, under the marked field (T783-2),
  * or wechart's fixed "no such item"; a fault of its own throws.
  */
-function refusedBy(answer: WebAnswer): CallToolResult {
+export function refusedBy(answer: WebAnswer): CallToolResult {
   if (answer.status >= 500) throw new Error(`The web route answered ${answer.status}.`);
   const said = (answer.body as { error?: unknown } | null)?.error;
   return typeof said === 'string' ? routeRefusal(said) : refusal(NOT_THERE);
@@ -124,6 +124,7 @@ export const READ_TOOLS: readonly McpTool[] = [
       'Lists the folders you may see, with how many items each holds, and your roots: the shared root and My workspace.',
     scope: 'read',
     annotations: READ_ONLY,
+    rows: 'folders',
     async run(_args, call) {
       const roots = await call.ask('/api/folder-roots');
       if (roots.status !== 200) return refusedBy(roots);
@@ -139,6 +140,7 @@ export const READ_TOOLS: readonly McpTool[] = [
     scope: 'read',
     inputSchema: IN_FOLDER,
     annotations: READ_ONLY,
+    rows: 'items',
     run: (args, call) =>
       read(
         call,
@@ -176,6 +178,7 @@ export const READ_TOOLS: readonly McpTool[] = [
     scope: 'read',
     inputSchema: BY_NAME,
     annotations: READ_ONLY,
+    rows: 'definitions',
     run: (args, call) => definitions(call, 'cube', args),
   },
   {
@@ -185,6 +188,7 @@ export const READ_TOOLS: readonly McpTool[] = [
     scope: 'read',
     inputSchema: BY_NAME,
     annotations: READ_ONLY,
+    rows: 'definitions',
     run: (args, call) => definitions(call, 'view', args),
   },
   {

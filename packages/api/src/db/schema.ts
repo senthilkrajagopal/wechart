@@ -175,6 +175,15 @@ export interface Database {
   latest_sign_ins: LatestSignInTable;
   mcp_rate_limit: McpRateLimitTable;
   saved_queries: SavedQueryTable;
+  mcp_result_pages: McpResultPagesTable;
+}
+
+/** The pages of one MCP tool result too large to give whole, for its token (T784, AC-475). */
+export interface McpResultPagesTable {
+  id: string;
+  token_id: string;
+  made_at: Generated<Date>;
+  pages: JSONColumnType<unknown[], string, string>;
 }
 
 /** A user's own saved SQL runner query (T812, AC-457): never shared. */

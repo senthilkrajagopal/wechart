@@ -7,6 +7,7 @@ import { viaMcp } from '../audit/record';
 import { PUBLIC } from '../auth/guard';
 import { asUser, Unauthenticated } from '../auth/user';
 import type { AuditStore } from '../repos/audit';
+import type { McpPageStore } from '../repos/mcp-pages';
 import { type McpAuth, noTokens } from './auth';
 import { mcpGuard } from './guard';
 import {
@@ -48,6 +49,8 @@ export interface McpOptions {
   readonly tools?: readonly McpTool[];
   /** Where every tool call is recorded (T781, AC-478). */
   readonly audit?: Pick<AuditStore, 'record'>;
+  /** Where a cut answer's pages are kept for its cursors (T784, AC-475). */
+  readonly pages?: McpPageStore;
 }
 
 const MINUTE_MS = 60_000;
@@ -117,11 +120,18 @@ export function registerMcp(app: FastifyInstance, options: McpOptions): void {
   const handler = mcpHandler((error) => app.log.error({ err: error }, 'MCP'), {
     tools: options.tools ?? [],
     ...(options.audit === undefined ? {} : { audit: options.audit }),
+    ...(options.pages === undefined ? {} : { pages: options.pages }),
     log: app.log,
     // A tool reads through the web app's own routes, as its caller (T782).
-    ask: (user, url) =>
+    // A POST and other methods with a JSON body, from T784 (the query tool).
+    ask: (user, url, init) =>
       asUser(user, async (headers) => {
-        const answer = await app.inject({ method: 'GET', url, headers });
+        const answer = await app.inject({
+          method: init?.method ?? 'GET',
+          url,
+          headers,
+          ...(init?.body === undefined ? {} : { payload: init.body as object }),
+        });
         const json = () => {
           try {
             return answer.json<unknown>();

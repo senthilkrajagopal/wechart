@@ -151,7 +151,7 @@ import { bearerAuth } from './mcp/auth';
 import { mcpCaller } from './mcp/caller';
 import { mcpUrlOf, registerMcp } from './mcp/plugin';
 import type { McpTool } from './mcp/server';
-import { READ_TOOLS } from './mcp/tools/read';
+import { MCP_TOOLS } from './mcp/tools';
 import {
   type RateLimitCounter,
   RateLimited,
@@ -162,6 +162,7 @@ import { registerSavedQueries } from './routes/sql-saved';
 import type { SavedQueryStore } from './repos/saved-queries';
 import type { AccessTokenStore } from './repos/access-tokens';
 import type { SignInStore } from './repos/sign-ins';
+import type { McpPageStore } from './repos/mcp-pages';
 import {
   overlayContentOf,
   overlaySync,
@@ -287,6 +288,8 @@ export interface BuildOptions {
   readonly savedQueries?: SavedQueryStore;
   /** The MCP tools served, wechart's own unless a test gives others (T781). */
   readonly mcpTools?: readonly McpTool[];
+  /** Where a cut MCP answer's pages are kept for its cursors (T784, AC-475). */
+  readonly mcpPages?: McpPageStore;
   /**
    * Where a data source lands before it is stored, and leaves before it is
    * removed (T442): xcube's connections. Unset without xcube.
@@ -529,6 +532,7 @@ export function buildServer({
   mcpRateLimits,
   savedQueries,
   mcpTools,
+  mcpPages,
   dataSourceLanding,
   connectionTest,
   connectionTests,
@@ -4539,8 +4543,9 @@ export function buildServer({
       ...(config.mcpBadTokenLimit === undefined ? {} : { badTokenLimit: config.mcpBadTokenLimit }),
       // Its tools, each call recorded in the audit trail (T781, AC-478).
       // wechart's own, reading and exploring from T782.
-      tools: mcpTools ?? READ_TOOLS,
+      tools: mcpTools ?? MCP_TOOLS,
       ...(audit === undefined ? {} : { audit }),
+      ...(mcpPages === undefined ? {} : { pages: mcpPages }),
       // A token acts as its owner, with their latest sign-in's groups (T777,
       // AC-471); with none kept, no token is taken with sign-in on.
       ...(accessTokens === undefined || (security === 'oidc' && signIns === undefined)

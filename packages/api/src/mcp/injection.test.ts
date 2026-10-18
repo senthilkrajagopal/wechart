@@ -194,6 +194,7 @@ async function withClient<T>(work: (client: Client) => Promise<T>): Promise<T> {
 /** `value` with its marked field taken out, as JSON. */
 const outsideTheMark = (value: unknown): string => {
   const { [USER_DATA]: _marked, ...rest } = value as Record<string, unknown>;
+  void _marked;
   return JSON.stringify(rest);
 };
 
@@ -212,6 +213,7 @@ function onlyMarked(tool: string, result: Awaited<ReturnType<Client['callTool']>
   expect(JSON.stringify(text[USER_DATA]), tool).toContain(INJECTION);
   expect(outsideTheMark(text), tool).not.toContain(INJECTION);
   const { content: _c, structuredContent: _s, ...rest } = result;
+  void [_c, _s];
   expect(JSON.stringify(rest), tool).not.toContain(INJECTION);
   return text[USER_DATA];
 }

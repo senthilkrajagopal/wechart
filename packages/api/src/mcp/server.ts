@@ -12,6 +12,8 @@ import { Forbidden, Unauthenticated, type WechartUser } from '../auth/user';
 import type { TokenScope } from '../repos/access-tokens';
 import type { AuditStore } from '../repos/audit';
 import type { McpAuth } from './auth';
+import type { McpPageStore } from '../repos/mcp-pages';
+import { paged } from './paging';
 import { refusal, routeRefusal } from './result';
 
 /**
@@ -40,9 +42,21 @@ export interface McpCall {
   /**
    * Asks the web app's own route at `url` as the caller, and gives its
    * status and JSON (T782): what the caller would be answered in the web
-   * app, behind its checks, with My workspace named `mine`.
+   * app, behind its checks, with My workspace named `mine`. A GET, unless
+   * `init` names another method and its JSON body (T784).
    */
-  ask(url: string): Promise<WebAnswer>;
+  ask(url: string, init?: AskInit): Promise<WebAnswer>;
+  /** Page `index` of a cut answer this token was given, and how many it has (T784); none otherwise. */
+  page(
+    id: string,
+    index: number,
+  ): Promise<{ readonly page: unknown; readonly count: number } | null>;
+}
+
+/** A tool's ask other than a GET (T784): its method and JSON body. */
+export interface AskInit {
+  readonly method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  readonly body?: unknown;
 }
 
 /** A web route's answer to a tool's ask (T782). */
@@ -62,6 +76,8 @@ export interface McpTool {
   readonly scope: TokenScope;
   readonly inputSchema?: StandardSchemaWithJSON;
   readonly annotations?: ToolAnnotations;
+  /** The key, under the result's marked field, of the rows it is paged by (T784, AC-475). */
+  readonly rows?: string;
   run(args: unknown, call: McpCall): Promise<CallToolResult>;
 }
 
@@ -79,7 +95,9 @@ export interface McpServices {
   readonly audit?: Pick<AuditStore, 'record'>;
   readonly log: FastifyBaseLogger;
   /** Asks the web app's route at `url` as `user` (T782; the plugin's, by `inject`). */
-  readonly ask: (user: WechartUser, url: string) => Promise<WebAnswer>;
+  readonly ask: (user: WechartUser, url: string, init?: AskInit) => Promise<WebAnswer>;
+  /** Where a cut answer's pages are kept (T784, AC-475); unset, an answer too large is refused. */
+  readonly pages?: McpPageStore;
 }
 
 /** What doesn't fit the tool's schema in `args`, by its issues' messages; none where all fits. */
@@ -124,8 +142,12 @@ async function called(
   const call: McpCall = {
     caller,
     token: { id: token.id, name: token.name, scopes: token.scopes },
-    ask: (url) => services.ask(caller, url),
+    ask: (url, init) => services.ask(caller, url, init),
+    page: async (id, index) => (await services.pages?.load(token.id, id, index)) ?? null,
   };
+  const pages = services.pages;
+  const save =
+    pages === undefined ? undefined : (kept: readonly unknown[]) => pages.save(token.id, kept);
   let outcome: McpOutcome;
   let result: CallToolResult;
   try {
@@ -139,7 +161,8 @@ async function called(
       );
       outcome = 'refused';
     } else if (unfit === undefined) {
-      result = await tool.run(args, call);
+      // Within 1,000 rows and 50,000 characters, paged past them (T784, AC-475).
+      result = await paged(await tool.run(args, call), tool.rows, save);
       outcome = result.isError === true ? 'refused' : 'ok';
     } else {
       result = refusal(`The arguments don’t fit ${tool.name}: ${unfit}`);

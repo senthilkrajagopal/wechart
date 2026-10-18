@@ -1622,11 +1622,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T783 (AC-443) Return user-written text and rows only in marked data fields, and keep the server's instructions and every tool's name and description fixed
 
-- [ ] T784 (AC-437, AC-475) Query cubes and views through MCP as the owner, and page every tool's result past 1,000 rows or 50,000 characters with a cursor
-  - Lane: MCP
-  - Files: `packages/api/src/mcp/tools/query.ts` (+ `query.test.ts`), `packages/api/src/mcp/paging.ts` (+ `paging.test.ts`), `packages/api/src/mcp/tools/read.ts`.
-  - Failing test: `query.test.ts`: a query returns the same rows the same query does in the web app for the same user, with folder access and Cube's access policies applying (AC-437). `paging.test.ts`: a result of 2,500 rows comes back as 1,000, saying it was cut and how many were left out, with a cursor; following the cursors returns every row once; a result of rows under 1,000 but over 50,000 characters is cut under 50,000 the same way; a folder listing longer than 1,000 items pages too (AC-475).
-  - Depends on: T783
+- [x] T784 (AC-437, AC-475, AC-443) Query cubes and views through MCP as the owner, and page every tool's result past 1,000 rows or 50,000 characters with a cursor
 
 - [ ] T785 (AC-438, AC-433, AC-469, AC-432) Edit in my workspace through MCP: copy a shared dashboard, chart or model into its project folder in the owner's workspace; refuse with 403 `insufficient_scope` without workspace-edit
   - Lane: MCP
@@ -2005,7 +2001,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 | AC-433 | T785 | AC-434 | T778 | AC-435 | T776 |
 | AC-436 | T775 | AC-437 | T782, T784 | AC-438 | T785, T786 |
 | AC-439 | T787 | AC-440 | T789 | AC-441 | T789 |
-| AC-442 | T767, T768, T781, T787 | AC-443 | T783 | AC-444 | T790 |
+| AC-442 | T767, T768, T781, T787 | AC-443 | T783, T784 | AC-444 | T790 |
 | ~~AC-445~~ | retired 2026-10-17, `[R78]` ("Defer Claude.ai") | AC-446 | T796, T801 | AC-447 | T798 |
 | AC-448 | T806 | AC-449 | T807 | AC-450 | T800 |
 | AC-451 | T801 | AC-452 | T804 | AC-453 | T809 |

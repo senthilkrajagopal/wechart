@@ -31,6 +31,7 @@ import { calcRequestStore } from './repos/calc-requests';
 import { accessTokenStore } from './repos/access-tokens';
 import { signInStore } from './repos/sign-ins';
 import { rateLimitCounter } from './mcp/rateLimitStore';
+import { mcpPageStore, PAGE_LIFETIME_MS } from './repos/mcp-pages';
 import { AUDIT_RETENTION_DAYS, startAuditRetention } from './audit/retention';
 import { readModelDir } from './model/read-dir';
 import { startModel } from './model/split';
@@ -188,6 +189,7 @@ async function main(): Promise<void> {
         });
   const runStore = sqlRuns(db);
   const rateLimits = rateLimitCounter(db);
+  const mcpPages = mcpPageStore(db);
   // The builds wechart starts, one record per start (T372, AC-150).
   const builds = buildHistory(db);
   /**
@@ -303,6 +305,8 @@ async function main(): Promise<void> {
     signIns: signInStore(db),
     // Each token's requests to `/mcp`, counted for every replica (T779, AC-472).
     mcpRateLimits: rateLimits,
+    // A cut MCP answer's pages, for its cursors on any replica (T784, AC-475).
+    mcpPages,
     // Each user's saved SQL runner queries (T812, AC-457).
     savedQueries: savedQueryStore(db),
     // Read-only SQL run by xcube, on a data source's connection (T532, AC-373).
@@ -439,6 +443,13 @@ async function main(): Promise<void> {
       app.log.warn({ err: error }, 'could not remove old MCP rate-limit windows');
     },
   });
+  // A cut MCP answer's pages, removed hourly once past a cursor's lifetime (T784).
+  const stopPageCleanup = startAuditRetention(mcpPages, {
+    days: PAGE_LIFETIME_MS / 86_400_000,
+    onError: (error) => {
+      app.log.warn({ err: error }, 'could not remove old MCP answer pages');
+    },
+  });
 
   /**
    * Each build wechart started followed to its end on the server, whether or
@@ -478,6 +489,7 @@ async function main(): Promise<void> {
     stopRetention();
     stopRunRetention();
     stopRateLimitCleanup();
+    stopPageCleanup();
     stopFollowing();
     if (scheduling) await scheduler.stop();
     clearInterval(sweeping);

@@ -19,6 +19,7 @@ function both(result: { content: unknown; structuredContent?: unknown }) {
 /** `value` with its marked field taken out, as JSON. */
 const outsideTheMark = (value: unknown): string => {
   const { [USER_DATA]: _marked, ...rest } = value as Record<string, unknown>;
+  void _marked;
   return JSON.stringify(rest);
 };
 

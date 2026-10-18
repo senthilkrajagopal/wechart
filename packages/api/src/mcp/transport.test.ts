@@ -12,13 +12,14 @@ import { mintToken } from './tokenText';
  * T778 (AC-434): MCP at `/mcp` over Streamable HTTP, protocol revision
  * 2026-07-28, with 2025-era clients served through the SDK's stateless
  * fallback; GET and DELETE answer 405; the server's instructions are fixed
- * text. From T782 the tools are the read tools, in their fixed order.
+ * text. From T782 the tools are the read tools, in their fixed order, and
+ * from T784 the query and next_page.
  *
  * The SDK's own client speaks to the wechart API through `inject`, so the
  * request carries the MCP host as its `Host`, which `fetch` can't set.
  */
 const HOST = 'mcp.wechart.example.com';
-/** The read tools (T782), in the order they're listed. */
+/** The read tools (T782), the query and the next page (T784), in the order they're listed. */
 const TOOL_NAMES = [
   'list_folders',
   'list_folder_items',
@@ -27,6 +28,8 @@ const TOOL_NAMES = [
   'read_cube',
   'read_view',
   'read_data_source',
+  'query',
+  'next_page',
 ];
 const NAME = 't778 transport';
 let token = '';
