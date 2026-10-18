@@ -135,6 +135,8 @@ describe('the tab strip (T800, AC-450)', () => {
         name: 'Query 1',
         run: {
           kind: 'done',
+          sql: 'SELECT 1',
+          at: 0,
           outcome: {
             outcome: 'finished',
             columns: [],

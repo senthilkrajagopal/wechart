@@ -10,7 +10,20 @@ import type { SqlOutcome } from '../data-sources/SqlResult';
  */
 
 /** A run on a tab: going, or how it ended, in the result's own words. */
-export type TabRun = { readonly kind: 'running' } | { readonly kind: 'done'; readonly outcome: SqlOutcome };
+export type TabRun =
+  | {
+      readonly kind: 'running';
+      /** When it started, in ms since the epoch: which run a result is of. */
+      readonly at: number;
+    }
+  | {
+      readonly kind: 'done';
+      readonly outcome: SqlOutcome;
+      /** The SQL it sent, for a refusal's words. */
+      readonly sql: string;
+      /** When it started, in ms since the epoch. */
+      readonly at: number;
+    };
 
 export interface SqlTab {
   readonly id: string;
@@ -40,7 +53,18 @@ export type TabsAction =
   | { readonly kind: 'duplicate'; readonly id: string }
   | { readonly kind: 'close'; readonly id: string }
   | { readonly kind: 'close-others'; readonly id: string }
-  | { readonly kind: 'source'; readonly id: string; readonly sourceId: string };
+  | { readonly kind: 'source'; readonly id: string; readonly sourceId: string }
+  | { readonly kind: 'sql'; readonly id: string; readonly sql: string }
+  | { readonly kind: 'run-start'; readonly id: string; readonly sql: string; readonly at: number }
+  | {
+      readonly kind: 'run-done';
+      readonly id: string;
+      /** The source it ran on: dropped if the tab has moved since (Q5). */
+      readonly sourceId: string;
+      readonly sql: string;
+      readonly at: number;
+      readonly outcome: SqlOutcome;
+    };
 
 /** A tab's id: short, for the address (`/sql?tab=7f3a9c01`, T801). */
 export const newTabId = (): string => {
@@ -137,8 +161,28 @@ export function tabsReducer(
               tab === target ? { ...tab, sourceId: action.sourceId, run: null } : tab,
             ),
           };
+    case 'sql':
+      return change(state, target, { sql: action.sql });
+    case 'run-start':
+      return change(state, target, { run: { kind: 'running', at: action.at }, lastRunSql: action.sql });
+    case 'run-done':
+      // Only the run going now ends: never one of before the tab moved,
+      // nor an earlier run's late answer (T802's review).
+      return target?.sourceId !== action.sourceId ||
+        target.run?.kind !== 'running' ||
+        target.run.at !== action.at
+        ? state
+        : change(state, target, {
+            run: { kind: 'done', outcome: action.outcome, sql: action.sql, at: action.at },
+          });
   }
 }
+
+/** One tab changed, the rest kept. */
+const change = (state: TabsState, target: SqlTab | undefined, to: Partial<SqlTab>): TabsState =>
+  target === undefined
+    ? state
+    : { ...state, tabs: state.tabs.map((tab) => (tab === target ? { ...tab, ...to } : tab)) };
 
 /** Whether closing it loses text: neither saved nor what it last ran (AC-450). */
 export const asksBeforeClosing = (tab: SqlTab): boolean =>

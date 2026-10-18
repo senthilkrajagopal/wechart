@@ -1,5 +1,6 @@
+import { EditorView } from '@codemirror/view';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -291,6 +292,100 @@ describe('tabs bound to a data source in the workspace (T800, AC-450)', () => {
     expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(
       screen.getByRole('tab', { name: /^Query 1/ }).id,
     );
+  });
+});
+
+/**
+ * T802 (AC-373, AC-385): an allowed member runs a tab's SQL from the
+ * workspace on that tab's source; two tabs on two sources each name their own.
+ */
+describe('running a tab’s SQL in the workspace (T802, AC-373, AC-385)', () => {
+  const page = (id: string, name: string, user: string) => ({
+    id,
+    folderId: 'f-sales',
+    name,
+    driver: 'postgres',
+    authMethod: 'password',
+    fields: { host: `${id}-host`, port: 5432, database: 'sales', user, ssl: false },
+    secrets: {},
+    targetFolderId: null,
+    origin: null,
+    version: 1,
+    updatedAt: '2026-10-17T10:00:00Z',
+    folderPath: [{ id: 'f-sales', title: 'Sales' }],
+    canWrite: true,
+    inWorkspace: false,
+    description: null,
+    sqlRunner: { on: true },
+    sqlAccess: { tab: true, runs: true },
+  });
+  const listed = [
+    { id: 'emea', name: 'emea_replica' },
+    { id: 'fx', name: 'fx_warehouse' },
+  ].map((source) => ({
+    ...source,
+    driver: 'postgres',
+    cubeStore: false,
+    folderId: 'f-sales',
+    folderPath: [{ id: 'f-sales', title: 'Sales' }],
+    inWorkspace: false,
+    runner: 'on',
+  }));
+  const posted: string[] = [];
+  const choose = async (name: string) => {
+    await userEvent.click(screen.getByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: new RegExp(name) }));
+  };
+
+  it('runs the open tab’s SQL on its own source, each tab’s warning naming its own', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+        if (init?.method === 'POST') {
+          posted.push(url);
+          return json({
+            outcome: 'finished',
+            columns: [{ name: 'one', type: 'int4' }],
+            rows: [[1]],
+            rowCount: 1,
+            truncated: null,
+            durationMs: 12,
+            statement: 'select',
+          });
+        }
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/data-sources/emea') return json(page('emea', 'emea_replica', 'cube_reader'));
+        if (url === '/api/data-sources/fx') return json(page('fx', 'fx_warehouse', 'fin_reader'));
+        return Promise.resolve(new Response('[]', { status: 404 }));
+      }),
+    );
+    renderAs(writer);
+    await screen.findByRole('button', { name: 'Data source Choose…' });
+
+    await choose('emea_replica');
+    expect((await screen.findByTestId('sql-warning')).textContent).toMatch(
+      /^This SQL runs on emea_replica’s database directly, as cube_reader\./,
+    );
+    const view = EditorView.findFromDOM(document.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+    act(() => {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'SELECT 1 AS one' } });
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect(await screen.findByRole('table', { name: 'Result: 1 row, 1 column' })).toBeTruthy();
+    expect(posted).toEqual(['/api/data-sources/emea/sql']);
+    expect(screen.getByRole('tab', { name: 'Query 1, Finished, 1 row, on emea_replica' })).toBeTruthy();
+
+    // A second tab, on another source, names its own.
+    await userEvent.click(screen.getByRole('button', { name: 'New tab on emea_replica' }));
+    await choose('fx_warehouse');
+    expect((await screen.findByTestId('sql-warning')).textContent).toMatch(
+      /^This SQL runs on fx_warehouse’s database directly, as fin_reader\./,
+    );
+    // Back on the first, its own source and its result again.
+    await userEvent.click(screen.getByRole('tab', { name: /^Query 1/ }));
+    expect((await screen.findByTestId('sql-warning')).textContent).toMatch(/^This SQL runs on emea_replica’s/);
+    expect(screen.getByRole('table', { name: 'Result: 1 row, 1 column' })).toBeTruthy();
   });
 });
 

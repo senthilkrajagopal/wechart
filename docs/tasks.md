@@ -1747,11 +1747,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T801 (AC-451, AC-446) Keep open tabs in this browser only, for the signed-in user, restore them on reload, and name the open tab in the address
 
-- [ ] T802 (AC-373, AC-385, AC-380) Run a tab's SQL on its data source from the workspace, under the run line and the warning naming that tab's source and login, with the result grid and CSV
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/QueryTab.tsx` (+ test; the editor and result from `workspaces/data-sources/SqlEditor.tsx` and `SqlResult.tsx`, moved), `packages/web/src/workspaces/sql/RunLine.tsx` (+ test), `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: `RunLine.test.tsx`: above every tab's editor on a data source or Cube Store, the run line names the tab's database, host and login, and the warning says the SQL runs on the database directly, past folder permissions and access policies, naming that tab's source, with no control to hide either (AC-385). The e2e: an allowed member runs `SELECT` from a workspace tab and gets the grid with each column's type, the row count, the time and CSV (AC-373, AC-380); two tabs on different sources each name their own.
-  - Depends on: T800
+- [x] T802 (AC-373, AC-385, AC-380) Run a tab's SQL on its data source from the workspace, under the run line and the warning naming that tab's source and login, with the result grid and CSV
 
 - [ ] T803 (AC-387) Run the selection, or with none the statement at the cursor, bounded by semicolons outside strings and comments
   - Lane: SQL

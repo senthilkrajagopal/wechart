@@ -15,9 +15,9 @@ import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtur
  * (design 17, state A; rule 67).
  */
 const RUN = Math.random().toString(36).slice(2, 8);
-const world = { folderId: '', sources: { on: '', off: '' } };
-/** Names held once across the system (T700, AC-421). */
-const SOURCES = { on: `sqlws_on_${RUN}`, off: `sqlws_off_${RUN}` };
+const world = { folderId: '', sources: { on: '', off: '', two: '' } };
+/** Names held once across the system (T700, AC-421); `two`, a second one on, for two tabs (T802). */
+const SOURCES = { on: `sqlws_on_${RUN}`, off: `sqlws_off_${RUN}`, two: `sqlws_two_${RUN}` };
 const KEY = JSON.parse(
   readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
 ) as XcubeKey;
@@ -59,7 +59,7 @@ test.beforeAll(async ({ browser }) => {
     });
     expect(access.status()).toBe(200);
     // Two data sources on the sample database there: one switched on, one off (T798).
-    for (const which of ['on', 'off'] as const) {
+    for (const which of ['on', 'off', 'two'] as const) {
       const request = admin.page.request;
       const made = await request.post('/api/data-sources', {
         data: await testedSource(request, {
@@ -76,10 +76,12 @@ test.beforeAll(async ({ browser }) => {
       expect(made.status(), await made.text()).toBe(201);
       world.sources[which] = ((await made.json()) as { id: string }).id;
     }
-    const on = await admin.page.request.put(`/api/data-sources/${world.sources.on}/sql-runner`, {
-      data: { on: true, readOnlyConfirmed: true },
-    });
-    expect(on.status(), await on.text()).toBe(200);
+    for (const id of [world.sources.on, world.sources.two]) {
+      const on = await admin.page.request.put(`/api/data-sources/${id}/sql-runner`, {
+        data: { on: true, readOnlyConfirmed: true },
+      });
+      expect(on.status(), await on.text()).toBe(200);
+    }
   } finally {
     await admin.context.close();
   }
@@ -350,7 +352,8 @@ test.describe('the data source picker (T798, AC-447)', () => {
       await pickerButton(page).click();
 
       const options = groupOf(page).getByRole('option');
-      await expect(options).toHaveCount(2);
+      // The folder's three: on, off, and a second on (T802's).
+      await expect(options).toHaveCount(3);
       await expect(options.filter({ hasText: SOURCES.off })).toContainText('PostgreSQL');
       await expect(options.filter({ hasText: SOURCES.off }).locator('.sql-picker__state')).toHaveText(
         'Off',
@@ -531,5 +534,143 @@ test.describe('tabs kept in this browser, the open one in the address (T801, AC-
     } finally {
       await context.close();
     }
+  });
+});
+
+/**
+ * T802 (AC-373, AC-385, AC-380, AC-446, AC-450): an allowed member runs a
+ * tab's SQL on its data source from the workspace, under the run line and
+ * the warning naming it, and gets the grid, its types, the row count, the
+ * time and the CSV; two tabs on two sources each name their own; and a
+ * reload of a tab's address brings back its text.
+ */
+test.describe('running a tab’s SQL in the workspace (T802)', () => {
+  const tabs = (page: Page) => page.getByRole('tablist', { name: 'SQL tabs' }).getByRole('tab');
+  const editor = (page: Page) => page.locator('.sql-editor .cm-content');
+  /** The editor's text replaced by `sql`, typed as a person types it. */
+  async function typeSql(page: Page, sql: string) {
+    await editor(page).click();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.press('Delete');
+    await page.keyboard.type(sql);
+  }
+  async function choose(page: Page, name: string) {
+    await pickerButton(page).click();
+    await groupOf(page).getByRole('option', { name: new RegExp(name) }).click();
+  }
+
+  test('runs SELECT on the tab’s own source, with the grid, types, rows, time and CSV; two tabs name their own', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    const posts: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/sql')) posts.push(request.url());
+    });
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await choose(page, SOURCES.on);
+
+      // The run line and the warning, above the editor, naming the tab's source and login (AC-385).
+      await expect(page.getByTestId('sql-runline')).toHaveText('Runs on sample at sample-db:5432, as sample');
+      const warning = page.getByTestId('sql-warning');
+      await expect(warning).toHaveText(
+        `This SQL runs on ${SOURCES.on}’s database directly, as sample. Folder permissions and access policies don’t apply here: you can read whatever that login can read.`,
+      );
+      expect((await warning.boundingBox())!.y).toBeLessThan((await page.locator('.sql-editor').boundingBox())!.y);
+      await expect(warning.getByRole('button')).toHaveCount(0);
+
+      await typeSql(page, "SELECT 1 AS one, 'a' AS letter");
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+      const grid = page.getByRole('table', { name: 'Result: 1 row, 2 columns' });
+      await expect(grid.getByRole('columnheader')).toHaveText(['#', 'oneint4', 'lettertext']);
+      await expect(page.getByTestId('sql-result-head')).toHaveText(
+        /^Finished 1 row · (under )?[\d.]+ s · at \d\d:\d\d:\d\dDownload CSV$/,
+      );
+      await expect(tabs(page).first()).toHaveAttribute('aria-label', `Query 1, Finished, 1 row, on ${SOURCES.on}`);
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('button', { name: 'Download CSV' }).click(),
+      ]);
+      expect(readFileSync(await download.path(), 'utf8')).toBe('one,letter\r\n1,a\r\n');
+      expect(posts).toEqual([`${BASE_URL}/api/data-sources/${world.sources.on}/sql`]);
+
+      // A second tab on another source: its own line, warning and runs.
+      await page.getByRole('button', { name: `New tab on ${SOURCES.on}` }).click();
+      await choose(page, SOURCES.two);
+      await expect(warning).toContainText(`This SQL runs on ${SOURCES.two}’s database directly`);
+      await typeSql(page, 'SELECT 2 AS two');
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+      await expect(page.getByRole('table', { name: 'Result: 1 row, 1 column' })).toBeVisible();
+      expect(posts[1]).toBe(`${BASE_URL}/api/data-sources/${world.sources.two}/sql`);
+
+      // Back on the first: its source and its result again (AC-450).
+      await tabs(page).first().click();
+      await expect(warning).toContainText(`This SQL runs on ${SOURCES.on}’s database directly`);
+      await expect(grid).toBeVisible();
+
+      // Another source for it: the SQL kept, the result cleared at once (design 17's Q5).
+      await choose(page, SOURCES.two);
+      await expect(editor(page)).toHaveText("SELECT 1 AS one, 'a' AS letter");
+      await expect(grid).toHaveCount(0);
+      await expect(page.getByText('Run a SELECT or EXPLAIN to see its rows here.')).toBeVisible();
+
+      // The second tab's text, changed since its run: closing it asks first (AC-450).
+      await tabs(page).nth(1).click();
+      await typeSql(page, 'SELECT 3');
+      await page.getByRole('button', { name: 'Actions for Query 2' }).click();
+      await expect(page.getByRole('menu', { name: 'Actions for Query 2' }).getByRole('menuitem')).toHaveText([
+        'Rename…',
+        'Duplicate',
+        'Close',
+        'Close other tabs',
+      ]);
+      await page.keyboard.press('Escape');
+      await page.getByRole('button', { name: 'Close Query 2' }).click();
+      const asking = page.getByRole('alertdialog', { name: 'Close Query 2?' });
+      await expect(asking.getByRole('button', { name: 'Keep it open' })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(tabs(page)).toHaveCount(2);
+      await page.getByRole('button', { name: 'Close Query 2' }).click();
+      await asking.getByRole('button', { name: 'Close tab' }).click();
+      await expect(tabs(page)).toHaveCount(1);
+      expect(posts).toHaveLength(2);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('a reload of a tab’s address brings back its source and its text, kept in no request or database (AC-446, AC-451)', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    const marker = `kept_text_${RUN}`;
+    const sent: string[] = [];
+    page.on('request', (request) => {
+      sent.push(`${request.url()} ${request.postData() ?? ''}`);
+    });
+    try {
+      await page.goto('/sql');
+      await choose(page, SOURCES.on);
+      await typeSql(page, `SELECT '${marker}' AS kept`);
+      await expect(page).toHaveURL(/\/sql\?tab=[0-9a-f]{8}$/);
+      const address = page.url();
+      await page.getByRole('button', { name: `New tab on ${SOURCES.on}` }).click();
+
+      await page.goto(address);
+      await expect(tabs(page).first()).toHaveAttribute('aria-selected', 'true');
+      await expect(editor(page)).toHaveText(`SELECT '${marker}' AS kept`);
+      await expect(pickerButton(page)).toContainText(SOURCES.on);
+      expect(sent.filter((line) => line.includes(marker))).toEqual([]);
+    } finally {
+      await context.close();
+    }
+    const dump = execFileSync(
+      'docker',
+      ['exec', 'wechart-meta', 'pg_dump', '-U', 'wechart', '--format=plain', 'wechart_security'],
+      { encoding: 'utf8', maxBuffer: 512 * 1024 * 1024 },
+    );
+    expect(dump.includes(marker)).toBe(false);
   });
 });

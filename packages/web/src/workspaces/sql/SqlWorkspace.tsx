@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type Dispatch,
   type ReactNode,
   type RefObject,
 } from 'react';
@@ -19,7 +20,11 @@ import { ChooseASource, NoSourceToRun } from './EmptyStates';
 import { OffPanel } from './OffPanel';
 import { SQL_SOURCES_QUERY } from './sources';
 import { SourcePicker } from './SourcePicker';
-import { firstTabs, tabsReducer, type TabsAction, type TabsState } from './tabs';
+import { CUBE_STORE_ID, CUBE_STORE_QUERY } from '../data-sources/cubeStore';
+import { QueryTab } from './QueryTab';
+import type { SqlSourceRow } from './sources';
+import type { SqlSource } from './sqlSource';
+import { firstTabs, tabsReducer, type SqlTab, type TabsAction, type TabsState } from './tabs';
 import { TabStrip } from './TabStrip';
 import { keepTabs, keptTabs } from './tabStore';
 import {
@@ -128,6 +133,77 @@ function ChosenOff({ id, superAdmin }: { readonly id: string; readonly superAdmi
   );
 }
 
+/**
+ * A source chosen that runs (T802, AC-373): the open tab's editor and
+ * result, once its page says who may run there and as which login. Its page
+ * saying this user may no longer run SQL there shows the off panel, never
+ * an editor that can run; until it is read, the split stays empty.
+ */
+function ChosenOn({
+  row,
+  tab,
+  dispatch,
+  grip,
+  superAdmin,
+}: {
+  readonly row: SqlSourceRow;
+  readonly tab: SqlTab;
+  readonly dispatch: Dispatch<TabsAction>;
+  readonly grip: ReactNode;
+  readonly superAdmin: boolean;
+}) {
+  const page = useQuery({ ...sourceQuery(row.id), retry: false, enabled: !row.cubeStore });
+  const store = useQuery({ ...CUBE_STORE_QUERY, retry: false, enabled: row.cubeStore });
+  const failed = row.cubeStore ? store.error : page.error;
+  const source: SqlSource | undefined = row.cubeStore
+    ? store.data == null
+      ? undefined
+      : {
+          cubeStore: true,
+          id: CUBE_STORE_ID,
+          version: 0,
+          name: 'Cube Store',
+          folderPath: [],
+          inWorkspace: false,
+          sqlRunner: {
+            on: store.data.on,
+            ...(store.data.confirmedBy === undefined ? {} : { confirmedBy: store.data.confirmedBy }),
+            ...(store.data.confirmedAt === undefined ? {} : { confirmedAt: store.data.confirmedAt }),
+            tab: true,
+            runs: store.data.runs,
+          },
+        }
+    : page.data === undefined
+      ? undefined
+      : {
+          id: page.data.id,
+          version: page.data.version,
+          name: page.data.name,
+          driver: page.data.driver,
+          fields: page.data.fields,
+          folderPath: page.data.folderPath,
+          inWorkspace: page.data.inWorkspace,
+          sqlRunner: { on: false, tab: false, runs: false, ...page.data.sqlRunner, ...page.data.sqlAccess },
+        };
+  if (source !== undefined && source.sqlRunner.runs)
+    return <QueryTab tab={tab} source={source} dispatch={dispatch} grip={grip} />;
+  if (source !== undefined)
+    return (
+      <div className="sql-centre__off">
+        <OffPanel source={source} superAdmin={superAdmin} turnedOff={false} onTurnedOn={() => undefined} />
+      </div>
+    );
+  return (
+    <>
+      <div className="sql-centre__editor" data-testid="sql-editor-area">
+        {failed === null ? null : <StateLine kind="err">{failed.message}</StateLine>}
+      </div>
+      {grip}
+      <div className="sql-centre__results" data-testid="sql-results-area" />
+    </>
+  );
+}
+
 type Side = 'left' | 'right';
 
 /**
@@ -220,6 +296,30 @@ function Workbench({
     split.current = null;
   };
 
+  /** The split's grip, between the editor and the results. */
+  const grip = (
+    <span
+      className="sql-centre__grip"
+      title="Drag to resize · double-click to reset"
+      aria-hidden="true"
+      onPointerDown={(event) => {
+        split.current = { y: event.clientY, from: share * splitHeight() };
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const from = split.current;
+        if (from === null) return;
+        setShare(editorShare(from.from + (event.clientY - from.y), splitHeight()));
+      }}
+      onPointerUp={endSplit}
+      onPointerCancel={endSplit}
+      onLostPointerCapture={endSplit}
+      onDoubleClick={() => {
+        setShare(SPLIT.editor);
+      }}
+    />
+  );
+
   const style = {
     '--sql-left': `${String(leftShown)}px`,
     '--sql-right': `${String(rightShown)}px`,
@@ -293,35 +393,22 @@ function Workbench({
             <div className="sql-centre__off">
               <ChosenOff id={chosenRow.id} superAdmin={superAdmin} />
             </div>
+          ) : chosenRow !== undefined && openTab !== undefined ? (
+            // The open tab's editor and result, on its own source (T802).
+            <ChosenOn
+              key={`${openTab.id} ${chosenRow.id}`}
+              row={chosenRow}
+              tab={openTab}
+              dispatch={dispatch}
+              grip={grip}
+              superAdmin={superAdmin}
+            />
           ) : (
             <>
               <div className="sql-centre__editor" data-testid="sql-editor-area">
-                {chosenRow !== undefined || sources.data === undefined ? null : runsAny ? (
-                  <ChooseASource />
-                ) : (
-                  <NoSourceToRun />
-                )}
+                {sources.data === undefined ? null : runsAny ? <ChooseASource /> : <NoSourceToRun />}
               </div>
-              <span
-                className="sql-centre__grip"
-                title="Drag to resize · double-click to reset"
-                aria-hidden="true"
-                onPointerDown={(event) => {
-                  split.current = { y: event.clientY, from: share * splitHeight() };
-                  event.currentTarget.setPointerCapture?.(event.pointerId);
-                }}
-                onPointerMove={(event) => {
-                  const from = split.current;
-                  if (from === null) return;
-                  setShare(editorShare(from.from + (event.clientY - from.y), splitHeight()));
-                }}
-                onPointerUp={endSplit}
-                onPointerCancel={endSplit}
-                onLostPointerCapture={endSplit}
-                onDoubleClick={() => {
-                  setShare(SPLIT.editor);
-                }}
-              />
+              {grip}
               <div className="sql-centre__results" data-testid="sql-results-area" />
             </>
           )}

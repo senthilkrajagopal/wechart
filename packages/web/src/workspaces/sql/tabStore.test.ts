@@ -78,7 +78,7 @@ describe('open tabs kept in this browser, for this user (T801, AC-451)', () => {
   it('keeps no result, which a reload reads as not run yet', () => {
     const browser = storage();
     const ran: TabsState = {
-      tabs: [tab({ id: 'qa', name: 'Q', sql: 'SELECT 1', lastRunSql: 'SELECT 1', run: { kind: 'running' } })],
+      tabs: [tab({ id: 'qa', name: 'Q', sql: 'SELECT 1', lastRunSql: 'SELECT 1', run: { kind: 'running', at: 1 } })],
       active: 'qa',
     };
 

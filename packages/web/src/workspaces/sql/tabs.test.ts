@@ -34,6 +34,8 @@ const tab = (over: Partial<SqlTab> & Pick<SqlTab, 'id' | 'name'>): SqlTab => ({
 });
 const finished = {
   kind: 'done',
+  sql: 'SELECT 1',
+  at: 0,
   outcome: {
     outcome: 'finished',
     columns: [],
@@ -164,6 +166,58 @@ describe('a tab, bound to one data source (T800, AC-450)', () => {
   });
 });
 
+/**
+ * T802 (AC-373, AC-380): a tab's text, and a run on its own source, kept in
+ * the tab: going, then its result, with the SQL it sent.
+ */
+describe('a tab’s text and its runs (T802)', () => {
+  const one: TabsState = { tabs: [tab({ id: 'a', name: 'Q', sourceId: 'emea' })], active: 'a' };
+
+  it('keeps the text typed in it', () => {
+    expect(tabsReducer(one, { kind: 'sql', id: 'a', sql: 'SELECT 2' }, ids).tabs[0]?.sql).toBe('SELECT 2');
+  });
+
+  it('marks a run going, its SQL the last it ran, then keeps its result', () => {
+    const going = tabsReducer(one, { kind: 'run-start', id: 'a', sql: 'SELECT 2', at: 5 }, ids);
+    expect(going.tabs[0]).toMatchObject({ run: { kind: 'running', at: 5 }, lastRunSql: 'SELECT 2' });
+
+    const done = tabsReducer(
+      going,
+      { kind: 'run-done', id: 'a', sourceId: 'emea', sql: 'SELECT 2', at: 5, outcome: finished.outcome },
+      ids,
+    );
+    expect(done.tabs[0]?.run).toEqual({ kind: 'done', sql: 'SELECT 2', at: 5, outcome: finished.outcome });
+  });
+
+  it('drops a result that comes back after its tab moved to another source (design 17’s Q5)', () => {
+    const going = tabsReducer(one, { kind: 'run-start', id: 'a', sql: 'SELECT 2', at: 5 }, ids);
+    const moved = tabsReducer(going, { kind: 'source', id: 'a', sourceId: 'fx' }, ids);
+
+    const late = tabsReducer(
+      moved,
+      { kind: 'run-done', id: 'a', sourceId: 'emea', sql: 'SELECT 2', at: 5, outcome: finished.outcome },
+      ids,
+    );
+
+    expect(late.tabs[0]?.run).toBeNull();
+  });
+
+  it('drops a result of an earlier run, never ending the run going now (T802’s review)', () => {
+    const first = tabsReducer(one, { kind: 'run-start', id: 'a', sql: 'SELECT 1', at: 5 }, ids);
+    const away = tabsReducer(first, { kind: 'source', id: 'a', sourceId: 'fx' }, ids);
+    const back = tabsReducer(away, { kind: 'source', id: 'a', sourceId: 'emea' }, ids);
+    const second = tabsReducer(back, { kind: 'run-start', id: 'a', sql: 'SELECT 2', at: 9 }, ids);
+
+    const late = tabsReducer(
+      second,
+      { kind: 'run-done', id: 'a', sourceId: 'emea', sql: 'SELECT 1', at: 5, outcome: finished.outcome },
+      ids,
+    );
+
+    expect(late.tabs[0]?.run).toEqual({ kind: 'running', at: 9 });
+  });
+});
+
 describe('asking before closing a tab (T800, AC-450)', () => {
   it('asks for text that is neither saved nor the SQL of its last run', () => {
     expect(asksBeforeClosing(tab({ id: 'a', name: 'Q', sql: 'SELECT 1' }))).toBe(true);
@@ -192,9 +246,9 @@ describe('a tab’s state, as an icon and a label (T800, AC-450; design 17’s Q
   });
 
   it('reads each other outcome in the result head’s words', () => {
-    const done = (outcome: object) => tabState(tab({ id: 'a', name: 'Q', run: { kind: 'done', outcome } as SqlTab['run'] }));
+    const done = (outcome: object) => tabState(tab({ id: 'a', name: 'Q', run: { kind: 'done', sql: 'SELECT 1', at: 0, outcome } as SqlTab['run'] }));
 
-    expect(tabState(tab({ id: 'a', name: 'Q', run: { kind: 'running' } }))).toEqual({ kind: 'run', label: 'Running' });
+    expect(tabState(tab({ id: 'a', name: 'Q', run: { kind: 'running', at: 1 } }))).toEqual({ kind: 'run', label: 'Running' });
     expect(done({ ...finished.outcome, truncated: 'rows' })).toEqual({ kind: 'warn', label: 'Limited to 10,000 rows' });
     expect(done({ ...finished.outcome, truncated: 'bytes' })).toEqual({ kind: 'warn', label: 'Limited to 10 MB' });
     expect(done({ outcome: 'timeout', durationMs: 30000 })).toEqual({ kind: 'err', label: 'Stopped at 30 seconds' });

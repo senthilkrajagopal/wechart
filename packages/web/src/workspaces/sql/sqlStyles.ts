@@ -252,4 +252,11 @@ main:has(.sql-workspace) {
   min-width: 0;
   overflow: auto;
 }
+/* A tab's run line, warning, editor and Run over its result (T802; design
+   17, pins 8, 9, 11 and 12): the editor takes what the split leaves it. */
+.sql-query { gap: 8px; padding: 8px 12px; }
+.sql-query .sql-editor { flex: 1 1 auto; min-height: 60px; display: flex; flex-direction: column; }
+.sql-query .sql-editor .cm-editor { flex: 1; min-height: 0; max-height: none; }
+.sql-query .sql-runner__bar { flex: none; }
+.sql-query__results { padding: 8px 12px; }
 `;
