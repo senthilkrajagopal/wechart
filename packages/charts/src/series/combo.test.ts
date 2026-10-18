@@ -1,17 +1,21 @@
 /**
  * T044 / AC-037: the combo chart, and the last of the eighteen types.
  *
- * A combo draws some measures as bars and some as a line. The thing to hold
- * on to is that both go against **one** value axis: direction.md is explicit
- * that the recommender never proposes a dual axis, because two scales in one
- * frame let any two series be made to look related. So the test checks that
- * the two measures share a scale, not merely that one of each mark appears.
+ * A combo draws some measures as bars and some as a line. By Auto both go
+ * against **one** value axis: direction.md is explicit that the recommender
+ * never proposes a dual axis, because two scales in one frame let any two
+ * series be made to look related (rule 117). So the test checks that the two
+ * measures share a scale, not merely that one of each mark appears.
+ *
+ * T846 (AC-497, AC-037): each measure drawn with the mark and on the axis the
+ * author chose, in §7h's draw order.
  */
 import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from '@wechart/core';
 
 import { comboOption } from './combo';
+import { optionFor } from '../optionFor';
 import { marksOf, renderToSvg, strokesOf } from '../testing/renderToSvg';
 
 const BLUE = '#123456';
@@ -101,5 +105,173 @@ describe('a combo with only one measure', () => {
     // drawing data that was never asked for.
     expect(marksOf(svg, [BLUE])).toHaveLength(2);
     expect(strokesOf(svg, PALETTE)).toHaveLength(0);
+  });
+});
+
+/**
+ * Revenue bar/left by Auto, Target line/left by Auto, Margin % points on the
+ * right and Cost an area on the left, both chosen (T846).
+ */
+describe('each measure with its own mark, on its own axis (AC-497)', () => {
+  const REVENUE = 'orders.revenue';
+  const TARGET = 'orders.target';
+  const MARGIN = 'orders.margin_pct';
+  const COST = 'orders.cost';
+  const GREEN = '#0f8a5f';
+  const RED = '#c0392b';
+  const SURFACE = '#fafaf9';
+  const MONTH = 'orders.month';
+
+  const mixed: RenderSpec = {
+    chartType: 'combo',
+    encoding: { x: [MONTH], y: [REVENUE, TARGET, MARGIN, COST] },
+    rows: [
+      { [MONTH]: 'Jan', [REVENUE]: 120, [TARGET]: 100, [MARGIN]: 0.2, [COST]: 80 },
+      { [MONTH]: 'Feb', [REVENUE]: 150, [TARGET]: 110, [MARGIN]: 0.3, [COST]: 90 },
+    ],
+    palette: [BLUE, ORANGE, GREEN, RED],
+    surface: SURFACE,
+    options: {
+      series: { [MARGIN]: { mark: 'point', axis: 'right' }, [COST]: { mark: 'area' } },
+    },
+  };
+
+  type Drawn = Record<string, unknown> & {
+    name?: string;
+    type?: string;
+    z?: number;
+    yAxisIndex?: number;
+    silent?: boolean;
+    symbol?: string;
+    symbolSize?: number;
+    areaStyle?: { opacity?: number; color?: string };
+    lineStyle?: { width?: number; color?: string };
+    itemStyle?: { color?: string; borderColor?: string; borderWidth?: number };
+    tooltip?: { show?: boolean };
+  };
+  const seriesOf = (option: Record<string, unknown>) => option['series'] as Drawn[];
+  const named = (option: Record<string, unknown>, name: string) =>
+    seriesOf(option).find((one) => one.name === name)!;
+
+  it('draws bars, a line, points and an area', () => {
+    expect(seriesOf(comboOption(mixed)).map((one) => [one.name, one.type])).toEqual([
+      [REVENUE, 'bar'],
+      [TARGET, 'line'],
+      [MARGIN, 'scatter'],
+      [COST, 'line'],
+    ]);
+  });
+
+  it('fills an area in its colour at 0.24 opacity, and gives a plain line none', () => {
+    const option = comboOption(mixed);
+
+    expect(named(option, COST).areaStyle).toEqual({ color: RED, opacity: 0.24 });
+    expect(named(option, TARGET).areaStyle).toBeUndefined();
+  });
+
+  it('puts Margin % on the right axis and the others on the left', () => {
+    const option = comboOption(mixed);
+
+    expect(seriesOf(option).map((one) => [one.name, one.yAxisIndex])).toEqual([
+      [REVENUE, 0],
+      [TARGET, 0],
+      [MARGIN, 1],
+      [COST, 0],
+    ]);
+    const axes = option['yAxis'] as Record<string, unknown>[];
+    expect(axes).toHaveLength(2);
+    expect(axes.map((axis) => [axis['type'], axis['position']])).toEqual([
+      ['value', 'left'],
+      ['value', 'right'],
+    ]);
+  });
+
+  it('has one value axis while every series is on the left', () => {
+    const left: RenderSpec = { ...mixed, options: { series: { [COST]: { mark: 'area' } } } };
+    const option = comboOption(left);
+
+    expect(Array.isArray(option['yAxis'])).toBe(false);
+    expect(seriesOf(option).every((one) => (one.yAxisIndex ?? 0) === 0)).toBe(true);
+  });
+
+  it('orders the layers areas, bars, lines, points', () => {
+    const z = (name: string) => named(comboOption(mixed), name).z ?? 0;
+
+    expect(z(COST)).toBeLessThan(z(REVENUE));
+    expect(z(REVENUE)).toBeLessThan(z(TARGET));
+    expect(z(TARGET)).toBeLessThan(z(MARGIN));
+  });
+
+  it('draws a line 2 px wide, over a 5 px halo in the surface colour', () => {
+    const drawn = seriesOf(optionFor(mixed));
+    const line = drawn.find((one) => one.name === TARGET && one.lineStyle?.color === ORANGE)!;
+    const halo = drawn.find((one) => one.name === TARGET && one.lineStyle?.color === SURFACE)!;
+
+    expect(line.lineStyle?.width).toBe(2);
+    expect([
+      halo.type,
+      halo.yAxisIndex,
+      halo.symbol,
+      halo.silent,
+      halo['legendHoverLink'],
+      halo.tooltip,
+      halo.lineStyle,
+    ]).toEqual(['line', 0, 'none', true, false, { show: false }, { color: SURFACE, width: 5 }]);
+    expect(halo.data).toEqual([100, 110]);
+    // Under its line, over the bars.
+    expect(halo.z).toBeLessThan(line.z ?? 0);
+    expect(halo.z).toBeGreaterThan(named(optionFor(mixed), REVENUE).z ?? 0);
+    // After its line, so the legend takes its entry's colour from the line.
+    expect(drawn.indexOf(halo)).toBeGreaterThan(drawn.indexOf(line));
+  });
+
+  it('gives an area and points no halo', () => {
+    const halos = seriesOf(optionFor(mixed)).filter((one) => one.lineStyle?.color === SURFACE);
+
+    expect(halos.map((one) => one.name)).toEqual([TARGET]);
+  });
+
+  it('paints the halo under the line and over the bars', () => {
+    const svg = renderToSvg(optionFor(mixed));
+    const at = (pattern: RegExp) => svg.search(pattern);
+
+    const halo = at(new RegExp(`fill="none"[^>]*stroke="${SURFACE}"[^>]*stroke-width="5"`));
+    const line = at(new RegExp(`fill="none"[^>]*stroke="${ORANGE}"[^>]*stroke-width="2"`));
+    const bar = at(new RegExp(`fill="${BLUE}"`));
+    expect(halo).toBeGreaterThan(-1);
+    expect(bar).toBeLessThan(halo);
+    expect(halo).toBeLessThan(line);
+  });
+
+  it('draws points 8 px across, ringed 1.5 px in the surface colour', () => {
+    const points = named(comboOption(mixed), MARGIN);
+
+    expect([points.symbol, points.symbolSize, points.itemStyle]).toEqual([
+      'circle',
+      8,
+      { color: GREEN, borderColor: SURFACE, borderWidth: 1.5 },
+    ]);
+  });
+
+  it('formats each axis by its own first measure', () => {
+    const formatted: RenderSpec = {
+      ...mixed,
+      formats: { [REVENUE]: 'currency', [MARGIN]: 'percent' },
+    };
+    const axes = comboOption(formatted)['yAxis'] as {
+      axisLabel?: { formatter?: (value: number) => string };
+    }[];
+
+    expect(axes[0]?.axisLabel?.formatter?.(1500)).toMatch(/^\$1,500/);
+    expect(axes[1]?.axisLabel?.formatter?.(0.25)).toMatch(/^25/);
+  });
+
+  it('draws the right axis’s measure though it is on another scale than the first', () => {
+    const formatted: RenderSpec = {
+      ...mixed,
+      formats: { [REVENUE]: 'currency', [MARGIN]: 'percent' },
+    };
+
+    expect(seriesOf(optionFor(formatted)).map((one) => one.name)).toContain(MARGIN);
   });
 });

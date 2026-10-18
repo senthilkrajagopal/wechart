@@ -485,12 +485,18 @@ describe('a partly marked combo', () => {
 
   it('splits its bars as a bar chart’s, and draws its line’s marked share over it faded', () => {
     const drawn = seriesOf(optionFor(combo())) as Drawn[];
+    // A line's halo (T846) carries its line's values as plain numbers.
+    const valueOf = (item: unknown) =>
+      typeof item === 'object' && item !== null ? (item as { value?: unknown }).value : item;
 
-    expect(drawn.map((one) => [one.type, one.name, one.data.map((item) => item.value)])).toEqual([
+    expect(drawn.map((one) => [one.type, one.name, one.data.map(valueOf)])).toEqual([
       ['bar', 'orders.amount', [4, null]],
       ['bar', 'orders.amount', [6, 20]],
       ['line', 'orders.count', [3, 4]],
       ['line', 'orders.count', [1, null]],
+      // The line's surface halo, last, under the line (T846, §7h): the
+      // whole line's values, not its marked share's.
+      ['line', 'orders.count', [3, 4]],
     ]);
     const [foot, rest, total, line] = drawn;
     expect(foot?.stack).toBe(rest?.stack);

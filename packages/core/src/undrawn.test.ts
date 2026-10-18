@@ -96,6 +96,30 @@ describe('the metrics a form leaves undrawn (T510)', () => {
     ]);
   });
 
+  /**
+   * T846 (AC-497): a combo's second axis has a scale of its own. Each metric
+   * is held to the first on its own axis, so one the author put on the right
+   * is drawn there, whatever the left's scale.
+   */
+  it('holds each metric of a combo to the first on its own axis', () => {
+    const onRight = (axis: Record<string, { axis: string }>): RenderSpec => ({
+      ...spec('combo', [AMOUNT, COUNT, SHARE, 'orders.items']),
+      options: { series: axis },
+    });
+
+    expect(undrawnMeasures(onRight({ [SHARE]: { axis: 'right' } }))).toEqual([
+      { member: COUNT, reason: 'scale' },
+      { member: 'orders.items', reason: 'scale' },
+    ]);
+    // Two on the right on different scales: the second right one isn't drawn.
+    expect(
+      undrawnMeasures(onRight({ [SHARE]: { axis: 'right' }, [COUNT]: { axis: 'right' } })),
+    ).toEqual([
+      { member: SHARE, reason: 'scale' },
+      { member: 'orders.items', reason: 'scale' },
+    ]);
+  });
+
   it('names none where every metric is drawn: a table, a pivot, small multiples by metric', () => {
     expect(undrawnMeasures(spec('table', [AMOUNT, COUNT, SHARE]))).toEqual([]);
     expect(undrawnMeasures(spec('pivot', [AMOUNT, COUNT, SHARE]))).toEqual([]);

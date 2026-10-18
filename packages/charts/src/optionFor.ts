@@ -24,7 +24,7 @@ import { isTrellisType, trellisOption } from './layout/trellis';
 import { legendFor } from './legend';
 import { tooltipFor } from './tooltip';
 import { boxplotOption, isBoxplotType } from './series/boxplot';
-import { comboOption, isComboType } from './series/combo';
+import { comboOption, isComboType, withLineHalos } from './series/combo';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { countryMap } from './geo/countryMap';
 import { isMapType, mapOption } from './series/map';
@@ -171,7 +171,9 @@ export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): E
       ...tooltipFor(spec),
     });
   }
-  if (isComboType(spec.chartType)) return drawn(onGrid(comboOption(spec, canvas)));
+  // Its lines' halos last, under the lines as drawn (§7h; T846).
+  if (isComboType(spec.chartType))
+    return withLineHalos(drawn(onGrid(comboOption(spec, canvas))), spec);
   if (isBoxplotType(spec.chartType)) return drawn(onGrid(boxplotOption(spec)));
   // Its own legend and tooltip, and no axes (T398). Drawn only once its
   // boundaries are registered: the tile loads them first (`loadCountryMap`).

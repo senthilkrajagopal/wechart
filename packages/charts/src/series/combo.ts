@@ -1,20 +1,32 @@
 /**
- * The combo chart (AC-037) — bars and a line in one frame.
+ * The combo chart (AC-037, F44): each measure drawn as its own series, with
+ * its own mark — bars, a line, an area or points — on its own value axis,
+ * left or right (AC-497).
  *
- * **One value axis.** direction.md is explicit that the recommender never
- * proposes a dual axis: two scales in one frame let any two series be made to
- * look related, and the inspector allows one only as a deliberate override
- * carrying a warning. So every series here shares a scale, and the chart says
- * something true about the magnitudes rather than merely about the shapes.
+ * The marks and axes come from the chart's options through `comboSeriesOf`
+ * (`@wechart/core`), Auto unless the author chose: the first measure as bars
+ * and the rest as lines, all on the left (AC-498). So by Auto every series
+ * shares one scale, and the chart says something true about the magnitudes
+ * rather than merely about the shapes; a second axis exists only because the
+ * author drew one (rule 117).
  *
- * The first measure is drawn as bars and the rest as lines. Which measure
- * takes which mark is a decision the chart spec should eventually carry —
- * Metabase keeps it per series in `series_settings.<key>.display` — but no
- * criterion asks for that yet, and inventing a setting nothing sets would be
- * guessing at a requirement.
+ * Layers follow §7h's draw order (`COMBO_Z`): areas, bars, lines, points. A
+ * line lies on a halo in the surface colour (`withLineHalos`), added once the
+ * rest of the option is drawn, so marking, the legend and the tooltip never
+ * see it as a series of the chart's.
  */
-import { seriesOf, type RenderSpec } from '@wechart/core';
+import {
+  comboSeriesOf,
+  formatterFor,
+  memberOn,
+  membersOn,
+  seriesOf,
+  type ComboAxis,
+  type ComboMark,
+  type RenderSpec,
+} from '@wechart/core';
 
+import { allCounts } from '../axis';
 import { colourFor } from '../colours';
 import { plotEdgesOf } from '../customize';
 import { PROTOTYPE_GRID } from '../layout/grid';
@@ -26,10 +38,43 @@ import {
   gapFor,
   type Canvas,
 } from './bar';
-import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
+import { COMBO_MARK, COMBO_Z, DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
 export function isComboType(chartType: string): boolean {
   return chartType === 'combo';
+}
+
+const AXIS_INDEX: Record<ComboAxis, number> = { left: 0, right: 1 };
+
+/**
+ * The value axes: one while every series is on the left; with a series on
+ * the right, two, each written in the format of its own first measure. The
+ * axis settings (`applyAxes`) format a single axis; two are formatted here.
+ */
+function valueAxes(
+  spec: RenderSpec,
+  measures: readonly { measure: string; axis: ComboAxis }[],
+): EChartsOption['yAxis'] {
+  if (!measures.some((one) => one.axis === 'right')) return { type: 'value' };
+  return (['left', 'right'] as const).map((side) => {
+    const on = measures.filter((one) => one.axis === side).map((one) => one.measure);
+    const [first] = on;
+    const write = first === undefined ? undefined : formatterFor(first, spec.formats ?? {});
+    return {
+      type: 'value',
+      position: side,
+      // Whole-number ticks for an axis of counts alone (T683).
+      ...(allCounts(spec, on) ? { minInterval: 1 } : {}),
+      ...(write === undefined
+        ? {}
+        : {
+            axisLabel: { formatter: write },
+            axisPointer: {
+              label: { formatter: (params: { value: unknown }) => write(params.value) },
+            },
+          }),
+    };
+  });
 }
 
 export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EChartsOption {
@@ -39,56 +84,140 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
 
   const surface = spec.surface ?? DEFAULT_SURFACE;
   const { categories, series } = seriesOf(spec);
+  const resolved = comboSeriesOf(membersOn(spec.encoding, 'y'), spec.options);
+  /**
+   * Split by colour, every series draws the first measure, so takes its mark
+   * and axis; otherwise each series is its measure. (A split across every
+   * measure is T852's.)
+   */
+  const split = memberOn(spec.encoding, 'color') !== undefined;
+  const drawAs = (name: string): { mark: ComboMark; axis: ComboAxis } =>
+    (split ? resolved[0] : resolved.find((one) => one.measure === name)) ?? {
+      mark: 'line',
+      axis: 'left',
+    };
+  const barCount = series.filter((one) => drawAs(one.name).mark === 'bar').length;
+
+  // Bars a bar per category in each bar series, the gap kept only where it
+  // leaves each bar its colour on this canvas (AC-210).
+  const barGap = gapFor(
+    drawnBarWidth(
+      categoryAxisPx(
+        canvas,
+        false,
+        plotEdgesOf(
+          spec,
+          series.map((each) => each.name),
+        ),
+      ),
+      categories.length,
+      Math.max(1, barCount),
+    ),
+  );
 
   return {
     animation: false,
     // The grid its bars' widths are estimated against (T254).
     grid: { ...PROTOTYPE_GRID },
     xAxis: { type: 'category', data: categories },
-    // Exactly one, shared by every series.
-    yAxis: { type: 'value' },
+    yAxis: valueAxes(spec, split ? [] : resolved),
     series: series.map((one, index) => {
       const colour = colourFor(spec, one.name, index);
-      const asBars = index === 0;
+      const { mark, axis } = drawAs(one.name);
+      const common = {
+        name: one.name,
+        data: [...one.values],
+        yAxisIndex: AXIS_INDEX[axis],
+        z: COMBO_Z[mark],
+      };
 
-      return asBars
-        ? {
+      switch (mark) {
+        case 'bar':
+          return {
+            ...common,
             type: 'bar' as const,
-            name: one.name,
-            data: [...one.values],
             // At most 36 px, as every bar (T683, CMP-12).
             barMaxWidth: BAR_MAX_PX,
             itemStyle: {
               color: colour,
               borderColor: surface,
-              // One bar series, a bar per category, its gap kept only where
-              // it leaves the bar its colour on this canvas (AC-210).
-              borderWidth: gapFor(
-                drawnBarWidth(
-                  categoryAxisPx(
-                    canvas,
-                    false,
-                    plotEdgesOf(
-                      spec,
-                      series.map((each) => each.name),
-                    ),
-                  ),
-                  categories.length,
-                  1,
-                ),
-              ),
+              borderWidth: barGap,
               borderRadius: [MARK.cornerRadiusPx, MARK.cornerRadiusPx, 0, 0],
             },
-          }
-        : {
+          };
+        case 'point':
+          return {
+            ...common,
+            type: 'scatter' as const,
+            symbol: 'circle',
+            symbolSize: MARK.markerPx,
+            itemStyle: { color: colour, borderColor: surface, borderWidth: COMBO_MARK.pointRingPx },
+          };
+        case 'area':
+        case 'line':
+          return {
+            ...common,
             type: 'line' as const,
-            name: one.name,
-            data: [...one.values],
             connectNulls: false,
             lineStyle: { color: colour, width: MARK.linePx },
             itemStyle: { color: colour },
             symbolSize: MARK.markerPx,
+            ...(mark === 'area'
+              ? { areaStyle: { color: colour, opacity: COMBO_MARK.areaOpacity } }
+              : {}),
           };
+      }
     }),
   };
+}
+
+type Series = Record<string, unknown> & {
+  name?: unknown;
+  type?: unknown;
+  areaStyle?: unknown;
+  data?: unknown;
+};
+
+/** An item's value, where a marking or a highlight made the item an object. */
+const valueOf = (item: unknown): unknown =>
+  typeof item === 'object' && item !== null && !Array.isArray(item) && 'value' in item
+    ? (item as { value: unknown }).value
+    : item;
+
+/**
+ * Each line of a combo drawn on a halo (direction.md §7h, "Line over bar"):
+ * a 5 px stroke in the surface colour under its 2 px line, so a line crossing
+ * bars stays one line. Not an area's edge, which lies behind the bars anyway.
+ *
+ * Added last, to the option as drawn: one per line, from the first series of
+ * its name (a marked share drawn over a line is not another line), with its
+ * values only. Named as its line and listed after it, so the legend takes its
+ * entry from the line; silent, out of the tooltip and the legend's hover
+ * (research/echarts-combo-layers.md).
+ */
+export function withLineHalos(option: EChartsOption, spec: RenderSpec): EChartsOption {
+  if (!isComboType(spec.chartType) || !Array.isArray(option['series'])) return option;
+  const surface = spec.surface ?? DEFAULT_SURFACE;
+  const series = option['series'] as Series[];
+  const seen = new Set<unknown>();
+  const halos = series.flatMap((one) => {
+    if (one.type !== 'line' || one.areaStyle !== undefined || seen.has(one.name)) return [];
+    seen.add(one.name);
+    return [
+      {
+        type: 'line',
+        name: one.name,
+        data: Array.isArray(one.data) ? one.data.map(valueOf) : [],
+        yAxisIndex: one['yAxisIndex'] ?? 0,
+        z: COMBO_Z.halo,
+        symbol: 'none',
+        connectNulls: false,
+        silent: true,
+        legendHoverLink: false,
+        tooltip: { show: false },
+        lineStyle: { color: surface, width: COMBO_MARK.haloPx },
+      },
+    ];
+  });
+  return halos.length === 0 ? option : { ...option, series: [...series, ...halos] };
 }

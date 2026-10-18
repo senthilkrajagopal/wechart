@@ -14,7 +14,14 @@
  * editor's pills and the recommender alike.
  */
 import type { MemberFormat, MemberFormats } from './format';
-import { membersOn, memberOn, type ChartType, type RenderSpec } from './render-spec';
+import { comboSeriesOf } from './combo';
+import {
+  membersOn,
+  memberOn,
+  type ChartType,
+  type ComboAxis,
+  type RenderSpec,
+} from './render-spec';
 
 /**
  * The scale a format puts a value on: money in its currency, a share, or a
@@ -70,10 +77,21 @@ export interface FormShape {
   readonly split: boolean;
   /** Each metric's scale (`scaleOf`). */
   readonly scaleOf: (member: string) => string;
+  /**
+   * A combo's value axis for each metric (`comboSeriesOf`, T846): each axis
+   * has a scale of its own. Absent, every metric shares one axis.
+   */
+  readonly axisOf?: (member: string) => ComboAxis;
 }
 
 /** The metrics a form doesn't draw, each with why, in the wells' order. */
-export function undrawnOf({ chartType, measures, split, scaleOf: scale }: FormShape): Undrawn[] {
+export function undrawnOf({
+  chartType,
+  measures,
+  split,
+  scaleOf: scale,
+  axisOf = () => 'left',
+}: FormShape): Undrawn[] {
   const past = (drawn: number): Undrawn[] =>
     measures.slice(drawn).map((member) => ({ member, reason: 'form' as const }));
   const [first] = measures;
@@ -86,10 +104,14 @@ export function undrawnOf({ chartType, measures, split, scaleOf: scale }: FormSh
   if (chartType === 'scatter') return past(2);
   if (ONE_AXIS.has(chartType)) {
     if (split) return past(1);
-    const own = scale(first);
+    // Each metric against the first on its own axis: there is one axis
+    // except in a combo the author gave a second (T846).
+    const firstOn = (axis: ComboAxis) => measures.find((member) => axisOf(member) === axis);
     return measures
-      .slice(1)
-      .filter((member) => scale(member) !== own)
+      .filter((member) => {
+        const own = firstOn(axisOf(member));
+        return member !== own && scale(member) !== scale(own ?? first);
+      })
       .map((member) => ({ member, reason: 'scale' as const }));
   }
   // A KPI, a pie or donut, a treemap, a heatmap, a box plot, a map: one.
@@ -99,11 +121,18 @@ export function undrawnOf({ chartType, measures, split, scaleOf: scale }: FormSh
 /** A spec's form, from what it draws. */
 function shapeOf(spec: RenderSpec, formats: MemberFormats = spec.formats ?? {}): FormShape {
   const split = memberOn(spec.encoding, spec.chartType === 'trellis' ? 'facet' : 'color');
+  const measures = spec.measures ?? membersOn(spec.encoding, 'y');
+  const axes =
+    spec.chartType === 'combo'
+      ? new Map(comboSeriesOf(measures, spec.options).map((one) => [one.measure, one.axis]))
+      : undefined;
   return {
     chartType: spec.chartType,
-    measures: spec.measures ?? membersOn(spec.encoding, 'y'),
-    split: ONE_AXIS.has(spec.chartType) || spec.chartType === 'trellis' ? split !== undefined : false,
+    measures,
+    split:
+      ONE_AXIS.has(spec.chartType) || spec.chartType === 'trellis' ? split !== undefined : false,
     scaleOf: (member) => scaleOf(formats[member]),
+    ...(axes === undefined ? {} : { axisOf: (member: string) => axes.get(member) ?? 'left' }),
   };
 }
 

@@ -32,6 +32,25 @@ export const MARK = {
 } as const;
 
 /**
+ * A combo's layers (direction.md §7h, "Draw order": bands, areas, bars,
+ * lines, points, reference lines, labels), as each series' `z`: ECharts
+ * paints a higher `z` over a lower, and its defaults put bars and points
+ * level and an area over bars (research/echarts-combo-layers.md). Each line's
+ * halo lies under every line and over every bar.
+ */
+export const COMBO_Z = { area: 1, bar: 2, halo: 3, line: 4, point: 5 } as const;
+
+/** direction.md §7h, a combo's marks: the area's fill, a line's halo, a point's ring. */
+export const COMBO_MARK = {
+  /** An area's fill opacity: bars behind it stay readable. */
+  areaOpacity: 0.24,
+  /** The width of the `bg-surface` stroke under a line. */
+  haloPx: 5,
+  /** The `bg-surface` ring round a point. */
+  pointRingPx: 1.5,
+} as const;
+
+/**
  * direction.md §5, the light categorical ramp, in its fixed order. Eight
  * slots, which is also the recommender's hard cap on colour series — past
  * eight the chart facets or folds the tail into "Other" rather than inventing

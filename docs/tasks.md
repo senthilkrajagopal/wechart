@@ -1864,10 +1864,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T845 [P] (AC-497, AC-498, AC-037) Carry each combo series' mark and axis in the chart spec, and resolve Auto: the first measure as bars, the rest as lines, all on the left
 
-- [ ] T846 (AC-497, AC-037) Draw each combo series with its own mark on its own value axis, in §7h's draw order, a line over bars on its surface halo
-  - Files: `packages/charts/src/series/combo.ts` (+ test), `packages/charts/src/theme.ts`, `packages/charts/src/optionFor.ts`.
-  - Failing test: `combo.test.ts`: Revenue bar/left, Target line/left, Margin % point/right and Cost area/left give ECharts series of type bar, line, scatter, and line with `areaStyle` at 0.24 opacity; Margin %'s `yAxisIndex` is 1 and the others' 0; `z` orders area < bar < line < point; a line has a 5 px `bg-surface` halo under its 2 px stroke; a point has an 8 px marker with a 1.5 px surface ring (AC-497, AC-037).
-  - Depends on: T845
+- [x] T846 (AC-497, AC-037) Draw each combo series with its own mark on its own value axis, in §7h's draw order, a line over bars on its surface halo
 
 - [ ] T847 (AC-499) Align a combo's two value axes: one zero height, the right axis's ticks on the left's gridlines, include zero forced while bars are drawn, and no right gridlines
   - Files: `packages/charts/src/combo/alignedAxes.ts` (+ test), `packages/charts/src/series/combo.ts`.
