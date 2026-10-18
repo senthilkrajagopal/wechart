@@ -8,6 +8,7 @@ import {
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { sql, StandardSQL, type SQLDialect } from '@codemirror/lang-sql';
 import { syntaxHighlighting } from '@codemirror/language';
+import { closeSearchPanel, openSearchPanel, search } from '@codemirror/search';
 import { Annotation, EditorState, Facet, Prec, StateField } from '@codemirror/state';
 import {
   Decoration,
@@ -87,6 +88,34 @@ const completionOf = (source: CompletionSource) => [
 ];
 
 /**
+ * The editor's own find, as AC-455 has it (T816): ⌘/Ctrl+F opens
+ * `@codemirror/search`'s panel at the top (research/keyboard-shortcuts-sql-runner.md:
+ * `openSearchPanel` returns true, so the browser's find is prevented), and Esc
+ * closes it. Its keymap's F3, Mod-g, Mod-d, Mod-Shift-l and Mod-Alt-g aren't
+ * bound: no criterion approves them (R75). Enter and Shift+Enter in its own
+ * field find the next and previous match, as the panel's field does by itself.
+ */
+const FIND = [
+  search({ top: true }),
+  Prec.high(
+    keymap.of([
+      {
+        key: 'Mod-f',
+        // Focus into its field, said outright: the panel's first opening only
+        // selects it, which not every browser takes as focus (jsdom doesn't).
+        run: (view) => {
+          const opened = openSearchPanel(view);
+          view.dom.querySelector<HTMLInputElement>('.cm-search input[name="search"]')?.focus();
+          return opened;
+        },
+        scope: 'editor search-panel',
+      },
+      { key: 'Escape', run: closeSearchPanel, scope: 'editor search-panel' },
+    ]),
+  ),
+];
+
+/**
  * The SQL tab's editor (T535; design 15's P2): the app's CodeMirror, as the
  * model's YAML has it, in SQL mode (`@codemirror/lang-sql`,
  * research/code-editor.md), driven as a controlled editor.
@@ -109,7 +138,14 @@ export function SqlEditor({
   onStatement,
   dialect = StandardSQL,
   completion,
+  find = false,
 }: {
+  /**
+   * The SQL runner workspace's (T816, AC-455): ⌘/Ctrl+F opens the editor's
+   * own find, and Esc in it closes it. The search keymap's other keys aren't
+   * bound (R75). Elsewhere the browser's find stays. Read once.
+   */
+  find?: boolean;
   /** The SQL runner workspace's autocomplete (T808, AC-456): what to offer as the user types. Read once. */
   completion?: CompletionSource | undefined;
   /** The source's dialect, for the statement at the cursor's bounds (with `atCursor`). Read once. */
@@ -174,6 +210,7 @@ export function SqlEditor({
           ),
           ...(atCursor ? [STATEMENT_DIALECT.of(dialect), statementMark] : []),
           ...(completion === undefined ? [] : completionOf(completion)),
+          ...(find ? FIND : []),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           sql(),
           syntaxHighlighting(TOKEN_HIGHLIGHT),

@@ -1718,11 +1718,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T815 (AC-460) List the user's own saved queries in ⌘K, labelled "Saved query", and no one else's
 
-- [ ] T816 (AC-455) ⌘/Ctrl+S saves the open tab's query in the workspace, and ⌘/Ctrl+F opens the editor's own find
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/SqlWorkspace.tsx`, `packages/web/src/workspaces/sql/QueryTab.tsx` (+ test; `@codemirror/search`), `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: `QueryTab.test.tsx`: ⌘/Ctrl+S in the workspace updates a saved query, or opens Save… for a new one, and the event's default is prevented; ⌘/Ctrl+F in the editor opens CodeMirror's find panel. The e2e: neither key does anything new outside the workspace (AC-455).
-  - Depends on: T812
+- [x] T816 (AC-455) ⌘/Ctrl+S saves the open tab's query in the workspace, and ⌘/Ctrl+F opens the editor's own find
 
 ### Lane SQL: History
 

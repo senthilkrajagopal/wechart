@@ -1050,6 +1050,113 @@ test.describe('saving a query (T812, AC-457, AC-483)', () => {
 });
 
 /**
+ * T816 (AC-455): ⌘/Ctrl+S anywhere in the workspace saves the open tab's
+ * query (Save… on a new one, Save on a saved one) instead of the browser's
+ * saving the page; ⌘/Ctrl+F in the editor opens the editor's own find; and
+ * neither key does anything new outside the workspace.
+ */
+test.describe('Save and Find keys (T816, AC-455)', () => {
+  /** Whether the page kept the browser from acting on the last key: heard on the window, after every handler. */
+  const watchPrevented = (page: Page) =>
+    page.evaluate(() => {
+      const kept = window as unknown as { lastPrevented?: boolean };
+      window.addEventListener('keydown', (event) => {
+        kept.lastPrevented = event.defaultPrevented;
+      });
+    });
+  const lastPrevented = (page: Page) =>
+    page.evaluate(() => (window as unknown as { lastPrevented?: boolean }).lastPrevented);
+  /**
+   * A synthetic ⌘/Ctrl+key on the focused element, so a key the page leaves
+   * alone can't reach the browser's own save or find: whether it was prevented.
+   */
+  const syntheticPrevented = (page: Page, key: string) =>
+    page.evaluate((pressed) => {
+      const event = new KeyboardEvent('keydown', {
+        key: pressed,
+        ctrlKey: true,
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      (document.activeElement ?? document.body).dispatchEvent(event);
+      return event.defaultPrevented;
+    }, key);
+
+  test('⌘/Ctrl+S saves the open tab’s query from anywhere in the workspace; ⌘/Ctrl+F opens the editor’s find; neither does anything new elsewhere', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    const name = `Keyed save ${RUN}`;
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await watchPrevented(page);
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.on) }).click();
+      const editor = page.locator('.sql-editor .cm-content');
+      await editor.click();
+      await page.keyboard.insertText('SELECT 1 AS one');
+
+      // A new query: Save… opens, the browser's save kept off.
+      await page.keyboard.press('ControlOrMeta+s');
+      const dialog = page.getByRole('dialog', { name: 'Save query' });
+      await expect(dialog).toBeVisible();
+      expect(await lastPrevented(page)).toBe(true);
+      await dialog.getByRole('textbox', { name: 'Name' }).fill(name);
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByTestId('sql-saved-as')).toHaveText('Saved query · Only me');
+
+      // A saved one: Save, from the right pane, far from the editor.
+      await editor.click();
+      await editor.press('End');
+      await page.keyboard.insertText(' LIMIT 3');
+      await rightPane(page).getByRole('button', { name, exact: true }).focus();
+      await page.keyboard.press('ControlOrMeta+s');
+      expect(await lastPrevented(page)).toBe(true);
+      await expect
+        .poll(async () => {
+          const listed = (await (await page.request.get('/api/sql/saved')).json()) as {
+            queries: { name: string; sql: string }[];
+          };
+          return listed.queries.find((each) => each.name === name)?.sql;
+        })
+        .toBe('SELECT 1 AS one LIMIT 3');
+      await expect(dialog).toHaveCount(0);
+
+      // ⌘/Ctrl+F in the editor: its own find, focus in its field; Esc closes it.
+      await editor.click();
+      await page.keyboard.press('ControlOrMeta+f');
+      const find = page.locator('.sql-editor .cm-search');
+      await expect(find).toBeVisible();
+      await expect(find.locator('input[name="search"]')).toBeFocused();
+      expect(await lastPrevented(page)).toBe(true);
+      await page.keyboard.press('Escape');
+      await expect(find).toHaveCount(0);
+
+      // Outside the workspace neither key is taken: Explore, and a data source's own SQL tab.
+      await page.goto('/explore');
+      await expect(page.getByRole('button', { name: /theme/i })).toBeVisible();
+      expect(await syntheticPrevented(page, 's')).toBe(false);
+      expect(await syntheticPrevented(page, 'f')).toBe(false);
+      await page.goto(`/explore/data-sources/${world.sources.on}`);
+      await page.getByRole('tablist', { name: 'Data source' }).getByRole('tab', { name: 'SQL' }).click();
+      await page.getByRole('tabpanel', { name: 'SQL' }).locator('.sql-editor .cm-content').click();
+      expect(await syntheticPrevented(page, 'f')).toBe(false);
+      expect(await syntheticPrevented(page, 's')).toBe(false);
+      await expect(page.locator('.cm-search')).toHaveCount(0);
+    } finally {
+      const listed = (await (await page.request.get('/api/sql/saved')).json()) as {
+        queries: { id: string; name: string }[];
+      };
+      for (const each of listed.queries.filter((query) => query.name === name))
+        await page.request.delete(`/api/sql/saved/${each.id}`);
+      await context.close();
+    }
+  });
+});
+
+/**
  * T809 (AC-453): each `{{ name }}` outside strings and comments, once, in
  * the strip under the editor, typed Text (the default), Number, Date or
  * Boolean, and Run held, naming those with no value, until each has one.

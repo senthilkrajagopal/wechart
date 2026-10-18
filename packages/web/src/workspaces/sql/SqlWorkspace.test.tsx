@@ -1039,6 +1039,51 @@ describe('opening a saved query whose source is no longer available (T814, AC-45
     ]);
   });
 
+  it('takes ⌘/Ctrl+S anywhere in the workspace: Save… on the open tab, never the browser’s save (T816, AC-455)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/sql/saved') return json({ queries: [] });
+        if (url === '/api/data-sources/emea')
+          return json({
+            id: 'emea',
+            folderId: 'f-sales',
+            name: 'emea_replica',
+            driver: 'postgres',
+            authMethod: 'password',
+            fields: { host: 'h', port: 5432, database: 'sales', user: 'cube_reader', ssl: false },
+            secrets: {},
+            targetFolderId: null,
+            origin: null,
+            version: 1,
+            updatedAt: '2026-10-17T10:00:00Z',
+            folderPath: [{ id: 'f-sales', title: 'Sales' }],
+            canWrite: true,
+            inWorkspace: false,
+            description: null,
+            sqlRunner: { on: true },
+            sqlAccess: { tab: true, runs: true },
+          });
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+    renderAs(writer);
+    // No source chosen: nothing to save, and the browser saves nothing either.
+    const picker = await screen.findByRole('button', { name: 'Data source Choose…' });
+    expect(fireEvent.keyDown(picker, { key: 's', ctrlKey: true })).toBe(false);
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await userEvent.click(picker);
+    await userEvent.click(screen.getByRole('option', { name: /emea_replica/ }));
+    await screen.findByRole('button', { name: 'Save…' });
+    // From the right pane, far from the editor.
+    const right = screen.getByRole('complementary', { name: 'Saved and History' });
+    expect(fireEvent.keyDown(right, { key: 's', metaKey: true })).toBe(false);
+    expect(screen.getByRole('dialog', { name: 'Save query' })).toBeTruthy();
+  });
+
   it('keeps the first visit’s sentence for a tab with no source that wasn’t opened so', async () => {
     vi.stubGlobal(
       'fetch',

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState, type Dispatch, type ReactNode } from 'react';
+import { useContext, useEffect, useId, useRef, useState, type Dispatch, type ReactNode } from 'react';
 
 import { clockOf } from '../../shell/formatTime';
 import { StatusIcon } from '../../shell/StatusIcon';
@@ -17,6 +17,7 @@ import { dialectFor, statementAt } from './statementAt';
 import { routeOf, type SqlSource } from './sqlSource';
 import { SaveDialog } from './SaveDialog';
 import { SAVED_QUERIES } from './SavedList';
+import { SaveKeyContext } from './saveKey';
 import type { SavedAs, SqlTab, TabsAction } from './tabs';
 
 /**
@@ -393,6 +394,29 @@ export function QueryTab({
     setAsking(null);
     saveButton.current?.focus();
   };
+  /**
+   * The workspace's ⌘/Ctrl+S (T816, AC-455): Save on a saved query, Save…
+   * on a new one, as their buttons do; nothing more while Save… is open.
+   */
+  const saveKey = useContext(SaveKeyContext);
+  const saveNow = () => {
+    const to = tab.saved;
+    if (to !== undefined) {
+      setSaveFailed(null);
+      void saveOf(to, to.name, to.description).then(setSaveFailed);
+    } else if (asking === null) {
+      setSaveFailed(null);
+      setAsking({ name: '', description: '' });
+    }
+  };
+  // The latest, each render: what saving is depends on the tab as it is now.
+  useEffect(() => {
+    if (saveKey === null) return undefined;
+    saveKey.current = saveNow;
+    return () => {
+      if (saveKey.current === saveNow) saveKey.current = null;
+    };
+  });
   return (
     <>
       <div className="sql-centre__editor sql-query" data-testid="sql-editor-area">
@@ -471,6 +495,7 @@ export function QueryTab({
           onRun={(sql) => void run(sql)}
           onSelection={setSelected}
           atCursor
+          find
           dialect={dialect}
           onStatement={setStatement}
           label={`SQL for ${source.name}`}

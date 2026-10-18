@@ -290,3 +290,18 @@
     - "Another user's isn't listed" is the API's (T813's test); `globalSearch.test.ts` checks what the palette makes of the owner's list, and the e2e checks the Super-Admin's palette.
     - **Not this task's:** `e2e/search-palette.spec.ts:147` fails on Chromium in this stack whether or not the palette asks for saved queries (checked with the ask turned off): the catalog's answer lands after the first ↓, so the option ids, which are positions, shift. Left for the coordinator.
     - Decision T815-1 is in `docs/design/decisions-sql.md`.
+    - **Review:** one cold review passed, with low notes only, left as they are: no test of the `only` path for a saved query on Cube Store (the filter is off there); the "another user's" half is shown by the e2e and T813's API test, not by `globalSearch.test.ts`; `?saved=` waits for the sources, so with no SQL runner set up it opens nothing.
+
+- [x] T816 (AC-455) ⌘/Ctrl+S saves the open tab's query in the workspace, and ⌘/Ctrl+F opens the editor's own find
+  - Lane: SQL
+  - Files: `packages/web/src/workspaces/sql/SqlWorkspace.tsx`, `packages/web/src/workspaces/sql/QueryTab.tsx` (+ test; `@codemirror/search`), `e2e/security/sql-workspace.spec.ts`.
+  - Failing test: `QueryTab.test.tsx`: ⌘/Ctrl+S in the workspace updates a saved query, or opens Save… for a new one, and the event's default is prevented; ⌘/Ctrl+F in the editor opens CodeMirror's find panel. The e2e: neither key does anything new outside the workspace (AC-455).
+  - Depends on: T812
+  - **Built 2026-10-18** (lane SQL, batch 6).
+    - **AC-455 is ticked** on the e2e "⌘/Ctrl+S saves the open tab’s query from anywhere in the workspace; ⌘/Ctrl+F opens the editor’s find; neither does anything new elsewhere" (`e2e/security/sql-workspace.spec.ts`), in Chrome, Safari and Firefox (headless):
+      - ⌘/Ctrl+S on a new query opens Save…, and on the saved one, pressed with focus in the right pane, updates its SQL; each time the key's default is prevented;
+      - ⌘/Ctrl+F in the editor opens its find panel with focus in its field, prevented, and Esc closes it;
+      - on Explore, and in the data source page's own SQL editor, a ⌘/Ctrl+S or ⌘/Ctrl+F (sent as a synthetic event, so the browser's own save can't open) isn't prevented, and no find panel opens.
+    - **New package:** `@codemirror/search` 6.7.2, pinned exactly, as `docs/research/keyboard-shortcuts-sql-runner.md` pins it (listed in `code-editor.md`'s packages).
+    - **The web:** `saveKey.ts` holds the key: the workspace listens on its own element and the open `QueryTab` fills the slot with its Save or Save…. `SqlEditor` gains `find`, set by `QueryTab` only: `search({ top: true })`, with Mod-f (focus put into the field) and Esc.
+    - Decision T816-1 is in `docs/design/decisions-sql.md`.

@@ -6,6 +6,7 @@ import { useReducer } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { QueryTab } from './QueryTab';
+import { SaveKeyContext, useSaveKeyScope } from './saveKey';
 import type { SqlSource } from './sqlSource';
 import { tabsReducer, type SqlTab, type TabsAction, type TabsState } from './tabs';
 
@@ -92,15 +93,24 @@ function Harness({ start, source }: { readonly start: SqlTab; readonly source: S
     { tabs: [start], active: start.id },
   );
   const open = state.tabs[0]!;
+  // The workspace's ⌘/Ctrl+S, as `SqlWorkspace` holds it (T816).
+  const keys = useSaveKeyScope();
   return (
-    <>
-      <QueryTab tab={open} source={source} dispatch={dispatch} grip={<span data-testid="grip" />} />
+    <div
+      data-testid="workspace"
+      onKeyDown={(event) => {
+        keys.onKeyDown(event.nativeEvent);
+      }}
+    >
+      <SaveKeyContext.Provider value={keys.slot}>
+        <QueryTab tab={open} source={source} dispatch={dispatch} grip={<span data-testid="grip" />} />
+      </SaveKeyContext.Provider>
       <output data-testid="kept-sql">{open.sql}</output>
       <output data-testid="kept-run">{open.run?.kind ?? 'none'}</output>
       <output data-testid="kept-params">
         {JSON.stringify({ params: open.params, paramTypes: open.paramTypes ?? {} })}
       </output>
-    </>
+    </div>
   );
 }
 function open(
@@ -560,6 +570,73 @@ describe('saving the tab’s query (T812, AC-457, AC-483)', () => {
     );
     expect(screen.getByRole('dialog', { name: 'Save query' })).toBeTruthy();
     expect(screen.queryByTestId('sql-saved-as')).toBeNull();
+  });
+});
+
+/**
+ * T816 (AC-455): WHILE focus is in the SQL runner workspace, ⌘/Ctrl+S saves
+ * the open tab's query (Save on a saved one, Save… on a new one) instead of
+ * the browser's saving the page; WHILE focus is in the SQL editor, ⌘/Ctrl+F
+ * opens the editor's own find.
+ */
+describe('Save and Find keys (T816, AC-455)', () => {
+  let saves: { method: string; url: string }[] = [];
+  beforeEach(() => {
+    saves = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url.startsWith('/api/sql/saved')) {
+          saves.push({ method: init?.method ?? 'GET', url });
+          return Promise.resolve(new Response(JSON.stringify({ id: 'q1' }), { status: 200 }));
+        }
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+  });
+  const editorOf = (container: HTMLElement) => container.querySelector<HTMLElement>('.sql-editor .cm-content')!;
+
+  it('⌘S on a saved query updates it, the browser’s save prevented', async () => {
+    const { container } = open(
+      tab({ sql: 'SELECT 2', saved: { id: 'q1', name: 'Big orders', description: '' }, savedSql: 'SELECT 1' }),
+    );
+    const allowed = fireEvent.keyDown(editorOf(container), { key: 's', metaKey: true });
+    expect(allowed).toBe(false);
+    await vi.waitFor(() => {
+      expect(saves).toEqual([{ method: 'PUT', url: '/api/sql/saved/q1' }]);
+    });
+  });
+
+  it('Ctrl+S on a new query opens Save…, from anywhere in the workspace', () => {
+    open(tab({ sql: 'SELECT 2' }));
+    const allowed = fireEvent.keyDown(screen.getByTestId('sql-warning'), { key: 's', ctrlKey: true });
+    expect(allowed).toBe(false);
+    expect(screen.getByRole('dialog', { name: 'Save query' })).toBeTruthy();
+    expect(saves).toEqual([]);
+  });
+
+  it('leaves S with Shift or Alt, and S alone, to the page', () => {
+    const { container } = open(tab({ sql: 'SELECT 2' }));
+    expect(fireEvent.keyDown(editorOf(container), { key: 'S', ctrlKey: true, shiftKey: true })).toBe(true);
+    expect(fireEvent.keyDown(editorOf(container), { key: 's', ctrlKey: true, altKey: true })).toBe(true);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('⌘/Ctrl+F in the editor opens CodeMirror’s find panel, and Esc closes it', () => {
+    const { container } = open(tab({ sql: 'SELECT 1' }));
+    const view = EditorView.findFromDOM(container.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+    let handled = false;
+    act(() => {
+      handled = runScopeHandlers(view, new KeyboardEvent('keydown', { key: 'f', ctrlKey: true }), 'editor');
+    });
+    expect(handled).toBe(true);
+    const panel = container.querySelector('.cm-search');
+    expect(panel).not.toBeNull();
+    expect(document.activeElement).toBe(panel!.querySelector('input[name="search"]'));
+    act(() => {
+      runScopeHandlers(view, new KeyboardEvent('keydown', { key: 'Escape' }), 'search-panel');
+    });
+    expect(container.querySelector('.cm-search')).toBeNull();
   });
 });
 

@@ -28,6 +28,7 @@ import { QueryTab, type Insertion, type RunHold, type RunOnOpen } from './QueryT
 import { SchemaTree } from './SchemaTree';
 import { runState, type RunState } from './runState';
 import { SavedList, savedQueryById, type SavedQuery } from './SavedList';
+import { SaveKeyContext, useSaveKeyScope } from './saveKey';
 import type { SqlSourceRow } from './sources';
 import type { SqlSource } from './sqlSource';
 import { firstTabs, newTabId, type SqlTab, type TabsAction, type TabsState } from './tabs';
@@ -437,6 +438,16 @@ function Workbench({
   const leftFolded = useWindowMatches(LEFT_RAIL_QUERY);
   const rightFolded = useWindowMatches(RIGHT_RAIL_QUERY);
   const workspace = useRef<HTMLElement>(null);
+  /** ⌘/Ctrl+S anywhere in the workspace saves the open tab's query (T816, AC-455). */
+  const saveKeys = useSaveKeyScope();
+  useEffect(() => {
+    const element = workspace.current;
+    const onKeyDown = saveKeys.onKeyDown;
+    element?.addEventListener('keydown', onKeyDown);
+    return () => {
+      element?.removeEventListener('keydown', onKeyDown);
+    };
+  }, [saveKeys.onKeyDown]);
   const below = useRef<HTMLDivElement>(null);
   const split = useRef<{ readonly y: number; readonly from: number } | null>(null);
   const leftShown = leftFolded ? LEFT_PANE.rail : left;
@@ -506,6 +517,7 @@ function Workbench({
       <h1 id="sql-workspace-title" className="visually-hidden">
         SQL runner
       </h1>
+      <SaveKeyContext.Provider value={saveKeys.slot}>
       <SidePane
         side="left"
         label="Data source and schema"
@@ -646,6 +658,7 @@ function Workbench({
           }}
         />
       </SidePane>
+      </SaveKeyContext.Provider>
     </section>
   );
 }
