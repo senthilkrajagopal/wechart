@@ -6,8 +6,8 @@ import { TileSkeleton } from '../tiles/TileSkeleton';
 /**
  * The dashboard's frame while the dashboard itself is on its way (T251;
  * recheck-dashboard F15; direction.md §6: "Loading: a skeleton of the chart
- * form, not a spinner"): the header's row, the page-tab strip, the filter
- * band and tile frames with a chart's shape in them, where there had been a
+ * form, not a spinner"): the compact row with its page tabs (T829; design 19)
+ * and tile frames with a chart's shape in them, where there had been a
  * lone "Loading…". Built from the dashboard's own classes, so nothing moves
  * when the dashboard arrives in their place.
  *
@@ -30,24 +30,22 @@ export function DashboardLoading() {
         <span className="dashboard-loading__title" aria-hidden="true">
           <span className="skeleton-bar" />
         </span>
-        {/* Said, as well as drawn (rule 3): a status with its icon. */}
-        <StateLine kind="run" className="dashboard-loading__status">
-          Loading the dashboard…
-        </StateLine>
-      </header>
-      <div className="dashboard__fixed" aria-hidden="true">
-        <div className="page-tabs__row">
+        {/* The page tabs, inline in the compact row (T829; design 19). */}
+        <div className="page-tabs__row" aria-hidden="true">
           <div className="page-tabs">
             <span className="dashboard-loading__tab">
               <span className="skeleton-bar" />
             </span>
           </div>
-          {/* The rest of the strip's rule, the whole width, as the
-              dashboard's own row draws it (T251's review). */}
-          <div className="page-tabs__rest" />
         </div>
-        <div className="filter-bar" />
-      </div>
+        <span className="dashboard__header-spacer" aria-hidden="true" />
+        {/* Said, as well as drawn (rule 3): a status with its icon. */}
+        <StateLine kind="run" className="dashboard-loading__status">
+          Loading the dashboard…
+        </StateLine>
+      </header>
+      {/* No filter band: it is in the header sheet, closed whenever a
+          dashboard opens (F43), so nothing moves when the dashboard arrives. */}
       <div className="dashboard__body">
         <div className="dashboard__canvas">
           <div className="dashboard-page" data-width="fixed">

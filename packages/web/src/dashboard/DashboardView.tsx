@@ -5319,9 +5319,14 @@ export function DashboardView({
         onStart={onEditStart}
         onDiscard={onDiscard}
         description={(shown) => shown.description}
-        headerActions={(session) => (
+        // The page tabs, inline in the compact row (AC-484; design 19 pin 3).
+        tabs={(session) => (
+          <PageTabsRow session={session} pageId={pageId} onOpenPage={setOpenPage} />
+        )}
+        // History and Bookmarks, before the primary (AC-484; design 19 screen 1).
+        headerLead={(session) => (
           <>
-            {/* Its versions, first in the head (T357, AC-289; design 06, pin 1;
+            {/* Its versions, first of the actions (T357, AC-289; design 06, pin 1;
                 2026-09-27 04 state E; T684): for those the API shows them to,
                 never while editing or read-only. A .btn, pressed while its
                 panel is open. */}
@@ -5353,6 +5358,10 @@ export function DashboardView({
                 onApply={applyView}
               />
             )}
+          </>
+        )}
+        headerActions={(session) => (
+          <>
             {/* A shared one's way to change it: a copy in My workspace
                 (T348, AC-278; design 04, state E). A workspace one's way
                 back: its proposal (state F). */}
@@ -5822,9 +5831,6 @@ export function DashboardView({
             />
           ) : undefined
         }
-        band={(session) => (
-          <PageTabsRow session={session} pageId={pageId} onOpenPage={setOpenPage} />
-        )}
         // The filter bar is in the header sheet, opened by the Filters toggle
         // (F43; design 19 screen 2).
         sheet={(session) => (
@@ -6083,7 +6089,7 @@ function SessionMirror({
 
 /**
  * The page tabs (AC-018, AC-207), and "+ Page tab" beside them while editing
- * (AC-206, the prototype's): in the band above the canvas, the tablist holding
+ * (AC-206, the prototype's): inline in the compact row (T829), the tablist holding
  * only tabs, and a new tab opened at once, empty and ready to fill.
  */
 function PageTabsRow({

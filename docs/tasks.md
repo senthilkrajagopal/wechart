@@ -1899,10 +1899,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T828 [P] (AC-196, AC-486, AC-487, AC-490) Move the description, the ownership line and the filter bar into a header sheet, closed whenever a dashboard opens, opened and closed by a Filters disclosure toggle with `aria-expanded` and `aria-controls`, and hidden from focus and assistive technology while closed
 
-- [ ] T829 (AC-484, AC-196, AC-496) The compact row: one 48 px row fixed above the tiles holding the way back, the title, the page tabs, the actions as today and the Filters toggle last
-  - Files: `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/dashboard/DashboardView.tsx` (`PageTabsRow` from `band` into the row), `packages/web/src/shell/styles.ts` (`.dashboard__header` as the row, `.page-tabs` at the row's height), `packages/web/src/dashboard/header/CompactRow.test.tsx`, `e2e/dashboard-header.spec.ts`.
-  - Failing test: `CompactRow.test.tsx`: in view mode the header holds, in order, the way back, the `h1`, the page tablist, History, Bookmarks, the primary action, the gear where shown, ⋯ and the toggle, and no description, ownership line or pill (AC-484). The e2e at 1,440 × 900 and 1,280 × 720: the row's box is 48 px tall; scrolling the canvas by 600 px leaves the row and its tabs where they were (AC-484, AC-196); the canvas's top edge is at most 96 px below the viewport's top (AC-496).
-  - Depends on: T828
+- [x] T829 (AC-484, AC-196, AC-496) The compact row: one 48 px row fixed above the tiles holding the way back, the title, the page tabs, the actions as today and the Filters toggle last
 
 - [ ] T830 (AC-485, AC-195) The way back "← ‹folder›" naming the whole path, and the title at `text-lg`, cut short with its tooltip and shown whole at the top of the open sheet only when cut
   - Files: `packages/web/src/dashboard/header/BackToFolder.tsx` (+ test; the path as `workspaces/explore/FolderCrumbs.tsx` builds it), `packages/web/src/dashboard/header/HeaderTitle.tsx` (+ test), `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/dashboard/header/HeaderSheet.tsx`, `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.

@@ -133,6 +133,17 @@ export interface EditChromeProps<T> {
    * makes inert, so a control there has to hold itself back while saving.
    */
   readonly headerActions?: ReactNode | ((session: EditSession<T>) => ReactNode);
+  /**
+   * The actions before the primary in the compact row — a dashboard's
+   * History and Bookmarks (AC-484: "History, Bookmarks, the primary action,
+   * the gear … and ⋯"; design 19 screen 1).
+   */
+  readonly headerLead?: ((session: EditSession<T>) => ReactNode) | undefined;
+  /**
+   * The page tabs, inline in the compact row after the title (AC-484; design
+   * 19 pin 3), so they stay fixed above the scrolling tiles with it (AC-196).
+   */
+  readonly tabs?: ((session: EditSession<T>) => ReactNode) | undefined;
   /** A line under the title: where it lives (T348). */
   readonly subtitle?: ReactNode | undefined;
   /**
@@ -170,9 +181,10 @@ export interface EditChromeProps<T> {
    */
   readonly readOnly?: boolean | undefined;
   /**
-   * The rows between the header and the canvas — a dashboard's page tabs and
-   * filter bar — full width above the canvas and the sidebar alike, as the
-   * prototype stacks them (T246), and so held while the canvas scrolls.
+   * Rows between the header and the canvas, full width above the canvas and
+   * the sidebar alike, as the prototype stacks them (T246), and so held while
+   * the canvas scrolls. A dashboard's page tabs are in the row now (`tabs`)
+   * and its filter bar in the sheet (`sheet`).
    */
   readonly band?: ((session: EditSession<T>) => ReactNode) | undefined;
   /**
@@ -213,6 +225,8 @@ export function EditChrome<T>({
   panels,
   overlay,
   headerActions,
+  headerLead,
+  tabs,
   subtitle,
   description,
   quietEdit = false,
@@ -422,6 +436,12 @@ export function EditChrome<T>({
             ) : null}
             {title(current)}
           </h1>
+          {/* The page tabs, inline after the title (AC-484; design 19 pin 3),
+              then the room that puts the actions at the row's end. */}
+          {tabs?.(session)}
+          <span className="dashboard__header-spacer" aria-hidden="true" />
+          {/* History and Bookmarks, before the primary (AC-484). */}
+          {headerLead?.(session)}
           {editing ? (
             <EditBar
               changes={changes}
@@ -481,8 +501,7 @@ export function EditChrome<T>({
           <div className="dashboard__fixed" inert={saving}>
             {band?.(session)}
             {hasSheet ? (
-              // Directly after the row and its page tabs (design 19's keyboard
-              // table; the tabs join the row in T829).
+              // Directly after the row (design 19's keyboard table).
               <HeaderSheet id={sheetId} open={editing || sheetOpen}>
                 {about.description === '' && about.ownership === undefined ? null : (
                   <div className="header-sheet__about">

@@ -148,20 +148,31 @@ test('while the dashboard is on its way, its frame is drawn: header, tabs and ti
   const said = frame.getByRole('status').filter({ hasText: 'Loading the dashboard' });
   await expect(said).toBeVisible();
   await expect(said.locator('[data-icon]')).toHaveCount(1);
-  // The header's row, the page-tab strip and the filter band hold their places…
+  // The compact row with its page-tab strip holds its place (T829; design
+  // 19); the filter band is in the header sheet, closed as a dashboard opens,
+  // so the frame draws none for the tiles to jump from…
   await expect(frame.locator('.dashboard__header')).toBeVisible();
-  await expect(frame.locator('.page-tabs')).toBeVisible();
-  await expect(frame.locator('.filter-bar')).toBeVisible();
+  await expect(frame.locator('.dashboard__header .page-tabs')).toBeVisible();
+  await expect(frame.locator('.filter-bar')).toHaveCount(0);
   // …and the tiles are frames with a chart's shape in them, not an empty page.
   await expect(frame.locator('.grid-tile').first()).toBeVisible();
   await expect(frame.getByTestId('tile-skeleton').first()).toHaveAttribute('data-shape', /\w+/);
   const header = (await frame.locator('.dashboard__header').boundingBox())!;
-  expect(header.height).toBe(80);
+  expect(header.height).toBe(48);
+  // The canvas straight under the row, with no band drawn between them.
+  const gap = async (scope: import('@playwright/test').Locator) =>
+    ((await scope.locator('.dashboard__canvas').boundingBox())?.y ?? 0) -
+    ((await scope.locator('.dashboard__header').boundingBox())?.y ?? 0) -
+    48;
+  expect(await gap(frame)).toBe(0);
 
   released = true;
   for (const route of held.splice(0)) await route.continue();
   await expect(page.getByTestId('chart-canvas').first()).toBeVisible();
   await expect(frame).toHaveCount(0);
+  // Nothing moved under the row as the dashboard arrived: its canvas too
+  // starts straight under it, the sheet closed.
+  expect(await gap(page.locator('.dashboard').first())).toBe(0);
 });
 
 test('a failed tile keeps its ⋯ menu, and its Details hold the error and the query', async ({

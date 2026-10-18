@@ -1,0 +1,8 @@
+# Decisions: the compact dashboard header (lane HEADER)
+
+Later decisions for P2.25 (F43, design 19), in the table of [`decisions-2026-10-08.md`](./decisions-2026-10-08.md)'s "Later decisions", kept here so the parallel lanes don't conflict there. T8xx-1, T828-1 and T828-2 are in that file.
+
+| ID | Question | Decision | Why | Departs |
+|---|---|---|---|---|
+| T829-1 the row while editing and below 1,024 px (AC-484, AC-491, AC-495) | AC-484's one 48 px row is for view mode at 1,024 px and wider. What does the row do while editing, and in a narrow window, before T836 and T842 build them? | **It may still wrap there, at least 48 px tall, as the header did before.** View mode at 1,024 px and wider never wraps: the title, the tabs and the way back give way instead. Lane HEADER's call, overturnable. | The edit bar and "+ Page tab" don't all fit one row at every width yet, and a row that can't wrap would push the page sideways (AC-304). | No |
+| T829-2 the tabs' underline and the row's rule (design 19 pin 3) | Design 19 draws the selected tab's 2 px underline over the row's 1 px rule (`margin-bottom: -1px`). Built so, the strip, which clips, cut both the underline and a focused tab's inset ring. | **The underline sits on top of the rule, not over it: 1 px higher than drawn.** Lane HEADER's call, overturnable. | A 1 px difference, within R77's 4 px; a whole focus ring (AC-176) outranks it. | Yes, by 1 px |

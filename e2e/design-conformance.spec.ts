@@ -314,11 +314,18 @@ test.describe('T203: the dashboard header, page tabs and tiles', () => {
     // .dash-tabs button { border: 0; background: none; height: 36px; padding: 0 12px; font-weight: 600;
     //                     font-size: 13px; color: var(--text-secondary); border-bottom: 2px solid transparent }
     // .dash-tabs button[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--accent) }
+    // Since T829 the tabs are inline in the compact row, each its full height,
+    // the underline on the row's own subtle rule (design 19 .dhrow, .itabs).
     const tabs = page.getByRole('tablist', { name: 'Pages' });
-    expect(await style(tabs, 'border-bottom-width', 'border-bottom-color')).toEqual({
+    expect(
+      await style(page.locator('.dashboard__header'), 'border-bottom-width', 'border-bottom-color'),
+    ).toEqual({
       'border-bottom-width': '1px',
       'border-bottom-color': await token(page, 'border-subtle'),
     });
+    await expect(
+      page.locator('.dashboard__header [role="tablist"][aria-label="Pages"]'),
+    ).toHaveCount(1);
     const selected = tabs.getByRole('tab', { name: 'Overview' });
     const other = tabs.getByRole('tab', { name: 'Appendix' });
     expect(
@@ -335,7 +342,8 @@ test.describe('T203: the dashboard header, page tabs and tiles', () => {
         'background-color',
       ),
     ).toEqual({
-      height: '36px',
+      // The 48 px row's full height inside its 1 px rule (design 19 pin 3).
+      height: '47px',
       'padding-left': '12px',
       'font-size': '13px',
       'font-weight': '600',
@@ -400,15 +408,15 @@ test.describe('T203: the dashboard header, page tabs and tiles', () => {
   test('the header, the page tabs and the page are padded as the prototype’s (T205’s review)', async ({
     page,
   }) => {
-    // .dash-head { padding: 12px 24px 0 }
+    // Design 19's compact row: .dhrow { height: 48px; padding: 0 24px } (T829).
     expect(await style(page.locator('.dashboard__header'), 'padding-top', 'padding-left')).toEqual({
-      'padding-top': '12px',
+      'padding-top': '0px',
       'padding-left': '24px',
     });
-    // .dash-tabs { padding: 8px 24px 0 }
+    // Its tabs inline, after the title: .itabs, unpadded.
     expect(
       await style(page.getByRole('tablist', { name: 'Pages' }), 'padding-top', 'padding-left'),
-    ).toEqual({ 'padding-top': '8px', 'padding-left': '24px' });
+    ).toEqual({ 'padding-top': '0px', 'padding-left': '0px' });
     // .dgrid { padding: 16px 24px 40px }
     expect(await style(page.getByTestId('dashboard-page'), 'padding-top', 'padding-left')).toEqual({
       'padding-top': '16px',
@@ -1484,16 +1492,19 @@ test.describe('T246: the dashboard header and the filter band', () => {
     await expect(title(page)).toBeVisible();
   });
 
-  test('the header: 80 px, its way back a 24 px ghost button, its folder muted', async ({
+  test('the header: one 48 px row, its way back a 24 px ghost button, its folder muted', async ({
     page,
   }) => {
-    // .dash-head { padding: 12px 24px 0; gap: 12px }: the breadcrumb's 24 px
-    // row, then the 32 px title (mismatch 1). To the title's foot: below it
-    // now is the line saying where the dashboard is (design 04, state E),
-    // which sign-in off shows too (T359, AC-254).
+    // Design 19's compact row in place of design 04's 80 px crumbs and title
+    // rows (T829; AC-343, AC-352 as amended): the way back, then the title,
+    // on one 48 px line, the title wholly within it.
     const head = await title(page).locator('..').boundingBox();
     const titled = await title(page).boundingBox();
-    expect((titled?.y ?? 0) + (titled?.height ?? 0) - (head?.y ?? 0)).toBe(80);
+    expect(head?.height).toBe(48);
+    expect(titled?.y ?? 0).toBeGreaterThanOrEqual(head?.y ?? 0);
+    expect((titled?.y ?? 0) + (titled?.height ?? 0)).toBeLessThanOrEqual(
+      (head?.y ?? 0) + (head?.height ?? 0),
+    );
     // The ownership line is in the header sheet since T828 (F43, AC-487):
     // opened first.
     await openHeaderSheet(page);

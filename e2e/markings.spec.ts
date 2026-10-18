@@ -1668,12 +1668,13 @@ test('a right-click on the chart, Shift+F10 or the Menu key opens the tile’s m
   request,
 }) => {
   const { id, title } = await markingDashboard(request);
+  // A window with room for the 536 px menu under the pointer or over it. In
+  // 720 px, once the compact header (T828, T829) put the tile higher, it fit
+  // neither way and was turned back from the window's top instead.
+  await page.setViewportSize({ width: 1280, height: 1100 });
   await open(page, id, title);
   // It reads the marking's chip, in the filter bar: the header sheet opened
-  // first (T828). Open, it also keeps the tile where this test measured it:
-  // closed, the tile sits 75 px higher in the 720 px window, where the 536 px
-  // menu fits neither under the pointer nor over it and is turned back from
-  // the window's top instead.
+  // first (T828).
   await openHeaderSheet(page);
   const status = tile(page, 'tile-status');
   await clickBar(page, status, 'shipped');

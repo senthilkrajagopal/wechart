@@ -18,11 +18,15 @@ import { IN_MY_WORKSPACE, myCopyOf, sharedIn } from './workspace';
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-/** A page's title, and the edge of the frame it sits in. */
-async function frameOf(page: Page, frame: Locator) {
+/**
+ * A page's title, and the edge of the frame it sits in: measured from what
+ * leads the title's row, where something does — a dashboard's way back, before
+ * its title in the compact row (T829; design 19).
+ */
+async function frameOf(page: Page, frame: Locator, lead?: Locator) {
   const title = page.getByRole('heading', { level: 1 }).first();
   await expect(title).toBeVisible();
-  const [box, edge] = [await title.boundingBox(), await frame.boundingBox()];
+  const [box, edge] = [await (lead ?? title).boundingBox(), await frame.boundingBox()];
   const style = await title.evaluate((node) => {
     const computed = getComputedStyle(node);
     return { size: computed.fontSize, weight: computed.fontWeight };
@@ -51,7 +55,24 @@ test.describe('one page frame (UX-109)', () => {
   for (const [name, path, frame, size] of PAGES) {
     test(`${name}: its title ${size}/600, 24 px from its frame's edge`, async ({ page }) => {
       await page.goto(path);
-      expect(await frameOf(page, frame(page))).toEqual({ gutter: 24, size, weight: '600' });
+      // A dashboard's title follows its way back in the compact row (T829).
+      const lead = path.startsWith('/explore/dashboards/')
+        ? page.locator('.dashboard__header > :first-child')
+        : undefined;
+      expect(await frameOf(page, frame(page), lead)).toEqual({ gutter: 24, size, weight: '600' });
+      if (lead !== undefined) {
+        // The title on the way back's line, after it.
+        const [back, title] = [
+          await lead.boundingBox(),
+          await page.getByRole('heading', { level: 1 }).first().boundingBox(),
+        ];
+        expect((title?.x ?? 0) > (back?.x ?? 0) + (back?.width ?? 0)).toBe(true);
+        expect(
+          Math.abs(
+            (title?.y ?? 0) + (title?.height ?? 0) / 2 - ((back?.y ?? 0) + (back?.height ?? 0) / 2),
+          ),
+        ).toBeLessThan(2);
+      }
     });
   }
 

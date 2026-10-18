@@ -6,6 +6,54 @@
  * A template literal, so no backtick in a comment below.
  */
 export const HEADER_CSS = `
+/* The compact row (AC-484; design 19 .dhrow; direction §7g): one 48 px row,
+   padded 0 24, ruled off in border-subtle on bg-page, fixed above the
+   scrolling canvas as the header always was. In view mode at 1,024 px and
+   wider it never wraps: the title and the tabs give way instead. */
+.dashboard__header {
+  flex-wrap: nowrap;
+  gap: 8px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 24px;
+  background: var(--wc-bg-page);
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+/* Each part keeps to one line; not the row as a whole, which would pass
+   nowrap on to the popovers and dialogs that open from it. */
+.dashboard__header > * { flex: none; white-space: nowrap; }
+.dashboard__header > * [role='dialog'] { white-space: normal; }
+.dashboard__header h1 {
+  margin: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dashboard__header-spacer { flex: 1 1 0; min-width: 0; }
+/* The way back, on the row's line (T830 makes it one step). */
+.dashboard__header > .item-crumbs { flex: 0 1 auto; flex-basis: auto; min-width: 0; overflow: hidden; }
+/* The page tabs inline: 13/600, each the row's full height, the 2 px accent
+   underline on the row's rule (design 19 .itabs). Not over it by the
+   design's 1 px: the strip clips, and the ring a focused tab draws inside
+   itself would be cut (R77). */
+/* The title and the way back give way first, the tabs only once they are
+   gone (design 19 G): a far larger shrink factor. Tabs that still don't fit
+   scroll within the strip, never the page, until T837 puts them behind
+   "More" in view mode (19-Q5). */
+.dashboard__header > .page-tabs__row { flex: 0 1 auto; min-width: 0; align-self: stretch; }
+.dashboard__header > h1,
+.dashboard__header > .item-crumbs { flex-shrink: 1000; }
+.dashboard__header .page-tabs { padding: 0; border-bottom: 0; align-items: stretch; gap: 2px; }
+.dashboard__header .page-tabs [role='tab'] { height: auto; }
+.dashboard__header .page-tabs__rest { flex: none; padding: 0 0 0 4px; border-bottom: 0; }
+/* While editing, and below 1,024 px, the row may still wrap: edit mode's row
+   is T836's, and the narrow row T842's (T829-1). */
+.dashboard[data-editing='true'] .dashboard__header { flex-wrap: wrap; height: auto; }
+@media (max-width: 1023px) {
+  .dashboard__header { flex-wrap: wrap; height: auto; }
+}
+
 /* The Filters toggle (AC-486; design 19 pin 6): a 32 px .btn, the funnel,
    the label and a chevron; drawn pressed on bg-subtle while the sheet is open,
    its chevron turned up (screen 2 pin 1). */
