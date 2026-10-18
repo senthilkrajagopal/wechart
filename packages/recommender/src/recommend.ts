@@ -341,6 +341,19 @@ const REASONS: Record<ChartType, string> = {
   combo: 'Two measures of the same scale together.',
   boxplot: 'How a measure’s values spread within each category.',
   map: 'A measure by country, shaded on a map.',
+  // R81's types (T934), each card's purpose as a reason; T968 and T1012
+  // decide when each is offered (AC-560, AC-561).
+  waterfall: 'What moved a total from one value to another.',
+  histogram: 'One numeric field: bins show its shape and where outliers sit.',
+  bubble: 'Three measures: across, up, and size.',
+  parallel: 'Compares members across 3 or more measures.',
+  bullet: 'Each member against its target and bands.',
+  sankey: 'How volume flows between stages or categories.',
+  funnel: 'Where volume drops between steps.',
+  timeline: 'Start and end on one time axis show overlaps.',
+  calendar: 'A calendar shows weekday and seasonal patterns.',
+  icicle: 'Each level’s share of the total, as lengths.',
+  graphicalTable: 'A row per member, with its trend and target at a glance.',
 };
 
 function reasonFor(candidate: Candidate): string {

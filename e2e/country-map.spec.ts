@@ -88,7 +88,8 @@ test('the map is offered for a dimension the model marks a country code only as 
   const marked = await mapCard(page);
   expect(marked.drawable).toBe('false');
   expect(marked.text).toContain(
-    'Country map needs a dimension of ISO-3 country codes in Dimensions; add 1 more.',
+    // "Map", in place of Country map (T934, AC-559).
+    'Map needs a dimension of ISO-3 country codes in Dimensions; add 1 more.',
   );
 
   // Country names, marked a country code: offered, whatever the values.

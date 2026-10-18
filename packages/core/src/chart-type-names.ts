@@ -26,7 +26,20 @@ export const CHART_TYPE_NAMES: Readonly<Record<ChartType, string>> = {
   trellis: 'Small multiples',
   combo: 'Combo (bar + line)',
   boxplot: 'Box plot',
-  map: 'Country map',
+  // "Map", in place of Country map (R81, 23-Q19 (a); AC-559, AC-622).
+  map: 'Map',
+  // R81's types, as design 23's cards name them (AC-559).
+  waterfall: 'Waterfall',
+  histogram: 'Histogram',
+  bubble: 'Bubble',
+  parallel: 'Parallel coordinates',
+  bullet: 'Bullet chart',
+  sankey: 'Sankey',
+  funnel: 'Funnel',
+  timeline: 'Timeline',
+  calendar: 'Calendar heatmap',
+  icicle: 'Icicle',
+  graphicalTable: 'Graphical table',
 };
 
 export function chartTypeName(type: ChartType): string {

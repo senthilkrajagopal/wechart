@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { WELLS, Wells, rejectionReason } from './Wells';
 import type { Member } from './fields';
+import { TYPE_WELLS, type TypeWellsProps } from './wells/registry';
 
 /**
  * AC-027: WHILE a field is being dragged, THE SYSTEM SHALL mark each well as
@@ -1163,5 +1164,72 @@ describe('a metric the form doesn’t draw (T510)', () => {
     render(<Wells spec={spec} available={[amount, measure]} onAdd={vi.fn()} onRemove={vi.fn()} />);
     expect(screen.queryByTestId('undrawn-metrics')).toBeNull();
     expect(screen.getByTestId('well-measures').textContent).not.toContain('not drawn');
+  });
+});
+
+/**
+ * T934 / AC-217 (R81): … still letting the type be chosen, the editor then
+ * highlighting the well it needs. And R81's wells live in `editor/wells/`,
+ * one module per type, routed from here once, after Metrics and Dimensions
+ * (direction.md §7i, "New wells").
+ */
+describe('R81’s wells, and the well a chosen type needs (T934)', () => {
+  const Stub = ({ chartType, highlight }: TypeWellsProps) => (
+    <section className="well-field" data-testid="stub-wells">
+      {chartType} {highlight ?? 'none'}
+    </section>
+  );
+
+  afterEach(() => {
+    delete TYPE_WELLS.waterfall;
+  });
+
+  it('highlights the well named, and only it', () => {
+    render(
+      <Wells
+        spec={emptySpec('orders')}
+        available={[measure, timeDimension]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        highlight="timeDimensions"
+      />,
+    );
+    expect(screen.getByTestId('well-timeDimensions').getAttribute('data-highlight')).toBe('true');
+    expect(screen.getByTestId('well-measures').getAttribute('data-highlight')).toBeNull();
+    expect(screen.getByTestId('well-dimensions').getAttribute('data-highlight')).toBeNull();
+  });
+
+  it('draws a type’s own wells from its module, after Dimensions, passing the highlight on', () => {
+    TYPE_WELLS.waterfall = Stub;
+    render(
+      <Wells
+        spec={emptySpec('orders')}
+        available={[measure, timeDimension]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        highlight="target"
+        typeWells={{ chartType: 'waterfall' }}
+      />,
+    );
+    const own = screen.getByTestId('stub-wells');
+    expect(own.textContent).toBe('waterfall target');
+    const dimensions = screen.getByTestId('well-dimensions');
+    expect(dimensions.compareDocumentPosition(own) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId('well-filters').compareDocumentPosition(own)).toBe(
+      Node.DOCUMENT_POSITION_PRECEDING,
+    );
+  });
+
+  it('draws nothing more for a type with no module of its own', () => {
+    render(
+      <Wells
+        spec={emptySpec('orders')}
+        available={[measure]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        typeWells={{ chartType: 'bar' }}
+      />,
+    );
+    expect(screen.queryByTestId('stub-wells')).toBeNull();
   });
 });

@@ -1,10 +1,34 @@
-import { CHART_TYPE_NAMES, type ChartType } from '@wechart/core';
-import { canDraw, describeMissing, type FieldCounts } from '@wechart/recommender';
+import type { ChartType } from '@wechart/core';
+import {
+  canDraw,
+  describeMissing,
+  missingFor,
+  type FieldCounts,
+  type WellName,
+} from '@wechart/recommender';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { useFocusTrap } from '../shell/useFocusTrap';
 import { ChartTypeIcon } from './ChartTypeIcon';
-import { needsText, TYPE_DESCRIPTIONS, TYPE_PURPOSES, typesMatching } from './chartTypeCatalog';
+import {
+  CARD_NAMES,
+  cardChoice,
+  needsText,
+  TYPE_DESCRIPTIONS,
+  TYPE_PURPOSES,
+  typesMatching,
+  type CardId,
+} from './chartTypeCatalog';
+
+/**
+ * What else a chosen card asks of the editor (T934): a 100 % card's stacking
+ * (AC-584), and for a card these fields can't draw, the well to highlight —
+ * the first it lacks (AC-217).
+ */
+export interface ChoiceExtras {
+  readonly stack?: 'percent';
+  readonly highlight?: WellName;
+}
 
 /**
  * "Choose chart type" (AC-217), the prototype's gallery: every type, searched
@@ -24,7 +48,8 @@ export interface ChartTypeGalleryProps {
   readonly suggested: readonly ChartType[];
   /** The chart's fields, which decide what can be drawn. */
   readonly counts: FieldCounts;
-  readonly onChoose: (type: ChartType) => void;
+  /** The type a card pins, with what else it asks, where it asks anything. */
+  readonly onChoose: (type: ChartType, extras?: ChoiceExtras) => void;
   /** Hand the choice back to the recommender. */
   readonly onAuto: () => void;
   readonly onClose: () => void;
@@ -72,14 +97,14 @@ export function ChartTypeGallery({
   }, []);
 
   // A search looks across every type, whichever shelf is open.
-  const listed: readonly ChartType[] =
+  const listed: readonly CardId[] =
     query.trim() !== ''
       ? typesMatching(query)
       : shelf === 'suggested'
         ? suggested
         : shelf === 'all'
           ? typesMatching('')
-          : (TYPE_PURPOSES.find((purpose) => purpose.id === shelf)?.types ?? []);
+          : (TYPE_PURPOSES.find((purpose) => purpose.id === shelf)?.cards ?? []);
   const shelves: [Shelf, string][] = [
     // As the prototype names it (editor.js:379; EDI-25).
     ['suggested', `Recommended (${String(suggested.length)})`],
@@ -129,37 +154,48 @@ export function ChartTypeGallery({
           {listed.length === 0 ? (
             <p className="type-gallery__none">No chart types match.</p>
           ) : (
-            listed.map((type) => {
+            listed.map((card) => {
+              const { type, stack } = cardChoice(card);
               const drawable = canDraw(type, counts);
-              const ids = { name: `${heading}-${type}`, about: `${heading}-${type}-about` };
+              const ids = { name: `${heading}-${card}`, about: `${heading}-${card}-about` };
+              // The first well it lacks, for the editor to highlight (AC-217).
+              const highlight = drawable ? undefined : missingFor(type, counts)[0]?.well;
+              const extras: ChoiceExtras = {
+                ...(stack === undefined ? {} : { stack }),
+                ...(highlight === undefined ? {} : { highlight }),
+              };
               return (
                 <button
-                  key={type}
+                  key={card}
                   type="button"
                   className="type-card"
-                  data-testid={`type-card-${type}`}
-                  data-type={type}
+                  data-testid={`type-card-${card}`}
+                  data-type={card}
                   data-drawable={String(drawable)}
-                  aria-current={type === current ? 'true' : undefined}
+                  // A 100 % card is its stacked type, but not the one drawn
+                  // now (the stacking is Customize's, AC-584).
+                  aria-current={card === current ? 'true' : undefined}
                   aria-labelledby={ids.name}
                   aria-describedby={ids.about}
-                  onClick={() => onChoose(type)}
+                  onClick={() =>
+                    Object.keys(extras).length === 0 ? onChoose(type) : onChoose(type, extras)
+                  }
                 >
                   {/* The prototype's card (editor.js:385; T688, EDI-24): the
                       type's icon on the top row with the badge, its name
                       on a line of its own. */}
                   <span className="type-card__top">
-                    <ChartTypeIcon type={type} size={28} />
-                    {suggested.includes(type) ? (
+                    <ChartTypeIcon type={card} size={28} />
+                    {(suggested as readonly CardId[]).includes(card) ? (
                       <span className="type-card__badge">Suggested</span>
                     ) : null}
                   </span>
                   <span id={ids.name} className="type-card__name">
-                    {CHART_TYPE_NAMES[type]}
+                    {CARD_NAMES[card]}
                   </span>
                   <span id={ids.about} className="type-card__about">
-                    <span className="type-card__description">{TYPE_DESCRIPTIONS[type]}</span>
-                    <span className="type-card__needs">{needsText(type)}</span>
+                    <span className="type-card__description">{TYPE_DESCRIPTIONS[card]}</span>
+                    <span className="type-card__needs">{needsText(card)}</span>
                     {/* Greyed, and why: what these fields lack (AC-217). */}
                     {drawable
                       ? null

@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { chooseChartType } from './chartType';
 import { newChartOnCountries } from './countries';
 import { cubePicker } from './cubePicker';
+import { AWAITING_TABLE_VIEW } from './r81Awaiting';
 import { wellPicker } from './wells';
 
 /**
@@ -42,7 +43,8 @@ async function openEditorWithEveryWellFilled(page: Page, chartType: string) {
   await expect(page.getByTestId('missing-fields')).toBeHidden();
 }
 
-for (const chartType of CHART_TYPES) {
+// R81's types join it as each one's table view lands (`r81Awaiting.ts`, T934).
+for (const chartType of CHART_TYPES.filter((type) => !AWAITING_TABLE_VIEW.has(type))) {
   test(`${chartType} offers a table view of its data`, async ({ page, request }, testInfo) => {
     /** The column the table has to show: the chart's own grouping, by its title. */
     let grouping: string | RegExp = 'Orders Status';

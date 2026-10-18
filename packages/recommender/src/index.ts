@@ -25,6 +25,7 @@ export {
   missingFor,
   type FieldCounts,
   type Requirement,
+  type WellName,
 } from './requirements';
 export type { Candidate, ChartType, Field, FieldKind, RuleOutcome, Signature } from './types';
 export { warningsFor } from './warnings';

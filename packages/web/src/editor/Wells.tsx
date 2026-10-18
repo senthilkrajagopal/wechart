@@ -20,6 +20,7 @@ import { fieldMetaOf, type Member } from './fields';
 import { PathPicker } from './PathPicker';
 import { QuickCalcMenu } from './QuickCalcMenu';
 import { overTimeUnavailable, quickCalcUnavailable } from './quickCalcAvailability';
+import { TYPE_WELLS, type TypeWellsProps } from './wells/registry';
 
 /**
  * How many of a member's values a filter pill offers (a decision, T229):
@@ -315,6 +316,13 @@ export interface WellsProps {
         readonly onTable: () => void;
       }
     | undefined;
+  /**
+   * The well a type chosen from the gallery needs (AC-217, T934): this
+   * one's, or one of the type's own, which it is handed.
+   */
+  readonly highlight?: TypeWellsProps['highlight'];
+  /** R81's type's own wells, drawn from its module after Time (T934). */
+  readonly typeWells?: Omit<TypeWellsProps, 'highlight'> | undefined;
 }
 
 export function Wells({
@@ -342,7 +350,10 @@ export function Wells({
   sort,
   eachPointIs,
   undrawn,
+  highlight,
+  typeWells,
 }: WellsProps) {
+  const TypeWells = typeWells === undefined ? undefined : TYPE_WELLS[typeWells.chartType];
   const ids = useId();
   const root = useRef<HTMLDivElement>(null);
   /**
@@ -528,6 +539,7 @@ export function Wells({
             <div
               className="well"
               data-testid={`well-${well.name}`}
+              data-highlight={highlight === well.name ? 'true' : undefined}
               data-drop={dragging === null ? undefined : legal ? 'legal' : 'illegal'}
               aria-describedby={refusal ? `well-${well.name}-reason` : undefined}
               onDragOver={(event) => {
@@ -674,6 +686,9 @@ export function Wells({
           section
         );
       })}
+      {TypeWells === undefined || typeWells === undefined ? null : (
+        <TypeWells {...typeWells} highlight={highlight} />
+      )}
 
       {/* The chart's own filters (AC-216), the prototype's Filters well. */}
       <section className="well-field">

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
 import { cubePicker } from './cubePicker';
+import { AWAITING_SERIES } from './r81Awaiting';
 import { wellPicker } from './wells';
 import { IN_MY_WORKSPACE, myCopyOf, newInMyWorkspace } from './workspace';
 
@@ -810,7 +811,8 @@ test('no chart type is left undrawn', async ({ page }) => {
   // type with no renderer. That was true while renderers were still landing
   // and stopped being true at T044, when the last of the eighteen arrived.
   // The guard itself is still covered by the unit test in optionFor.test.ts.
-  for (const chartType of CHART_TYPES) {
+  // R81's types join it as each one's series lands (`r81Awaiting.ts`, T934).
+  for (const chartType of CHART_TYPES.filter((type) => !AWAITING_SERIES.has(type))) {
     await chooseChartType(page, chartType);
     await expect(page.getByTestId('chart-not-drawable')).toBeHidden();
   }
@@ -1805,6 +1807,94 @@ test('the type reads by name; Change opens a gallery that greys what these field
   await auto.click();
   await expect(page.getByTestId('chart-type')).toHaveText('Auto · Bar');
   await expect(auto).toHaveAttribute('aria-pressed', 'true');
+});
+
+/**
+ * T934 / AC-217 (R81): … greys those the chart's fields cannot draw, saying
+ * what's missing in `text-primary` and still letting the type be chosen, the
+ * editor then highlighting the well it needs; and AC-559's nine purposes,
+ * Flow among them, and no gauge.
+ * `Fails when: … a greyed R81 card can't be chosen, or choosing one doesn't
+ * highlight the well it needs.`
+ */
+test('a greyed type chosen from the gallery highlights the well it needs, until the fields change', async ({
+  page,
+}) => {
+  await openEditorOnOrders(page);
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await expect(page.getByTestId('chart-type')).toHaveText('Auto · Bar');
+
+  await page.getByTestId('chart-type-change').click();
+  const gallery = page.getByRole('dialog', { name: 'Choose chart type' });
+  const shelves = gallery.getByRole('navigation', { name: 'Chart purposes' }).getByRole('button');
+  await expect(shelves).toHaveText([
+    /^Recommended/,
+    'All charts',
+    'Evolution over time',
+    'Ranking and comparison',
+    'Part of a whole',
+    'Flow',
+    'Distribution and matrix',
+    'Correlation',
+    'Geography',
+    'KPI',
+    'Table',
+  ]);
+  // Bullet chart lacks a target: greyed, saying so in text-primary.
+  await gallery.getByRole('button', { name: 'Ranking and comparison' }).click();
+  const bullet = gallery.getByTestId('type-card-bullet');
+  await expect(bullet).toHaveAttribute('data-drawable', 'false');
+  await expect(bullet.locator('.type-card__missing')).toHaveText(
+    'Put a measure or a value in Target',
+  );
+  const primary = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--wc-text-primary').trim(),
+  );
+  const missingColour = await bullet
+    .locator('.type-card__missing')
+    .evaluate((node) => getComputedStyle(node).color);
+  const probe = await page.evaluate((colour) => {
+    const span = document.createElement('span');
+    span.style.color = colour;
+    document.body.append(span);
+    const resolved = getComputedStyle(span).color;
+    span.remove();
+    return resolved;
+  }, primary);
+  expect(missingColour).toBe(probe);
+  // No gauge: a search finds the two cards that do its job.
+  await gallery.getByRole('searchbox', { name: 'Search chart types' }).fill('gauge');
+  await expect(gallery.getByTestId(/^type-card-/)).toHaveCount(2);
+  await expect(gallery.getByTestId('type-card-kpi')).toBeVisible();
+  await expect(gallery.getByTestId('type-card-bullet')).toBeVisible();
+  await gallery.getByRole('searchbox', { name: 'Search chart types' }).fill('');
+
+  // A greyed type of today, chosen: its missing well highlighted.
+  await gallery.getByRole('button', { name: 'Evolution over time' }).click();
+  await gallery.getByTestId('type-card-line').click();
+  await expect(gallery).toHaveCount(0);
+  await expect(page.getByTestId('chart-type')).toHaveText('Line');
+  await expect(page.getByTestId('well-timeDimensions')).toHaveAttribute('data-highlight', 'true');
+  await expect(page.getByTestId('well-measures')).not.toHaveAttribute('data-highlight');
+  // Back to Auto, a bar: nothing is asked for (T934's review).
+  await page
+    .getByRole('group', { name: 'Quick picks' })
+    .getByRole('button', { name: 'Auto', exact: true })
+    .click();
+  await expect(page.getByTestId('chart-type')).toHaveText('Auto · Bar');
+  await expect(page.getByTestId('well-timeDimensions')).not.toHaveAttribute('data-highlight');
+  await page.getByTestId('chart-type-change').click();
+  await gallery.getByRole('button', { name: 'Evolution over time' }).click();
+  await gallery.getByTestId('type-card-line').click();
+  await expect(page.getByTestId('well-timeDimensions')).toHaveAttribute('data-highlight', 'true');
+  // Filled, it's no longer asked for.
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+  await expect(page.getByTestId('well-timeDimensions')).not.toHaveAttribute('data-highlight');
+
+  // A greyed R81 card still chosen: the bullet pinned by its name.
+  await chooseChartType(page, 'bullet');
+  await expect(page.getByTestId('chart-type')).toHaveText('Bullet chart');
 });
 
 /**

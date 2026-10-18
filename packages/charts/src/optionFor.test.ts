@@ -1,11 +1,14 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { CHART_TYPES, type RenderSpec } from '@wechart/core';
+import { CHART_TYPES, R81_TYPES, type RenderSpec } from '@wechart/core';
 
 import countries from './geo/countries-50m.geo.json';
 import { registerCountries } from './geo/countryMap';
 import { DIRECT_LABEL_TOP } from './layout/directLabels';
 import { DRAWABLE_TYPES, isDrawable, optionFor } from './optionFor';
+import { PROTOTYPE_GRID } from './layout/grid';
+import { SERIES } from './series/registry';
+import { tooltipFor } from './tooltip';
 import {
   cellsOf,
   labelsOf,
@@ -126,11 +129,19 @@ describe('every drawable type produces marks', () => {
 describe('a type ECharts does not draw', () => {
   const notEcharts = CHART_TYPES.filter((chartType) => !isDrawable(chartType));
 
-  it('is only the DOM-rendered ones', () => {
-    // Every type is drawn now; these three are drawn as DOM by `ChartTile`,
-    // because a number or a table on a canvas is unselectable, unsearchable
-    // and invisible to a screen reader. Nothing is left undrawn.
-    expect([...notEcharts].sort()).toEqual(['kpi', 'pivot', 'table']);
+  it('is only the DOM-rendered ones, and R81’s types until their series lands', () => {
+    // Every type before R81 is drawn; these three are drawn as DOM by
+    // `ChartTile`, because a number or a table on a canvas is unselectable,
+    // unsearchable and invisible to a screen reader. R81's types (T934) join
+    // the vocabulary before their series: each leaves this list as its
+    // series task registers it (`series/registry.ts`), and the graphical
+    // table, a DOM table, never joins ECharts.
+    const r81 = new Set<string>(R81_TYPES);
+    expect([...notEcharts].filter((type) => !r81.has(type)).sort()).toEqual([
+      'kpi',
+      'pivot',
+      'table',
+    ]);
   });
 
   for (const chartType of notEcharts) {
@@ -146,6 +157,31 @@ describe('a type ECharts does not draw', () => {
     for (const chartType of DRAWABLE_TYPES) {
       expect(isDrawable(chartType)).toBe(true);
     }
+  });
+});
+
+/**
+ * T934: R81's types draw from their own modules, registered in one line of
+ * `series/registry.ts`, through the same path as every chart — so a new type
+ * is marked, highlighted and given its tooltip as the others are.
+ */
+describe('a type drawn from its own series module (T934)', () => {
+  afterEach(() => {
+    delete SERIES.waterfall;
+  });
+
+  it('is drawable once registered, and drawn from its module', () => {
+    expect(isDrawable('waterfall')).toBe(false);
+    SERIES.waterfall = () => ({ series: [{ type: 'bar', name: 'from its module', data: [1] }] });
+    expect(isDrawable('waterfall')).toBe(true);
+    const option = optionFor(spec('waterfall'));
+    expect((option['series'] as { name: string }[])[0]?.name).toBe('from its module');
+    // Drawn as every chart is: its tooltip and the prototype's grid.
+    // (Its formatter a function, compared by what it holds besides.)
+    expect(JSON.stringify(option['tooltip'])).toBe(
+      JSON.stringify(tooltipFor(spec('waterfall'))['tooltip']),
+    );
+    expect(option['grid']).toMatchObject(PROTOTYPE_GRID);
   });
 });
 

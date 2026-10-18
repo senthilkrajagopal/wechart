@@ -28,9 +28,56 @@ describe('what a chart needs (AC-033)', () => {
   it('asks a country map for a measure and a dimension of country codes', () => {
     expect(canDraw('map', { ...counts(1, 1), countryCodes: 1 })).toBe(true);
     expect(canDraw('map', counts(1, 1))).toBe(false);
+    // "Map", in place of Country map (T934, AC-559).
     expect(describeMissing('map', counts(1, 1))).toEqual([
-      'Country map needs a dimension of ISO-3 country codes in Dimensions; add 1 more.',
+      'Map needs a dimension of ISO-3 country codes in Dimensions; add 1 more.',
     ]);
+  });
+
+  /**
+   * T934 / AC-217 (R81): a type the chart's fields cannot draw is greyed,
+   * "saying what's missing in `text-primary`", and the editor then highlights
+   * the well it needs. A bullet chart needs a target: "Put a measure or a
+   * value in Target" (design 23 screen 1 pin 5).
+   */
+  it('asks a bullet chart for a target, in design 23’s words, naming the Target well', () => {
+    expect(canDraw('bullet', counts(1, 1))).toBe(false);
+    expect(describeMissing('bullet', counts(1, 1))).toEqual(['Put a measure or a value in Target']);
+    expect(missingFor('bullet', counts(1, 1)).map((requirement) => requirement.well)).toEqual([
+      'target',
+    ]);
+    expect(canDraw('bullet', { ...counts(1, 1), targets: 1 })).toBe(true);
+  });
+
+  it('asks a histogram for a numeric dimension, or a measure with Each point is', () => {
+    expect(canDraw('histogram', counts(1, 1))).toBe(false);
+    expect(canDraw('histogram', { ...counts(0, 1), numericDimensions: 1 })).toBe(true);
+    expect(canDraw('histogram', { ...counts(1, 0), eachPointIs: 1 })).toBe(true);
+    // Each point is with no measure to compute per point draws nothing.
+    expect(canDraw('histogram', { ...counts(0, 0), eachPointIs: 1 })).toBe(false);
+  });
+
+  it('asks each of R81’s other types for what its card says it needs', () => {
+    expect(canDraw('waterfall', counts(1, 0, 1))).toBe(true);
+    expect(canDraw('waterfall', counts(1, 1))).toBe(true);
+    expect(canDraw('waterfall', counts(1, 0))).toBe(false);
+    expect(canDraw('bubble', counts(3, 1))).toBe(true);
+    expect(canDraw('bubble', counts(2, 1))).toBe(false);
+    expect(canDraw('parallel', counts(4, 1))).toBe(true);
+    expect(canDraw('parallel', counts(2, 1))).toBe(false);
+    expect(canDraw('sankey', counts(1, 2))).toBe(true);
+    expect(canDraw('sankey', counts(1, 1))).toBe(false);
+    expect(canDraw('funnel', counts(1, 1))).toBe(true);
+    expect(canDraw('funnel', counts(2, 0))).toBe(true);
+    expect(canDraw('funnel', counts(1, 0))).toBe(false);
+    expect(canDraw('timeline', counts(0, 1, 2))).toBe(true);
+    expect(canDraw('timeline', counts(0, 1, 1))).toBe(false);
+    expect(canDraw('calendar', counts(1, 0, 1))).toBe(true);
+    expect(canDraw('calendar', counts(1, 0, 0))).toBe(false);
+    expect(canDraw('icicle', counts(1, 2))).toBe(true);
+    expect(canDraw('icicle', counts(1, 1))).toBe(false);
+    expect(canDraw('graphicalTable', counts(1, 1))).toBe(true);
+    expect(canDraw('graphicalTable', counts(1, 0))).toBe(false);
   });
 
   it('reports nothing missing when the fields are there', () => {

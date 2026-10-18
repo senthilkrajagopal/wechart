@@ -127,11 +127,12 @@ describe('loading a saved chart into the editor', () => {
       chart: {
         source: { cube: 'orders' },
         wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
-        chartType: 'sankey',
+        // A gauge: no wechart has one (R81, "No gauge"); a Sankey is R81's (T934).
+        chartType: 'gauge',
       },
     });
 
-    expect(() => editorStateOf(unknown)).toThrow(/sankey/);
+    expect(() => editorStateOf(unknown)).toThrow(/gauge/);
   });
 
   it('loads no axis settings as an empty set, not as missing', () => {

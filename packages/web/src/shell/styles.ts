@@ -9545,6 +9545,8 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   background: var(--wc-bg-accent-soft);
 }
 .well[data-drop='illegal'] { outline: 2px dashed var(--wc-border-strong); }
+/* The well a greyed type chosen from the gallery needs (AC-217, T934). */
+.well[data-highlight='true'] { outline: 2px solid var(--wc-accent); border-color: var(--wc-accent); }
 
 .well__reason {
   margin: 4px 0;

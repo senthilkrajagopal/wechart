@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ChartTypeGallery } from './ChartTypeGallery';
+import { ALL_CARDS } from './chartTypeCatalog';
 
 /**
  * T230 / AC-217: THE SYSTEM SHALL show the chart's type by its name … with a
@@ -47,7 +48,7 @@ describe('the chart type gallery (AC-217)', () => {
   it('draws each card as the prototype does: its icon on the top row with the badge, its name on its own line, and the prototype’s foot (T688, EDI-24, EDI-25)', async () => {
     const { dialog } = gallery();
     await userEvent.click(within(dialog).getByRole('button', { name: 'All charts' }));
-    for (const type of CHART_TYPES) {
+    for (const type of ALL_CARDS) {
       const card = within(dialog).getByTestId(`type-card-${type}`);
       const top = card.querySelector('.type-card__top')!;
       // The icon first on the top row; the name below it, not beside the badge.
@@ -66,12 +67,69 @@ describe('the chart type gallery (AC-217)', () => {
   it('lists every type under All charts, and a purpose’s under it', async () => {
     const { dialog } = gallery();
     await userEvent.click(within(dialog).getByRole('button', { name: 'All charts' }));
-    // Every type the spec knows, the box plot (T399) included.
-    expect(typesShown(dialog)).toEqual([...CHART_TYPES]);
+    // Every type the spec knows, the box plot (T399) included, and R81's
+    // 100 % cards (T934).
+    expect(typesShown(dialog)).toEqual([...ALL_CARDS]);
+    for (const type of CHART_TYPES) expect(typesShown(dialog)).toContain(type);
     expect(dialog.textContent).not.toContain('groupedBar');
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Part of a whole' }));
-    expect(typesShown(dialog)).toEqual(['pie', 'donut', 'treemap', 'stackedBar', 'stackedArea']);
+    expect(typesShown(dialog)).toEqual([
+      'pie',
+      'donut',
+      'treemap',
+      'stackedBar',
+      'stackedArea',
+      'stackedBar100',
+      'stackedArea100',
+      'icicle',
+    ]);
+  });
+
+  /**
+   * T934 / AC-217 (R81): … greys those the chart's fields cannot draw, saying
+   * what's missing in `text-primary` and still letting the type be chosen,
+   * the editor then highlighting the well it needs.
+   * `Fails when: … a greyed R81 card can't be chosen, or choosing one doesn't
+   * highlight the well it needs.`
+   *
+   * Revenue by Region: one measure and one dimension.
+   */
+  it('greys Bullet chart with what it lacks, and choosing it pins the bullet and highlights Target', async () => {
+    const { dialog, onChoose } = gallery();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Ranking and comparison' }));
+    const bullet = within(dialog).getByTestId('type-card-bullet');
+    expect(bullet.dataset['drawable']).toBe('false');
+    expect(bullet.textContent).toContain('Bullet chart');
+    expect(bullet.textContent).toContain('Needs a measure, a target and a dimension');
+    // In text-primary: the missing line's own class (styles.ts).
+    expect(bullet.querySelector('.type-card__missing')?.textContent).toBe(
+      'Put a measure or a value in Target',
+    );
+    await userEvent.click(bullet);
+    expect(onChoose).toHaveBeenCalledWith('bullet', { highlight: 'target' });
+  });
+
+  it('highlights the well a greyed type of today needs, and none for one it can draw', async () => {
+    const { dialog, onChoose } = gallery();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Evolution over time' }));
+    await userEvent.click(within(dialog).getByTestId('type-card-line'));
+    expect(onChoose).toHaveBeenLastCalledWith('line', { highlight: 'timeDimensions' });
+  });
+
+  it('opens a 100 % card as its stacked type at 100 %, and keeps the Flow shelf (AC-559)', async () => {
+    const { dialog, onChoose } = gallery();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Flow' }));
+    expect(typesShown(dialog)).toEqual(['sankey', 'funnel']);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Part of a whole' }));
+    const card = within(dialog).getByTestId('type-card-stackedBar100');
+    expect(card.textContent).toContain('100 % stacked bar');
+    await userEvent.click(card);
+    // One dimension: a stacked bar needs a second, so Dimensions is highlighted too.
+    expect(onChoose).toHaveBeenLastCalledWith('stackedBar', {
+      stack: 'percent',
+      highlight: 'dimensions',
+    });
   });
 
   it('greys a type the fields cannot draw, saying what it needs', async () => {

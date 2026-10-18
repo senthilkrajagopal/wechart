@@ -30,6 +30,7 @@ import {
   warningsFor,
   type ChartType,
   type Signature,
+  type WellName,
 } from '@wechart/recommender';
 
 import { DEFAULT_PALETTE, STACKABLE_TYPES } from '@wechart/charts';
@@ -559,6 +560,12 @@ function EditorBody({
     // The first dimension's alone: it is the one a map draws by (T398's review).
     countryCodes:
       signature.fields.find((field) => field.kind === 'dimension')?.countryCodes === true ? 1 : 0,
+    // What R81's histogram can bin (T934): a dimension of numbers, or a
+    // measure with Each point is.
+    numericDimensions: spec.dimensions.filter(
+      (name) => available.find((member) => member.name === name)?.type === 'number',
+    ).length,
+    eachPointIs: spec.eachPointIs === undefined ? 0 : 1,
   };
 
   const recommendation = useMemo(() => recommend(signature), [signature]);
@@ -597,6 +604,15 @@ function EditorBody({
   ];
   /** Whether the type gallery is open (AC-217), and Change, to give focus back to. */
   const [gallery, setGallery] = useState(false);
+  /**
+   * The well a greyed type chosen from the gallery needs (AC-217, T934),
+   * highlighted while the fields are as they were when it was chosen and
+   * that type is still the one drawn (T934's review: Auto or a quick pick
+   * leaves the fields as they were).
+   */
+  const [highlighted, setHighlighted] = useState<
+    { readonly well: WellName; readonly spec: ChartSpec; readonly type: ChartType } | undefined
+  >(undefined);
   const changeType = useRef<HTMLButtonElement>(null);
   const closeGallery = () => {
     setGallery(false);
@@ -1107,6 +1123,15 @@ function EditorBody({
                       return rest;
                     })
                   }
+                  // The well a type chosen from the gallery needs (AC-217,
+                  // T934), until the fields next change; and R81's type's own
+                  // wells (`editor/wells/`).
+                  highlight={
+                    highlighted?.spec === spec && highlighted.type === shownType
+                      ? highlighted.well
+                      : undefined
+                  }
+                  typeWells={shownType === null ? undefined : { chartType: shownType }}
                   // A box plot's "Each point is" (T400, AC-314), for a box plot alone.
                   {...(shownType === 'boxplot'
                     ? {
@@ -1220,8 +1245,13 @@ function EditorBody({
           current={shownType}
           suggested={suggested}
           counts={counts}
-          onChoose={(type) => {
+          // A greyed card's well highlighted (AC-217, T934). A 100 % card's
+          // stacking is Customize's Stack, which T957 adds (AC-584).
+          onChoose={(type, extras) => {
             setChartTypeState(chooseType(type));
+            setHighlighted(
+              extras?.highlight === undefined ? undefined : { well: extras.highlight, spec, type },
+            );
             closeGallery();
           }}
           onAuto={() => {

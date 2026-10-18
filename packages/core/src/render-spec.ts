@@ -44,8 +44,25 @@ export type ChartType =
   | 'combo'
   // Phase 2 (AC-306): the spread of a measure's values in each category.
   | 'boxplot'
-  // Phase 2 (AC-305): a measure by country, its dimension ISO-3 codes.
-  | 'map';
+  // Phase 2 (AC-305): a measure by country, its dimension ISO-3 codes; from
+  // R81 the Map, with Regions, Points and Density layers (AC-622).
+  | 'map'
+  // R81 (F49–F55, T934): the new types. 100 % stacked bar and area are not
+  // types of their own: their cards open Stacked bar and Stacked area at
+  // 100 % (23-Q15, AC-584). Each type's spec, series, wells, table view and
+  // text alternative live in its own module, registered in one line of each
+  // registry (`chart-types/index.ts` and its siblings in charts and web).
+  | 'waterfall'
+  | 'histogram'
+  | 'bubble'
+  | 'parallel'
+  | 'bullet'
+  | 'sankey'
+  | 'funnel'
+  | 'timeline'
+  | 'calendar'
+  | 'icicle'
+  | 'graphicalTable';
 
 /**
  * The visual channels a member can be bound to.
@@ -63,6 +80,21 @@ export const CHANNELS: readonly Channel[] = ['x', 'y', 'color', 'size', 'facet',
  * checker; this is for the places that have to iterate it — a picker offering
  * every type, or a test asserting that whatever has no renderer says so.
  */
+/** R81's types (T934), in the order the gallery's All charts lists them after today's. */
+export const R81_TYPES = [
+  'waterfall',
+  'histogram',
+  'bubble',
+  'parallel',
+  'bullet',
+  'sankey',
+  'funnel',
+  'timeline',
+  'calendar',
+  'icicle',
+  'graphicalTable',
+] as const satisfies readonly ChartType[];
+
 export const CHART_TYPES: readonly ChartType[] = [
   'bar',
   'hbar',
@@ -84,6 +116,7 @@ export const CHART_TYPES: readonly ChartType[] = [
   'combo',
   'boxplot',
   'map',
+  ...R81_TYPES,
 ];
 
 /**

@@ -29,6 +29,7 @@ describe("a listed chart's type (AC-193)", () => {
   });
 
   it('shows a type this build does not know as stored, rather than hiding it', () => {
-    expect(chartTypeText({ chartType: 'sankey', hasFields: true })).toBe('sankey');
+    // A Sankey is a type from R81 (T934); a gauge never is ("No gauge").
+    expect(chartTypeText({ chartType: 'gauge', hasFields: true })).toBe('gauge');
   });
 });

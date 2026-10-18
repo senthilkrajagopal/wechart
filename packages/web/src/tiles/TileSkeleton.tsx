@@ -44,6 +44,18 @@ const SHAPES: Record<ChartType, Shape> = {
   kpi: 'number',
   table: 'rows',
   pivot: 'rows',
+  // R81's types (T934), each in the nearest shape it draws.
+  waterfall: 'bars',
+  histogram: 'bars',
+  bullet: 'hbars',
+  funnel: 'hbars',
+  timeline: 'hbars',
+  bubble: 'dots',
+  parallel: 'line',
+  sankey: 'blocks',
+  icicle: 'blocks',
+  calendar: 'grid',
+  graphicalTable: 'rows',
 };
 
 const FILL = 'var(--wc-bg-subtle)';

@@ -28,6 +28,7 @@ import { comboOption, isComboType, withLineHalos } from './series/combo';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { countryMap } from './geo/countryMap';
 import { isMapType, mapOption } from './series/map';
+import { SERIES } from './series/registry';
 import { lineOption, isLineType } from './series/line';
 import { fitPieLabels, pieOption, isPieType } from './series/pie';
 import { scatterOption, isScatterType } from './series/scatter';
@@ -61,7 +62,11 @@ export const DRAWABLE_TYPES = [
 ] as const satisfies readonly ChartType[];
 
 export function isDrawable(chartType: string): boolean {
-  return (DRAWABLE_TYPES as readonly string[]).includes(chartType);
+  return (
+    (DRAWABLE_TYPES as readonly string[]).includes(chartType) ||
+    // R81's types, once their series is registered (T934).
+    Object.hasOwn(SERIES, chartType)
+  );
 }
 
 /** A map's regions with no fill of their own: the visualMap's scale fills them. */
@@ -188,8 +193,12 @@ export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): E
     );
   }
 
+  // R81's types, each from its own module (T934; `series/registry.ts`).
+  const own = SERIES[spec.chartType];
+  if (own !== undefined) return drawn(onGrid(own(spec, canvas)));
+
   // Reached only by the DOM-rendered types — KPI, table and pivot — which
   // `ChartTile` routes before this is called, and which ECharts genuinely
-  // does not draw.
+  // does not draw; and by R81's types until their series is registered.
   throw new Error(`No ECharts renderer draws ${spec.chartType}.`);
 }

@@ -211,7 +211,8 @@ describe('reading an export file (T512, AC-359)', () => {
     const read = readExport(
       fileOf([
         DASHBOARD,
-        { ...OWN, body: chartBody('Order flow', { chartType: 'sankey' }) },
+        // A gauge: no wechart has one (R81, "No gauge"); a Sankey is R81's (T934).
+        { ...OWN, body: chartBody('Order flow', { chartType: 'gauge' }) },
         LIBRARY,
         { ...SOURCE, name: 'lakehouse', driver: 'databricks', authMethod: 'token', fields: {} },
         MODEL,
@@ -223,7 +224,7 @@ describe('reading an export file (T512, AC-359)', () => {
       parts: [
         {
           part: 'Chart “Order flow”, on the dashboard Q3 board pack',
-          why: 'Chart type sankey: this wechart has no such chart type.',
+          why: 'Chart type gauge: this wechart has no such chart type.',
         },
         {
           part: 'Data source lakehouse',
@@ -238,7 +239,7 @@ describe('reading an export file (T512, AC-359)', () => {
   });
 
   it('refuses a tile meant to become a chart type this wechart doesn’t have', () => {
-    const tile = { id: 't9', kind: 'chart', chartType: 'sankey', w: 6, h: 30 };
+    const tile = { id: 't9', kind: 'chart', chartType: 'gauge', w: 6, h: 30 };
     const board = {
       ...DASHBOARD,
       body: {
@@ -251,7 +252,7 @@ describe('reading an export file (T512, AC-359)', () => {
       parts: [
         {
           part: 'Tile t9, on the dashboard Q3 board pack',
-          why: 'Chart type sankey: this wechart has no such chart type.',
+          why: 'Chart type gauge: this wechart has no such chart type.',
         },
       ],
     });

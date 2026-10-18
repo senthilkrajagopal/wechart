@@ -39,6 +39,7 @@ export {
   type LegacyFixture,
 } from './chart-migrations';
 export { CHART_TYPE_NAMES, chartTypeName } from './chart-type-names';
+export { CHART_TYPE_MODULES, type ChartTypeModule } from './chart-types';
 export {
   EXPORT_EXTENSION,
   EXPORT_FORMAT,
@@ -72,6 +73,7 @@ export {
 export {
   CHANNELS,
   CHART_TYPES,
+  R81_TYPES,
   distinctValues,
   inValueOrder,
   memberOn,

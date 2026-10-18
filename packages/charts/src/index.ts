@@ -13,6 +13,8 @@ export { heatmapOption, isHeatmapType } from './series/heatmap';
 export { isMapType, mapOption, unplacedCodes } from './series/map';
 export { countryMap, loadCountryMap, type CountryMap } from './geo/countryMap';
 export { DRAWABLE_TYPES, isDrawable, optionFor } from './optionFor';
+export { SERIES, type SeriesOption } from './series/registry';
+export { DESCRIBE, describeChart, type Describe } from './describe';
 export { themed, type ChartTheme } from './themed';
 export { applyAxes, axesOf, type AxesSettings, type AxisSettings, type NumberFormat } from './axis';
 export {
