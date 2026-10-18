@@ -2,6 +2,8 @@
 
 **Approved 2026-10-18** by the user: designs 20–22, "Approve (Recommended)", with three questions answered on their own (R80 in `docs/requirements-log.md`). Every other question takes the way its design draws it, option (a). See "Decided 2026-10-18" at the end. The spec's F44–F48 (AC-497 … AC-558) and the amended AC-037, AC-058, AC-116, AC-121, AC-123, AC-208, AC-218, AC-219 and AC-302 hold them.
 
+**Design 23 approved 2026-10-18** by the user: "Approve (Recommended)", with 23-Q6, 23-Q8 and 23-Q12 answered on their own (R81 in `docs/requirements-log.md`); every other 23-Qn takes option (a). The spec's F49–F55 (AC-559 … AC-629) and the amended AC-028, AC-031, AC-037, AC-098, AC-217, AC-305 and AC-306 hold it. direction.md §7i and rules 147–167 are accepted with it.
+
 Three static mockups for R80: modern combo charts, rich text tiles, and the LLM settings they need now. They are numbered after designs 17–19 in `../../2026-10-17/designs/index.md`. A fourth, design 23, draws R81's fifteen new chart types, designed in parallel with R80 (R81: "In parallel"); its row, notes and questions follow R80's below.
 
 - **Format:** the same as designs 17–19. Each is a self-contained HTML file with inline CSS in direction.md's tokens, and Inter and IBM Plex Mono from Google Fonts, with no other requests. Open it in a browser. Each shows:
@@ -272,3 +274,13 @@ The user approved designs 20–22: "Approve (Recommended)" (R80 in `docs/require
 - **22-Q8:** (a). No draft kept once inserted or discarded.
 
 **For direction.md:** D-Q1 and D-Q2 as proposed. §7h and rules 115–146 are accepted; rule 30, rule 25, §6's dual-axis sentence and §8's Markdown entry are amended there.
+
+**Design 23, the new chart types** (the user, 2026-10-18; R81 in `docs/requirements-log.md`): "Approve (Recommended)". The spec's F49–F55 (AC-559 … AC-629) hold it.
+- **23-Q6:** asked. "Admin-1 + custom + points + density (Recommended)": admin-1 boundaries, custom GeoJSON uploaded by the semantic-layer engineer, a Points layer from Cube `geo` dimensions and a Density layer; no tile basemap.
+- **23-Q8:** asked. "Yes, existing keys (Recommended)": keyboard marking on every new type with §7a's existing keys and roving focus, and From and To sliders per axis for parallel-coordinate brushing, approved under R75 and AC-176 (AC-563, AC-600).
+- **23-Q12:** asked. "Blue up / red down + ▲▼ (Recommended)": §5's diverging ends, totals in `text-secondary`, every label with ▲ or ▼ and a sign (AC-576).
+- **23-Q1 … 23-Q5, 23-Q7, 23-Q9 … 23-Q11, 23-Q13 … 23-Q19:** (a), as drawn. 23-Q5's caps are decided as drawn.
+- **Research before build** (design 23's last section) stays a "Waits on: research …" line on the tasks that need it, in `docs/tasks.md` §P2.27.
+- **Still open** (requirements §P2.8, R81-1 … R81-3): who uploads a custom boundary set and where it lives; a histogram of a numeric dimension with no bin dimension; a timeline's duration.
+
+**For direction.md:** D-Q3 as proposed. §7i and rules 147–167 are accepted; rule 50's wording and §6's bar marks are amended there, and rules 164 and 167 now state 23-Q3's and 23-Q8's answers.

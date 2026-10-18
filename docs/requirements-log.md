@@ -245,7 +245,16 @@ Questions are Claude's; answers are the user's, verbatim.
   - Q: Inventory the .dxp files first? A: "Proceed without them (Recommended)". *The study's Q1: the ranking stands without counting the 50 most-used `.dxp` files' visualization types.*
   - Q: Gauges? A: "No gauge (Recommended)". *The study's Q5 (a): no gauge is built; the bullet chart and the KPI with a target do that job.*
   - Q: Order relative to combo and rich tiles? A: "In parallel". *R81 is designed and planned alongside R80 (designs 20–22), not after it. The KPI and graphical table reuse R80's sparkline, Change and bullet elements, so both rounds draw them one way.*
-- **Still open:** the study's Q2, Q3, Q4 and Q6–Q10, and the questions design 23 adds, are listed with candidate answers in `docs/design/reviews/2026-10-18/designs/index.md` (23-Q1 … 23-Q19).
+- ~~**Still open:** the study's Q2, Q3, Q4 and Q6–Q10, and the questions design 23 adds, are listed with candidate answers in `docs/design/reviews/2026-10-18/designs/index.md` (23-Q1 … 23-Q19).~~ Answered 2026-10-18, below.
+- **Design 23, 2026-10-18** (the user; `docs/design/reviews/2026-10-18/designs/index.md`):
+  - Q: Approve design 23, taking the drawn recommendation for every question not asked? A: "Approve (Recommended)". *Every 23-Qn not asked below takes its drawn option (a): 23-Q1 … 23-Q5, 23-Q7, 23-Q9 … 23-Q11 and 23-Q13 … 23-Q19.*
+  - Q: Geo scope (23-Q6)? A: "Admin-1 + custom + points + density (Recommended)". *Admin-1 boundaries, custom GeoJSON uploaded by the semantic-layer engineer, a Points layer from Cube `geo` dimensions and a Density layer, with no tile basemap.*
+  - Q: Keyboard marking on the new types (23-Q8)? A: "Yes, existing keys (Recommended)". *Approved under R75 and AC-176: §7a's existing keys and roving focus on every new type, plus From and To sliders per axis for parallel-coordinate brushing. No new shortcut.*
+  - Q: Waterfall colours (23-Q12)? A: "Blue up / red down + ▲▼ (Recommended)". *§5's diverging ends, blue for an increase and red for a decrease, totals in `text-secondary`, every label with ▲ or ▼ and a sign.*
+  - *The coordinator's calls while specifying (2026-10-18), overturnable:*
+    - *exactly 3 measures and a dimension make the bubble the top pick whatever the dimension's member count (sheet 5's example draws 12 products), parallel coordinates the runner-up; 4 or more measures and a dimension of more than 8 members make parallel coordinates the top pick, and of 8 or fewer its runner-up (sheets 5 and 7 overlap at 3 measures and more than 8 members);*
+    - *a KPI's Direction starts at Higher is better, and a waterfall's "Show at most" at 6 steps, as design 23 draws them;*
+    - *a KPI's tiles are ordered by value, highest first, unless the author orders them in Customize (sheet 1, "ordered by value; the order is in Customize").*
 
 **R80 — combo charts and rich text tiles, as a priority from phase 3** (2026-10-18, the user)
 - **Sources.** Input: `docs/inputs/2026-10-18-phase-3-advanced-analytics.md`. Studies: `docs/design/references-combo-and-rich-tiles.md` (visualization and BI expert) and `docs/design/references-spotfire-combo-textarea.md` (Spotfire expert). Research: `docs/research/rich-tiles-and-combo-tech.md`.
@@ -286,6 +295,24 @@ Questions are Claude's; answers are the user's, verbatim.
     - *an author's allowance counts each Summarize, Regenerate and Try again once; the automatic retry after a rejected draft doesn't count;*
     - *the endpoints of Anthropic and OpenAI are fixed (`https://api.anthropic.com`, `https://api.openai.com/v1`, the research's defaults); only Azure OpenAI takes a typed endpoint, and Bedrock a region;*
     - *an inserted summary keeps, with its text, which facts it cited and each one's sign and rank when inserted, so "Written for earlier data" can be told; nothing else of the draft is kept (22-Q8 (a)).*
+- **R80's open items R80-1 … R80-5** (requirements §P2.8), answered 2026-10-18 (the user):
+  - Q: R80-1, which period a summary's "change against the previous period" compares? A: "The date filter's period (Recommended)". *The change compares the dashboard's current date-filter range with the range of equal length just before it.*
+  - Q: R80-2, which day and month the AI limits count in? A: "Deployment's time zone (Recommended)". *A deployment setting, a Helm value, UTC by default. It also names the project folder MCP's `edit_in_my_workspace` makes when the client sends no time zone, overturning decision T785-2 (UTC).*
+  - Q: R80-3, a draft call's limits? A: "60 s, 1,024 tokens, 20 facts (Recommended)". *A 60 s timeout, an output cap of 1,024 tokens, at most 20 facts in one request, and titles and member names of at most 80 characters.*
+  - R80-4, redo inside the text: not asked. It stays off (AC-516).
+  - Q: R80-5, wechart's API starting without the AI key-encryption key? A: "Start; AI can't store keys (Recommended)". *wechart starts; Security › AI says the deployment is missing its AI encryption key, and AI stays off.*
+  - ~~R80-6, the Bedrock client's options, is research, being done separately into `docs/research/llm-providers.md`. T905 and T915 still wait on it.~~ R80-6 is researched (2026-10-18): `docs/research/bedrock-client.md`, with an addendum correcting `llm-providers.md` §4 and Gotcha 3.
+  - *The coordinator's calls on R80-6 (2026-10-18), overturnable, from `bedrock-client.md`:*
+    - *wechart uses `AnthropicBedrock` against `bedrock-runtime`, not `AnthropicBedrockMantle`: AWS recommends `bedrock-runtime` for new applications, and Mantle has no cross-Region inference profiles. Bedrock's model is a pick-list of each model's inference profiles (`global.`, `us.`, `eu.`, `au.`, `jp.`), with a note on data residency;*
+    - *`@aws-sdk/credential-providers@3.1152.0` is pinned as a direct dependency; on the IAM role, one long-lived `fromNodeProviderChain()` is passed through `providerChainResolver` (Gotcha 1);*
+    - *if `AWS_BEARER_TOKEN_BEDROCK` or `ANTHROPIC_BEDROCK_BASE_URL` is set in the API's environment, Bedrock is refused with a message on Security › AI, and wechart still starts, as R80-5 has it (Gotcha 2);*
+    - *the Helm chart gives the api pod its own service account, with values `api.serviceAccount.{create,name,annotations}`, and renders `ai.bedrock.roleArn` into its IRSA annotation `eks.amazonaws.com/role-arn` (Gotcha 8: whether the chart's `automountServiceAccountToken: false` blocks the injected token is unverified, so it is checked on an EKS cluster);*
+    - *with an access key pair, no session token is taken or stored, since temporary keys expire.*
+  - *The coordinator's calls while specifying (2026-10-18), overturnable:*
+    - *a draft call past 60 s is cancelled and reported as a provider that can't be reached (AC-544);*
+    - *when what a summary covers yields more than 20 facts, nothing is sent and Summarize says how many there are and that it takes at most 20, rather than dropping some silently (rule 165's spirit);*
+    - *a title or member name longer than 80 characters is cut to 79 and "…";*
+    - *"the dashboard's current date-filter range" is the date filter in scope of the covered tile; with none in scope, the change fact isn't offered, saying it needs a date filter.*
 
 **R79 — a compact dashboard header** (2026-10-17, the user; input `docs/inputs/2026-10-17-compact-dashboard-header.md`; design study `docs/design/references-compact-header.md`; design 19 in `docs/design/reviews/2026-10-17/designs/index.md`)
 - **The request:** "in the on the dashboard page.. nearly 30% of the page goes away for the dashboard header and the filters. Can we have a more compressed header that can be expanded with a slide down so that the complete header can be seen... default will be the compressed header. use a UI expert who can specify what this behavior should look like."

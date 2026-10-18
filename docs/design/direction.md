@@ -4,7 +4,7 @@
 **Phase 2 (2026-09-25):** principles 6–9, §7e and rules 59–89 extend this direction to sign-in, folder access, workspaces, proposals, history, bookmarks, the audit trail, the country map and the box plot. Evidence: `references.md` › "Phase 2". **Accepted by the user on 2026-09-25.**
 **R78 (2026-10-17):** §7f and rules 90–108 extend it to the SQL runner workspace and personal access tokens. Evidence: `references-sql-runner.md` (its checklist rules 107–125, renumbered here and amended for R78's answers) and designs 17 and 18 (`reviews/2026-10-17/designs/`). **Accepted with designs 17 and 18 on 2026-10-17** ("Approve with defaults (Recommended)"; the defaults taken are in that review's `index.md`). Rule 107's Ctrl+Q and Ctrl+Alt+[ and ] wait on `docs/research/keyboard-shortcuts-sql-runner.md` (17-Q3, "Research first").
 **R80 (2026-10-18):** §7h and rules 115–146 extend it to the combo chart, the Text tile (which replaces Markdown), dashboard parameters and the AI provider settings. Evidence: `references-combo-and-rich-tiles.md`, `references-spotfire-combo-textarea.md`, `references-copilot.md` §9, research `rich-tiles-and-combo-tech.md`, and designs 20–22 (`reviews/2026-10-18/designs/`). **Accepted with designs 20–22 on 2026-10-18** ("Approve (Recommended)"; the answers taken are in that review's `index.md`, "Decided 2026-10-18").
-**R81 (2026-10-18):** §7i and rules 147–167 extend it to fifteen new chart types: the KPI with comparison, target, sparkline and tile-by; the graphical table; waterfall; histogram; bubble; map layers; parallel coordinates; bullet chart; 100 % stacked bar and area; Sankey; box plot points and violin; funnel; timeline; calendar heatmap; icicle and sunburst. Evidence: `references-new-chart-components.md` and design 23 (`reviews/2026-10-18/designs/23-new-chart-types.html`). **Proposed; waiting for the user's approval of design 23.**
+**R81 (2026-10-18):** §7i and rules 147–167 extend it to fifteen new chart types: the KPI with comparison, target, sparkline and tile-by; the graphical table; waterfall; histogram; bubble; map layers; parallel coordinates; bullet chart; 100 % stacked bar and area; Sankey; box plot points and violin; funnel; timeline; calendar heatmap; icicle and sunburst. Evidence: `references-new-chart-components.md` and design 23 (`reviews/2026-10-18/designs/23-new-chart-types.html`). ~~**Proposed; waiting for the user's approval of design 23.**~~ **Accepted with design 23 on 2026-10-18** ("Approve (Recommended)"; the answers taken are in that review's `index.md`, "Decided 2026-10-18").
 **Sources:**
 
 - `references.md`: six enterprise BI products studied, with a committed direction.
@@ -264,7 +264,7 @@ Two further changes made at the same time, neither of them a contrast failure:
 - **Trellis axes:** axes are synchronized by default; each can be set to independent.
 - **Dual y-axes:** the recommender never proposes them. Two measures with different scales become small multiples or an indexed chart instead. ~~The inspector allows a dual axis only as an explicit override, and shows a warning when it is on.~~ A second value axis is drawn only by the author's choice, in a combo, aligned at zero and in its ticks; while it isn't synchronized, the author sees a warning (R80, 2026-10-18; §7h, rules 116–121).
 - **Marks:**
-  - bars have a 2 px surface gap and 4 px rounded data-ends anchored at the baseline
+  - bars have a 2 px surface gap and 4 px rounded data-ends anchored at the baseline; except that histogram bins touch (a 1 px surface gap and square ends, since bins are a continuous range) and waterfall steps have square ends (R81, §7i, 2026-10-18)
   - lines are 2 px
   - markers are at least 8 px
   - data labels are selective, never on every point
@@ -600,7 +600,7 @@ Nothing in §2–§7g changes except as the designs' criteria tables say: §6's 
 | Summarize | The insert menu's Copilot group; its settings in Properties; the draft card in the tile |
 | AI provider | Security › AI, after Access tokens; Super-Admins only; `/security/ai` |
 
-## 7i. R81: new chart types (proposed 2026-10-18)
+## 7i. R81: new chart types (accepted 2026-10-18)
 
 **Direction** (`references-new-chart-components.md` › Direction, settled by R81's answers). Add the chart types that answer the questions Spotfire analysts already ask: performance against a target, contribution to a change, distribution, multi-measure profiles, mix, flow, time spans and hierarchy. Each draws from Cube's grouped (or, where it says so, ungrouped) queries, is markable at the granularity it draws, says what it can't mark, and has a table view and a text alternative. The KPI and the graphical table are built from R80's Change, sparkline, icon and bullet-graph elements (§7h), drawn as designs 20 and 21 draw them. No gauge (R81). Every type is designed in parallel with R80 (R81).
 
@@ -630,7 +630,7 @@ Nothing in §2–§7h changes except as design 23's criteria table says: §6's b
 | Icicle and sunburst | 1 px surface gaps; colour follows the first level's member and deeper boxes inherit it; root `border-strong`; labels `text-xs` `text-primary` on a 3 px `bg-surface` halo where a box is ≥ 16 px tall | rule 7; §7h Reference label halo |
 | Marking on new types | §5's 1.5 px marking outline and 0.28 fade throughout; a range or brush drawn as the drag overlay on `bg-subtle` | §5; §7a |
 | Paging | "Tiles 1–20 of n", "Rows 1–50 of n" with 24 px ‹ › buttons | §4 small controls; 23-Q5 |
-| Proposed caps (23-Q5) | KPI tiles 20; graphical-table rows 50 a page; parallel-coordinate lines 1,000; Sankey flows 50; calendar 366 days a panel, offered from 56; bullet bands 2–3; histogram bins 5–50 | proposed, not decided |
+| Caps (23-Q5) | KPI tiles 20; graphical-table rows 50 a page; parallel-coordinate lines 1,000; Sankey flows 50; calendar 366 days a panel, offered from 56; bullet bands 2–3; histogram bins 5–50 | ~~proposed, not decided~~ decided 2026-10-18, 23-Q5 (a) |
 
 **Where each surface lives**
 
@@ -639,7 +639,7 @@ Nothing in §2–§7h changes except as design 23's criteria table says: §6's b
 | The new types | The chart-type gallery (AC-217), on the shelves design 23's screen 1 lists, one new shelf, Flow (23-Q11) |
 | New wells | The chart editor's Data tab, after Metrics and Dimensions in each type's order (design 23's sheets) |
 | Stack 100 %, Draw as, Points and Violin, Colour links by, Percent of, Scale, Week starts | The chart editor's Customize tab |
-| Boundary sets (custom GeoJSON) | Uploaded by the semantic-layer engineer; where, after research (23-Q6) |
+| Boundary sets (custom GeoJSON) | Uploaded by the semantic-layer engineer (23-Q6, "Admin-1 + custom + points + density (Recommended)"); who exactly and where, requirements §P2.8 R81-1 and research |
 | Bin dimensions | Drafted from the histogram's "Make bins in the model…" into My workspace, in the model editor (23-Q4) |
 
 ## 8. Components (primitives and states)
@@ -692,7 +692,7 @@ Nothing in §2–§7h changes except as design 23's criteria table says: §6's b
   - ParametersSection, ParameterForm (role, choices, default, used by); ParameterPill (in a well)
   - SummarizePanel; DraftCard (facts, Insert, Regenerate, Discard); AILabel; EarlierDataWarning
   - AISettingsPage (General, Provider, Limits, What's sent, Test connection, Usage); StoredKey and ReplaceKeyDialog; ConnectionChecks
-- **R81 (§7i, proposed):**
+- **R81 (§7i, accepted 2026-10-18):**
   - KpiTile (value, Change, sparkline, target; tiled list with paging); CompareToField; DirectionSegmented
   - GraphicalTable (Value, Change, Sparkline, Bullet and Icon columns; ColumnList with ⋯ Move up, Move down, Remove; paging)
   - WaterfallChart; HistogramChart (BinsField; "Make bins in the model…"); BubbleChart (SizeLegend, ShapeLegend); MapLayers (BoundarySetSelect, RegionsLayer, PointsLayer, DensityLayer, UnplacedNote); ParallelCoordinates (ScaleWarning, AxisRangeInputs if 23-Q8 (a)); BulletChart (BandsField); StackModeSegmented; SankeyChart; BoxPlotDistribution (Points, Violin); FunnelChart (PercentOf); TimelineChart (EachBarIs; RunningEnd); CalendarHeatmap (WeekStart; NoDataSwatch); IcicleChart (DrawAs; ZoomBreadcrumb)
@@ -749,7 +749,7 @@ Nothing in §2–§7h changes except as design 23's criteria table says: §6's b
 47. Click replaces the marking, Ctrl/⌘+click toggles, drag marks a rectangle, Alt+drag a lasso, and Ctrl/⌘+drag is ToggleOrAdd. Clicking an empty plot area unmarks that tile's marking. A drag of 5 px or more is never treated as a click.
 48. Markings span every page tab of the dashboard.
 49. Marked items keep their colour and gain an outline in the marking colour; unmarked items fade. A partly marked item shows its marked share from the baseline only for additive measures (sum, count). Non-additive measures get a pattern plus "Marked: X" in the tooltip.
-50. Marking state is never conveyed by colour alone. Every tile using a non-empty marking shows "n marked" beside the marking's swatch, and every non-empty marking has a chip naming it and summarising its values.
+50. Marking state is never conveyed by colour alone. Every tile using a non-empty marking shows "n marked" beside the marking's swatch, and every non-empty marking has a chip naming it and summarising its values. A tile whose items are all only partly marked shows "● ‹marking summary›'s share shown" instead of a count of 0 (R81, design 23 screen 2 pin 12, 2026-10-18).
 51. Every marking colour is at least ΔE 15 (normal vision) and at least ΔE 8 (colour-blind simulation) from every categorical slot in both themes.
 52. Arrow keys move focus between a tile's items without changing the marking. Space marks the focused item, and each marking change is announced in a polite live region.
 53. "Filter to marked" and "Filter out marked" create removable dashboard filters and clear the marking. "View marked rows" shows the underlying rows, capped, with export.
@@ -873,7 +873,7 @@ R80, combo charts, the Text tile, dashboard parameters and the AI provider (§7h
 
 146. Designs 20–22 add no colour, type size or weight and keep the 12 px floor. They add no keyboard shortcut beyond the insert menu's combobox keys, markdown's typing patterns, and ⌘B, ⌘I and ⌘Z inside a Text tile's text only (21-Q11, "Yes, inside the text only (Recommended)", approved under R75; the editor's other default keys stay off), and every panel, dialog and popover follows rule 85.
 
-R81, the new chart types (§7i; design 23, **proposed 2026-10-18**). Drawn from `references-new-chart-components.md` §5 and R81's answers. Caps named here are 23-Q5's proposals until decided. The copilot study's rules follow from 168 when the copilot is taken up.
+R81, the new chart types (§7i; design 23, ~~**proposed 2026-10-18**~~ **accepted 2026-10-18**, "Approve (Recommended)"). Drawn from `references-new-chart-components.md` §5 and R81's answers. ~~Caps named here are 23-Q5's proposals until decided.~~ The caps named here are decided (23-Q5 (a)). The copilot study's rules follow from 168 when the copilot is taken up.
 
 *The gallery and the KPI types (design 23, screen 1 and sheets 1, 2, 8)*
 
@@ -906,7 +906,7 @@ R81, the new chart types (§7i; design 23, **proposed 2026-10-18**). Drawn from 
 *For every new type*
 
 163. Each new type marks at the granularity it draws, with §5's outline and fade; where an item can only be partly marked it shows the marked share as its form allows (from its own base, in its cells, or in its tooltip), and a tile whose items are all partly marked says "‹marking›'s share shown" instead of a count. Anything that can't be marked says so with an icon and a label.
-164. The recommender proposes a new type as the top pick only where design 23's sheets say (histogram, bubble, parallel coordinates, map, bullet with a target); every other new type is only a runner-up, each with a reason of at most 80 characters, and line stays the top pick for one measure over time. No new type needs a second value axis. Saved charts in Auto follow 23-Q3's answer.
+164. The recommender proposes a new type as the top pick only where design 23's sheets say (histogram, bubble, parallel coordinates, map, bullet with a target); every other new type is only a runner-up, each with a reason of at most 80 characters, and line stays the top pick for one measure over time. No new type needs a second value axis. Saved charts in Auto ~~follow 23-Q3's answer~~ keep drawing what they drew until their fields next change (23-Q3 (a), 2026-10-18).
 165. Every new type has an empty state naming what's missing with one action, and every cap it meets shows the cap and an alternative (page, fold to "Other", filter, table); nothing over a cap is dropped silently.
 166. Every new type has a table view (AC-178) holding the numbers behind every mark, and a text alternative naming the type, its encodings, its range and its extremes. No state rests on colour alone.
-167. Design 23 adds no colour, type size or weight and keeps the 12 px floor. It adds no keyboard shortcut; keyboard marking on the new types uses §7a's existing keys only if the user approves it (23-Q8), and the table view is always the complete path.
+167. Design 23 adds no colour, type size or weight and keeps the 12 px floor. It adds no keyboard shortcut; keyboard marking on the new types uses §7a's existing keys ~~only if the user approves it (23-Q8)~~, approved 2026-10-18 under R75 ("Yes, existing keys (Recommended)", 23-Q8), with From and To sliders per parallel-coordinate axis; and the table view is always the complete path.

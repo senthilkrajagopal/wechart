@@ -245,7 +245,7 @@ Decisions taken in R7:
 
 ## 9. Interview log
 
-Phase 1's interview log (rounds R1–R10) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R80]`; search that file for the round.
+Phase 1's interview log (rounds R1–R10) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R81]`; search that file for the round.
 
 # Part 2 — Phase 2 requirements (2026-09-25)
 
@@ -785,8 +785,42 @@ No criteria are written for these yet. Each gets its own questions where it is o
   - the API key typed once, tested, stored encrypted by wechart's API with a key of its own, its ciphertext bound to the provider and the endpoint so that changing either clears it, never shown again (22-Q3; research § Key handling). **Bedrock** uses AWS IAM credentials: the IAM role the deployment gives wechart's pods, preferred, or an access key pair stored the same way `[R80]`;
   - Test connection with four checks; Save held until it passes whenever the provider, endpoint, model or key changes (22-Q6); limits of summaries per person per day and for everyone per month, with a message of at most 280 characters (22-Q5, 22-Q10); usage this month; audit events for settings changes, key replacements and inserted summaries, never a key (22-Q7) `[R80]`.
 - **On Bedrock,** which offers no strict structured output or forced tool use for current Claude models, the rule that every number is a live element is enforced by wechart's validation alone, and a non-conforming draft is rejected and retried `[R80]` (`docs/research/llm-providers.md` Gotcha 3).
-- **Packages** (research): `@tiptap/core`, `@tiptap/pm`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/static-renderer` and `@tiptap/suggestion` at 3.32.0; `@anthropic-ai/sdk@0.135.0`; `openai@7.38.0`; `@anthropic-ai/bedrock-sdk@0.35.0`; `zod@4.6.5` (already in the lockfile). Not `@tiptap/markdown` (beta): wechart converts its own markdown subset.
+- **R80's open items, answered 2026-10-18** `[R80]` (§P2.8):
+  - **The change's period** (R80-1, "The date filter's period (Recommended)"): a summary's change fact compares the date-filter range in scope of the covered tile with the range of equal length just before it. *The coordinator's call, overturnable:* with no date filter in scope, the change fact isn't offered and says it needs one.
+  - **The time zone** (R80-2, "Deployment's time zone (Recommended)"): the AI limits count days and months in the deployment's time zone, a Helm value, UTC by default. The same setting names the project folder MCP's `edit_in_my_workspace` makes when the client sends no time zone (overturning decision T785-2, which used UTC).
+  - **A draft call's limits** (R80-3, "60 s, 1,024 tokens, 20 facts (Recommended)"): a 60 s timeout, an output cap of 1,024 tokens, at most 20 facts in one request, and titles and member names of at most 80 characters. *The coordinator's calls, overturnable:* a call past 60 s is cancelled and reported as a provider that can't be reached; more than 20 facts send nothing and say so; a longer title or name is cut to 79 characters and "…".
+  - **Redo inside the text** (R80-4): not asked; it stays off (AC-516).
+  - **No AI key-encryption key** (R80-5, "Start; AI can't store keys (Recommended)"): wechart's API starts; Security › AI says the deployment is missing its AI encryption key, and AI stays off until it is provided.
+  - **Bedrock's client** (R80-6, researched in `docs/research/bedrock-client.md`; *the coordinator's calls, overturnable*): `AnthropicBedrock` on `bedrock-runtime`, not Mantle; the model chosen from each model's inference profiles (`global.`, `us.`, `eu.`, `au.`, `jp.`) with a data-residency note; on the IAM role, one long-lived credential chain; Bedrock refused, with a message, while `AWS_BEARER_TOKEN_BEDROCK` or `ANTHROPIC_BEDROCK_BASE_URL` is set in the API's environment, wechart still starting; the api pod's own service account, its IRSA annotation from `ai.bedrock.roleArn`; an access key pair without a session token. `@aws-sdk/credential-providers@3.1152.0` joins the packages.
+- **Packages** (research): `@tiptap/core`, `@tiptap/pm`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/static-renderer` and `@tiptap/suggestion` at 3.32.0; `@anthropic-ai/sdk@0.135.0`; `openai@7.38.0`; `@anthropic-ai/bedrock-sdk@0.35.0` with `@aws-sdk/credential-providers@3.1152.0` (`bedrock-client.md`, 2026-10-18); `zod@4.6.5` (already in the lockfile). Not `@tiptap/markdown` (beta): wechart converts its own markdown subset.
 - **Lifted non-goals:** "Spotfire-style controls inside text tiles" (Part 1 §7) is lifted for filter controls, parameter controls and action buttons; scripts stay out. "AI and chat authoring" is lifted for AI summaries in Text tiles; the copilot chat stays in §P2.6 M `[R80]`.
+
+**P. New chart types** `[R81]` *(added 2026-10-18; study `docs/design/references-new-chart-components.md`; design 23, approved the same day, "Approve (Recommended)", with 23-Q6, 23-Q8 and 23-Q12 answered on their own; direction.md §7i and rules 147–167)*
+- **Which:** all fifteen of the study's §4 ("Top tier (1–5), Spotfire analysis (6–8), Mix & flow (9–12), Time & hierarchy (13–15)"), designed and planned in parallel with R80 ("In parallel"), the KPI and graphical table reusing R80's Change, sparkline, icon and bullet-graph elements `[R81]`:
+  1. **the KPI, upgraded in place** with Compare to, Target, Time (period and trend), Tile by and Direction; a KPI with none of them set draws as today (23-Q1); its sparkline at the tile's content width × 32 px (23-Q14);
+  2. **a graphical table** of one row per member with ordered Value, Change, Sparkline, Bullet and Icon columns;
+  3. **a waterfall** of one summed measure, by member or between two periods, increases blue and decreases red, every label with ▲ or ▼ and a sign ("Blue up / red down + ▲▼ (Recommended)", 23-Q12);
+  4. **a histogram**, its bins from a bin dimension in the model for numeric dimensions, or binned in the browser from per-entity values for a measure with Each point is (23-Q4);
+  5. **a bubble chart**, a scatter with Size (by area, 8 to 40 px across, 23-Q13) and Shape;
+  6. **a Map** in place of the Country map, with Regions, Points and Density layers on Countries, Admin-1 or a custom boundary set, and no tile basemap ("Admin-1 + custom + points + density (Recommended)", 23-Q6; 23-Q19); custom GeoJSON is uploaded by the semantic-layer engineer;
+  7. **parallel coordinates**, each axis min to max;
+  8. **a bullet chart**, offered only while a Target is set, with 2–3 bands;
+  9. **100 % stacked bar and area**, as two gallery cards that preset Stack at 100 % (23-Q15);
+  10. **a Sankey** of 2–4 ordered steps;
+  11. **the box plot's Points** (None, Outliers, All, Beeswarm) **and Violin**;
+  12. **a funnel** drawn as bars on one baseline in stage order, no trapezoid (23-Q16);
+  13. **a timeline**, one bar per row or first-to-last per member (23-Q7);
+  14. **a calendar heatmap**, its week starting on the browser locale's first day (23-Q17);
+  15. **an icicle**, with sunburst as its option (23-Q9); click marks, double-click or "Zoom into" zooms (23-Q18).
+- **The gallery** gains a ninth shelf, Flow, holding Sankey and Funnel; Funnel stays under Ranking and comparison too (23-Q11). **No gauge** ("No gauge (Recommended)") `[R81]`.
+- **The recommender** (23-Q2, 23-Q3): new top picks only for the histogram, the bubble, parallel coordinates, the map and the bullet chart with a target; every other new type a runner-up; line stays the top pick for one measure over time, "KPI with trend" its first runner-up. Charts saved in Auto keep drawing what they drew until their fields next change `[R81]`.
+- **Caps** (23-Q5 (a)): KPI tiles 20, then paging; graphical-table rows 50 a page; parallel-coordinate lines 1,000; Sankey flows 50; a calendar 366 days a panel, offered from 56 days; bubble Colour 3 values and Shape 6; bullet bands 2–3; histogram bins 5–50 `[R81]`.
+- **Marking** at the granularity each type draws, saying what it can't mark (the Density layer, funnel stages that are measures, a Sankey link's share); **keyboard marking on every new type** with §7a's existing keys, and From and To sliders per axis for parallel-coordinate brushing ("Yes, existing keys (Recommended)", approved under R75 and AC-176, 23-Q8) `[R81]`.
+- **Every new type** has a table view and a text alternative, an empty state naming what's missing, and a stated alternative at each cap `[R81]`.
+- **Packages and data shapes** are researched before build (design 23, "Research before build"; 23-Q10): the shape of a Cube `geo` value; min and max of time columns; `@echarts-x/custom-violin`, `@echarts-x/custom-bar-range` and an icicle custom series; an admin-1 boundary dataset and where uploaded GeoJSON is stored; ECharts' jitter seed and parallel brush; the palette validator on the waterfall's pair and the points-over-ramp pair.
+- **Not asked again:** inventorying the `.dxp` files ("Proceed without them (Recommended)") and gauges ("No gauge (Recommended)") `[R81]`.
+- *The coordinator's calls (2026-10-18), overturnable* (`docs/requirements-log.md`, R81): exactly 3 measures and a dimension make the bubble the top pick, 4 or more measures and a dimension of more than 8 members parallel coordinates; a KPI's Direction starts at Higher is better and a waterfall's "Show at most" at 6; KPI tiles are ordered by value unless the author orders them.
+- **Still open** (§P2.8, R81-1 … R81-3): who uploads a custom boundary set and where it lives; a histogram of a numeric dimension that has no bin dimension; what a timeline's duration is.
 
 ## P2.7 Non-goals for phase 2
 
@@ -833,6 +867,11 @@ No criteria are written for these yet. Each gets its own questions where it is o
   - what-if (value) parameters, which come later; parameters bound by a chart from folders; a "Reset parameters" action; a PDF export;
   - viewers drafting summaries; keeping drafts or prompts; statistics beyond change and contributors as facts (phase 3 stage A);
   - Google Gemini, an endpoint compatible with OpenAI's API, Azure OpenAI through Entra ID, a second ("fast") model, and limits counted in provider tokens.
+- **Around the new chart types** `[R81]`, the options design 23 didn't choose, and the study's §6:
+  - a gauge; a separate "KPI chart" type; KPI with trend as the top pick for one measure over time; Auto charts redrawn, or pinned by a migration, at release;
+  - model bins only, or browser bins only; geo limited to admin-1, or deferred; a tile basemap; ungrouped timeline rows only;
+  - sunburst only; click to zoom in an icicle; a funnel trapezoid; green and red waterfalls; a card per map layer; 100 % stacking only as a Customize option; a fixed first weekday;
+  - Pareto as a chart type, control charts, a summary table, dendrograms, 3D scatter, radar, chord, network graphs, Marimekko, word clouds, liquid fill, pictorial bars, theme rivers, horizon charts, slope, lollipop and dot plots as types, bump and ribbon charts, an index chart, a decomposition tree, candlesticks and state timelines as types, and sparkline small multiples as a type (the study's §6).
 
 Phase 1's non-goals still stand, except two that phase 2 brings into scope:
 - **Users, groups, roles and SSO** (§P2.6 A–B).
@@ -846,13 +885,36 @@ R80 brings in two more:
 - **Spotfire-style controls inside text tiles,** as the Text tile's filter controls, parameter controls and action buttons (§P2.6 O). Scripts stay out.
 - **AI and chat authoring,** for AI summaries in Text tiles (§P2.6 O). The copilot chat stays in §P2.6 M.
 
+R81 widens one: **maps and geo charts** go beyond the country map to admin-1 and custom boundaries, points and density, still with no tile basemap (§P2.6 P).
+
 The rest still apply: scheduled delivery and alerts, embedding, `.dxp` migration tooling, Spotfire Subsets, Tags and Lists and data functions, touch, and selling wechart `[Part 1 §7]`.
 
 ## P2.8 Open questions
 
-### Round R80 (2026-10-18): still open
+### Round R81 (2026-10-18): still open
 
-Found while specifying §P2.6 O. The spec states no value for any of them; each holds back only the task named, which carries a "Waits on" line.
+Found while specifying §P2.6 P. The spec states no value for any of them; each holds back only the task named, which carries a "Waits on" line.
+
+| # | Question | Holds back |
+|---|---|---|
+| R81-1 | Who may upload a custom GeoJSON boundary set ("the semantic-layer engineer": a Super-Admin, or a folder's read-write member), and where it lives: a folder item, found along the path as models are and landing through a proposal, or one deployment-wide list. Research (`docs/research/`, the boundary dataset and GeoJSON storage) settles how it is stored and checked, not who | the upload task (AC-628); AC-628 states the file's checks, which hold for either answer |
+| R81-2 | A histogram of a numeric dimension that has no bin dimension in the model. Design 23 draws model bins and "Make bins in the model…", but not what draws before the bins exist: the dimension's grouped values binned in the browser with "Computed from n of N", or only the empty state with "Make bins in the model…" | nothing yet: no criterion states it (AC-586 covers model bins and "Make bins in the model…"); a criterion and a task follow the answer |
+| R81-3 | What a timeline's "End or a duration" takes as a duration: a numeric dimension or a measure, and in which unit (seconds, hours, days, or the model's format) | nothing yet: AC-602 takes an end time only; a criterion and a task follow the answer |
+
+### Round R80 (2026-10-18): settled the same day
+
+Found while specifying §P2.6 O. The user answered R80-1, R80-2, R80-3 and R80-5 on 2026-10-18 (`docs/requirements-log.md`, R80); R80-4 wasn't asked and stays off. R80-6 was researched the same day (`docs/research/bedrock-client.md`), and the coordinator's calls on it are in the log. The decisions are folded into §P2.6 O and the spec's AC-536, AC-537, AC-543, AC-547 … AC-549, AC-558 and AC-630.
+
+| # | Decision |
+|---|---|
+| R80-1 | **The date filter's period:** the date-filter range in scope against the equal range just before it |
+| R80-2 | **The deployment's time zone,** a Helm value, UTC by default; also MCP's project folder name when the client sends no time zone (T785-2 overturned) |
+| R80-3 | **60 s, 1,024 output tokens, 20 facts a request, titles and member names of at most 80 characters** |
+| R80-4 | Not asked; redo stays off (AC-516) |
+| R80-5 | **Start; Security › AI says the AI encryption key is missing, and AI stays off** |
+| R80-6 | **Researched** (`bedrock-client.md`): `AnthropicBedrock` on `bedrock-runtime`, inference profiles, one long-lived credential chain, the bearer-token and base-URL variables refused, the api pod's own service account with IRSA, no session token (the coordinator's calls) |
+
+The questions as first asked:
 
 | # | Question | Holds back |
 |---|---|---|
@@ -956,4 +1018,4 @@ The questions as first asked:
 
 ## P2.9 Interview log
 
-Phase 2's interview log (rounds R11 onward, the user's later decisions included) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R80]`; search that file for the round.
+Phase 2's interview log (rounds R11 onward, the user's later decisions included) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R81]`; search that file for the round.

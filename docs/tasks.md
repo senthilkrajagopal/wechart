@@ -1573,7 +1573,7 @@ These tasks are what group 3's check of the open criteria found missing. Each is
 F41 lets Claude Code read wechart, edit in its owner's My workspace and propose, through `/mcp` with personal access tokens. F42 moves the SQL runner into its own workspace at `/sql`. Designs 17 and 18 were approved on 2026-10-17 with their drawn defaults (`docs/design/reviews/2026-10-17/designs/index.md`, "Decided 2026-10-17"). Research: `mcp-typescript-sdk.md`, `mcp-deployment-and-tokens.md`, `fastify-rate-limit.md`, `gateway-api.md`, `sql-parameter-binding.md`, `code-editor.md`, `xcube-sql-runner.md` and `cube/data-apis.md` (`/v1/cubesql`).
 
 **Two lanes,** each in its own worktree, touching disjoint files as far as possible:
-- **Lane MCP:** `packages/api/src/mcp/`, the token repos and routes, `packages/web/src/account/`, Security's Access tokens tab, and `deploy/helm/`. Order: T767, T768, T769, T770, T771, T772, T773, T774, T775, T776, T777, T778, T779, T780, T781, T782, T783, T784, T785, T786, T787, T788, T789, T790, T791, then the Helm tasks T792, T793, T794, T795. T773 and T792 depend on nothing and can go first.
+- **Lane MCP:** `packages/api/src/mcp/`, the token repos and routes, `packages/web/src/account/`, Security's Access tokens tab, and `deploy/helm/`. Order: T767, T768, T769, T770, T771, T772, T773, T774, T775, T776, T777, T778, T779, T780, T781, T782, T783, T784, T785, T786, T787, T788, T789, T790, T791, T1015 (added 2026-10-18, R80-2: the deployment's time zone, before lane TEXT's T912), then the Helm tasks T792, T793, T794, T795. T773, T792 and T1015 depend on nothing and can go first.
 - **Lane SQL:** `packages/web/src/workspaces/sql/`, the SQL routes and repos in `packages/api/src/routes/sql-*.ts` and `packages/api/src/repos/sql-*.ts`, and the data source page's SQL tab. Order: T796, T797, T798, T799, T800, T801, T802, T803, T804, T805, T806, T807, T808, T809, T810, T812, T813, T814, T815, T816, T817, T818, T819, T820, T821, T823, T824, T825, T826; then, once their outside work lands, T811, T822 and T827.
 - **Shared files** (expect cherry-pick conflicts there, nowhere else): `packages/api/src/server.ts` (both register routes; lane MCP also changes the global error handler), `packages/web/src/router/routes.tsx` (`/account/tokens` and `/security/tokens` against `/sql`), and `packages/api/src/audit/record.ts` (lane MCP's MCP mark against lane SQL's "Cube" mark).
 - **Migrations,** above 1758660000000, numbered per lane so the two never clash: lane MCP from 1758670000000, lane SQL from 1758680000000.
@@ -1641,6 +1641,13 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
   - Files: `packages/api/src/mcp/single-user.test.ts`, `e2e/access-tokens-single-user.spec.ts`.
   - Failing test: `single-user.test.ts`, sign-in off: a token the single user made lists and reads as that user; a request with no token, a bad one, a foreign `Host` or `Origin`, or past the token's or the address's limit is refused as with sign-in on (401, 403, 429) (AC-479).
   - Depends on: T769, T780, T782
+
+- [ ] T1015 [P] (AC-630) The deployment's time zone, a Helm value, UTC by default, naming an MCP project folder when the client sends no time zone
+  - Lane: MCP
+  - Files: `packages/api/src/config.ts` (`WECHART_TIME_ZONE`, checked as an IANA zone at start), `packages/api/src/config.test.ts`, `deploy/helm/wechart/values.yaml` (`timeZone: UTC`), `deploy/helm/wechart/templates/api.yaml` (the env var), `packages/api/src/mcp/tools/workspace.ts`, `packages/api/src/mcp/tools/workspace-time-zone.test.ts`.
+  - Failing test: `config.test.ts`: no value reads UTC, `Europe/Berlin` is kept, and `Mars/Olympus` stops the start with a message naming it; `workspace-time-zone.test.ts`: with the deployment at `Europe/Berlin` and no `timeZone` sent, a copy made at 22:30 UTC on 2026-10-18 lands in `project-2026-10-19-0030`; with `America/New_York` sent, in `project-2026-10-18-1830`; with no zone set, in `project-2026-10-18-2230` (AC-630).
+  - Depends on: none (T785 is done)
+  - R80-2 answered 2026-10-18; decision T785-2's UTC default is overturned. Lane TEXT's T912 reads the same setting.
 
 ### Lane MCP: the Helm chart (Gateway API, Envoy Gateway)
 
@@ -1840,16 +1847,18 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 F44 gives combo charts per-series marks and axes, two aligned value axes, one split dimension, reference lines and bands, and the amended AC-218 warning. F45 replaces the Markdown tile with the Text tile, edited in place with Tiptap 3 and read through its static renderer. F46 adds filter controls, action buttons and field-switch dashboard parameters. F47 drafts AI summaries from facts computed through Cube, and F48 is Security › AI. Designs 20–22 were approved on 2026-10-18 (`docs/design/reviews/2026-10-18/designs/index.md`, "Decided 2026-10-18"); their tokens are direction.md §7h and rules 115–146.
 
-**Packages,** each covered by its research doc and pinned exactly: `@tiptap/core`, `@tiptap/pm`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/static-renderer` and `@tiptap/suggestion` at 3.32.0, all identical, `@tiptap/pm` resolving `prosemirror-view` ≥ 1.42.3 (`rich-tiles-and-combo-tech.md`); `@anthropic-ai/sdk@0.135.0`, `openai@7.38.0`, `@anthropic-ai/bedrock-sdk@0.35.0` and `zod@4.6.5` as a direct dependency of `@wechart/api` (`llm-providers.md`, `supporting-utilities.md`). Not `@tiptap/markdown` (beta), `echarts-stat` or `d3-shape`: wechart converts its own markdown subset and draws its own SVG.
+**Packages,** each covered by its research doc and pinned exactly: `@tiptap/core`, `@tiptap/pm`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/static-renderer` and `@tiptap/suggestion` at 3.32.0, all identical, `@tiptap/pm` resolving `prosemirror-view` ≥ 1.42.3 (`rich-tiles-and-combo-tech.md`); `@anthropic-ai/sdk@0.135.0`, `openai@7.38.0`, `@anthropic-ai/bedrock-sdk@0.35.0`, `@aws-sdk/credential-providers@3.1152.0` (`bedrock-client.md`, added 2026-10-18) and `zod@4.6.5` as a direct dependency of `@wechart/api` (`llm-providers.md`, `supporting-utilities.md`). Not `@tiptap/markdown` (beta), `echarts-stat` or `d3-shape`: wechart converts its own markdown subset and draws its own SVG.
 
 **Two lanes,** each in its own worktree, touching disjoint files as far as possible. Foundations come first in each.
 - **Lane COMBO:** `packages/core/src/combo.ts`, `render-spec.ts` and `undrawn.ts`; `packages/charts/`; `packages/recommender/`; the chart editor's combo parts in `packages/web/src/editor/`; `e2e/combo.spec.ts`. Order: T845, T846, T847, T848, T849, T850, T851, T852, T853, T854, T855, T856, T857, T858, T859, T860, T861, T862, T863, T864, T865, T866, T867. T845 depends on nothing.
-- **Lane TEXT:** `packages/core/src/text-document*.ts` and the dashboard parameter model; `packages/web/src/tiles/text/`, the dashboard's model, edit sidebar, settings, bookmarks and filters; `packages/api/src/ai/`, the AI routes and repos, `packages/api/src/mcp/tools/`; `packages/web/src/workspaces/security/ai/`; `deploy/helm/`. Order: T868, T869, T870, T871, T872, T873, T874, T875, T876, T877, T878, T879, T880, T881, T882, T883, T884, T885, T886, T887, T888, T889, T891, T892, T893, T894, T895, T896, T897, T898, T899, T900, T890; the AI service T901, T902, T903, T904, T906, T907, T908, T909, T913; the AI pages T916, T917, T918, T919, T920, T921, T922, T924, T925, T926; then, once their questions are answered, T910, T911, T912, T914, T923, T927, T928, T929, T930, T931, T932, T933, and T905 and T915. T868, T895 and T901 depend on nothing and can go first.
+- **Lane TEXT:** `packages/core/src/text-document*.ts` and the dashboard parameter model; `packages/web/src/tiles/text/`, the dashboard's model, edit sidebar, settings, bookmarks and filters; `packages/api/src/ai/`, the AI routes and repos, `packages/api/src/mcp/tools/`; `packages/web/src/workspaces/security/ai/`; `deploy/helm/`. Order: T868, T869, T870, T871, T872, T873, T874, T875, T876, T877, T878, T879, T880, T881, T882, T883, T884, T885, T886, T887, T888, T889, T891, T892, T893, T894, T895, T896, T897, T898, T899, T900, T890; the AI service T901, T902, T903, T904, T906, T907, T908, T909, T913, T910, T911, T912 (after lane MCP's T1015), T914, T905, T1017, T915; the AI pages T916, T1016, T917, T918, T919, T920, T921, T922, T923, T924, T925, T926; then T927, T928, T929, T930, T931, T932, T933. ~~then, once their questions are answered, …~~ (R80-1 … R80-6 settled 2026-10-18). T868, T895 and T901 depend on nothing and can go first.
 - **Shared files** (expect cherry-pick conflicts there only): `packages/web/src/editor/Wells.tsx` (lane COMBO's pill menu, Split by well and offers; lane TEXT's Parameters group, T898); `packages/core/src/index.ts`; `packages/web/src/shell/styles.ts`; `packages/web/src/dashboard/DashboardView.tsx` (lane COMBO's tile edit-head warning, T861; lane TEXT's Text tile).
 - **Migrations,** lane TEXT only, from 1758700000000.
 - **Tests never call a provider.** Unit tests point each client at an in-process fake provider (`packages/api/src/ai/fake.ts`, after `packages/api/src/xcube/fake.ts`); the e2e stack runs the same fake over HTTPS with a test certificate the API trusts through `NODE_EXTRA_CA_CERTS`, set up as Azure OpenAI at the fake's address (`llm-providers.md` § Testing).
 
-**Waiting on answers** (`docs/requirements.md` §P2.8, R80): T910 waits on R80-1 (the period a change compares); T912 on R80-2 (the day and month limits count in); T911 on R80-3 (a draft call's timeout and size caps; its test holds for any values, which come from config); T915 on R80-5 (starting without the key-encryption key) and R80-6; T905 on R80-6 (a research addendum to `llm-providers.md` for the Bedrock client's options). The draft route's dependants wait with it: T914, T923, T927 … T933. T901's test holds without R80-5's answer. Every other task can start now.
+~~**Waiting on answers** (`docs/requirements.md` §P2.8, R80): T910 waits on R80-1 (the period a change compares); T912 on R80-2 (the day and month limits count in); T911 on R80-3 (a draft call's timeout and size caps; its test holds for any values, which come from config); T915 on R80-5 (starting without the key-encryption key) and R80-6; T905 on R80-6 (a research addendum to `llm-providers.md` for the Bedrock client's options). The draft route's dependants wait with it: T914, T923, T927 … T933. T901's test holds without R80-5's answer. Every other task can start now.~~
+
+**Answered 2026-10-18** (`docs/requirements.md` §P2.8, R80): R80-1 (the date filter's period) is in T910; R80-2 (the deployment's time zone) in T912 and lane MCP's T1015; R80-3 (60 s, 1,024 tokens, 20 facts, 80 characters) in T911; R80-5 (start without the AI key-encryption key) in T1016; R80-6, researched in `docs/research/bedrock-client.md`, in T905, T915, T917 and T1017, with the coordinator's calls recorded under R80 in `docs/requirements-log.md`. No task in this section waits any more.
 
 ### Lane COMBO: the spec and the drawing
 
@@ -2139,7 +2148,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Files: `packages/api/src/ai/keyStore.ts` (+ test), `packages/api/src/config.ts` (`WECHART_AI_KEY_KEYRING_FILE`, through `keyOf`), `packages/api/src/config.test.ts`.
   - Failing test: `keyStore.test.ts`: a key sealed for Azure OpenAI at `https://acme.openai.azure.com` opens with the same binding and fails to open for OpenAI or for `https://evil.example`; each seal has a fresh 12-byte IV and a 16-byte tag; `config.test.ts`: the keyring is refused when it equals the signing, service or seed key (AC-549).
   - Depends on: none
-  - What the API does with no keyring at all is R80-5's, and T915's; this task's test provides one.
+  - ~~What the API does with no keyring at all is R80-5's, and T915's;~~ What the API does with no keyring at all is T1016's (R80-5, answered 2026-10-18); this task's test provides one.
 
 - [ ] T902 (AC-546, AC-548) The AI settings in wechart's database and their API, for Super-Admins only (404 for others), the key write-only, and the single user with sign-in off
   - Files: `packages/api/src/db/migrations/1758700000000_ai-settings.cjs`, `packages/api/src/repos/ai-settings.ts` (+ test), `packages/api/src/routes/ai-settings.ts` (+ test), `packages/api/src/server.ts`.
@@ -2156,11 +2165,11 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `anthropic.test.ts`, with `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL` and `ANTHROPIC_LOG=debug` set in the environment: the fake receives one request, at the configured base URL, with the saved key, `output_config.format`, no `tools`, and a system prompt holding no fixture title; a 500 isn't retried; nothing is logged; `openai.test.ts`, with the OpenAI variables set: a Responses request with `store: false`, `text.format` strict, the saved key and base URL; zod 4.6.5's schema for `Narrative` uses `anyOf`, not `oneOf` (AC-537, AC-558).
   - Depends on: T903
 
-- [ ] T905 (AC-558, AC-547) The Amazon Bedrock client through `AnthropicBedrockMantle`: the region, and the pods' IAM role or a saved access key pair
-  - Files: `packages/api/package.json` (`@anthropic-ai/bedrock-sdk@0.35.0`), `packages/api/src/ai/bedrock.ts` (+ test).
-  - Failing test: `bedrock.test.ts`: with an access key pair saved and other AWS credentials in the environment, the fake receives a request signed with the saved pair for the saved region; with the IAM role chosen, the client takes the default credential chain and nothing is stored; no `output_config.format` is sent, and the response still goes through T906's check (AC-558, AC-547).
+- [ ] T905 (AC-558, AC-547) The Amazon Bedrock client through `AnthropicBedrock` on `bedrock-runtime`: the saved region and inference profile, and the pods' IAM role through one long-lived credential chain, or a saved access key pair with no session token
+  - Files: `packages/api/package.json` (`@anthropic-ai/bedrock-sdk@0.35.0`, `@aws-sdk/credential-providers@3.1152.0`), `packages/api/src/ai/bedrock.ts` (+ test), `packages/api/src/ai/bedrockProfiles.ts` (each model's inference profiles; + test), `packages/api/src/ai/fake.ts` (`POST /model/‹model›/invoke`).
+  - Failing test: `bedrock.test.ts` (`bedrock-client.md` § Pointing the client at a local fake), with `AWS_ACCESS_KEY_ID` and `AWS_REGION` set to decoys: with a key pair saved, the fake receives `POST /model/global.anthropic.claude-sonnet-5-5/invoke` whose SigV4 credential scope names the saved access key, the saved region and service `bedrock`, a body with `anthropic_version: "bedrock-2023-05-31"` and no `model`, `stream` or `output_config`, and no session token; with the IAM role chosen, a `providerChainResolver` returning test credentials is called and two drafts use one provider instance; the response still goes through T906's check; `bedrockProfiles.test.ts`: Sonnet 5.5 offers `global.`, `us.`, `eu.` and `au.` profiles and no base ID, Opus 5.5 also `jp.` (AC-558, AC-547).
   - Depends on: T904, T906
-  - Waits on: R80-6, a research addendum to `docs/research/llm-providers.md` for the client's region, credential and base-URL options.
+  - R80-6 researched 2026-10-18 (`docs/research/bedrock-client.md`); `AnthropicBedrock` in place of `AnthropicBedrockMantle` is the coordinator's call (requirements log, R80).
 
 - [ ] T906 (AC-538) Check every draft, and retry once: typed segments only, known facts only, no digit in text, no refusal or cut-off
   - Files: `packages/api/src/ai/validateNarrative.ts` (+ test), `packages/api/src/ai/draft.ts` (+ test).
@@ -2184,21 +2193,21 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [ ] T910 (AC-536) Compute a summary's facts through Cube as the author, under the page's filters: change against the previous period, and top and bottom contributors
   - Files: `packages/api/src/ai/facts.ts` (+ test), `packages/api/src/cube/` (queries as the user).
-  - Failing test: `facts.test.ts`: for Revenue under Country = Germany, France, the change fact's two queries carry the author's token and that filter; the contributors fact ranks members by Revenue; a measure in a folder the author can't reach gives no fact and is never sent (AC-536).
+  - Failing test: `facts.test.ts`: for Revenue under Country = Germany, France, the change fact's two queries carry the author's token and that filter; with the date filter at Oct 1 – Dec 31 2026, the earlier query's range is Jul 1 – Sep 30 2026; with no date filter in scope, no change fact is computed and the tile reads "Needs a date filter on the page"; the contributors fact ranks members by Revenue; a measure in a folder the author can't reach gives no fact and is never sent (AC-536).
   - Depends on: T904
-  - Waits on: R80-1, which period a change compares.
+  - R80-1 answered 2026-10-18: the date filter's period.
 
 - [ ] T911 (AC-535, AC-537, AC-540) The draft route: AI on, Who may use AI (403 otherwise), facts then the provider then the check, and nothing of the draft kept
   - Files: `packages/api/src/routes/ai-summaries.ts` (+ test), `packages/api/src/ai/draft.ts`.
-  - Failing test: `ai-summaries.test.ts`: a viewer, and a member outside the chosen AD groups, get 403; with AI off, 409; a draft answers segments and facts; afterwards no table holds the draft's text or the facts sent, and the captured log holds neither; the provider request carries the timeout and output cap from config (AC-535, AC-537, AC-540).
+  - Failing test: `ai-summaries.test.ts`: a viewer, and a member outside the chosen AD groups, get 403; with AI off, 409; a draft answers segments and facts; afterwards no table holds the draft's text or the facts sent, and the captured log holds neither; the provider request carries a 60 s timeout and an output cap of 1,024 tokens; a fake that doesn't answer is cancelled at 60 s and reported as unreachable (fake timers); 21 facts send nothing and answer "21 facts; Copilot takes at most 20. Cover fewer tiles or measures."; an 81-character member name is sent as its first 79 characters and "…" (AC-535, AC-537, AC-540).
   - Depends on: T906, T910
-  - Waits on: R80-3, for the timeout's and caps' values (config; the test holds for any).
+  - R80-3 answered 2026-10-18: 60 s, 1,024 tokens, 20 facts, 80 characters.
 
 - [ ] T912 (AC-543) Count drafts against the daily and monthly limits, and refuse one over a limit with 429 before any provider call
   - Files: `packages/api/src/ai/limits.ts` (+ test), `packages/api/src/routes/ai-summaries.ts`.
-  - Failing test: `limits.test.ts`: with 20 a day, the 21st draft the same day answers 429 with the Super-Admin's message and the fake receives nothing; an automatic retry counts nothing; the monthly limit answers its own message (AC-543).
-  - Depends on: T911
-  - Waits on: R80-2, which day and month the limits count in.
+  - Failing test: `limits.test.ts`: with 20 a day, the 21st draft the same day answers 429 with the Super-Admin's message and the fake receives nothing; an automatic retry counts nothing; the monthly limit answers its own message; with the deployment's zone `Asia/Tokyo`, 20 drafts made by 14:59 UTC on 2026-10-18 no longer count at 15:00 UTC, and a month's count resets at Tokyo's midnight, not UTC's (AC-543).
+  - Depends on: T911, T1015
+  - R80-2 answered 2026-10-18: the deployment's time zone, read as T1015 reads it.
 
 - [ ] T913 (AC-544) Report a provider that can't be reached, refuses the key or is past its spending limit with wechart's own words and the request id, never retrying a spending-limit refusal
   - Files: `packages/api/src/ai/errors.ts` (+ test), `packages/api/src/ai/draft.ts`.
@@ -2210,11 +2219,17 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `ai-usage.test.ts`: a draft records who, provider, model, input and output tokens, request id, duration and outcome; an insert records "AI summary inserted" with the folder, "Revenue overview › EMEA summary" and "5 live values · 4 facts"; neither holds a fact's value or any text of the draft (AC-545).
   - Depends on: T911
 
-- [ ] T915 (AC-549, AC-547) The Helm chart: the AI keyring as its own Secret mounted for `_FILE`, and the pods' IAM role for Bedrock
-  - Files: `deploy/helm/wechart/values.yaml`, `deploy/helm/wechart/templates/` (the Secret, the mount and the service account's annotations), `deploy/helm/verify.sh`.
-  - Failing test: `verify.sh`: the rendered chart mounts the AI keyring Secret at the path `WECHART_AI_KEY_KEYRING_FILE` names, apart from the signing and service keys; with `ai.bedrock.roleArn` set, the API's service account carries the annotation the research names (AC-549, AC-547).
+- [ ] T915 (AC-549, AC-547) The Helm chart: the AI keyring as its own Secret mounted for `_FILE`, and a service account of the api pod's own carrying the IRSA annotation for Bedrock
+  - Files: `deploy/helm/wechart/values.yaml` (`api.serviceAccount.create`, `api.serviceAccount.name`, `api.serviceAccount.annotations`, `ai.bedrock.roleArn`), `deploy/helm/wechart/templates/` (the Secret, the mount, `api-serviceaccount.yaml`, and `serviceAccountName` in `api.yaml`), `deploy/helm/verify.sh`.
+  - Failing test: `verify.sh`: the rendered chart mounts the AI keyring Secret at the path `WECHART_AI_KEY_KEYRING_FILE` names, apart from the signing and service keys; with defaults, the api Deployment names its own service account and the chart renders it; with `ai.bedrock.roleArn` set, that service account carries `eks.amazonaws.com/role-arn: ‹arn›`, merged with `api.serviceAccount.annotations`; with `api.serviceAccount.create: false` and a name, the Deployment names it and no service account is rendered (AC-549, AC-547).
   - Depends on: T901
-  - Waits on: R80-5 and R80-6.
+  - R80-5 answered and R80-6 researched 2026-10-18 (`bedrock-client.md` § Running in Kubernetes; the coordinator's calls). Gotcha 8: whether the api pod's `automountServiceAccountToken: false` blocks the IRSA or Pod Identity token is unverified; the render keeps it, and the first EKS deployment checks that a Bedrock test connection on the IAM role passes.
+
+- [ ] T1017 (AC-558) Refuse Bedrock, and still start, while `AWS_BEARER_TOKEN_BEDROCK` or `ANTHROPIC_BEDROCK_BASE_URL` is set in the API's environment, saying so on Security › AI
+  - Files: `packages/api/src/ai/bedrockEnvironment.ts` (+ test), `packages/api/src/ai/providers.ts`, `packages/api/src/routes/ai-settings.ts`, `packages/web/src/workspaces/security/ai/AiSettingsForm.tsx`, `packages/web/src/workspaces/security/ai/BedrockUnavailable.test.tsx`.
+  - Failing test: `bedrockEnvironment.test.ts`, with `AWS_BEARER_TOKEN_BEDROCK` set: the API starts; a Bedrock test connection, save and draft answer 409 naming the variable, and the fake receives no request and no `Authorization: Bearer`; with `ANTHROPIC_BEDROCK_BASE_URL` set, the same; with neither, Bedrock is offered; `BedrockUnavailable.test.tsx`: the settings response's flag shows the warning icon and "Amazon Bedrock is unavailable: this deployment sets AWS_BEARER_TOKEN_BEDROCK in wechart's environment, which would replace the credentials or address set here. Remove it to use Bedrock." (AC-558).
+  - Depends on: T905, T917
+  - R80-6's coordinator's call (`bedrock-client.md` Gotcha 2), recorded under R80 in the requirements log.
 
 ### Lane TEXT: Security › AI
 
@@ -2223,10 +2238,16 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `AiTab.test.tsx`: a Super-Admin sees AI after Access tokens with "Not set up", then "On · tested 18 Oct, 09:12" once saved and tested, each with its icon; a read-write member at `/security/ai` sees Not found; with sign-in off the single user sees the tab (AC-546).
   - Depends on: T902
 
+- [ ] T1016 (AC-549) Start without the AI key-encryption key: AI stays off, no key is stored, and Security › AI says the deployment is missing it
+  - Files: `packages/api/src/config.ts` (`WECHART_AI_KEY_KEYRING_FILE` optional), `packages/api/src/ai/keyStore.ts`, `packages/api/src/routes/ai-settings.ts`, `packages/api/src/routes/ai-no-keyring.test.ts`, `packages/web/src/workspaces/security/ai/AiTab.tsx`, `packages/web/src/workspaces/security/ai/NoKeyring.test.tsx`.
+  - Failing test: `ai-no-keyring.test.ts`, with no keyring configured: the server starts; GET reports AI off and `keyringMissing`; a save or test holding a key answers 409 and nothing is stored; a draft answers 409 and the fake receives nothing; `NoKeyring.test.tsx`: the tab's state shows the warning icon and "This deployment is missing its AI encryption key, so AI is off and no key can be stored. Ask whoever deploys wechart to provide it." (AC-549).
+  - Depends on: T902, T916
+  - R80-5 answered 2026-10-18: "Start; AI can't store keys (Recommended)".
+
 - [ ] T917 (AC-547, AC-548) The settings form: AI on, Who may use AI, the provider and its fields, the key typed once or stored, and what's sent
   - Files: `packages/web/src/workspaces/security/ai/AiSettingsForm.tsx` (+ test), `packages/web/src/workspaces/security/ai/StoredKey.tsx` (+ test).
-  - Failing test: `AiSettingsForm.test.tsx`: Who may use AI defaults to "Everyone who can edit dashboards"; the AD group combobox appears for "Only these AD groups"; Anthropic shows model and key with the endpoint read-only; Azure endpoint, deployment and key; Bedrock region, model ID and credentials with IAM role first; no second model; the What's sent card reads as AC-547 says; `StoredKey.test.tsx`: the key field is `type="password"` with `autocomplete="off"` and no show button; once stored it reads "Stored · encrypted · set 2 Oct 2026 by Ada Admin" with Replace… (AC-547, AC-548).
-  - Depends on: T916, T903
+  - Failing test: `AiSettingsForm.test.tsx`: Who may use AI defaults to "Everyone who can edit dashboards"; the AD group combobox appears for "Only these AD groups"; Anthropic shows model and key with the endpoint read-only; Azure endpoint, deployment and key; Bedrock region, a model list of inference profiles (no base IDs, no typing) under the residency note "Global may send requests to any AWS Region. us., eu., au. and jp. keep them within that geography.", and credentials with IAM role first and a key pair of an access key ID and a secret access key, with no session token field (amended 2026-10-18, R80-6's coordinator's calls); no second model; the What's sent card reads as AC-547 says; `StoredKey.test.tsx`: the key field is `type="password"` with `autocomplete="off"` and no show button; once stored it reads "Stored · encrypted · set 2 Oct 2026 by Ada Admin" with Replace… (AC-547, AC-548).
+  - Depends on: T916, T903, T905 (the inference profiles)
 
 - [ ] T918 (AC-550) The Test connection card: the four checks running in order, their results and failures, the announcement, and the last result kept
   - Files: `packages/web/src/workspaces/security/ai/ConnectionChecks.tsx` (+ test).
@@ -2309,6 +2330,484 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Files: `packages/web/src/tiles/text/ai/ProviderFailed.tsx` (+ test).
   - Failing test: `ProviderFailed.test.tsx`: the warning icon, "Copilot can't reach its provider. Tell your Super-Admin.", Retry and Details holding the request id; a Super-Admin also sees "Open Security › AI"; Details never holds the text of the API's internal error (AC-544).
   - Depends on: T927, T913
+
+## P2.27 New chart types (F49–F55, added 2026-10-18, `[R81]`)
+
+F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Auto charts as they were, and lets the keyboard mark them. F50 is the KPI upgraded in place and the graphical table; F51 the waterfall, the bullet chart and 100 % stacking; F52 the histogram, the box plot's points and violin, the bubble and parallel coordinates; F53 the timeline and the calendar heatmap; F54 the Sankey, the funnel and the icicle; F55 the Map. Design 23 was approved on 2026-10-18 (`docs/design/reviews/2026-10-18/designs/index.md`, "Decided 2026-10-18"); its tokens are direction.md §7i and rules 147–167.
+
+**Packages.** Nothing new is imported without research: ECharts 6.1.0 (`echarts.md`, `rich-tiles-and-combo-tech.md` §2) draws the series, `d3-geo` (`country-map.md`) the projection, and R80's elements (lane TEXT, `packages/web/src/tiles/text/elements/`) the KPI's and the graphical table's micro-charts. `@echarts-x/custom-violin` and `@echarts-x/custom-bar-range` wait on research before import, and are replaced by wechart's own custom series if the research finds them unmaintained (23-Q10 (a)).
+
+**Two lanes,** each in its own worktree, touching disjoint files as far as possible. Each new type's spec lives in `packages/core/src/chart-types/‹type›.ts`, its series in `packages/charts/src/series/‹type›.ts`, its wells in `packages/web/src/editor/wells/‹type›.tsx`, its table view in `packages/web/src/tiles/tableView/‹type›.ts` and its text alternative in `packages/charts/src/describe/‹type›.ts`, each registered in one line of a shared registry.
+- **Lane CHARTS-A:** the gallery and registries (T934), the "share shown" badge, the KPI, the graphical table, the waterfall, the bullet chart, 100 % stacking, the histogram and the bubble; lane A's recommender rules, saved Auto charts, its keyboard order and its e2e (`e2e/new-charts-a.spec.ts`). Order: T934, T935, T936, T937, T938, T939, T940, T941, T942, T943, T944, T945, T946, T947, T948, T949, T950, T951, T952, T953, T954, T955, T956, T957, T958, T959, T960, T961, T962, T963, T964, T965, T966, T967, T968, T969, T970, T971, T972. T934 and T935 depend on nothing and go first.
+- **Lane CHARTS-B:** the Map, parallel coordinates, the Sankey, the box plot's points and violin, the funnel, the timeline, the calendar heatmap, and the icicle and sunburst; lane B's recommender rules, its keyboard order and its e2e (`e2e/new-charts-b.spec.ts`). Order: T973, T974, T975, T976, T977, T978, T980, T981, T982, T983, T984, T985, T986, T987, T988, T989, T990, T991, T992, T993, T994, T995, T996, T997, T998, T999, T1000, T1001, T1002, T1003, T1004, T1005, T1006, T1007, T1008, T1009, T1010, T1011, T1012, T1013, T1014; then T979, once R81-1 is answered. T990 depends on nothing; every other lane B task starts after lane A's T934.
+- **Shared with each other** (expect cherry-pick conflicts there only): the registries T934 creates (`packages/core/src/chart-types/index.ts`, `packages/charts/src/series/registry.ts`, `packages/web/src/editor/wells/registry.ts`, `packages/web/src/tiles/tableView/index.ts`, `packages/charts/src/describe/index.ts`), one line per type; `packages/recommender/src/recommend.ts`, `legality.ts` and `reason.ts` (T968, T969 against T1012); `packages/charts/src/interaction/keyboardMarking.ts` (T971 against T1013); `packages/charts/src/marking/partial.ts` (the marked share: T946, T951, T963 against T988); `packages/core/src/chart-spec.ts`.
+- **Shared with lanes COMBO and TEXT** (P2.26): `packages/charts/src/series/` and `packages/charts/src/optionFor.ts` (COMBO's T846 and T863 against T934's registry and every series task); `packages/recommender/` (COMBO's T861 `warnings.ts` and T865 `explain.ts` against T968, T969 and T1012); `packages/web/src/editor/Wells.tsx` (COMBO's pill menu and Split by well, TEXT's Parameters group, against T934, which routes R81's wells to `editor/wells/` once); `packages/web/src/editor/chartTypeCatalog.ts` and `ChartTypeGallery.tsx` (T934 only, against nothing in COMBO or TEXT); `packages/core/src/render-spec.ts` (COMBO's T845 and T852 against T934's `ChartType` union); `packages/web/src/tiles/DataTable.tsx` and `ChartCanvas.tsx` (COMBO's T864 against T934's table-view and describe registries). KPI and graphical-table tasks import lane TEXT's elements, so they depend on T884, T885 and T886.
+- **Migrations:** none in lane A. Lane B's T979, if R81-1 puts custom boundary sets in wechart's database, numbers from 1758710000000.
+
+**Research before build** (design 23's last section; CLAUDE.md: "Every claim about third-party behavior needs a source in `docs/research/`"). Each task below that needs one carries a "Waits on: research …" line and starts only once that doc lands:
+- the shape of a Cube `geo` value in a `/v1/load` row, and the client types: T976, T977;
+- whether Cube returns min and max of a time column as a timestamp: T999;
+- `@echarts-x/custom-violin`: T992; `@echarts-x/custom-bar-range`: T1000; an icicle custom series: T1008;
+- an admin-1 boundary dataset (source, licence, detail), and where uploaded GeoJSON is stored and checked: T975, T979;
+- ECharts 6.1's jitter seed: T991; its `parallel` brush events: T983;
+- the palette validator (`palette-validation.md`) on the waterfall's blue and red pair: T949; on the points-over-ramp pair: T976.
+- *Not in design 23's list, raised with the coordinator:* how the browser gives a locale's first weekday: T1003.
+
+**Waiting on answers** (`docs/requirements.md` §P2.8, R81): T979 waits on R81-1 (who uploads a custom boundary set, and where it lives). R81-2 and R81-3 hold back no task yet; each gets a criterion and a task once answered.
+
+### Lane CHARTS-A: the gallery and what every type shares
+
+- [ ] T934 [P] (AC-559, AC-217) Register R81's types, names, needs and nine shelves, Flow among them and Map in place of Country map, with no gauge; a greyed card stays choosable and highlights the well it needs
+  - Files: `packages/core/src/render-spec.ts` (the `ChartType` union), `packages/core/src/chart-type-names.ts` (+ test), `packages/core/src/chart-types/index.ts`, `packages/recommender/src/requirements.ts` (+ test), `packages/web/src/editor/chartTypeCatalog.ts` (+ test), `packages/web/src/editor/ChartTypeGallery.tsx` (+ test), `packages/web/src/editor/ChartTypeIcon.tsx`, `packages/web/src/editor/Wells.tsx` (routing R81's wells to `editor/wells/registry.ts`), `packages/charts/src/series/registry.ts`, `packages/charts/src/optionFor.ts`, `packages/web/src/tiles/tableView/index.ts`, `packages/charts/src/describe/index.ts`.
+  - Failing test: `chartTypeCatalog.test.ts`: `TYPE_PURPOSES` is the nine purposes of AC-559 in order with their cards, Flow holding Sankey and Funnel, Funnel also under Ranking, Bullet chart also under KPI; Waterfall's `needsText` reads "Needs a summed measure, and a dimension or time for its steps", and those of 100 % stacked bar and area, Sankey and Icicle say "summed"; `typesMatching('gauge')` is Bullet chart and KPI; `chart-type-names.test.ts`: `map` reads "Map"; `ChartTypeGallery.test.tsx`: with Revenue by Region, Bullet chart is greyed with "Put a measure or a value in Target" in `text-primary`, and choosing it pins `bullet` and asks the editor to highlight Target (AC-559, AC-217).
+  - Depends on: none
+
+- [ ] T935 [P] (AC-098) Say "● ‹marking›'s share shown" on a tile whose items are all only partly marked, in place of "0 marked"
+  - Files: `packages/web/src/dashboard/markings/MarkBadge.tsx` (+ test), `packages/web/src/dashboard/markings/markedValues.ts`.
+  - Failing test: `MarkBadge.test.tsx`: a tile whose every item has a marked share between 0 and its whole, with Region = EMEA marked elsewhere, reads "● EMEA's share shown" and never "0 marked"; a tile with 1 whole item marked still reads "● 1 marked" (AC-098).
+  - Depends on: none
+
+### Lane CHARTS-A: the KPI
+
+- [ ] T936 (AC-564, AC-037) The KPI's Compare to, Target, Time, Tile by and Direction in its spec and wells, and a KPI with none set drawn as before
+  - Files: `packages/core/src/chart-types/kpi.ts` (+ test), `packages/core/src/chart-spec.ts`, `packages/web/src/editor/wells/kpi.tsx` (+ test), `packages/web/src/tiles/Kpi.test.tsx`.
+  - Failing test: `kpi.test.ts`: a KPI spec with Compare to Same period last year, a Target measure, Time by month, Tile by Region and Lower is better parses and saves back the same; a spec with none of them parses with Direction Higher is better; `kpi.test.tsx` (wells): the five wells follow Metrics, Compare to offers its five choices; `Kpi.test.tsx`: every existing case renders the same DOM, with no change line, sparkline or target (AC-564, AC-037).
+  - Depends on: T934
+
+- [ ] T937 (AC-565) A KPI's comparison through `compareDateRange`, another measure or a value, and its change line coloured by Direction
+  - Files: `packages/core/src/chart-types/kpi.ts` (`kpiQueries`; + test), `packages/web/src/tiles/kpi/KpiChange.tsx` (+ test), `packages/web/src/tiles/Kpi.tsx`.
+  - Failing test: `kpi.test.ts`: Previous period over October 2026 by month asks Cube for `compareDateRange` [Oct 2026, Sep 2026] on Ordered at, and Same period last year [Oct 2026, Oct 2025]; `KpiChange.test.tsx`: $1.35M against $1.32M with Higher is better reads "▲ +2.4% vs Sep 2026 ($1.32M)" in `status-success`; Return rate 1.8 % against 2.2 % with Lower is better reads "▼ −0.4 pts vs Sep 2026 (2.2%) · lower is better" in `status-success`; Neutral in `text-secondary` (AC-565).
+  - Depends on: T936, T884
+
+- [ ] T938 (AC-565) A KPI's trend as R80's sparkline at the content width × 32, and its target as R80's bullet graph at the content width × 16 with "‹p›% of ‹target›"
+  - Files: `packages/web/src/tiles/kpi/KpiTrend.tsx` (+ test), `packages/web/src/tiles/kpi/KpiTarget.tsx` (+ test), `packages/web/src/tiles/Kpi.tsx`.
+  - Failing test: `KpiTrend.test.tsx`: in a 280 px tile the sparkline is R80's `Sparkline` at 256 × 32, over Ordered at by month; `KpiTarget.test.tsx`: $1.35M against $1.40M draws R80's `BulletGraph` 16 px tall and "97% of $1.40M" in `text-xs` `text-secondary` (AC-565).
+  - Depends on: T937, T885
+
+- [ ] T939 (AC-566) A KPI comparing periods with no Time says it needs one, and a compared period with no data reads "— vs ‹period› · No data for the comparison period"
+  - Files: `packages/web/src/tiles/kpi/KpiChange.tsx`, `packages/web/src/tiles/kpi/KpiEmpty.test.tsx`.
+  - Failing test: `KpiEmpty.test.tsx`: Previous period with Time empty shows "Compare to: Previous period needs a time dimension in Time." with a Time action that opens the Time well; a compared period of no rows reads "— vs Sep 2026 · No data for the comparison period" and no 0 % (AC-566).
+  - Depends on: T937
+
+- [ ] T940 (AC-567) Tile a KPI by a dimension: one tile per member as a list, ordered by value unless the author orders them, paged past 20
+  - Files: `packages/web/src/tiles/kpi/KpiTiles.tsx` (+ test), `packages/web/src/editor/wells/kpi.tsx` (Customize's tile order).
+  - Failing test: `KpiTiles.test.tsx`: Revenue tiled by 4 regions draws a `list` of 4 items in value order, EMEA's named "EMEA: $412K, up 4.2% vs Sep 2026, 92% of $450K"; a custom order is kept; 32 members show 20 with "Tiles 1–20 of 32" and ‹ › (AC-567).
+  - Depends on: T938
+
+- [ ] T941 (AC-568) A KPI tile marks and cross-filters its member, the marked tile outlined and the others dimmed, every tile recomputing when limited
+  - Files: `packages/web/src/tiles/kpi/KpiTiles.tsx`, `packages/web/src/tiles/kpi/kpiMarking.test.tsx`.
+  - Failing test: `kpiMarking.test.tsx`: clicking EMEA's tile marks Region = EMEA; Ctrl-click on APAC adds it; the marked tile has the 1.5 px outline and "● Marked", the others' values in `text-secondary` and their sparklines at opacity 0.28; limited by a marking of Channel = Web every tile's query carries it; in cross-filter mode a tile filters the others to its Region, and as a Highlight target shows "Selected: $X · p%" (AC-568).
+  - Depends on: T940
+
+- [ ] T942 (AC-569) The KPI's table view and its sparkline's text alternative
+  - Files: `packages/web/src/tiles/tableView/kpi.ts` (+ test).
+  - Failing test: `kpi.test.ts` (table view): tiled by Region, rows read "EMEA · $412,000 · $395,000 · ▲ +4.2% · $450,000 · 92%"; each sparkline's alternative names the first, last, low and high values (AC-569).
+  - Depends on: T940
+
+### Lane CHARTS-A: the graphical table
+
+- [ ] T943 (AC-570, AC-037) The graphical table's spec and wells: Rows, Group rows by, and ordered columns of R80's element kinds, moved and removed from a ⋯ menu with Undo
+  - Files: `packages/core/src/chart-types/graphicalTable.ts` (+ test), `packages/web/src/editor/wells/graphicalTable.tsx` (+ test).
+  - Failing test: `graphicalTable.test.ts`: a spec of Category with Value, Sparkline, Bullet, Icon and Change columns parses and saves back in order; `graphicalTable.test.tsx` (wells): + Column offers the five kinds; a column's row opens its R80 element settings; its ⋯ holds Move up, Move down and Remove, Remove offering Undo; with no column the tile says "Add a column: Value, Change, Sparkline, Bullet or Icon." (AC-570, AC-037).
+  - Depends on: T934
+
+- [ ] T944 (AC-571) Draw the graphical table as a real `<table>` with its caption, 24 px rows, and its Value, Change, Sparkline, Bullet and Icon cells
+  - Files: `packages/web/src/tiles/GraphicalTable.tsx` (+ test).
+  - Failing test: `GraphicalTable.test.tsx`: 6 categories render a `table` with column headers and the caption "Categories at a glance: 6 rows; 2 on track, 2 at risk, 2 off track."; rows 24 px under a 28 px header; Sparkline cells are 64 × 16 `img`s each scaled to its own row; a Bullet cell is 96 × 16 with "23.1%" beside it, read "23.1 % of 25 %, in the 80–100 % band"; an Icon cell shows the icon and "At risk"; a row with no trend shows "—" with "No data for these filters"; Group rows by Region puts each region's rows under a heading row (AC-571).
+  - Depends on: T943, T885, T886
+
+- [ ] T945 (AC-572) Page a graphical table at 50 rows, each page asking Cube for its values and its own members' trends
+  - Files: `packages/web/src/tiles/GraphicalTable.tsx`, `packages/core/src/chart-types/graphicalTable.ts` (`pageQueries`; + test).
+  - Failing test: `graphicalTable.test.ts`: page 2 of 214 rows makes two queries, the second filtered to that page's 50 members and by month; `GraphicalTable.test.tsx`: "Rows 51–100 of 214" with ‹ › (AC-572).
+  - Depends on: T944
+
+- [ ] T946 (AC-573) Mark a graphical table's rows as table tiles do, never by sorting, with "· $X marked" in partly marked additive cells, and cross-filter by row
+  - Files: `packages/web/src/tiles/GraphicalTable.tsx`, `packages/web/src/tiles/graphicalTableMarking.test.tsx`, `packages/charts/src/marking/partial.ts`.
+  - Failing test: `graphicalTableMarking.test.tsx`: click marks Seafood, Ctrl-click adds Dairy, Shift-click from Seafood marks the range; sorting by Revenue keeps the marking; marked rows are bold with a left rule, others' text `text-secondary` and micro-charts 0.28 while Change and Icon keep their colours; with Region = EMEA marked elsewhere, Beverages' Revenue reads "$1.21M · $310K marked" and Margin % shows "Marked: 22.8%" only in its tooltip; in cross-filter mode a row filters the others to its Category (AC-573).
+  - Depends on: T944, T935
+
+- [ ] T947 (AC-574) "View as table" for a graphical table: the numbers behind every cell
+  - Files: `packages/web/src/tiles/tableView/graphicalTable.ts` (+ test).
+  - Failing test: `graphicalTable.test.ts` (table view): Beverages reads "$1,210,000 · $84K → $112K · 23.1% / 25% · At risk", each matching its drawn cell (AC-574).
+  - Depends on: T944
+
+### Lane CHARTS-A: the waterfall
+
+- [ ] T948 (AC-575, AC-037) The waterfall's spec and data: steps by member or by change between two periods through `compareDateRange`, totals, and "Show at most 6"
+  - Files: `packages/core/src/chart-types/waterfall.ts` (+ test), `packages/web/src/editor/wells/waterfall.tsx` (+ test).
+  - Failing test: `waterfall.test.ts`: Gross margin by Category without Compare periods gives one step per member and an end total of their sum; with Q3 → Q4 2026 it asks for `compareDateRange` and gives each member's change, a start of $800,000 and an end equal to start plus every step; "Show at most" starts at 6; `waterfall.test.tsx` (wells): the five wells and options are there (AC-575, AC-037).
+  - Depends on: T934
+
+- [ ] T949 (AC-576) Draw the waterfall: increases blue and decreases red, totals `text-secondary`, ▲ or ▼ and a sign on every label, square ends and dashed connectors
+  - Files: `packages/charts/src/series/waterfall.ts` (+ test), `packages/charts/src/series/registry.ts`.
+  - Failing test: `waterfall.test.ts` (series): an increase is §5's diverging blue and a decrease its red, totals `text-secondary`; labels read "▲ +$120K" and "▼ −$90K" in `text-xs` `text-primary`; each step's base is the previous running total; bars have no `borderRadius`; connectors are 1 px `border-strong` dashed [2, 2]; with Totals None the axis min isn't forced to zero (AC-576).
+  - Depends on: T948
+  - Waits on: research: the palette validator (`docs/research/palette-validation.md`) run on the waterfall's blue and red pair against §5's checks.
+
+- [ ] T950 (AC-577) Refuse a waterfall of a measure that isn't summed, with "Bar chart instead", and fold steps past "Show at most" into "Other (n)"
+  - Files: `packages/core/src/chart-types/waterfall.ts`, `packages/web/src/tiles/WaterfallEmpty.tsx` (+ test).
+  - Failing test: `waterfall.test.ts`: 20 steps with "Show at most" 6 fold the 14 smallest by absolute change into "Other (14)", whose tooltip lists 10 and "+4 more"; `WaterfallEmpty.test.tsx`: Margin % draws nothing and says "Margin % is an average, so its steps wouldn't add up to a total. Choose a summed measure." with "Bar chart instead" (AC-577).
+  - Depends on: T948
+
+- [ ] T951 (AC-578) Mark a waterfall's steps, Other and totals, draw another tile's marked share from each step's start, and cross-filter by step but never by total
+  - Files: `packages/charts/src/series/waterfall.ts`, `packages/charts/src/marking/partial.ts`, `packages/charts/src/series/waterfallMarking.test.ts`.
+  - Failing test: `waterfallMarking.test.ts`: clicking "Q4 2026" marks every member it sums, as Mark all; "Other (3)" marks its three; a drag over two steps marks both; with EMEA marked elsewhere, Beverages draws $40K from the step's start at full opacity and the rest at 0.28; in cross-filter mode a total filters nothing and its tooltip reads "A total: click a step to filter" (AC-578).
+  - Depends on: T949, T935
+
+- [ ] T952 (AC-579) The waterfall's text alternative and its table view with a running total
+  - Files: `packages/charts/src/describe/waterfall.ts` (+ test), `packages/web/src/tiles/tableView/waterfall.ts` (+ test).
+  - Failing test: `waterfall.test.ts` (describe): "Waterfall of Gross margin from Q3 2026 $0.80M to Q4 2026 $0.84M, up $40K. Largest rise Beverages +$120K; largest fall Confections −$110K."; (table view) columns Step, Change, Direction, Running total, Beverages "+$120,000 · ▲ Increase · $920,000" (AC-579).
+  - Depends on: T949
+
+### Lane CHARTS-A: the bullet chart
+
+- [ ] T953 (AC-580, AC-037) The bullet chart's spec and wells: Target, 2–3 bands at 80, 100 and 120 % by default, and its empty state
+  - Files: `packages/core/src/chart-types/bullet.ts` (+ test), `packages/web/src/editor/wells/bullet.tsx` (+ test).
+  - Failing test: `bullet.test.ts`: bands default to [80, 100, 120]; a fourth band is refused with "At most 3 bands: R80's three greys, and no fourth without a new colour."; one band is refused; `bullet.test.tsx` (wells): with Target emptied the tile says "A bullet chart compares each member with a target. Put a measure or a value in Target." with Target as its action (AC-580, AC-037).
+  - Depends on: T934
+
+- [ ] T954 (AC-581) Draw one bullet per member on one axis from zero: R80's greys lightest lowest, an 8 px value bar and a 2 × 32 px target
+  - Files: `packages/charts/src/series/bullet.ts` (+ test).
+  - Failing test: `bullet.test.ts` (series): 4 regions share one value axis with `min: 0` and the note "Axis starts at $0: bars are lengths"; bands are `bg-subtle`, `border-subtle`, `border-strong` from low to high, 24 px tall on a 48 px pitch; the value bar is 8 px `text-primary`; the target 2 × 32 px; a member with no target draws its bar labelled "No target"; 30 members scroll with the axis fixed (AC-581).
+  - Depends on: T953
+
+- [ ] T955 (AC-582) Mark and cross-filter a bullet as its member, drawing another tile's marked share on the value bar from zero
+  - Files: `packages/charts/src/series/bullet.ts`, `packages/charts/src/series/bulletMarking.test.ts`.
+  - Failing test: `bulletMarking.test.ts`: a click marks EMEA, Ctrl toggles, a drag marks the bullets it touches; with Channel = Web marked elsewhere, EMEA's bar draws $210K from 0 at full opacity and the rest at 0.28; an average measure draws no share and its tooltip reads "Marked: 24.1%"; in cross-filter mode a bullet filters the others to its Region (AC-582).
+  - Depends on: T954
+
+- [ ] T956 (AC-583) Name each bullet and the chart, and give the bullet chart its table view
+  - Files: `packages/charts/src/describe/bullet.ts` (+ test), `packages/web/src/tiles/tableView/bullet.ts` (+ test).
+  - Failing test: `bullet.test.ts` (describe): "EMEA: $412K of $450K target (92 %), in the 80–100 % band." and "4 regions; 1 above target (North America)."; (table view) Region, Revenue, Target, % of target, Band (AC-583).
+  - Depends on: T954
+
+### Lane CHARTS-A: 100 % stacking
+
+- [ ] T957 (AC-584, AC-037) Customize › Stack, Sum or 100 %, on stacked bar and area, with the two gallery presets, only for summed measures, folding before shares, on a fixed 0–100 % axis
+  - Files: `packages/core/src/chart-types/stack100.ts` (+ test), `packages/charts/src/series/bar.ts`, `packages/charts/src/series/line.ts`, `packages/web/src/editor/wells/stack.tsx` (+ test), `packages/web/src/editor/chartTypeCatalog.ts` (the presets' cards).
+  - Failing test: `stack100.test.ts`: Revenue by Region and Channel at 100 % gives each Region's drawn shares summing to 100 within 1e-9, with 12 channels folded to 7 and "Other (5)" before shares are taken; the value axis is 0–100 % with interval 25 and no log or include-zero option; the tooltip reads "Web: $210K · 51 % of EMEA"; `stack.test.tsx`: Margin % disables 100 % with "Margin % is an average, so its shares of a total wouldn't mean anything. 100 % takes a summed measure."; the 100 % stacked bar card opens Stacked bar at 100 % (AC-584, AC-037).
+  - Depends on: T934
+
+- [ ] T958 (AC-585) Mark a 100 % segment as its tuple, draw a marked share as a fraction of the segment, and add the share to the text alternative and table
+  - Files: `packages/charts/src/marking/partial.ts`, `packages/charts/src/describe/stack100.ts` (+ test), `packages/web/src/tiles/tableView/stack100.ts` (+ test), `packages/charts/src/series/stack100Marking.test.ts`.
+  - Failing test: `stack100Marking.test.ts`: a segment marks (Region, Channel); a legend entry marks its Channel; with a marking covering half of EMEA · Web, the drawn marked part is half the segment's height from its own base; (describe) "Web's share is largest in APAC (62 %) and smallest in LATAM (38 %)."; (table view) a "Share of Region" column (AC-585).
+  - Depends on: T957, T935
+
+### Lane CHARTS-A: the histogram
+
+- [ ] T959 (AC-586, AC-037) The histogram's spec and wells: Value from a model bin dimension or a measure with Each point is, bins of a width or a count of 5–50, and the "from the model" label
+  - Files: `packages/core/src/chart-types/histogram.ts` (+ test), `packages/core/src/bins.ts` (reading `meta.wechart.binOf`; + test), `packages/web/src/editor/wells/histogram.tsx` (+ test).
+  - Failing test: `bins.test.ts`: a dimension whose meta is `{ wechart: { binOf: { member: "orders.value", width: 50 } } }` is the bin dimension of Order value at $50; `histogram.test.ts`: a bin count of 4 or 51 is refused; `histogram.test.tsx` (wells): a model-binned chart reads "Bins of $50 · from the model" (AC-586, AC-037).
+  - Depends on: T934
+
+- [ ] T960 (AC-586) "Make bins in the model…" drafts a bin dimension in the author's My workspace
+  - Files: `packages/web/src/editor/wells/MakeBins.tsx` (+ test), `packages/web/src/workspaces/model/draftBinDimension.ts` (+ test).
+  - Failing test: `draftBinDimension.test.ts`: Order value at $50 drafts, in the cube's My workspace copy, a `number` dimension whose SQL floors the value to 50 and whose meta is `wechart.binOf` naming its source and width; the shared model is unchanged; `MakeBins.test.tsx`: the offer appears only for a numeric dimension with no bin dimension (AC-586).
+  - Depends on: T959
+
+- [ ] T961 (AC-587) Draw histogram bins touching with square ends, ticks at bin edges, and bins named "from ‹a› to under ‹b›"
+  - Files: `packages/charts/src/series/histogram.ts` (+ test).
+  - Failing test: `histogram.test.ts` (series): bars have a 1 px surface gap, no radius and `barCategoryGap: 0`; axis ticks fall on 0, 50, …, 500; Colour by Channel stacks within each bin; a bin's label is "from $100 to under $150" (AC-587).
+  - Depends on: T959
+
+- [ ] T962 (AC-588) Bin a measure per entity in the browser, saying "Computed from n of N" when Cube's row limit cut it
+  - Files: `packages/core/src/chart-types/histogram.ts` (`browserBins`; + test), `packages/web/src/tiles/HistogramCut.tsx` (+ test).
+  - Failing test: `histogram.test.ts`: 10,000 per-order values bin into counts equal to a direct count of each range; `HistogramCut.test.tsx`: 10,000 of 48,210 reads "Computed from 10,000 of 48,210 orders (Cube's row limit). Bin counts are of those orders only." (AC-588).
+  - Depends on: T961
+
+- [ ] T963 (AC-589) Mark a model bin as a range on its source, a browser bin as at most 1,000 IDs, draw another tile's marked share per bin, and cross-filter to the bin's range
+  - Files: `packages/charts/src/series/histogram.ts`, `packages/core/src/markings/range.ts`, `packages/charts/src/series/histogramMarking.test.ts`.
+  - Failing test: `histogramMarking.test.ts`: clicking the $100 bin of a model-binned chart stores Order value ≥ 100 and < 150; a drag over two bins ≥ 100 and < 200; a browser bin of 2,140 orders refuses with "Too many orders to mark: 2,140 in this bin; at most 1,000. The marking didn't change."; with EMEA marked elsewhere each bin's EMEA part draws from the baseline; the cross-filter chip reads "Order value ≥ $100 and < $150" (AC-589).
+  - Depends on: T962, T935
+
+- [ ] T964 (AC-590) The histogram's empty state, text alternative and table view
+  - Files: `packages/charts/src/describe/histogram.ts` (+ test), `packages/web/src/tiles/tableView/histogram.ts` (+ test), `packages/web/src/editor/wells/histogram.tsx`.
+  - Failing test: (describe) "Histogram of Order value, 10 bins of $50 from $0 to $500. Most orders $100 to under $150 (4,100); counts fall toward $500."; (table view) Order value, Count, Share, the first row "from $0 to under $50"; with nothing to bin, "Put a numeric dimension in Value, or a measure with Each point is." with Value as its action (AC-590).
+  - Depends on: T961
+
+### Lane CHARTS-A: the bubble
+
+- [ ] T965 (AC-594, AC-037) Size and Shape wells on a scatter, a Bubble while Size is set, Colour at most 3 and Shape at most 6 with their reasons, and Shape never filled by Auto
+  - Files: `packages/core/src/chart-types/bubble.ts` (+ test), `packages/web/src/editor/wells/bubble.tsx` (+ test).
+  - Failing test: `bubble.test.ts`: a scatter spec with Size is a bubble, and without it a scatter drawn as today; `bubble.test.tsx` (wells): Region of 4 in Colour reads "Region Colour takes at most 3 values on a bubble chart; Region has 4. Put it in Shape."; Category of 8 in Shape reads "Category Shape takes at most 6 values; Category has 8."; the Bubble card is greyed with "Put a measure in Size" while Size is empty (AC-594, AC-037).
+  - Depends on: T934
+
+- [ ] T966 (AC-595) Size bubbles by area from 8 to 40 px, draw larger first, take shapes in order, show a size legend, and count marks of size at or below zero
+  - Files: `packages/charts/src/series/scatter.ts` (+ test), `packages/charts/src/legend.ts`.
+  - Failing test: `scatter.test.ts`: the smallest value's `symbolSize` is 8 and the largest's 40, and for any mark `size² ∝ value` within 1 %; `z` orders larger marks below smaller; shapes run circle, rect, triangle, diamond, down-triangle, cross; the legend holds three reference circles with values; 3 marks of Order count 0 aren't drawn and the note reads "3 products with Order count at or below 0 aren't drawn: an area can't be negative." (AC-595).
+  - Depends on: T965
+
+- [ ] T967 (AC-596) Mark a bubble as a scatter point, and name its encodings in its text alternative and table view
+  - Files: `packages/charts/src/describe/bubble.ts` (+ test), `packages/web/src/tiles/tableView/bubble.ts` (+ test), `packages/charts/src/series/bubbleMarking.test.ts`.
+  - Failing test: `bubbleMarking.test.ts`: click, Ctrl, rectangle and lasso mark Products as a scatter's do; (describe) "Bubble chart of 12 products: Revenue across, Margin % up, Order count as size, Channel as colour, Region as shape. Largest Chai ($1.21M, 23.1 %, 2,140 orders)."; (table view) Product, Revenue, Margin %, Orders, Channel, Region (AC-596).
+  - Depends on: T966
+
+### Lane CHARTS-A: the recommender, saved charts, the keyboard and the e2e
+
+- [ ] T968 (AC-560, AC-031, AC-028) The new top picks: histogram, bubble, parallel coordinates, bullet and KPI with a target; line kept for one measure over time with KPI with trend next; and R81's caps on bubbles and KPI tiles
+  - Files: `packages/recommender/src/recommend.ts` (+ test), `packages/recommender/src/legality.ts` (+ test), `packages/recommender/src/reason.ts`.
+  - Failing test: `recommend.test.ts`: one numeric dimension alone gives Histogram; one measure with Each point is gives Histogram then Box plot; Revenue, Margin % and Order count by 12 Products give Bubble then Parallel coordinates; 5 measures by 14 Products give Parallel coordinates; a Target with Region gives Bullet chart, and with no dimension KPI then a single bullet; Revenue by month gives Line then "KPI with trend"; `legality.test.ts`: a bubble with Colour of 4 or Shape of 7, and a KPI tiled by 21, are rejected (AC-560, AC-031, AC-028).
+  - Depends on: T934
+
+- [ ] T969 (AC-561, AC-031) Runners-up with their reasons: waterfall, 100 % stacked, graphical table, KPI tiled and parallel coordinates for 4+ measures over at most 8 members
+  - Files: `packages/recommender/src/recommend.ts`, `packages/recommender/src/reason.ts` (+ test), `packages/recommender/src/runnersUpR81.test.ts`.
+  - Failing test: `runnersUpR81.test.ts`: Gross margin changing sign across 6 Categories offers Waterfall, never first, with "Two periods by Category: …" under 80 characters while Compare periods is set; Revenue by Region and Channel of 5 offers 100 % stacked bar; 42 Categories with Revenue and month offer Graphical table; Revenue, month and 4 Regions offer KPI tiled, 21 Regions don't; an average offers no waterfall or 100 %; 4 measures by 6 Products offer Parallel coordinates as a runner-up (AC-561, AC-031).
+  - Depends on: T968
+
+- [ ] T970 (AC-562, AC-028) Keep a chart saved in Auto before R81 drawing its saved type until its fields next change
+  - Files: `packages/core/src/chart-spec.ts` (the recommender rules version), `packages/core/src/chart-migrations.ts` (+ test), `packages/web/src/editor/chartTypeState.ts` (+ test).
+  - Failing test: `chart-migrations.test.ts`: an Auto spec of Revenue, Margin % and Order count by Product saved without a rules version reads as drawn type bar; `chartTypeState.test.ts`: it stays bar on opening, and after the author adds and removes a filter field it is recommended Bubble; a spec saved with R81's version follows the rules at once (AC-562, AC-028).
+  - Depends on: T968
+
+- [ ] T971 (AC-563) Keyboard marking on KPI tiles, bullets, waterfall steps and histogram bins, with §7a's keys in their order
+  - Files: `packages/charts/src/interaction/keyboardMarking.ts` (+ test), `packages/web/src/tiles/kpi/KpiTiles.tsx`.
+  - Failing test: `keyboardMarking.test.ts`: on a waterfall, → moves focus step to step left to right without marking, Space marks, Ctrl+Space toggles, Shift+→ extends, Esc unmarks, each announced once; KPI tiles and bullets in reading order; histogram bins left to right; no other key acts (AC-563).
+  - Depends on: T941, T951, T955, T963
+
+- [ ] T972 (AC-559, AC-037, AC-098, AC-568, AC-573, AC-578, AC-582, AC-589) Design 23's screen 2 on a running dashboard: a KPI tiled by Region marks EMEA, and the graphical table, waterfall, bullet chart and histogram each show it their way
+  - Files: `e2e/new-charts-a.spec.ts`.
+  - Failing test: `new-charts-a.spec.ts`: an author picks each lane A type from the gallery's shelves and saves it on one dashboard; in Markings mode, clicking EMEA's KPI tile outlines it; the graphical table's Beverages reads "· $310K marked" and its tile "● EMEA's share shown"; the waterfall's steps and the histogram's bins draw EMEA's part from their base; the bullet chart's EMEA bullet is outlined; reloading draws the same (AC-559, AC-037, AC-098, AC-568, AC-573, AC-578, AC-582, AC-589).
+  - Depends on: T941, T946, T951, T955, T963, T970
+
+### Lane CHARTS-B: the Map
+
+- [ ] T973 (AC-622, AC-305, AC-037) One Map type in place of the Country map: a boundary set and Regions, Points and Density layers in its spec, and saved country maps opening as Regions on Countries, unchanged
+  - Files: `packages/core/src/chart-types/map.ts` (+ test), `packages/core/src/chart-migrations.ts` (+ test), `packages/web/src/editor/wells/map.tsx` (+ test), `packages/charts/src/series/map.ts`.
+  - Failing test: `chart-migrations.test.ts`: a country map saved before R81 reads as a Map with a Regions layer on Countries and the same measure and dimension; `map.test.ts` (series): it draws the same countries in the same colours as before; `map.test.tsx` (wells): Boundary set offers Countries, Admin-1 and custom sets, and the three layers; the gallery has one Map card (AC-622, AC-305, AC-037).
+  - Depends on: T934
+
+- [ ] T974 (AC-623) A region key for every boundary set, from its values or the model's mark, and every unplaced value named in the page's text
+  - Files: `packages/core/src/geo/regionKeys.ts` (+ test), `packages/core/src/geo/iso3.ts`, `packages/web/src/workspaces/model/form/ObjectForm.tsx`, `packages/web/src/workspaces/model/form/regionKey.test.tsx`, `packages/web/src/tiles/UnplacedCodes.tsx`.
+  - Failing test: `regionKeys.test.ts`: a dimension whose values are all keys of a set is its key; `meta.wechart.regionKey` naming the set counts whatever the values, and `false` never counts; ISO-3 dimensions keep AC-313's behaviour; `regionKey.test.tsx`: the model form sets and clears the mark; `UnplacedCodes.test.tsx`: "Online" is listed under the map as "Not on the map: "Online" (no territory)" in the DOM (AC-623).
+  - Depends on: T973
+
+- [ ] T975 (AC-624) Draw a Regions layer on the Admin-1 boundary set with the sequential ramp, the "No data" swatch and 0.5 px surface boundaries
+  - Files: `packages/charts/src/geo/admin1.ts`, `packages/charts/src/geo/` (the dataset), `packages/charts/src/series/map.ts`, `packages/charts/src/series/mapRegions.test.ts`.
+  - Failing test: `mapRegions.test.ts`: German states by Revenue draw on the ramp with a legend; a state with no row takes the null neutral and the "No data" swatch shows; boundaries are 0.5 px `bg-surface`; a Countries map still draws as before (AC-624).
+  - Depends on: T974
+  - Waits on: research: an admin-1 boundary dataset (source, licence, detail, key format) in `docs/research/`.
+
+- [ ] T976 (AC-625) A Points layer from a geo dimension: area-proportional circles of 8–24 px, slot 2 over regions, rows with no location counted, and a cut result said
+  - Files: `packages/charts/src/series/mapPoints.ts` (+ test), `packages/core/src/geo/geoValue.ts` (+ test), `packages/web/src/tiles/MapNotes.tsx` (+ test).
+  - Failing test: `geoValue.test.ts`: a `/v1/load` row's geo value, in the shape the research documents, gives its latitude and longitude; `mapPoints.test.ts`: 10 stores are scatter points on `geo` at their coordinates, 8 px for the smallest Revenue and 24 px for the largest by area; over a Regions layer they take categorical slot 2; Colour of 4 values is refused; `MapNotes.test.tsx`: "312 stores have no location." and, cut, "Showing 10,000 of 48,210 stores (Cube's row limit)." with "Draw as density" and Filter (AC-625).
+  - Depends on: T973
+  - Waits on: research: the shape of a Cube `geo` value in a `/v1/load` row and its client types; and the palette validator on categorical slot 2 over the sequential ramp.
+
+- [ ] T977 (AC-626) A Density layer on the ramp fading to transparent, regions as outlines while it shows, never markable, saying so
+  - Files: `packages/charts/src/series/mapDensity.ts` (+ test), `packages/web/src/editor/wells/map.tsx`.
+  - Failing test: `mapDensity.test.ts`: a heatmap series on `geo` whose ramp runs from transparent to §5's darkest blue; while it shows, regions have no fill and a 1 px `border-strong` edge; a click or lasso on it changes no marking; the layer row and tooltip read "Density can't be marked; it shows where points gather" (AC-626).
+  - Depends on: T976
+  - Waits on: research: the shape of a Cube `geo` value (as T976).
+
+- [ ] T978 (AC-627) Mark a map's regions and points, the lasso taking points or, with none, regions, by outline and fade, and cross-filter by region or point
+  - Files: `packages/charts/src/interaction/itemsInShape.ts`, `packages/charts/src/series/mapMarking.test.ts`.
+  - Failing test: `mapMarking.test.ts`: a lasso over 3 stores marks those 3 and no region; with no Points layer it marks the regions it touches; a marked region keeps its fill and gains the outline while others fade; in cross-filter mode a region filters to its member and a store to its store (AC-627).
+  - Depends on: T976
+
+- [ ] T979 (AC-628) Upload a custom GeoJSON boundary set, checked for polygons, the key property and unique keys, and offer it in Boundary set
+  - Files: `packages/core/src/geo/boundarySet.ts` (+ test); the route, storage and page as R81-1's answer and the research place them.
+  - Failing test: `boundarySet.test.ts`: a FeatureCollection of polygons each with `territory_id` passes; one with a Point feature, a feature without `territory_id`, or two features of one key is refused naming the first failing feature; an accepted set is listed in Boundary set under its name (AC-628).
+  - Depends on: T975
+  - Waits on: R81-1 (who uploads a custom boundary set, and where it lives).
+  - Waits on: research: where uploaded GeoJSON is stored and checked.
+
+- [ ] T980 (AC-629) The map's text alternative and table view
+  - Files: `packages/charts/src/describe/map.ts` (+ test), `packages/web/src/tiles/tableView/map.ts` (+ test).
+  - Failing test: (describe) "Map of Revenue by sales territory, 6 territories: highest Atlantic $1.40M, lowest Mountain $0.20M; Islands has no data. 10 stores as points sized by Revenue."; (table view) Islands reads "No data", not 0, with its store count (AC-629).
+  - Depends on: T976
+
+### Lane CHARTS-B: parallel coordinates
+
+- [ ] T981 (AC-597, AC-037) Parallel coordinates' spec and wells: Line by, 3 or more ordered measures, Colour, and Scale with Shared only for one format
+  - Files: `packages/core/src/chart-types/parallel.ts` (+ test), `packages/web/src/editor/wells/parallel.tsx` (+ test).
+  - Failing test: `parallel.test.ts`: a spec of Product and 5 measures parses in order; `parallel.test.tsx` (wells): Shared is disabled for $ and % with the reason; 2 measures say "Parallel coordinates need at least 3 measures; there are 2. Add a measure, or use Scatter." with + Measure (AC-597, AC-037).
+  - Depends on: T934
+
+- [ ] T982 (AC-598) Draw one line per member over min-to-max axes, the scale warning as text, and at most 1,000 lines with the cut said
+  - Files: `packages/charts/src/series/parallel.ts` (+ test), `packages/web/src/tiles/ParallelNotes.tsx` (+ test).
+  - Failing test: `parallel.test.ts` (series): each `parallelAxis` has its own min and max, its name its max above and its min below; lines are 1.5 px and, with 60 lines, at opacity 0.6; `ParallelNotes.test.tsx`: the warning is DOM text; 4,210 products draw 1,000 by Revenue with "Showing 1,000 of 4,210 products, by Revenue. Filter, or open the table." (AC-598).
+  - Depends on: T981
+
+- [ ] T983 (AC-599) Brush along parallel axes to mark the members passing every brushed range, as a member list of at most 1,000, and cross-filter to them
+  - Files: `packages/charts/src/interaction/parallelBrush.ts` (+ test), `packages/charts/src/series/parallel.ts`.
+  - Failing test: `parallelBrush.test.ts`: brushing Margin % 22–26 % marks the 6 Products inside it; adding Return rate 0–2 % with Ctrl keeps both brushes and marks the 4 passing both; the stored marking is a Product list; the chip reads "Product: 6 brushed in Margin %" (AC-599).
+  - Depends on: T982
+  - Waits on: research: ECharts 6.1's `parallel` brush events (`axisareaselected` and what it reports).
+
+- [ ] T984 (AC-600) A From and a To slider per parallel axis, named after its measure, setting its brush from the keyboard
+  - Files: `packages/web/src/tiles/ParallelSliders.tsx` (+ test).
+  - Failing test: `ParallelSliders.test.tsx`: in Markings mode each axis has `input type="range"` named "Margin % from" and "Margin % to"; Tab reaches them and → moves them; setting 22 % and 26 % marks the same 6 Products the drag did (AC-600).
+  - Depends on: T983
+
+- [ ] T985 (AC-601) The text alternative and the table view of parallel coordinates
+  - Files: `packages/charts/src/describe/parallel.ts` (+ test), `packages/web/src/tiles/tableView/parallel.ts` (+ test).
+  - Failing test: (describe) "Parallel coordinates of 14 products across 5 measures, each axis min to max. 6 marked through Margin % 22–26 %."; (table view) Product and the 5 measures, marked rows bold with a left rule (AC-601).
+  - Depends on: T982
+
+### Lane CHARTS-B: the Sankey
+
+- [ ] T986 (AC-610, AC-037) The Sankey's spec and wells: 2–4 ordered steps, one summed measure, Colour links by, one grouped query, and its empty state
+  - Files: `packages/core/src/chart-types/sankey.ts` (+ test), `packages/web/src/editor/wells/sankey.tsx` (+ test).
+  - Failing test: `sankey.test.ts`: Channel → Region → Category with Revenue makes one Cube request of the three dimensions and links only adjacent pairs; a fifth step and an average are refused; `sankey.test.tsx` (wells): one step says "A Sankey shows flows between steps. Add a second dimension to Steps." with + Step (AC-610, AC-037).
+  - Depends on: T934
+
+- [ ] T987 (AC-611) Draw the Sankey's nodes and links, split a repeated member as "‹member› (2)", and fold flows past 50 into "Other"
+  - Files: `packages/charts/src/series/sankey.ts` (+ test).
+  - Failing test: `sankey.test.ts` (series): nodes 12 px wide; the colouring step's nodes in their members' colours, others `text-secondary`; links at 0.4, emphasis 0.6; EMEA in steps 1 and 3 yields a node "EMEA (2)" and the note; 214 flows keep each step's members carrying its top 50 and fold the rest into "Other" with the note (AC-611).
+  - Depends on: T986
+
+- [ ] T988 (AC-612) Mark a Sankey node as its member and a link as its tuple, give a link's marked share in its tooltip, and cross-filter
+  - Files: `packages/charts/src/series/sankey.ts`, `packages/charts/src/marking/partial.ts`, `packages/charts/src/series/sankeyMarking.test.ts`.
+  - Failing test: `sankeyMarking.test.ts`: clicking Web → EMEA marks (Channel = Web, Region = EMEA); with a marking elsewhere unmarked links fade to 0.28 of 0.4 and Web → EMEA's tooltip reads "Marked: $96K of $210K"; the tile's ⓘ says the share is in the tooltip; the chip reads "Channel: Web · Region: EMEA" (AC-612).
+  - Depends on: T987
+
+- [ ] T989 (AC-613) The Sankey's text alternative and its table of flows
+  - Files: `packages/charts/src/describe/sankey.ts` (+ test), `packages/web/src/tiles/tableView/sankey.ts` (+ test).
+  - Failing test: (describe) "Sankey of Revenue from Channel to Region, 12 flows, $1.35M. Largest: Web → North America $237K; Web → EMEA $210K; Retail → North America $183K."; (table view) "Web → EMEA · $210,000 · 32.3%" (AC-613).
+  - Depends on: T987
+
+### Lane CHARTS-B: the box plot's points and violin
+
+- [ ] T990 [P] (AC-591, AC-306) Customize › Distribution on a box plot: Points and Violin, Outliers by default, and All, Beeswarm and Violin unavailable without Each point is
+  - Files: `packages/core/src/chart-types/boxplotDistribution.ts` (+ test), `packages/web/src/editor/wells/boxplotDistribution.tsx` (+ test).
+  - Failing test: `boxplotDistribution.test.ts`: a box plot saved before R81 reads as Points Outliers and no Violin; `boxplotDistribution.test.tsx`: without Each point is, All, Beeswarm and Violin are disabled, each described "Points need Each point is: choose what one point is, such as an Order." (AC-591, AC-306).
+  - Depends on: none
+
+- [ ] T991 (AC-592, AC-306) Points as All or Beeswarm from a fixed seed, 8 px at 0.6, falling back to All with a note where a beeswarm can't fit
+  - Files: `packages/charts/src/series/boxplot.ts` (+ test).
+  - Failing test: `boxplot.test.ts`: Beeswarm gives points with no two overlapping; All jitters them; two draws of the same data give identical positions; points are 8 px at opacity 0.6; APAC's 3,000 points fall back to All with "Too many points to place side by side in APAC: drawn as All, jittered."; Outliers draws as before R81 (AC-592, AC-306).
+  - Depends on: T990
+  - Waits on: research: ECharts 6.1's jitter and `jitterOverlap`, and how its placement can be seeded (the study: "not published").
+
+- [ ] T992 (AC-592) The violin: the category's colour at 0.24 with a 1.5 px edge, the box narrowing to 20 px inside it
+  - Files: `packages/charts/src/series/violin.ts` (+ test), `packages/charts/src/series/boxplot.ts`.
+  - Failing test: `violin.test.ts`: with Violin on, each Region has a violin in its colour at opacity 0.24 with a 1.5 px edge and its box 20 px wide inside it (AC-592).
+  - Depends on: T990
+  - Waits on: research: `@echarts-x/custom-violin` (version, licence, maintenance, its KDE options), before import; wechart's own custom series if it's unmaintained (23-Q10 (a)).
+
+- [ ] T993 (AC-593) Mark a box plot's points by entity ID, at most 1,000, and add points and violin to its text alternative, with "View points"
+  - Files: `packages/charts/src/series/boxplot.ts`, `packages/charts/src/describe/boxplot.ts` (+ test), `packages/web/src/tiles/tableView/boxplot.ts` (+ test), `packages/charts/src/series/boxplotMarking.test.ts`.
+  - Failing test: `boxplotMarking.test.ts`: clicking a point marks its Order ID; a lasso over 1,200 points refuses as AC-102 says; a box marks its Region; (describe) adds "Points: every order, as a beeswarm. Violin: …"; (table view) "View points" lists the orders and their values (AC-593).
+  - Depends on: T991
+
+### Lane CHARTS-B: the funnel
+
+- [ ] T994 (AC-614, AC-037) The funnel's spec and wells: stages as a dimension or as 2+ measures of one format, Percent of, and its refusals
+  - Files: `packages/core/src/chart-types/funnel.ts` (+ test), `packages/web/src/editor/wells/funnel.tsx` (+ test).
+  - Failing test: `funnel.test.ts`: Visits, Sign-ups, Trials, Quotes and Purchases parse in order; Revenue added is refused "Stages must share a format: Revenue is $, the others are counts."; `funnel.test.tsx` (wells): Metrics shows only with a stage dimension; one stage says "A funnel needs at least two stages. Add a measure to Stages, or put a stage dimension there." (AC-614, AC-037).
+  - Depends on: T934
+
+- [ ] T995 (AC-615) Draw a funnel as bars on one baseline in stage order, with conversions, "lost" on the biggest drop, and a widening stage said
+  - Files: `packages/charts/src/series/funnel.ts` (+ test).
+  - Failing test: `funnel.test.ts` (series): a horizontal bar series, one colour, 28 px bars on a 44 px pitch in stage order; Sign-ups' label "12,400 · 25.7 % of previous", and "lost" only on Visits → Sign-ups; Quotes 3,400 after Trials 3,040 draws as is with "Quotes (3,400) is larger than Trials (3,040), so these stages don't narrow." and "111.8 % of previous"; no funnel (trapezoid) series is offered (AC-615).
+  - Depends on: T994
+
+- [ ] T996 (AC-616) Mark a funnel's dimension stages, and say measure stages can't be marked or filter
+  - Files: `packages/charts/src/series/funnel.ts`, `packages/web/src/dashboard/settings/CrossFilterMatrix.tsx`, `packages/charts/src/series/funnelMarking.test.ts`.
+  - Failing test: `funnelMarking.test.ts`: with a stage dimension a bar marks its stage and draws a partly marked share from the baseline; with measure stages nothing marks and the badge reads "Stages are measures: nothing to mark"; Settings › Cross-filtering lists the tile as unable to filter with that reason (AC-616).
+  - Depends on: T995
+
+- [ ] T997 (AC-617) The funnel's text alternative and table view
+  - Files: `packages/charts/src/describe/funnel.ts` (+ test), `packages/web/src/tiles/tableView/funnel.ts` (+ test).
+  - Failing test: (describe) "Funnel of 5 stages from Visits 48,200 to Purchases 1,180, 2.4 % of the first. Biggest drop Visits → Sign-ups: 74.3 % lost."; (table view) Stage, Count, Of first, Of previous (AC-617).
+  - Depends on: T995
+
+### Lane CHARTS-B: the timeline
+
+- [ ] T998 (AC-602, AC-037) The timeline's spec and wells, one bar per ungrouped row, and its empty state
+  - Files: `packages/core/src/chart-types/timeline.ts` (+ test), `packages/web/src/editor/wells/timeline.tsx` (+ test).
+  - Failing test: `timeline.test.ts`: One row asks Cube for an ungrouped query of Batch, Started at and Finished at and gives one bar per row; `timeline.test.tsx` (wells): End empty says "A timeline needs an end for each bar. Put an end time in End." with End as its action (AC-602, AC-037).
+  - Depends on: T934
+
+- [ ] T999 (AC-602) "First to last, per ‹Rows›": each member's earliest start to its latest end
+  - Files: `packages/core/src/chart-types/timeline.ts` (`firstToLast`; + test).
+  - Failing test: `timeline.test.ts`: First to last per Batch asks Cube for the minimum of Started at and the maximum of Finished at per Batch, in the form the research documents, and gives B-1043 Oct 3, 12:00 to Oct 7, 12:00 (AC-602).
+  - Depends on: T998
+  - Waits on: research: whether Cube returns min and max of a time column as a timestamp, and how such a measure is written.
+
+- [ ] T1000 (AC-603) Draw timeline bars, open bars running to Today, zero-length diamonds, reversed rows named, and a cut result said
+  - Files: `packages/charts/src/series/timeline.ts` (+ test), `packages/web/src/tiles/TimelineNotes.tsx` (+ test).
+  - Failing test: `timeline.test.ts` (series): bars 16 px in 28 px rows with radius 3 on a time axis; B-1048 with no end runs to Today, drawn as a 1.5 px dashed `text-secondary` line, and ends "▸ running"; a zero-length task is an 8 px diamond; `TimelineNotes.test.tsx`: "2 batches end before they start and aren't drawn: B-0997, B-1002."; "Showing 10,000 of 48,210 rows, Cube's row limit." with "Draw first to last per Batch" and Filter (AC-603).
+  - Depends on: T998
+  - Waits on: research: `@echarts-x/custom-bar-range` (version, licence, maintenance, time-axis support), before import; wechart's own custom series if it's unmaintained (23-Q10 (a)).
+
+- [ ] T1001 (AC-604) Mark the timeline bars overlapping a dragged range, as a range marking on Start and End, and cross-filter to the overlap
+  - Files: `packages/charts/src/series/timeline.ts`, `packages/core/src/markings/range.ts` (the overlap predicate; + test), `packages/charts/src/series/timelineMarking.test.ts`.
+  - Failing test: `range.test.ts`: an overlap of Oct 6 – 7 is Started at < Oct 8 and Finished at > Oct 6; `timelineMarking.test.ts`: the drag marks the 3 batches overlapping it and no other; a bar click marks its Batch; with one bar per row, a click marks the row's ID; the chip reads "Overlaps Oct 6 – 7" (AC-604).
+  - Depends on: T1000
+
+- [ ] T1002 (AC-605) The timeline's text alternative and table view, durations in words
+  - Files: `packages/charts/src/describe/timeline.ts` (+ test), `packages/web/src/tiles/tableView/timeline.ts` (+ test).
+  - Failing test: (describe) "Timeline of 8 batches, Oct 1 to Oct 12 2026, coloured by Plant. Longest B-1043, 4 days. B-1048 still running."; (table view) B-1044's duration "1 day 12 hours", B-1048's end "Still running" and duration "2 days 12 hours so far" (AC-605).
+  - Depends on: T1000
+
+### Lane CHARTS-B: the calendar heatmap
+
+- [ ] T1003 (AC-606, AC-037) The calendar heatmap's spec and wells: Time by day over the date filter's range, the week starting on the browser locale's first day, and its empty state
+  - Files: `packages/core/src/chart-types/calendar.ts` (+ test), `packages/web/src/editor/wells/calendar.tsx` (+ test), `packages/web/src/tiles/weekStart.ts` (+ test).
+  - Failing test: `calendar.test.ts`: the range is the date filter's Jul 1 – Dec 31 2026; `weekStart.test.ts`: two locales whose week data differ give their own first days, as the research documents; `calendar.test.tsx` (wells): Ordered at by month says "A calendar needs days, and Ordered at is by month." with "Change to day" (AC-606, AC-037).
+  - Depends on: T934
+  - Waits on: research: how the browser gives a locale's first weekday (not in design 23's list; raised with the coordinator, 2026-10-18).
+
+- [ ] T1004 (AC-607) Draw a calendar's days on the ramp, days with no rows in the null neutral with "No data", and one calendar per year past 366 days
+  - Files: `packages/charts/src/series/calendar.ts` (+ test).
+  - Failing test: `calendar.test.ts` (series): cells 14 px on a 16 px pitch with radius 2 on §5's ramp; Dec 25 with no rows takes the null neutral and the legend shows "No data"; days outside the range aren't drawn; 2025-01-01 to 2026-12-31 draws two calendars with "One calendar per year: 2025, 2026." (AC-607).
+  - Depends on: T1003
+
+- [ ] T1005 (AC-608) Mark calendar days, a drag as a date range, Ctrl/⌘ a day and Shift an extension, and cross-filter to them
+  - Files: `packages/charts/src/series/calendar.ts`, `packages/charts/src/series/calendarMarking.test.ts`.
+  - Failing test: `calendarMarking.test.ts`: a drag from Sep 7 to Sep 13 stores a date range [Sep 7, Sep 13]; Ctrl-click Sep 20 adds that day; Shift-click Sep 22 extends from it; the chip reads "Ordered at: Sep 7 – 13" (AC-608).
+  - Depends on: T1004
+
+- [ ] T1006 (AC-609) The calendar's text alternative and table view
+  - Files: `packages/charts/src/describe/calendar.ts` (+ test), `packages/web/src/tiles/tableView/calendar.ts` (+ test).
+  - Failing test: (describe) "Calendar of daily Count, Jul 1 to Dec 31 2026. Highest 412 on Fri Nov 27; Fridays run highest; 6 days with no data."; (table view) 2026-12-25 reads "Friday · No data" (AC-609).
+  - Depends on: T1004
+
+### Lane CHARTS-B: the icicle and sunburst
+
+- [ ] T1007 (AC-618, AC-037) The icicle's spec and wells: 2–4 levels or a hierarchy dropped at once, one summed measure, Draw as, and its refusals
+  - Files: `packages/core/src/chart-types/icicle.ts` (+ test), `packages/web/src/editor/wells/icicle.tsx` (+ test).
+  - Failing test: `icicle.test.ts`: dropping the hierarchy Region › Country › City fills Levels in that order; a fifth level is refused; Draw as starts at Icicle; `icicle.test.tsx` (wells): one level says "An icicle breaks a total down through levels. Add a second dimension to Levels, or drop in a hierarchy."; Margin % says "Lengths can't show an average's share of a total. Choose a summed measure." (AC-618, AC-037).
+  - Depends on: T934
+
+- [ ] T1008 (AC-619) Draw the icicle from one query per level, coloured by the first level, labelled where boxes are tall enough, folding a wide first level and slivers into "Other"
+  - Files: `packages/core/src/chart-types/icicle.ts` (`levelQueries`; + test), `packages/charts/src/series/icicle.ts` (+ test).
+  - Failing test: `icicle.test.ts`: Region › Country makes one query per level and EMEA's value is Cube's Region-level value, not the sum of its countries; `icicle.test.ts` (series): Germany takes EMEA's colour; the root is `border-strong`; a 14 px box has no label; 11 regions draw 7 and "Other (4)"; boxes under 2 px fold into their parent's "Other (n)" (AC-619).
+  - Depends on: T1007
+  - Waits on: research: an icicle as an ECharts 6.1 custom series (`renderItem` over a partition layout), before build.
+
+- [ ] T1009 (AC-619) Draw as Sunburst: the same levels as rings, same colours and marking, labels only where an arc has room
+  - Files: `packages/charts/src/series/sunburst.ts` (+ test).
+  - Failing test: `sunburst.test.ts`: Draw as Sunburst gives a `sunburst` series of the same levels and colours as the icicle; an arc too narrow for its label has none (AC-619).
+  - Depends on: T1008
+
+- [ ] T1010 (AC-620) Mark an icicle box as its path, everything under it marked; zoom by double-click or "Zoom into" with a breadcrumb, never marking; cross-filter to the path
+  - Files: `packages/charts/src/series/icicle.ts`, `packages/web/src/tiles/IcicleBreadcrumb.tsx` (+ test), `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/charts/src/series/icicleMarking.test.ts`.
+  - Failing test: `icicleMarking.test.ts`: clicking Germany marks Region = EMEA AND Country = Germany; clicking EMEA marks every country under it; a click never zooms; `IcicleBreadcrumb.test.tsx`: double-click on EMEA, or ⋯ › "Zoom into EMEA", zooms with "All › EMEA" and changes no marking or filter; the chip reads "Region: EMEA · Country: Germany" (AC-620).
+  - Depends on: T1008
+
+- [ ] T1011 (AC-621) The icicle's text alternative and its table view indented by level
+  - Files: `packages/charts/src/describe/icicle.ts` (+ test), `packages/web/src/tiles/tableView/icicle.ts` (+ test).
+  - Failing test: (describe) "Icicle of Revenue, $4.5M, by Region then Country. North America $1.8M (United States $1.45M), EMEA $1.6M, APAC $0.6M, LATAM $0.5M."; (table view) Germany indented under EMEA with "Of parent 34.4%" and "Of total 12.2%" (AC-621).
+  - Depends on: T1008
+
+### Lane CHARTS-B: the recommender, the keyboard and the e2e
+
+- [ ] T1012 (AC-560, AC-561, AC-031, AC-305) The map as the top pick for a geo dimension or a region key; the Sankey, funnel, timeline, calendar and icicle as runners-up with their reasons; and their caps
+  - Files: `packages/recommender/src/recommend.ts`, `packages/recommender/src/legality.ts`, `packages/recommender/src/reason.ts`, `packages/recommender/src/recommendLaneB.test.ts`.
+  - Failing test: `recommendLaneB.test.ts`: a geo dimension and Revenue give Map with Points; an admin-1 key and Revenue give Map with Regions, an ISO-3 one as AC-305 says; Channel and Region with Revenue offer Sankey ("Revenue from Channel to Region: 12 flows, widths to scale."), 51 pairs don't; 5 counts and no dimension offer Funnel; Batch, Started at and Finished at offer Timeline; Count by day over 184 days offers Calendar heatmap, 55 days don't; Region › Country of Revenue offers Icicle, a first level of 9 doesn't; an average offers neither Sankey nor Icicle; none is ever first and every reason is at most 80 characters (AC-560, AC-561, AC-031, AC-305).
+  - Depends on: T974, T968
+
+- [ ] T1013 (AC-563) Keyboard marking on calendar days, timeline bars, Sankey nodes and links, icicle boxes, parallel lines, map regions and points, and funnel stages, in their order
+  - Files: `packages/charts/src/interaction/keyboardMarking.ts` (+ test).
+  - Failing test: `keyboardMarking.test.ts`: calendar days by date; timeline bars by row; Sankey nodes by step, then links; icicle boxes depth-first; parallel lines by the first axis; map regions by name, then points; funnel stages left to right; on each, Space marks, Ctrl+Space toggles, Shift+arrow extends and Esc unmarks, announced once (AC-563).
+  - Depends on: T978, T983, T988, T996, T1001, T1005, T1010, T971
+
+- [ ] T1014 (AC-622, AC-305, AC-037, AC-599, AC-604, AC-612, AC-620) A dashboard of lane B's types: a saved country map unchanged as a Map, and the Sankey, timeline, icicle and parallel coordinates marking from the pointer and the keyboard
+  - Files: `e2e/new-charts-b.spec.ts`, `e2e/country-map.spec.ts`.
+  - Failing test: `new-charts-b.spec.ts`: an author picks a Map with points, parallel coordinates, a Sankey, a funnel, a timeline, a calendar and an icicle from the gallery and saves them on one dashboard; brushing Margin % marks members highlighted on the Sankey; a drag on the timeline marks the overlapping batches; double-clicking EMEA on the icicle zooms with a breadcrumb and marks nothing; reloading draws the same; `country-map.spec.ts`: a dashboard saved before R81 shows its country map unchanged, its type card reading "Map" (AC-622, AC-305, AC-037, AC-599, AC-604, AC-612, AC-620).
+  - Depends on: T976, T983, T988, T995, T1001, T1004, T1010, T1013
 
 ## Phase 2 coverage: acceptance criterion → task
 
@@ -2436,16 +2935,43 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 | AC-524 | T888 | AC-525 | T889 | AC-526 | T890 |
 | AC-527 | T870, T891 | AC-528 | T892 | AC-529 | T893 |
 | AC-530 | T894 | AC-531 | T895, T896 | AC-532 | T897 |
-| AC-533 | T898 | AC-534 | T899 | AC-535 | T911 (waits on R80-3), T925 |
-| AC-536 | T910 (waits on R80-1), T926 | AC-537 | T904, T911 | AC-538 | T906, T928 |
+| AC-533 | T898 | AC-534 | T899 | AC-535 | T911, T925 |
+| AC-536 | T910 (R80-1 answered 2026-10-18), T926 | AC-537 | T904, T911 (R80-3 answered) | AC-538 | T906, T928 |
 | AC-539 | T927 | AC-540 | T911, T929 | AC-541 | T930 |
-| AC-542 | T931 | AC-543 | T912 (waits on R80-2), T932 | AC-544 | T913, T933 |
-| AC-545 | T914, T929 | AC-546 | T902, T916 | AC-547 | T903, T905 (waits on R80-6), T915 (waits on R80-5, R80-6), T917 |
-| AC-548 | T902, T917 | AC-549 | T901, T903, T915 | AC-550 | T907, T918 |
+| AC-542 | T931 | AC-543 | T912 (R80-2 answered), T932 | AC-544 | T913, T933 |
+| AC-545 | T914, T929 | AC-546 | T902, T916 | AC-547 | T903, T905, T915, T917 (R80-6 researched) |
+| AC-548 | T902, T917 | AC-549 | T901, T903, T915, T1016 (R80-5 answered) | AC-550 | T907, T918 |
 | AC-551 | T908, T919 | AC-552 | T909, T920 | AC-553 | T921 |
 | AC-554 | T922 | AC-555 | T923 | AC-556 | T909 |
-| AC-557 | T924 | AC-558 | T904, T905 | | |
+| AC-557 | T924 | AC-558 | T904, T905, T1017 | AC-630 (R80-2, lane MCP) | T1015 |
 | AC-058 (again, Text in place of Markdown, `[R80]`) | T874 | AC-116 (again, every element kind, `[R80]`) | T869, T884, T886 | AC-208 (again, the Text tile, `[R80]`) | T873 |
 | AC-302 (again, editing on the canvas, `[R80]`) | T876 | AC-121, AC-123 (again, parameter values, `[R80]`) | T900 | AC-030, AC-029, AC-443 (held, `[R80]`) | T865, T891 |
+| AC-559 | T934, T972 | AC-560 | T968, T1012 | AC-561 | T969, T1012 |
+| AC-562 | T970 | AC-563 | T971, T1013 | AC-564 | T936 |
+| AC-565 | T937, T938 | AC-566 | T939 | AC-567 | T940 |
+| AC-568 | T941, T972 | AC-569 | T942 | AC-570 | T943 |
+| AC-571 | T944 | AC-572 | T945 | AC-573 | T946, T972 |
+| AC-574 | T947 | AC-575 | T948 | AC-576 | T949 |
+| AC-577 | T950 | AC-578 | T951, T972 | AC-579 | T952 |
+| AC-580 | T953 | AC-581 | T954 | AC-582 | T955, T972 |
+| AC-583 | T956 | AC-584 | T957 | AC-585 | T958 |
+| AC-586 | T959, T960 | AC-587 | T961 | AC-588 | T962 |
+| AC-589 | T963, T972 | AC-590 | T964 | AC-591 | T990 |
+| AC-592 | T991, T992 | AC-593 | T993 | AC-594 | T965 |
+| AC-595 | T966 | AC-596 | T967 | AC-597 | T981 |
+| AC-598 | T982 | AC-599 | T983, T1014 | AC-600 | T984 |
+| AC-601 | T985 | AC-602 | T998, T999 | AC-603 | T1000 |
+| AC-604 | T1001, T1014 | AC-605 | T1002 | AC-606 | T1003 |
+| AC-607 | T1004 | AC-608 | T1005 | AC-609 | T1006 |
+| AC-610 | T986 | AC-611 | T987 | AC-612 | T988, T1014 |
+| AC-613 | T989 | AC-614 | T994 | AC-615 | T995 |
+| AC-616 | T996 | AC-617 | T997 | AC-618 | T1007 |
+| AC-619 | T1008, T1009 | AC-620 | T1010, T1014 | AC-621 | T1011 |
+| AC-622 | T973, T1014 | AC-623 | T974 | AC-624 | T975 |
+| AC-625 | T976 | AC-626 | T977 | AC-627 | T978 |
+| AC-628 | T979 (waits on R81-1) | AC-629 | T980 | | |
+| AC-028 (again, R81's rules, `[R81]`) | T968, T970 | AC-031 (again, R81's caps, `[R81]`) | T968, T969, T1012 | AC-037 (again, R81's types, `[R81]`) | each type's spec task: T936, T943, T948, T953, T957, T959, T965, T973, T981, T986, T994, T998, T1003, T1007; T972, T1014 |
+| AC-098 (again, "share shown", `[R81]`) | T935, T972 | AC-217 (again, the nine shelves, `[R81]`) | T934 | AC-305 (again, the Map, `[R81]`) | T973, T1012, T1014 |
+| AC-306 (again, points and violin, `[R81]`) | T990, T991 | | | | |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.
