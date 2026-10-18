@@ -255,7 +255,12 @@ describe('Edit in my workspace through MCP (T785, AC-438, AC-432)', () => {
 
 describe('every tool’s scope, in both eras (T785’s review, AC-433)', () => {
   it('answers a call by a token without its tool’s scope 403 insufficient_scope, for every tool, 2026-07-28 and 2025 alike', async () => {
-    const without = { read: tokens.noRead!, 'workspace-edit': tokens.noEdit! } as const;
+    // `noEdit` holds read alone, so it lacks proposals-and-jobs too (T787).
+    const without = {
+      read: tokens.noRead!,
+      'workspace-edit': tokens.noEdit!,
+      'proposals-and-jobs': tokens.noEdit!,
+    } as const;
     for (const era of ['modern', '2025'] as const) {
       for (const tool of MCP_TOOLS) {
         const scope = tool.scope as keyof typeof without;

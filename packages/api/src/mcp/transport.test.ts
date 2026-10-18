@@ -19,7 +19,7 @@ import { mintToken } from './tokenText';
  * request carries the MCP host as its `Host`, which `fetch` can't set.
  */
 const HOST = 'mcp.wechart.example.com';
-/** The read tools (T782), the query and the next page (T784), and the workspace's (T785 on), in order. */
+/** The read tools (T782), the query and the next page (T784), the workspace's (T785 on) and the proposals' (T787), in order. */
 const TOOL_NAMES = [
   'list_folders',
   'list_folder_items',
@@ -36,6 +36,9 @@ const TOOL_NAMES = [
   'delete_item',
   'save_model_file',
   'delete_model_file',
+  'propose',
+  'withdraw_proposal',
+  'list_my_proposals',
 ];
 const NAME = 't778 transport';
 let token = '';

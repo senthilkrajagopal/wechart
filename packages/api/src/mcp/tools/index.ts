@@ -1,5 +1,6 @@
 import { NEXT_PAGE } from '../paging';
 import type { McpTool } from '../server';
+import { PROPOSAL_TOOLS } from './proposals';
 import { QUERY_TOOL } from './query';
 import { READ_TOOLS } from './read';
 import { WORKSPACE_TOOLS } from './workspace';
@@ -10,4 +11,5 @@ export const MCP_TOOLS: readonly McpTool[] = [
   QUERY_TOOL,
   NEXT_PAGE,
   ...WORKSPACE_TOOLS,
+  ...PROPOSAL_TOOLS,
 ];

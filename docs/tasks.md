@@ -1628,11 +1628,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T786 (AC-438) Create, change and delete dashboards, charts, cubes and views in the owner's workspace through MCP, and nowhere else
 
-- [ ] T787 (AC-439, AC-442, AC-469) Propose, withdraw and list the owner's proposals through MCP, checked as the web app's are, and marked in the audit trail as through MCP
-  - Lane: MCP
-  - Files: `packages/api/src/mcp/tools/proposals.ts` (+ `proposals.test.ts`).
-  - Failing test: `proposals.test.ts`: proposing a workspace item into its target folder with a description of up to 1,000 characters makes the same proposal the web app makes from that item, publish check included, and one over 1,000 is refused (AC-439); withdraw works on the owner's open proposal only; the list shows only the owner's proposals, with each one's state and any rejection reason (AC-439); the proposal's audit record says it came through MCP and names the token (AC-442); a token without proposals-and-jobs gets 403 `insufficient_scope` (AC-469).
-  - Depends on: T786
+- [x] T787 (AC-439, AC-442, AC-469) Propose, withdraw and list the owner's proposals through MCP, checked as the web app's are, and marked in the audit trail as through MCP
 
 - [ ] T788 (AC-477, AC-469) List jobs, builds and schedules through MCP, with Run now and Cancel where the owner may, and no schedule edits
   - Lane: MCP
