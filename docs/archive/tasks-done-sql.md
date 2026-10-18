@@ -127,3 +127,19 @@
     - **The editor** is the shared `SqlEditor`, which gains an optional `completion`; the data source page passes none, so it has no autocomplete.
     - **New pinned package:** `@codemirror/autocomplete` 6.20.3, already in the store as lang-sql's dependency. Research addendum in `code-editor.md`, 2026-10-17.
     - Decisions T808-1 and T808-2 are in `docs/design/decisions-sql.md`. T808-2 binds only AC-456's keys, and lets the list take them at once, not after the library's 75 ms.
+
+- [x] T809 (AC-453) List each `{{ name }}` outside strings and comments once, in a strip under the editor, typed Text, Number, Date or Boolean, and hold Run until each has a value
+  - Lane: SQL
+  - Files: `packages/web/src/workspaces/sql/parameterNames.ts` (+ test; per `sql-parameter-binding.md` §4, a dialect per driver, MySQL with backslash escapes), `packages/web/src/workspaces/sql/ParameterStrip.tsx` (+ test).
+  - Failing test: `parameterNames.test.ts`: `{{region}}` and `{{ region }}` list once; `{{Region}}` and `{{region}}` list twice; `{{1x}}`, `{{a-b}}`, one in a string, one in a `--` comment and one in a block comment aren't listed; on MySQL, `'it\'s {{x}}'` lists nothing. `ParameterStrip.test.tsx`: each name has Text (first), Number, Date or Boolean and a value field; Run is held naming the parameters that have no value, and a run can't start until each has one (AC-453).
+  - Depends on: T802
+  - **Built 2026-10-17** (lane SQL, batch 4).
+    - **AC-453 is ticked** on the e2e "parameters under the editor (T809, AC-453)". It types SQL holding a `{{…}}` in a comment and in a string, `{{ status }}` and `{{status}}`, and `{{Min}}`, then checks that:
+      - the strip lists `status` and `Min` once each;
+      - the type is Text first, of the four;
+      - Run is disabled, with "Give status and Min values to run", then "Give Min a value to run";
+      - ⌘/Ctrl+Enter sends nothing while a value is missing;
+      - Run is enabled once both have values.
+    - **Also changed:** `QueryTab.tsx` (the strip, and the hold on Run and on ⌘/Ctrl+Enter), `tabs.ts` (`paramTypes` and the `param-value` and `param-type` actions), `tabStore.ts` (the types kept with the tab, any but the four dropped), and `sqlStyles.ts`.
+    - **Until T811,** a run sends the SQL with its `{{name}}`s and no values, so the database refuses it. No value is ever written into the SQL text.
+    - Decision T809-1 is in `docs/design/decisions-sql.md`.

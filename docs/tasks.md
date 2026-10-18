@@ -1740,11 +1740,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 ### Lane SQL: parameters
 
-- [ ] T809 (AC-453) List each `{{ name }}` outside strings and comments once, in a strip under the editor, typed Text, Number, Date or Boolean, and hold Run until each has a value
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/parameterNames.ts` (+ test; per `sql-parameter-binding.md` §4, a dialect per driver, MySQL with backslash escapes), `packages/web/src/workspaces/sql/ParameterStrip.tsx` (+ test).
-  - Failing test: `parameterNames.test.ts`: `{{region}}` and `{{ region }}` list once; `{{Region}}` and `{{region}}` list twice; `{{1x}}`, `{{a-b}}`, one in a string, one in a `--` comment and one in a block comment aren't listed; on MySQL, `'it\'s {{x}}'` lists nothing. `ParameterStrip.test.tsx`: each name has Text (first), Number, Date or Boolean and a value field; Run is held naming the parameters that have no value, and a run can't start until each has one (AC-453).
-  - Depends on: T802
+- [x] T809 (AC-453) List each `{{ name }}` outside strings and comments once, in a strip under the editor, typed Text, Number, Date or Boolean, and hold Run until each has a value
 
 - [ ] T810 (AC-482) Hold Run on Dremio and on Cube Store while the SQL holds a parameter, saying parameters aren't available on that source
   - Lane: SQL

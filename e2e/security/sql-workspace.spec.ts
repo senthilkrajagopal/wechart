@@ -921,6 +921,59 @@ test.describe('autocomplete in the editor (T808, AC-456)', () => {
 });
 
 /**
+ * T809 (AC-453): each `{{ name }}` outside strings and comments, once, in
+ * the strip under the editor, typed Text (the default), Number, Date or
+ * Boolean, and Run held, naming those with no value, until each has one.
+ */
+test.describe('parameters under the editor (T809, AC-453)', () => {
+  test('lists each parameter once with its type, and holds Run, ⌘/Ctrl+Enter too, until each has a value', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    const runs: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/sql')) runs.push(request.url());
+    });
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.on) }).click();
+      const editor = page.locator('.sql-editor .cm-content');
+      await editor.click();
+      await page.keyboard.insertText(
+        "-- by {{commented}}\nSELECT '{{quoted}}' AS label FROM orders WHERE status = {{ status }} AND amount > {{Min}} OR status = {{status}}",
+      );
+
+      const strip = workspace(page).getByRole('group', { name: 'Parameters' });
+      await expect(strip.locator('.sql-params__name')).toHaveText(['status', 'Min']);
+      const type = strip.getByRole('combobox', { name: 'status, type' });
+      await expect(type).toHaveValue('text');
+      await expect(type.locator('option')).toHaveText(['Text', 'Number', 'Date', 'Boolean']);
+
+      const run = workspace(page).getByRole('button', { name: 'Run', exact: true });
+      await expect(run).toBeDisabled();
+      await expect(page.getByTestId('sql-params-held')).toHaveText('Give status and Min values to run');
+      await editor.press('ControlOrMeta+Enter');
+
+      await strip.getByRole('textbox', { name: 'status, value' }).fill('shipped');
+      await expect(page.getByTestId('sql-params-held')).toHaveText('Give Min a value to run');
+      await expect(run).toBeDisabled();
+      await editor.press('ControlOrMeta+Enter');
+
+      await strip.getByRole('combobox', { name: 'Min, type' }).selectOption('Number');
+      await strip.getByRole('spinbutton', { name: 'Min, value' }).fill('10');
+      await expect(page.getByTestId('sql-params-held')).toHaveCount(0);
+      await expect(run).toBeEnabled();
+      // Nothing was sent while a value was missing.
+      expect(runs).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
+});
+
+/**
  * T807 (AC-449): a table's ⋯ — Insert name, Insert SELECT (written, not
  * run) and Preview 100 rows (a new tab, an ordinary run: capped, audited and
  * in History); opening a schema or a table sends only catalog reads.

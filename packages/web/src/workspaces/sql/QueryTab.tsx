@@ -8,6 +8,8 @@ import { csvFileName, csvOf } from '../data-sources/sqlCsv';
 import { SqlEditor } from '../data-sources/SqlEditor';
 import { ResultHead, seconds, SqlResult, type SqlOutcome } from '../data-sources/SqlResult';
 import { catalogRead, schemaCompletion } from './completion';
+import { parameterNames } from './parameterNames';
+import { heldFor, missingValues, ParameterStrip } from './ParameterStrip';
 import { cancelRun, GOING_QUERY, NO_CANCEL, type Going } from './going';
 import { RunLine } from './RunLine';
 import { runState, type RunState } from './runState';
@@ -246,6 +248,8 @@ export function QueryTab({
   const run = async (sql: string) => {
     // One run per person, across every tab: held while another goes (AC-452, AC-379).
     if (running || hold !== null || sending.current || sql.trim() === '') return;
+    // Held while a parameter has no value, ⌘/Ctrl+Enter included (T809, AC-453).
+    if (missingValues(parameterNames(tab.sql, dialect), tab.params).length > 0) return;
     sending.current = true;
     setCancelFailed(null);
     const at = Date.now();
@@ -319,6 +323,9 @@ export function QueryTab({
 
   const toRun = selected === '' ? statement : selected;
   const held = !running && hold !== null;
+  // Each `{{ name }}` in the tab's SQL, and those without a value, which hold Run (T809, AC-453).
+  const names = parameterNames(tab.sql, dialect);
+  const wanting = heldFor(missingValues(names, tab.params));
   return (
     <>
       <div className="sql-centre__editor sql-query" data-testid="sql-editor-area">
@@ -342,16 +349,33 @@ export function QueryTab({
           insertion={toInsert}
           completion={completion}
         />
+        <ParameterStrip
+          names={names}
+          types={tab.paramTypes ?? {}}
+          values={tab.params}
+          onType={(name, type) => {
+            dispatch({ kind: 'param-type', id: tab.id, name, type });
+          }}
+          onValue={(name, value) => {
+            dispatch({ kind: 'param-value', id: tab.id, name, value });
+          }}
+        />
         <div className="sql-runner__bar" ref={bar}>
           <button
             type="button"
             className="btn btn-primary"
-            disabled={running || held || toRun.trim() === ''}
+            disabled={running || held || wanting !== null || toRun.trim() === ''}
             onClick={() => void run(toRun)}
           >
             {running ? 'Running…' : selected === '' ? 'Run' : 'Run selection'}
           </button>
           {held ? <span className="sql-runner__note">held while your other run goes</span> : null}
+          {!running && wanting !== null ? (
+            <span className="sql-runner__note sql-params__held" data-testid="sql-params-held">
+              <StatusIcon kind="idle" />
+              {wanting}
+            </span>
+          ) : null}
           {running ? (
             // Cube Store can't stop a query: no Cancel, said so (AC-379, R64).
             onCubeStore ? (

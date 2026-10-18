@@ -1,5 +1,6 @@
 import type { StateKind } from '../../shell/StatusIcon';
 import type { SqlOutcome } from '../data-sources/SqlResult';
+import type { ParamType } from './parameterNames';
 import { runState } from './runState';
 
 /**
@@ -42,8 +43,10 @@ export interface SqlTab {
   /** The one data source it runs on; '' until one is chosen. */
   readonly sourceId: string;
   readonly sql: string;
-  /** Its parameters' values, by name (AC-451; their types come with T809). */
+  /** Its parameters' values, by name (AC-451). */
   readonly params: Readonly<Record<string, string>>;
+  /** Their types, by name, where not Text (T809, AC-453). */
+  readonly paramTypes?: Readonly<Record<string, ParamType>>;
   /** The text of its saved query, when it is one (T806 on). */
   readonly savedSql: string | null;
   /** The SQL its last run sent. */
@@ -75,6 +78,9 @@ export type TabsAction =
   | { readonly kind: 'close-others'; readonly id: string }
   | { readonly kind: 'source'; readonly id: string; readonly sourceId: string }
   | { readonly kind: 'sql'; readonly id: string; readonly sql: string }
+  /** A parameter's value, or its type, set in the strip (T809). */
+  | { readonly kind: 'param-value'; readonly id: string; readonly name: string; readonly value: string }
+  | { readonly kind: 'param-type'; readonly id: string; readonly name: string; readonly type: ParamType }
   | { readonly kind: 'run-start'; readonly id: string; readonly sql: string; readonly at: number }
   /** The page came back from the browser's cache: runs going lost their answer (T804). */
   | { readonly kind: 'runs-kept'; readonly at: number }
@@ -194,6 +200,14 @@ export function tabsReducer(
           };
     case 'sql':
       return change(state, target, { sql: action.sql });
+    case 'param-value':
+      return target === undefined
+        ? state
+        : change(state, target, { params: { ...target.params, [action.name]: action.value } });
+    case 'param-type':
+      return target === undefined
+        ? state
+        : change(state, target, { paramTypes: { ...target.paramTypes, [action.name]: action.type } });
     case 'run-start':
       return change(state, target, { run: { kind: 'running', at: action.at }, lastRunSql: action.sql });
     case 'runs-kept': {

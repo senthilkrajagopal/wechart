@@ -1,6 +1,6 @@
 import { EditorView, runScopeHandlers } from '@codemirror/view';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useReducer } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -97,6 +97,9 @@ function Harness({ start, source }: { readonly start: SqlTab; readonly source: S
       <QueryTab tab={open} source={source} dispatch={dispatch} grip={<span data-testid="grip" />} />
       <output data-testid="kept-sql">{open.sql}</output>
       <output data-testid="kept-run">{open.run?.kind ?? 'none'}</output>
+      <output data-testid="kept-params">
+        {JSON.stringify({ params: open.params, paramTypes: open.paramTypes ?? {} })}
+      </output>
     </>
   );
 }
@@ -278,6 +281,72 @@ describe('the selection, or the statement at the cursor (T803, AC-387)', () => {
  * Fails when: Enter adds a new line while the list is open; Esc does anything
  * but close the list; or Tab is kept in the editor.
  */
+/**
+ * T809 (AC-453): the tab's `{{ name }}`s in the strip under the editor, and
+ * Run held, naming those without a value, until each has one.
+ * Fails when: a run starts while a parameter has no value.
+ */
+describe('parameters under the editor (T809, AC-453)', () => {
+  const SQL = "SELECT * FROM orders WHERE region = {{region}} AND label = '{{not_one}}' AND at >= {{ since }}";
+  const modEnter = (container: HTMLElement) =>
+    act(() => {
+      runScopeHandlers(
+        EditorView.findFromDOM(container.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!,
+        new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }),
+        'editor',
+      );
+    });
+
+  it('lists the SQL’s parameters once each, under the editor and over the run bar', () => {
+    const { container } = open(tab({ sql: `${SQL} OR r2 = {{region}}` }));
+    const strip = screen.getByRole('group', { name: 'Parameters' });
+    expect([...strip.querySelectorAll('.sql-params__name')].map((name) => name.textContent)).toEqual([
+      'region',
+      'since',
+    ]);
+    const editor = container.querySelector('.sql-editor')!;
+    const bar = container.querySelector('.sql-runner__bar')!;
+    expect(editor.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(strip.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('holds Run, from the button and from ⌘/Ctrl+Enter, naming those with no value, until each has one', async () => {
+    const { container } = open(tab({ sql: SQL }));
+    const run = screen.getByRole('button', { name: 'Run' });
+    expect((run as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId('sql-params-held').textContent).toBe('Give region and since values to run');
+    modEnter(container);
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'region, value' }), 'EMEA');
+    expect(screen.getByTestId('sql-params-held').textContent).toBe('Give since a value to run');
+    expect((run as HTMLButtonElement).disabled).toBe(true);
+    modEnter(container);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(posts).toEqual([]);
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'since, type' }), 'Date');
+    fireEvent.change(screen.getByLabelText('since, value'), { target: { value: '2026-09-01' } });
+
+    expect(screen.queryByTestId('sql-params-held')).toBeNull();
+    expect((run as HTMLButtonElement).disabled).toBe(false);
+    await userEvent.click(run);
+    await vi.waitFor(() => {
+      expect(posts).toHaveLength(1);
+    });
+  });
+
+  it('keeps each parameter’s type and value in the tab', async () => {
+    open(tab({ sql: 'SELECT {{n}}' }));
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'n, type' }), 'Number');
+    await userEvent.type(screen.getByRole('spinbutton', { name: 'n, value' }), '7');
+
+    expect(JSON.parse(screen.getByTestId('kept-params').textContent!)).toEqual({
+      params: { n: '7' },
+      paramTypes: { n: 'number' },
+    });
+  });
+});
+
 describe('autocomplete in the editor (T808, AC-456)', () => {
   /** The schema browser's answers for EMEA, kept as it keeps them. */
   const readClient = () => {

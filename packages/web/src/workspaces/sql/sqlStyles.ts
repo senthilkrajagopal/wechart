@@ -283,4 +283,20 @@ main:has(.sql-workspace) {
   border: 1px solid var(--wc-border-subtle); border-radius: 3px;
   font-size: 12px; line-height: 14px; color: var(--wc-text-secondary); background: var(--wc-bg-surface);
 }
+/* The parameters strip under the editor (T809; pin 13, state F): each name,
+   its type and its value in a row that wraps. */
+.sql-params { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 12px; }
+.sql-params__label { font-weight: 600; color: var(--wc-text-secondary); }
+.sql-params__none { color: var(--wc-text-secondary); }
+.sql-params__field { display: inline-flex; align-items: center; gap: 4px; }
+.sql-params__name { font-family: var(--wc-font-code); }
+.sql-params__input {
+  box-sizing: border-box; height: 24px; margin: 0; padding: 0 6px;
+  border: 1px solid var(--wc-border-strong, var(--wc-border-subtle)); border-radius: 6px;
+  background: var(--wc-bg-surface); color: var(--wc-text-primary); font: inherit; font-size: 12px;
+}
+.sql-params__value { width: 128px; }
+.sql-params__input[aria-invalid='true'] { border-color: var(--wc-status-error); }
+.sql-params__input:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
+.sql-params__held { display: inline-flex; align-items: center; gap: 4px; }
 `;

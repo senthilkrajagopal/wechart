@@ -58,6 +58,23 @@ describe('open tabs kept in this browser, for this user (T801, AC-451)', () => {
     expect(keptTabs(browser, 'wren@example.com')).toEqual(kept);
   });
 
+  it('keeps each parameter’s type with its value (T809, AC-453), and drops a type not of the four', () => {
+    const browser = storage();
+    const typed: TabsState = {
+      tabs: [tab({ id: 'qa1b2c3d', name: 'typed', params: { n: '7' }, paramTypes: { n: 'number', d: 'date' } })],
+      active: 'qa1b2c3d',
+    };
+    keepTabs(browser, 'wren@example.com', typed);
+    expect(keptTabs(browser, 'wren@example.com')).toEqual(typed);
+
+    const raw = JSON.parse(browser.getItem(tabsKeyOf('wren@example.com'))!) as {
+      tabs: Record<string, unknown>[];
+    };
+    raw.tabs[0]!.paramTypes = { n: 'number', x: 'blob' };
+    browser.setItem(tabsKeyOf('wren@example.com'), JSON.stringify(raw));
+    expect(keptTabs(browser, 'wren@example.com')?.tabs[0]?.paramTypes).toEqual({ n: 'number' });
+  });
+
   it('keeps them under a key holding the user’s id', () => {
     const browser = storage();
 

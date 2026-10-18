@@ -1,3 +1,4 @@
+import type { ParamType } from './parameterNames';
 import type { SqlTab, TabsState } from './tabs';
 
 /**
@@ -12,6 +13,14 @@ export const tabsKeyOf = (user: string): string => `wechart.sql.tabs.${user}`;
 
 const isText = (value: unknown): value is string => typeof value === 'string';
 const isTextOrNull = (value: unknown): value is string | null => value === null || isText(value);
+
+const TYPES: ReadonlySet<unknown> = new Set<ParamType>(['text', 'number', 'date', 'boolean']);
+/** Its parameters' kept types (T809), those of the four types only; none kept, none. */
+function typesOf(value: unknown): { paramTypes?: Record<string, ParamType> } {
+  if (typeof value !== 'object' || value === null) return {};
+  const types = Object.entries(value).filter((entry): entry is [string, ParamType] => TYPES.has(entry[1]));
+  return types.length === 0 ? {} : { paramTypes: Object.fromEntries(types) };
+}
 
 /** One kept tab, when it has a tab's shape; its result, none. */
 function tabOf(value: unknown): SqlTab | null {
@@ -37,6 +46,7 @@ function tabOf(value: unknown): SqlTab | null {
     sourceId: kept.sourceId,
     sql: kept.sql,
     params: params as Record<string, string>,
+    ...typesOf(kept.paramTypes),
     savedSql: kept.savedSql,
     lastRunSql: kept.lastRunSql,
     run: runOf(kept.run),
@@ -88,6 +98,7 @@ export function keepTabs(storage: Storage | undefined, user: string, state: Tabs
     sourceId: tab.sourceId,
     sql: tab.sql,
     params: tab.params,
+    ...(tab.paramTypes === undefined ? {} : { paramTypes: tab.paramTypes }),
     savedSql: tab.savedSql,
     lastRunSql: tab.lastRunSql,
     ...(tab.run?.kind === 'running' ? { run: { kind: 'running', at: tab.run.at } } : {}),
