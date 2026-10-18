@@ -20,14 +20,23 @@ import {
  * `rich-tiles-and-combo-tech.md` §1). Its mappings are wechart's own
  * (`readMapping.tsx`), its links checked by wechart (`SafeLink.tsx`).
  */
-const renderDocument = renderJSONContentToReactElement({
-  nodeMapping,
-  markMapping,
-  // `readableNode` leaves only what the mappings know; these are the floor
-  // under it, never reached by a tree it has read.
-  unhandledNode: () => null,
-  unhandledMark: ({ children }) => children,
-});
+/**
+ * A renderer per drawing, never one shared: it keys each node from a counter
+ * it keeps for its life, so a shared one gave every node new keys on every
+ * render, and React remounted the tile's elements each time (T873's review).
+ * Made afresh, its keys run from 0 by position, the same each time.
+ */
+const rendererOf = () =>
+  renderJSONContentToReactElement({
+    nodeMapping,
+    markMapping,
+    // `readableNode` leaves only what the mappings know; these are the floor
+    // under it, never reached by a tree it has read.
+    unhandledNode: () => null,
+    unhandledMark: ({ children }) => children,
+  });
+
+type Content = Parameters<ReturnType<typeof rendererOf>>[0]['content'];
 
 export function TextTile({
   document,
@@ -42,7 +51,7 @@ export function TextTile({
     <div className="text-tile">
       {root?.type === 'doc' ? (
         <TextElementsContext value={renderElement}>
-          {renderDocument({ content: root as Parameters<typeof renderDocument>[0]['content'] })}
+          {rendererOf()({ content: root as Content })}
         </TextElementsContext>
       ) : null}
     </div>

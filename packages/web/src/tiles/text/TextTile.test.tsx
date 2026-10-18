@@ -158,6 +158,22 @@ describe('a Text tile in view mode (AC-208)', () => {
     expect(tile.querySelector('strong [data-testid="el"]')?.textContent).toBe('orders.revenue');
   });
 
+  it('keeps what it drew across a re-render, so an element keeps its state (T873’s review)', () => {
+    const document = doc(
+      paragraph(text('Revenue '), { type: 'value', attrs: { measure: 'orders.revenue' } }),
+    );
+    const renderElement = () => <input data-testid="control" />;
+    const { rerender, container } = render(
+      <TextTile document={document} renderElement={renderElement} />,
+    );
+    const before = container.querySelector('[data-testid="control"]');
+    rerender(<TextTile document={document} renderElement={renderElement} />);
+    // Another tile drawn in between, as a dashboard draws several.
+    render(<TextTile document={document} renderElement={renderElement} />);
+    rerender(<TextTile document={document} renderElement={renderElement} />);
+    expect(container.querySelector('[data-testid="control"]')).toBe(before);
+  });
+
   it('draws nothing at all for a stored value that isn’t a document', () => {
     const tile = drawn({ version: 1 } as unknown as TextDocument);
     expect(tile.textContent).toBe('');

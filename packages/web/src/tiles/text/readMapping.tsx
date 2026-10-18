@@ -123,9 +123,12 @@ export function readableNode(input: unknown, depth = 0): TextNode | undefined {
   const content = Array.isArray(input['content'])
     ? (input['content'] as unknown[]).flatMap((child) => readableNode(child, depth + 1) ?? [])
     : [];
+  // Only the attribute each block's mapping reads (T873's review).
+  const own = type === 'heading' ? 'level' : type === 'orderedList' ? 'start' : undefined;
+  const kept = own === undefined ? undefined : attrs.attrs?.[own];
   return {
     type,
-    ...(type === 'heading' || type === 'orderedList' ? attrs : {}),
+    ...(own !== undefined && kept !== undefined ? { attrs: { [own]: kept } } : {}),
     ...(type === 'hardBreak' ? marksOf(input['marks']) : { content }),
   };
 }
