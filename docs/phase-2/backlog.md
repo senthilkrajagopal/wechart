@@ -347,6 +347,23 @@ The user: these "will be deferred and not done in this phase". No task builds th
   - Tab kept inside the data source wizard, Import, Export and Generate cubes sheets below 1,024 px;
   - focus given back after Import's "Keep going", Explore's heading Rename and the version view's "Back to current".
   - Also not built: T692's screen-reader announcement as the target filter's arrows move the choice.
+- **Phase 3: advanced analytics, rich tiles and combo charts (the user, 2026-10-18: "Please add them to the next phase").** Raw input: `docs/inputs/2026-10-18-phase-3-advanced-analytics.md`; the plan was first drafted in the Cube-expert session.
+  - **Analytics, in three stages:**
+    - A: curve fits, forecasting, clustering, statistics.
+    - B: data functions, markable outputs, user Python. This lifts phase 1's non-goal on Spotfire data functions.
+    - C: R, trained models, scheduled scoring.
+  - **Rich tiles,** including AI-written narrative. That shares the LLM settings with the parked copilot.
+  - **Combo charts:** amending AC-218 and the R67/R69 scale rules.
+  - **Ten questions for the phase 3 interview:**
+    - Analytics: who may publish functions; whether what-if parameters are in scope; whether geo-analytics is in scope; whether R is needed.
+    - Rich tiles: whether AI narrative is regenerated on refresh; whether rich tiles replace text tiles; whether 10 is the right limit on live elements per tile.
+    - Combo charts: when to warn about a hand-picked combo (AC-218); whether 8 series and 4 axes are the right limits; whether more than one series may be split by a dimension.
+- **Also brought into scope by R78, to be specified with phase 3 or earlier at the user's word** (requirements §P2.6 M):
+  - the copilot with ⌘J Ask;
+  - a read-only login per data source;
+  - the refresh worker's build history;
+  - xcube's slice 7;
+  - the 4 Northwind bugs.
 
 ## 8. Deferred past phase 3
 

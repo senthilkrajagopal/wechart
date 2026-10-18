@@ -134,6 +134,15 @@ The user wants "two more things" built. Only one is named so far:
   - which operations come first.
   - It also lifts the phase-1 non-goal "AI and chat authoring" (requirements §P2.7).
 
+## Phase 3 (next phase)
+
+The list is in `docs/phase-2/backlog.md` §7. It holds:
+- advanced analytics (stages A–C), rich tiles and combo charts, with their ten open questions (added 2026-10-18, `docs/inputs/2026-10-18-phase-3-advanced-analytics.md`);
+- the keyboard work;
+- the items §P2.6 M brought in.
+
+Phase 3 starts with a project-interview round on those questions.
+
 ## Waiting on the user
 
 - **Northwind:** log its 4 bugs (colours past 8 series, marked pivot overflow, pivot column order, single-level treemap), and decide whether to copy its exports into the repo.
