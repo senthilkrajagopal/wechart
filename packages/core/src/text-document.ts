@@ -246,7 +246,13 @@ const NODES: Readonly<Record<string, NodeSpec>> = {
   bulletList: { content: ['listItem'], attrs: {}, marks: [] },
   orderedList: {
     content: ['listItem'],
-    attrs: { start: { check: isCount, mustBe: 'a whole number from 1' } },
+    attrs: {
+      /** From 0, since a markdown list may count from "0." (AC-512). */
+      start: {
+        check: (value) => Number.isSafeInteger(value) && (value as number) >= 0,
+        mustBe: 'a whole number from 0',
+      },
+    },
     marks: [],
   },
   listItem: { content: ['paragraph', 'bulletList', 'orderedList'], attrs: {}, marks: [] },

@@ -14,6 +14,8 @@
  * the API binds it at publish and counts it among what uses a cube (T389's
  * review, AC-272, AC-275), and the tile draws it.
  */
+import type { TextNode } from './text-document';
+
 export type TextToken =
   | { readonly kind: 'marking'; readonly name: string; readonly show: 'count' | 'summary' }
   | { readonly kind: 'measure'; readonly member: string; readonly marking?: string };
@@ -75,6 +77,23 @@ export function firstTokenIn(
     if (tokenOf(found[1] ?? '') !== undefined)
       return { index: found.index, length: found[0].length };
   return undefined;
+}
+
+/**
+ * The Text tile's element a markdown tile's token names (AC-512, AC-116): a
+ * measure token is a Value, limited by its marking where it names one; a
+ * marking token a Marking showing its count or summary.
+ */
+export function elementOfToken(token: TextToken): TextNode {
+  return token.kind === 'marking'
+    ? { type: 'marking', attrs: { marking: token.name, show: token.show } }
+    : {
+        type: 'value',
+        attrs: {
+          measure: token.member,
+          ...(token.marking === undefined ? {} : { marking: token.marking }),
+        },
+      };
 }
 
 /** The members a text's measure tokens name, each once. */

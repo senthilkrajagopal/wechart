@@ -283,6 +283,7 @@ export {
 export { boxStats, quantile7, type BoxStats, type WhiskerRule } from './stats/boxplot';
 export { countryCodeMarkingOf, holdsCountryCodes, ISO_3166_ALPHA_3 } from './geo/iso3';
 export {
+  elementOfToken,
   firstTokenIn,
   textPartsOf,
   textRenamed,
@@ -290,6 +291,7 @@ export {
   type TextToken,
 } from './text-tokens';
 export * from './text-document';
+export { textDocumentFromMarkdown } from './text-document-from-markdown';
 
 export {
   DRIVER_TYPES,

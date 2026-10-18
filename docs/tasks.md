@@ -1978,10 +1978,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T868 [P] (AC-513, AC-518) The Text tile's stored document: wechart's own schema and version, with its nodes, marks and attributes, link checks and element count
 
-- [ ] T869 (AC-512, AC-116) Convert wechart's markdown subset and its `{{…}}` tokens into a Text document, an HTML tag kept as literal text
-  - Files: `packages/core/src/text-document-from-markdown.ts` (+ test), `packages/core/src/text-tokens.ts`.
-  - Failing test: `text-document-from-markdown.test.ts`: every case in `packages/web/src/tiles/Markdown.test.tsx` gives a document whose text, heading levels, lists, links and line breaks match; `{{measure:orders.revenue | marking:Marking}}` becomes a Value limited by Marking; `<b>hi</b>` stays the literal text "<b>hi</b>"; the result passes `textDocumentProblems` (AC-512, AC-116).
-  - Depends on: T868
+- [x] T869 (AC-512, AC-116) Convert wechart's markdown subset and its `{{…}}` tokens into a Text document, an HTML tag kept as literal text
 
 - [ ] T870 (AC-527) Write a Text document back as markdown, each element as a `{{…}}` token naming its kind and source
   - Files: `packages/core/src/text-document-to-markdown.ts` (+ test).
