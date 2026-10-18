@@ -171,6 +171,8 @@ import { ExportPane, type Outline as ExportOutline } from './export/ExportPane';
 import { ExportedToast } from './export/ExportedToast';
 import { Canvas, type CanvasProps } from './grid/Canvas';
 import { filtersSet } from './header/filtersSet';
+import { PageTabsMore } from './header/PageTabsMore';
+import { useTabsThatFit } from './header/useTabsThatFit';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
 import { COLUMNS, ROW_UNIT_PX } from './grid/geometry';
 import { actionFor } from './grid/keyboard';
@@ -6117,10 +6119,19 @@ function PageTabsRow({
 }) {
   const { document, editing } = session;
   const showing = document.pages.find((page) => page.id === pageId) ?? document.pages[0];
+  const row = useRef<HTMLDivElement>(null);
+  /**
+   * In view mode, those that don't fit go behind "More ▾", the open page
+   * always inline (AC-492, T837). While editing, every tab is in the strip,
+   * which scrolls, so each stays a drop target (AC-491).
+   */
+  const placed = useTabsThatFit(row, document.pages, showing?.id, !editing);
+  const inline = document.pages.filter((page) => !placed.menu.includes(page.id));
+  const rest = document.pages.filter((page) => placed.menu.includes(page.id));
   return (
-    <div className="page-tabs__row">
+    <div className="page-tabs__row" ref={row} data-fit={placed.fits ? '' : undefined}>
       <div role="tablist" aria-label="Pages" className="page-tabs">
-        {document.pages.map((page) => (
+        {inline.map((page) => (
           <button
             key={page.id}
             type="button"
@@ -6130,12 +6141,14 @@ function PageTabsRow({
             tabIndex={page.id === showing?.id ? 0 : -1}
             // A tile dropped on a page tab moves to that page (AC-056).
             data-droptab={pageKey(page.id)}
+            // Its width, for which fit the row (T837).
+            data-page={page.id}
             onClick={() => {
               onOpenPage(page.id);
             }}
             onKeyDown={(event) => {
               onTabKey(event, (index) => {
-                const chosen = document.pages[index];
+                const chosen = inline[index];
                 if (chosen !== undefined) onOpenPage(chosen.id);
               });
             }}
@@ -6144,8 +6157,13 @@ function PageTabsRow({
           </button>
         ))}
       </div>
-      <div className="page-tabs__rest">
-        {editing ? (
+      {rest.length === 0 ? null : (
+        <div className="page-tabs__more-box">
+          <PageTabsMore pages={rest} onOpen={onOpenPage} />
+        </div>
+      )}
+      {editing ? (
+        <div className="page-tabs__rest">
           <button
             type="button"
             className="btn-ghost btn-sm page-tabs__add"
@@ -6163,8 +6181,8 @@ function PageTabsRow({
           >
             + Page tab
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

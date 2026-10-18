@@ -80,10 +80,37 @@ export const HEADER_CSS = `
    drop target (AC-491, AC-056); in view mode until T837 puts them behind
    "More" (19-Q5). */
 .dashboard__header > .page-tabs__row { flex: 0 1 auto; min-width: 0; align-self: stretch; }
+/* Placed to fit, in view mode (AC-492, T837): the strip keeps its width and
+   the title alone gives way. Shrinking by flex's weights, the strip gave up a
+   fraction of a pixel while the title still had room, and scrolled by one. */
+.dashboard__header > .page-tabs__row[data-fit] { flex-shrink: 0; }
 .dashboard__header > h1 { flex-shrink: 1000; }
 .dashboard__header .page-tabs { padding: 0; border-bottom: 0; align-items: stretch; gap: 2px; }
 .dashboard__header .page-tabs [role='tab'] { height: auto; }
 .dashboard__header .page-tabs__rest { flex: none; padding: 0 0 0 4px; border-bottom: 0; }
+/* "More ▾" after the inline tabs in view mode (AC-492; design 19 pin 3 and
+   state D1): drawn as a tab, 13/600 in the secondary ink, the row's full
+   height, its menu under it. Outside the strip, which may clip. */
+.page-tabs__more-box { display: flex; flex: none; align-self: stretch; margin-left: 4px; }
+.page-tabs__more-box > .menu-button { align-items: stretch; }
+.page-tabs__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--wc-text-secondary);
+  font-size: 13px;
+  font-weight: var(--wc-text-sm-strong-weight);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.page-tabs__more:hover,
+.page-tabs__more[aria-expanded='true'] { color: var(--wc-text-primary); }
+.page-tabs__more:focus-visible { outline-offset: -2px; }
 /* While editing it is the same one row, "Editing ‹name›", the tabs, "+ Page
    tab" and the edit bar where the actions were (AC-491; design 19 state C,
    "row 48"). Its height is the row's own only so that why Save is held back,

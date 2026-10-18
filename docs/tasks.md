@@ -1876,10 +1876,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T836 (AC-491, AC-206, AC-056) In edit mode, show the sheet open with no toggle, "Editing ‹name›" and "+ Page tab" in the row, page tabs scrolling with no "More ▾", and the reader's state back when editing ends
 
-- [ ] T837 (AC-492) In view mode, put the page tabs that don't fit behind "More ▾", the open page always inline, the strip never scrolling
-  - Files: `packages/web/src/dashboard/header/tabsThatFit.ts` (+ test), `packages/web/src/dashboard/header/PageTabsMore.tsx` (+ test; through `shell/MenuButton.tsx`), `packages/web/src/dashboard/DashboardView.tsx` (`PageTabsRow`), `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
-  - Failing test: `tabsThatFit.test.ts`: given the tabs' widths and the room left, it keeps inline as many as fit, in order, with the open page taking the last inline place when it would otherwise fall in the menu, and puts none in the menu when all fit. `PageTabsMore.test.tsx`: "More ▾" lists the rest, and choosing one opens that page. The e2e at 1,152 px with 8 tabs and the 7th open: the 7th is inline and in view, the strip's `scrollWidth` equals its `clientWidth`, and every tab is either inline or in the menu (AC-492).
-  - Depends on: T829
+- [x] T837 (AC-492) In view mode, put the page tabs that don't fit behind "More ▾", the open page always inline, the strip never scrolling
 
 - [ ] T838 (AC-200, AC-119, AC-098) While the sheet is closed, show compact marking chips, at most two then "+n", or the first cross-filter's compact chip then "+n", each with its menu and ×, the source tile in its tooltip, accessible name and menu heading
   - Files: `packages/web/src/dashboard/header/CompactChips.tsx` (+ test; from `dashboard/markings/MarkChip.tsx` and `dashboard/crossfilter/CrossFilterChip.tsx`), `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/shell/styles.ts`, `e2e/markings.spec.ts`, `e2e/crossfilter.spec.ts`.

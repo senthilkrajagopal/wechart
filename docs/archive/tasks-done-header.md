@@ -46,3 +46,8 @@ Lane HEADER's ticked tasks from `docs/tasks.md` §P2.25 (F43), their sub-lines w
   - Files: `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/dashboard/header/useHeaderSheet.ts`, `packages/web/src/dashboard/DashboardView.tsx` (`PageTabsRow` while editing), `packages/web/src/dashboard/edit/enterEdit.test.tsx`, `e2e/dashboard-edit.spec.ts`.
   - Failing test: `enterEdit.test.tsx`: with the sheet closed, Edit shows it open and no toggle, the row reading "Editing ‹name›" with "+ Page tab" after the tabs; Discard puts it back closed; with it open before Edit, Save leaves it open (AC-491, AC-206). The e2e at 1,152 px with 12 page tabs: the strip scrolls, no "More ▾" shows, and a tile dropped on the last tab moves into it (AC-491, AC-056).
   - Depends on: T829, T835
+
+- [x] T837 (AC-492) In view mode, put the page tabs that don't fit behind "More ▾", the open page always inline, the strip never scrolling
+  - Files: `packages/web/src/dashboard/header/tabsThatFit.ts` (+ test), `packages/web/src/dashboard/header/PageTabsMore.tsx` (+ test; through `shell/MenuButton.tsx`), `packages/web/src/dashboard/DashboardView.tsx` (`PageTabsRow`), `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
+  - Failing test: `tabsThatFit.test.ts`: given the tabs' widths and the room left, it keeps inline as many as fit, in order, with the open page taking the last inline place when it would otherwise fall in the menu, and puts none in the menu when all fit. `PageTabsMore.test.tsx`: "More ▾" lists the rest, and choosing one opens that page. The e2e at 1,152 px with 8 tabs and the 7th open: the 7th is inline and in view, the strip's `scrollWidth` equals its `clientWidth`, and every tab is either inline or in the menu (AC-492).
+  - Depends on: T829

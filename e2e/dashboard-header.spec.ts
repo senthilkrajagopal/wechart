@@ -822,3 +822,101 @@ test('a long title is cut on its one line, whole in its tooltip, its name and th
   await expect(headerSheet(page).locator('.dashboard__description')).toBeVisible();
   await expect(headerSheet(page).locator('.header-sheet__title')).toHaveCount(0);
 });
+
+/**
+ * T837 (AC-492; 19-Q5 (a); design 19 pin 3 and state D1): in view mode at
+ * 1,024 px and wider, page tabs that don't fit the compact row go behind
+ * "More ▾", the open page always inline; the strip never scrolls, and no tab
+ * is cut short or hidden except into that menu.
+ */
+test('at 1,152 px, 8 page tabs: those that fit inline, the rest behind More, the open page always inline, the strip never scrolling', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1152, height: 800 });
+  // Short, as design 19 draws them: a few fit beside the actions at 1,152 px.
+  const titles = Array.from({ length: 8 }, (_, index) => `Week ${String(index + 1)}`);
+  const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const id = await sharedIn(request, 'dashboard', 'root', {
+    title: `Pages ${unique}`,
+    settings: { width: 'full' },
+    pages: titles.map((title, index) => ({
+      id: `p${String(index + 1)}`,
+      title,
+      items: [{ id: `notes-${String(index)}`, kind: 'markdown', w: 6, h: 8, text: `On ${title}` }],
+    })),
+    filters: [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }],
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByText('On Week 1', { exact: true })).toBeVisible();
+
+  const strip = row(page).getByRole('tablist', { name: 'Pages' });
+  const more = row(page).getByRole('button', { name: 'More pages' });
+
+  /** Each tab inline, wholly in view and uncut, or in the menu: never both, never neither. */
+  async function everyTabPlaced(open: string): Promise<void> {
+    await expect(more).toBeVisible();
+    // The strip doesn't scroll.
+    expect(await strip.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0);
+    const inline = await strip.getByRole('tab').allTextContents();
+    expect(inline.length).toBeGreaterThan(1);
+    expect(inline).toContain(open);
+    for (const name of inline) {
+      const tab = strip.getByRole('tab', { name, exact: true });
+      await expect(tab).toBeInViewport({ ratio: 1 });
+      expect(await tab.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    }
+    await expect(strip.getByRole('tab', { name: open, exact: true })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await more.click();
+    const menu = page.getByRole('menu', { name: 'More pages' });
+    const listed = await menu.getByRole('menuitem').allTextContents();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    // In order, the open page not among them, and each tab in one place.
+    expect(listed).not.toContain(open);
+    expect(listed.length).toBeGreaterThan(0);
+    expect([...inline, ...listed].sort()).toEqual([...titles].sort());
+    expect(listed).toEqual(titles.filter((title) => listed.includes(title)));
+    expect(inline).toEqual(titles.filter((title) => inline.includes(title)));
+    // "More ▾" right after the inline tabs, on the row's line.
+    const [stripBox, moreBox, rowBox] = await Promise.all([
+      strip.boundingBox(),
+      more.boundingBox(),
+      row(page).boundingBox(),
+    ]);
+    expect(moreBox!.x).toBeGreaterThanOrEqual(stripBox!.x + stripBox!.width);
+    expect(moreBox!.x - (stripBox!.x + stripBox!.width)).toBeLessThan(16);
+    expect(rowBox!.height).toBe(48);
+  }
+
+  await everyTabPlaced('Week 1');
+
+  // The 7th, chosen from the menu: open, inline and in view.
+  await more.click();
+  await page
+    .getByRole('menu', { name: 'More pages' })
+    .getByRole('menuitem', { name: 'Week 7' })
+    .click();
+  await expect(page.getByText('On Week 7', { exact: true })).toBeVisible();
+  await everyTabPlaced('Week 7');
+
+  // At 1,024 px, the narrowest AC-492 holds at: the open page inline, whole
+  // and in view, the rest behind "More ▾", and still no scrolling.
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await expect(strip.getByRole('tab')).not.toHaveCount(8);
+  const open = strip.getByRole('tab', { name: 'Week 7', exact: true });
+  await expect(open).toHaveAttribute('aria-selected', 'true');
+  await expect(open).toBeInViewport({ ratio: 1 });
+  await expect(more).toBeInViewport({ ratio: 1 });
+  expect(await strip.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0);
+  expect((await row(page).boundingBox())?.height).toBe(48);
+
+  // Wide enough for every tab: no "More ▾".
+  await page.setViewportSize({ width: 2400, height: 800 });
+  await expect(strip.getByRole('tab')).toHaveCount(8);
+  await expect(more).toHaveCount(0);
+  expect(await strip.evaluate((node) => node.scrollWidth - node.clientWidth)).toBe(0);
+});
