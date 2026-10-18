@@ -1837,10 +1837,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T840 (AC-493) Announce each change made while the sheet is closed exactly once, politely, with the new number, and leave the sheet closed
 
-- [ ] T841 (AC-494) From 1,024 to 1,279 px, keep one 48 px row, History and Bookmarks as icon buttons named in their accessible names and tooltips
-  - Files: `packages/web/src/dashboard/DashboardView.tsx` (`headerActions`), `packages/web/src/dashboard/bookmarks/Bookmarks.tsx`, `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
-  - Failing test: the e2e at 1,024 and 1,152 px: the row is 48 px tall and one line; History and Bookmarks show no visible text, and their accessible names and `title`s are "History" and "Bookmarks"; the document's `scrollWidth` equals its `clientWidth` (AC-494).
-  - Depends on: T837
+- [x] T841 (AC-494) From 1,024 to 1,279 px, keep one 48 px row, History and Bookmarks as icon buttons named in their accessible names and tooltips
 
 - [ ] T842 (AC-495, AC-304) Below 1,024 px, keep the way back, the title, the toggle and ⋯ in the row, History and Bookmarks… in ⋯, a "Page: ‹name› ▾" menu on a 40 px row for more than one page, and the sheet's pills one under another
   - Files: `packages/web/src/dashboard/header/PageMenu.tsx` (+ test; through `shell/MenuButton.tsx`), `packages/web/src/dashboard/DashboardView.tsx` (`headerActions` and ⋯ through `useNarrowWindow`), `packages/web/src/filters/FilterBar.tsx` (stacked pills when narrow), `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.

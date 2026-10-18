@@ -5454,10 +5454,14 @@ export function DashboardView({
                 className={historyOpen ? 'btn pressed dashboard__history' : 'btn dashboard__history'}
                 data-history-button=""
                 aria-pressed={historyOpen}
+                // Named and titled by its word, which only its icon shows
+                // from 1,024 to 1,279 px (AC-494; design 19 D1).
+                aria-label="History"
+                title="History"
                 onClick={onHistory}
               >
                 <HistoryIcon />
-                History
+                <span className="header-action__label">History</span>
               </button>
             )}
             {/* A reader's: what the dashboard shows now, under a name (T127,

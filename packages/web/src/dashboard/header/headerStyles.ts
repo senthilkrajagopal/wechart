@@ -120,6 +120,19 @@ export const HEADER_CSS = `
 @media (max-width: 1023px) {
   .dashboard__header { flex-wrap: wrap; height: auto; }
 }
+/* From 1,024 to 1,279 px (AC-494; design 19 D1): History and Bookmarks are
+   32 px icon buttons, their words in their names and tooltips only, so the
+   row keeps to one 48 px line with room for the tabs. */
+@media (min-width: 1024px) and (max-width: 1279.98px) {
+  .dashboard__header .header-action__label,
+  .dashboard__header .dashboard__bookmarks-button > svg:last-child { display: none; }
+  .dashboard__header .dashboard__history,
+  .dashboard__header .dashboard__bookmarks-button {
+    justify-content: center;
+    min-width: 32px;
+    padding: 0 8px;
+  }
+}
 
 /* The compact chips (AC-200, AC-119; design 19 pin 4, .mchip and .xchip;
    direction §7g): 24 px pills, radius 999, 12 px, before the actions while

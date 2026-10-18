@@ -391,6 +391,10 @@ export function Bookmarks({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
+        // Named and titled by its word, which only its icon shows from
+        // 1,024 to 1,279 px in the dashboard's row (AC-494; design 19 D1).
+        aria-label="Bookmarks"
+        title="Bookmarks"
         onClick={() => {
           // Read again as it opens: another's shared since is listed, and one
           // unshared since isn't (T367's review). What was read shows meanwhile.
@@ -400,7 +404,7 @@ export function Bookmarks({
       >
         {/* Design 10's bookmark icon and the designs' chevron (T742; design-10-Q3). */}
         <Icon of="bookmark" />
-        Bookmarks
+        <span className="header-action__label">Bookmarks</span>
         <Icon of="chevron" />
       </button>
       {open ? (

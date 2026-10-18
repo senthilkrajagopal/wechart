@@ -931,6 +931,62 @@ test('at 1,152 px, 8 page tabs: those that fit inline, the rest behind More, the
 });
 
 /**
+ * T841 (AC-494; design 19 state D1): from 1,024 to 1,279 px the compact row
+ * stays one 48 px row, History and Bookmarks icon buttons named, and
+ * titled, "History" and "Bookmarks", and the page doesn't scroll sideways.
+ */
+test('at 1,024 and 1,152 px the row is one 48 px line, History and Bookmarks icons named in their names and tooltips', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await sharedDashboard(request);
+  const filters = [
+    { id: 'f-status', member: 'orders.status', value: { kind: 'values', values: ['shipped'] } },
+  ];
+  for (const width of [1024, 1152]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(
+      `/explore/dashboards/${id}?filters=${encodeURIComponent(JSON.stringify(filters))}`,
+    );
+    await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+    const header = (await row(page).boundingBox())!;
+    expect(header.height, String(width)).toBe(48);
+    // One line: every part of it within its 48 px.
+    const parts = row(page).locator(':scope > :visible');
+    const count = await parts.count();
+    for (let at = 0; at < count; at += 1) {
+      const box = (await parts.nth(at).boundingBox())!;
+      expect(box.y, `${String(width)}: ${String(at)}`).toBeGreaterThanOrEqual(header.y);
+      expect(box.y + box.height, `${String(width)}: ${String(at)}`).toBeLessThanOrEqual(
+        header.y + header.height,
+      );
+    }
+    for (const name of ['History', 'Bookmarks']) {
+      const button = row(page).getByRole('button', { name, exact: true });
+      await expect(button).toBeVisible();
+      await expect(button).toHaveAttribute('title', name);
+      // An icon: no text drawn, the icon itself shown.
+      expect(await button.innerText(), `${String(width)}: ${name}`).toBe('');
+      await expect(button.locator('svg').first()).toBeVisible();
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0);
+  }
+
+  // From 1,280 px, their words again.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(row(page).getByRole('button', { name: 'History', exact: true })).toHaveText(
+    'History',
+  );
+  await expect(row(page).getByRole('button', { name: 'Bookmarks', exact: true })).toHaveText(
+    'Bookmarks',
+  );
+});
+
+/**
  * Watches every polite live region on the page (`aria-live="polite"`, or a
  * `status`, polite by default) and keeps each new message, in order, with
  * the times the Filters toggle took and lost its change highlight.

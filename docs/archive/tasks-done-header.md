@@ -66,3 +66,8 @@ Lane HEADER's ticked tasks from `docs/tasks.md` §P2.25 (F43), their sub-lines w
   - Files: `packages/web/src/dashboard/header/filterChangeSaid.ts` (+ test), `packages/web/src/dashboard/DashboardView.tsx` (the existing `MarkingAnnouncer` region), `packages/web/src/dashboard/bookmarks/Bookmarks.tsx`, `e2e/dashboard-header.spec.ts`.
   - Failing test: `filterChangeSaid.test.ts`: "Filter added: Product is Côte de Blaye or Raclette Courdavault. 4 filters set."; a removal, "Filter removed: … 3 filters set."; a bookmark, "Bookmark applied: Q3 review. Page By country. 2 filters set. Nothing marked.". The e2e: with the sheet closed, Filter to marked from a tile's ⋯ turns the toggle's number to 4 and the compact chip goes; the page's polite live regions together receive exactly one new message, holding "4 filters set"; the toggle stays `aria-expanded="false"`; a bookmark applied is said once (AC-493).
   - Depends on: T831, T838
+
+- [x] T841 (AC-494) From 1,024 to 1,279 px, keep one 48 px row, History and Bookmarks as icon buttons named in their accessible names and tooltips
+  - Files: `packages/web/src/dashboard/DashboardView.tsx` (`headerActions`), `packages/web/src/dashboard/bookmarks/Bookmarks.tsx`, `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
+  - Failing test: the e2e at 1,024 and 1,152 px: the row is 48 px tall and one line; History and Bookmarks show no visible text, and their accessible names and `title`s are "History" and "Bookmarks"; the document's `scrollWidth` equals its `clientWidth` (AC-494).
+  - Depends on: T837
