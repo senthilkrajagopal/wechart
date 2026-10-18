@@ -20,7 +20,9 @@ import {
   memberNameOf,
   type ColumnRow,
 } from './columnKinds';
+import { parameterNames } from './parameterNames';
 import type { MakeKind } from './ResultHead';
+import { dialectFor } from './statementAt';
 import { placeOf, type SqlSourceRow } from './sources';
 
 /** My workspace's root, as the API names it to the client (T343). */
@@ -36,8 +38,34 @@ function columnSql(column: string, driver: string | null): string {
   return `{CUBE}."${column.replace(/"/g, '""')}"`;
 }
 
-/** The SQL a cube reads: what ran, without a closing semicolon, which Cube's subquery can't hold. */
-export const cubeSqlOf = (sql: string) => sql.trim().replace(/;\s*$/, '').trimEnd();
+/**
+ * The SQL a cube reads: what ran, without a closing semicolon, which Cube's
+ * subquery can't hold; ending on a line comment, with a new line after it,
+ * so the comment closes before the subquery does (T820's review).
+ */
+export function cubeSqlOf(sql: string): string {
+  const ran = sql.trim().replace(/;\s*$/, '').trimEnd();
+  return /--[^\n]*$/.test(ran) ? `${ran}\n` : ran;
+}
+
+/**
+ * The SQL as a YAML model's `sql` holds it (research `cube/data-modeling.md`,
+ * "Literal braces in YAML are escaped as `\{` and `\}`"): Cube reads the value
+ * as a Python f-string, so each brace the SQL holds is written escaped; and
+ * no `{{` or `}}` is left for Cube to render the file as Jinja first.
+ */
+const escapedForCube = (sql: string) => sql.replace(/[{}]/g, (brace) => `\\${brace}`);
+
+/** Why the SQL that ran can't be a cube's as it is; none where it can (T820's review). */
+function sqlProblem(sql: string, driver: string | null): string | undefined {
+  // Until T822 writes their values in, a `{{name}}` would reach Cube's file as text.
+  if (parameterNames(sql, dialectFor(driver)).length > 0)
+    return 'Its parameters can’t be written into a cube yet. Write their values into the SQL, and run it again.';
+  // `{%` escaped is still `{%`, which makes Cube render the whole file as a template.
+  if (sql.includes('{%'))
+    return 'Its SQL holds “{%”, which Cube reads as the start of a template. Write it another way, and run it again.';
+  return undefined;
+}
 
 /**
  * The draft's one file (research `cube/data-modeling.md` §1, §4, §5): a cube
@@ -73,7 +101,7 @@ export function cubeFileOf({
       cubes: [
         {
           name,
-          sql: cubeSqlOf(sql),
+          sql: escapedForCube(cubeSqlOf(sql)),
           data_source: source.name,
           ...(dimensions.length === 0 ? {} : { dimensions }),
           measures,
@@ -167,8 +195,20 @@ export function MakeCubePane({
     ) === true;
   const nameError = nameProblem(name, 'cube') ?? (heldHere ? nameInUse(name) : undefined);
   const columnsError = columnsProblem(rows);
+  const sqlError = sqlProblem(sql, source.driver);
+  /** Why Add is held where nothing else on the pane says so. */
+  const held = own.isError
+    ? 'My workspace’s model couldn’t be read, so whether the name is free isn’t known. Try again.'
+    : targets.isSuccess && targets.data.length > 0 && target === ''
+      ? 'Choose the folder it is to go to.'
+      : undefined;
   const ready =
-    !busy && nameError === undefined && columnsError === undefined && target !== '' && own.isSuccess;
+    !busy &&
+    nameError === undefined &&
+    columnsError === undefined &&
+    sqlError === undefined &&
+    target !== '' &&
+    own.isSuccess;
 
   const change = (at: number, next: (row: ColumnRow) => ColumnRow) => {
     setRows((now) => now.map((row, index) => (index === at ? next(row) : row)));
@@ -279,6 +319,11 @@ export function MakeCubePane({
           <pre className="sql-make__sql" aria-labelledby={`${ids}-sql`} data-testid="make-cube-sql">
             {cubeSqlOf(sql)}
           </pre>
+          {sqlError === undefined ? null : (
+            <p className="field__error" data-testid="make-cube-sql-error">
+              {sqlError}
+            </p>
+          )}
         </div>
         <div className="sql-make__columns">
           <table className="sql-make__table" aria-label="Columns">
@@ -382,6 +427,11 @@ export function MakeCubePane({
         {refused === null ? null : (
           <p className="source-pane__foot-note is-err" role="alert">
             {refused}
+          </p>
+        )}
+        {refused !== null || held === undefined ? null : (
+          <p className="source-pane__foot-note" data-testid="make-cube-held">
+            {held}
           </p>
         )}
         <span className="source-pane__spacer" />

@@ -325,6 +325,82 @@ describe('the Make a cube pane (T820, AC-462)', () => {
     expect(add().getAttribute('aria-disabled')).toBe('true');
   });
 
+  it('writes braces the SQL holds as Cube reads them literally, so the file holds what ran (T820’s review)', async () => {
+    const sql = `SELECT id, '{"a": 1}'::jsonb AS doc, '{1,2}'::int[] AS ids FROM orders WHERE note <> '}}'`;
+    open({ sql });
+    await within(pane()).findByRole('tree');
+    // Shown as it ran.
+    expect(within(pane()).getByTestId('make-cube-sql').textContent).toBe(sql);
+    await userEvent.click(add());
+
+    const content = (posts[0]!.body as { files: { content: string }[] }).files[0]!.content;
+    const cube = (parse(content) as { cubes: { sql: string }[] }).cubes[0]!;
+    expect(cube.sql).toBe(
+      `SELECT id, '\\{"a": 1\\}'::jsonb AS doc, '\\{1,2\\}'::int[] AS ids FROM orders WHERE note <> '\\}\\}'`,
+    );
+    // Nothing Cube would render as a template first.
+    expect(content).not.toMatch(/\{%|%\}|\{\{|\}\}/);
+  });
+
+  it('refuses SQL holding “{%”, which Cube would read as a template, and adds nothing', async () => {
+    open({ sql: "SELECT id FROM orders WHERE note LIKE '{%'" });
+    await within(pane()).findByRole('tree');
+    expect(within(pane()).getByTestId('make-cube-sql-error').textContent).toBe(
+      'Its SQL holds “{%”, which Cube reads as the start of a template. Write it another way, and run it again.',
+    );
+    await userEvent.click(add());
+    expect(posts).toEqual([]);
+  });
+
+  it('refuses SQL with parameters, whose values can’t be written in yet, and adds nothing', async () => {
+    open({ sql: 'SELECT id, total FROM orders WHERE region = {{region}}' });
+    await within(pane()).findByRole('tree');
+    expect(within(pane()).getByTestId('make-cube-sql-error').textContent).toBe(
+      'Its parameters can’t be written into a cube yet. Write their values into the SQL, and run it again.',
+    );
+    await userEvent.click(add());
+    expect(posts).toEqual([]);
+  });
+
+  it('ends a cube whose SQL ends on a line comment with a new line, so the comment closes before Cube’s subquery does', async () => {
+    open({ sql: 'SELECT id, customer, total, ordered_at FROM orders -- the big ones' });
+    await within(pane()).findByRole('tree');
+    await userEvent.click(add());
+    const content = (posts[0]!.body as { files: { content: string }[] }).files[0]!.content;
+    expect((parse(content) as { cubes: { sql: string }[] }).cubes[0]!.sql).toBe(
+      'SELECT id, customer, total, ordered_at FROM orders -- the big ones\n',
+    );
+  });
+
+  it('says why Add is held where no folder is chosen', async () => {
+    open({ source: { ...SOURCE, folderId: 'f-ro', folderPath: [{ id: 'f-ro', title: 'Finance' }] } });
+    await within(pane()).findByRole('tree');
+    expect(within(pane()).getByTestId('make-cube-held').textContent).toBe(
+      'Choose the folder it is to go to.',
+    );
+  });
+
+  it('says why Add is held where My workspace’s model can’t be read', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        Promise.resolve(
+          url === '/api/folders/targets'
+            ? new Response(JSON.stringify(TARGETS), { status: 200 })
+            : new Response('{}', { status: 500 }),
+        ),
+      ),
+    );
+    open();
+    await within(pane()).findByRole('tree');
+    // Read again three times first, as every folder's model files are.
+    expect(await within(pane()).findByTestId('make-cube-held', {}, { timeout: 12_000 })).toHaveProperty(
+      'textContent',
+      'My workspace’s model couldn’t be read, so whether the name is free isn’t known. Try again.',
+    );
+    expect(add().getAttribute('aria-disabled')).toBe('true');
+  }, 20_000);
+
   it('says whoever queries the cube reads it through Cube, and Cancel closes it', async () => {
     const { onClose } = open();
     await within(pane()).findByRole('tree');
