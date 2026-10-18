@@ -292,6 +292,7 @@ export {
 } from './text-tokens';
 export * from './text-document';
 export { textDocumentFromMarkdown } from './text-document-from-markdown';
+export { textDocumentToMarkdown } from './text-document-to-markdown';
 
 export {
   DRIVER_TYPES,
