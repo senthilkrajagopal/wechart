@@ -1,0 +1,8 @@
+# Finished tasks' notes: P2.26, the Text tile, dashboard parameters and AI summaries (lane TEXT)
+
+Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lines word for word, kept apart from `tasks-done.md` while the lanes run in parallel. Each task keeps its one line in `docs/tasks.md`.
+
+- [x] T868 [P] (AC-513, AC-518) The Text tile's stored document: wechart's own schema and version, with its nodes, marks and attributes, link checks and element count
+  - Files: `packages/core/src/text-document.ts` (+ test), `packages/core/src/index.ts`.
+  - Failing test: `text-document.test.ts`: a document of paragraphs, three heading levels, a Large value, bold, italic, both lists, a link to `https://` and one to a wechart dashboard, and one element of each kind passes `textDocumentProblems`; it refuses an unknown node, an unknown mark, an attribute not declared (`onclick`, `style`, `class`), a `javascript:`, `data:` or `vbscript:` link, and 11 elements, each named; `elementsOf` counts live elements, controls and buttons (AC-513, AC-518).
+  - Depends on: none

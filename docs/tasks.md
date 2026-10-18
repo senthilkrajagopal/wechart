@@ -1970,10 +1970,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 ### Lane TEXT: the document
 
-- [ ] T868 [P] (AC-513, AC-518) The Text tile's stored document: wechart's own schema and version, with its nodes, marks and attributes, link checks and element count
-  - Files: `packages/core/src/text-document.ts` (+ test), `packages/core/src/index.ts`.
-  - Failing test: `text-document.test.ts`: a document of paragraphs, three heading levels, a Large value, bold, italic, both lists, a link to `https://` and one to a wechart dashboard, and one element of each kind passes `textDocumentProblems`; it refuses an unknown node, an unknown mark, an attribute not declared (`onclick`, `style`, `class`), a `javascript:`, `data:` or `vbscript:` link, and 11 elements, each named; `elementsOf` counts live elements, controls and buttons (AC-513, AC-518).
-  - Depends on: none
+- [x] T868 [P] (AC-513, AC-518) The Text tile's stored document: wechart's own schema and version, with its nodes, marks and attributes, link checks and element count
 
 - [ ] T869 (AC-512, AC-116) Convert wechart's markdown subset and its `{{…}}` tokens into a Text document, an HTML tag kept as literal text
   - Files: `packages/core/src/text-document-from-markdown.ts` (+ test), `packages/core/src/text-tokens.ts`.

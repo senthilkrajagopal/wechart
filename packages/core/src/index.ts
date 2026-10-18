@@ -276,6 +276,7 @@ export {
   tokenMembersOf,
   type TextToken,
 } from './text-tokens';
+export * from './text-document';
 
 export {
   DRIVER_TYPES,
