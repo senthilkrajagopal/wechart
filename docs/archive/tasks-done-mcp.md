@@ -271,3 +271,19 @@
     - **Batch run, real Chrome, at d6ffe766:**
       - **Main:** 825 passed, 4 failed. All four pass when rerun alone, so they are load flakes: a11y-tokens:88, filters:201, model-design:855 and model-schedule:73.
       - **Security:** 395 passed, none failed.
+
+- [x] T779 (AC-472, AC-473) Limit each token's requests to `/mcp` in the metadata database, 60 a minute where unset, with 429 and `Retry-After` over it and 503 while the store fails; the error handler answers both
+  - Lane: MCP
+  - Files: `packages/api/package.json` (`@fastify/rate-limit` 11.2.1), `packages/api/src/db/migrations/1758670003000_mcp-rate-limit.cjs` (renumbered 2026-10-17: T777's took 1758670002000, since 1758670001000 was T768's), `packages/api/src/mcp/rateLimitStore.ts` (+ test; variant A of `mcp-deployment-and-tokens.md`, `INSERT … ON CONFLICT DO UPDATE … RETURNING`), `packages/api/src/mcp/plugin.ts`, `packages/api/src/config.ts` (`WECHART_MCP_RATE_LIMIT`), `packages/api/src/server.ts` (the global error handler), `packages/api/src/mcp/rate-limit.test.ts`.
+  - Today: the global `setErrorHandler` turns the limiter's error into a 500 (`fastify-rate-limit.md`, Gotcha 1).
+  - Failing test: `rate-limit.test.ts`: two Fastify instances on one metadata database, the limit at 60: a token's 61st request in a minute, across both, answers 429 with `Retry-After` and runs nothing, and an `initialize` or `tools/list` request counts as a `tools/call` does (AC-472); with the store's table unreachable, a request answers 503 and runs nothing, and answers normally once it's back (AC-473). `rateLimitStore.test.ts`: concurrent increments of one key never lose a count; an old window is cleaned up.
+  - Depends on: T778
+  - **Built 2026-10-17** (lane MCP, batch 4). **AC-472 is ticked.** AC-473 is shown for token-bearing requests and ticks at T780 (decision T779-6).
+    - **Package:** `@fastify/rate-limit` 11.2.1, pinned exactly.
+    - **Store:** table `mcp_rate_limit` (migration `1758670003000`), one row per key, logged. `rateLimitCounter(db)` runs Variant A in one upsert on the database's clock, and removes old windows. `main.ts` removes windows begun over a day ago, hourly, through `startAuditRetention`.
+    - **The plugin:** `/mcp`'s routes now sit in their own encapsulated scope, with the limiter registered there first: a route-level `onRequest` hook after the Host, Origin and token checks, keyed `tok:<token id>`. GET and DELETE are left out (`rateLimit: false`) until T780. A count that fails is `RateLimitStoreUnavailable`, rethrown with `skipOnError` off. With no counter given, every count fails, so `/mcp` answers 503 (decision T779-3).
+    - **The global error handler** answers `RateLimited` with 429 and `RateLimitStoreUnavailable` with 503. The limiter's `Retry-After`, set before it throws, survives the custom handler. That was UNVERIFIED in `fastify-rate-limit.md` (Gotcha 1); `rate-limit.test.ts` shows it.
+    - **Config:** `WECHART_MCP_RATE_LIMIT`, a whole number from 1, 60 unset.
+    - **Tests:** `rateLimitStore.test.ts` (3, new), `rate-limit.test.ts` (5, new: two replicas over the limit, each token counted alone, the setting, no store, and the store going away and coming back through a TCP relay in front of Postgres).
+    - **Tests changed:** `mcp/auth.test.ts` and `mcp/transport.test.ts` now give the server a counter, since `/mcp` takes nothing without one.
+    - **Unit suite:** api 1,964 passed, 2 failed (route-matrix `GET /api/cube-store` and `POST /api/cube-store/sql`, 5 s timeouts at load average 30; both pass alone, 1.7 s each); web 3,020, core 550, charts 556, recommender 133, ui 47.

@@ -150,6 +150,11 @@ import { workspaceModels } from './routes/workspace-models';
 import { bearerAuth } from './mcp/auth';
 import { mcpCaller } from './mcp/caller';
 import { mcpUrlOf, registerMcp } from './mcp/plugin';
+import {
+  type RateLimitCounter,
+  RateLimited,
+  RateLimitStoreUnavailable,
+} from './mcp/rateLimitStore';
 import { registerAccessTokens } from './routes/access-tokens';
 import type { AccessTokenStore } from './repos/access-tokens';
 import type { SignInStore } from './repos/sign-ins';
@@ -272,6 +277,8 @@ export interface BuildOptions {
   readonly accessTokens?: AccessTokenStore;
   /** Each user's latest web sign-in, whose groups their tokens act with (T777, AC-471). */
   readonly signIns?: SignInStore;
+  /** Each token's requests to `/mcp`, counted for every replica (T779, AC-472). Unset: 503. */
+  readonly mcpRateLimits?: RateLimitCounter;
   /**
    * Where a data source lands before it is stored, and leaves before it is
    * removed (T442): xcube's connections. Unset without xcube.
@@ -511,6 +518,7 @@ export function buildServer({
   calcRequests,
   accessTokens,
   signIns,
+  mcpRateLimits,
   dataSourceLanding,
   connectionTest,
   connectionTests,
@@ -4512,6 +4520,9 @@ export function buildServer({
   if (config.mcpHost !== undefined)
     registerMcp(app, {
       host: config.mcpHost,
+      // Each token's requests limited across replicas (T779, AC-472, AC-473).
+      ...(mcpRateLimits === undefined ? {} : { rateLimits: mcpRateLimits }),
+      ...(config.mcpRateLimit === undefined ? {} : { rateLimit: config.mcpRateLimit }),
       // A token acts as its owner, with their latest sign-in's groups (T777,
       // AC-471); with none kept, no token is taken with sign-in on.
       ...(accessTokens === undefined || (security === 'oidc' && signIns === undefined)
@@ -6580,6 +6591,18 @@ export function buildServer({
 
     if (error instanceof BadRequest) {
       return reply.status(400).send({ error: error.message });
+    }
+
+    // `/mcp` over its limit, `Retry-After` already set by the limiter (T779, AC-472).
+    if (error instanceof RateLimited) {
+      return reply.status(429).send({ error: error.message });
+    }
+    // Its count can't be kept: nothing is taken until it can (T779, AC-473).
+    if (error instanceof RateLimitStoreUnavailable) {
+      app.log.warn({ err: error.cause }, error.message);
+      return reply.status(503).send({
+        error: 'MCP can’t count requests just now, so it takes none. Try again shortly.',
+      });
     }
 
     // Nobody signed in (AC-251): no content, whatever the route.

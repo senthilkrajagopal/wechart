@@ -29,6 +29,7 @@ import { xcubeRefreshWorker } from './xcube/refresh-worker';
 import { calcRequestStore } from './repos/calc-requests';
 import { accessTokenStore } from './repos/access-tokens';
 import { signInStore } from './repos/sign-ins';
+import { rateLimitCounter } from './mcp/rateLimitStore';
 import { AUDIT_RETENTION_DAYS, startAuditRetention } from './audit/retention';
 import { readModelDir } from './model/read-dir';
 import { startModel } from './model/split';
@@ -185,6 +186,7 @@ async function main(): Promise<void> {
           pushTree: () => sync.pushTree('folder'),
         });
   const runStore = sqlRuns(db);
+  const rateLimits = rateLimitCounter(db);
   // The builds wechart starts, one record per start (T372, AC-150).
   const builds = buildHistory(db);
   /**
@@ -298,6 +300,8 @@ async function main(): Promise<void> {
     accessTokens: accessTokenStore(db),
     // Each user's latest sign-in, whose groups their tokens act with (T777, AC-471).
     signIns: signInStore(db),
+    // Each token's requests to `/mcp`, counted for every replica (T779, AC-472).
+    mcpRateLimits: rateLimits,
     // Read-only SQL run by xcube, on a data source's connection (T532, AC-373).
     ...(config.xcube === undefined || service === undefined
       ? {}
@@ -425,6 +429,13 @@ async function main(): Promise<void> {
       app.log.warn({ err: error }, 'could not remove SQL runs past the retention');
     },
   });
+  // `/mcp`'s finished count windows, removed hourly once a day old (T779).
+  const stopRateLimitCleanup = startAuditRetention(rateLimits, {
+    days: 1,
+    onError: (error) => {
+      app.log.warn({ err: error }, 'could not remove old MCP rate-limit windows');
+    },
+  });
 
   /**
    * Each build wechart started followed to its end on the server, whether or
@@ -463,6 +474,7 @@ async function main(): Promise<void> {
   closeWithGrace({ delay: 15_000 }, async () => {
     stopRetention();
     stopRunRetention();
+    stopRateLimitCleanup();
     stopFollowing();
     if (scheduling) await scheduler.stop();
     clearInterval(sweeping);

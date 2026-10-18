@@ -6,6 +6,7 @@ import { closeDb, getDb } from '../db/client';
 import { accessTokenStore } from '../repos/access-tokens';
 import { signInStore } from '../repos/sign-ins';
 import { buildServer } from '../server';
+import { rateLimitCounter } from './rateLimitStore';
 import { mintToken } from './tokenText';
 
 /**
@@ -18,6 +19,8 @@ import { mintToken } from './tokenText';
  */
 const HOST = 'mcp.wechart.example.com';
 const store = () => accessTokenStore(getDb());
+/** Where `/mcp` counts each token's requests (T779): with none, it takes nothing. */
+const counter = () => rateLimitCounter(getDb());
 const DAY = 86_400_000;
 const MISSING = 'Bearer error="invalid_token", error_description="Missing Authorization header"';
 const REFUSED =
@@ -96,7 +99,7 @@ describe('the token on /mcp, sign-in off (T776, AC-435, AC-431, AC-430, AC-479)'
     });
 
   it('answers 401 with a Bearer challenge to a missing, bad, revoked or expired token, running nothing', async () => {
-    const app = buildServer({ config: base, accessTokens: store() });
+    const app = buildServer({ config: base, accessTokens: store(), mcpRateLimits: counter() });
     try {
       const cases: [string, Record<string, string>, string, string][] = [
         ['none', {}, '/mcp', MISSING],
@@ -133,7 +136,7 @@ describe('the token on /mcp, sign-in off (T776, AC-435, AC-431, AC-430, AC-479)'
   });
 
   it('refuses before the body is read: a body of another type gets the 401 too', async () => {
-    const app = buildServer({ config: base, accessTokens: store() });
+    const app = buildServer({ config: base, accessTokens: store(), mcpRateLimits: counter() });
     try {
       const answer = await app.inject({
         method: 'POST',
@@ -150,7 +153,12 @@ describe('the token on /mcp, sign-in off (T776, AC-435, AC-431, AC-430, AC-479)'
 
   it('lets a working token through and records when it was last used', async () => {
     const at = new Date('2026-10-17T12:34:56.000Z');
-    const app = buildServer({ config: base, accessTokens: store(), now: () => at });
+    const app = buildServer({
+      config: base,
+      accessTokens: store(),
+      mcpRateLimits: counter(),
+      now: () => at,
+    });
     try {
       const answer = await post(app, { authorization: `Bearer ${working.text}` });
       // Past the token check, MCP answers (T778).
@@ -183,6 +191,7 @@ describe('the token on /mcp, sign-in on (T776, AC-435)', () => {
       },
       sessions: pgSessionStore(getDb()),
       accessTokens: store(),
+      mcpRateLimits: counter(),
       // Whose groups a token acts with (T777): with none kept, no token is taken.
       ...(keepsSignIns ? { signIns: signInStore(getDb()) } : {}),
     });

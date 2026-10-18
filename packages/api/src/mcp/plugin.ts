@@ -1,3 +1,4 @@
+import rateLimit from '@fastify/rate-limit';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import { bearerAuthChallengeResponse } from '@modelcontextprotocol/server';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -5,6 +6,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { PUBLIC } from '../auth/guard';
 import { type McpAuth, noTokens } from './auth';
 import { mcpGuard } from './guard';
+import {
+  MCP_RATE_LIMIT,
+  type RateLimitCounter,
+  RateLimited,
+  rateLimitStore,
+} from './rateLimitStore';
 import { mcpHandler } from './server';
 
 /** Where MCP is served, on its host (AC-476). */
@@ -23,7 +30,17 @@ export interface McpOptions {
    * away. Unset, no token is taken.
    */
   readonly verifyToken?: (authorization: string | undefined) => Promise<McpAuth>;
+  /**
+   * Where each token's requests are counted (T779, AC-472): the metadata
+   * database, shared by every replica. Unset, nothing can be counted, so a
+   * request bearing a token is refused with 503 (AC-473).
+   */
+  readonly rateLimits?: RateLimitCounter;
+  /** A token's requests a minute, `WECHART_MCP_RATE_LIMIT`: 60 unset (AC-472). */
+  readonly rateLimit?: number;
 }
+
+const MINUTE_MS = 60_000;
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -78,21 +95,45 @@ export function registerMcp(app: FastifyInstance, options: McpOptions): void {
   app.addHook('onClose', async () => {
     await handler.close();
   });
-  app.post(
-    MCP_PATH,
-    { ...PUBLIC, onRequest: [...guard, tokenCheck], preParsing: actAsCaller },
-    async (request, reply) => {
-      reply.hijack();
-      // `auth` on the raw request is where the adapter reads it from (the SDK's Fastify recipe).
-      const raw = Object.assign(request.raw, { auth: request.mcpAuth }) as Parameters<
-        typeof node
-      >[0];
-      await node(raw, reply.raw, request.body);
-    },
-  );
   // "GET and DELETE should be answered with 405" (same source).
   const notAllowed = async (_request: unknown, reply: FastifyReply) =>
     reply.status(405).header('allow', 'POST').send({ error: 'MCP is spoken here by POST alone.' });
-  app.get(MCP_PATH, { ...PUBLIC, onRequest: guard }, notAllowed);
-  app.delete(MCP_PATH, { ...PUBLIC, onRequest: guard }, notAllowed);
+  // Its own scope, so the limiter's `onRoute` hook sees `/mcp`'s routes alone
+  // (`fastify-rate-limit.md`, "Scoping to `/mcp` only").
+  app.register(async (mcp) => {
+    // Each token's requests, whatever their method, counted in the metadata
+    // database (T779, AC-472). The limiter is a route-level `onRequest` hook,
+    // so it runs after the Host, Origin and token checks, keyed by the
+    // token's id, never its text (Gotcha 13). A count that fails is rethrown
+    // (`skipOnError` off): 503, fail closed (AC-473). The error handler
+    // answers both (`server.ts`).
+    await mcp.register(rateLimit, {
+      hook: 'onRequest',
+      max: options.rateLimit ?? MCP_RATE_LIMIT,
+      timeWindow: MINUTE_MS,
+      store: rateLimitStore(options.rateLimits),
+      skipOnError: false,
+      keyGenerator: (request) => {
+        if (request.mcpAuth === null) throw new Error('/mcp counted a request with no token.');
+        return `tok:${request.mcpAuth.clientId}`;
+      },
+      errorResponseBuilder: (_request, context) => new RateLimited(context.after),
+    });
+    mcp.post(
+      MCP_PATH,
+      { ...PUBLIC, onRequest: [...guard, tokenCheck], preParsing: actAsCaller },
+      async (request, reply) => {
+        reply.hijack();
+        // `auth` on the raw request is where the adapter reads it from (the SDK's Fastify recipe).
+        const raw = Object.assign(request.raw, { auth: request.mcpAuth }) as Parameters<
+          typeof node
+        >[0];
+        await node(raw, reply.raw, request.body);
+      },
+    );
+    // These take no token and run nothing, so they aren't counted.
+    const uncounted = { config: { ...PUBLIC.config, rateLimit: false as const } };
+    mcp.get(MCP_PATH, { ...uncounted, onRequest: guard }, notAllowed);
+    mcp.delete(MCP_PATH, { ...uncounted, onRequest: guard }, notAllowed);
+  });
 }

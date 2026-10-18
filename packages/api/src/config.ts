@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { AUDIT_RETENTION_DAYS } from './audit/retention';
 import type { SecurityMode } from './auth/user';
+import { MCP_RATE_LIMIT } from './mcp/rateLimitStore';
 import type { XcubePublicKey } from './secrets/xcube-key';
 
 /**
@@ -73,6 +74,11 @@ export interface Config {
    * 18's Q6, "MCP off (Recommended)").
    */
   readonly mcpHost?: string;
+  /**
+   * `WECHART_MCP_RATE_LIMIT`: how many requests to `/mcp` each token may
+   * make a minute, a whole number from 1; 60 unset (T779, AC-472).
+   */
+  readonly mcpRateLimit?: number;
   /**
    * `WECHART_SUPER_ADMIN_GROUP`: the AD group whose members are Super-Admins,
    * exactly as the provider's groups claim carries it (T323, AC-256). Required
@@ -225,6 +231,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     security,
     ...(trustProxy === undefined ? {} : { trustProxy }),
     ...(mcpHost === undefined ? {} : { mcpHost }),
+    mcpRateLimit: perMinuteOf(env, 'WECHART_MCP_RATE_LIMIT', MCP_RATE_LIMIT),
     ...(security === 'oidc' ? signInOf(env, trustProxy) : {}),
     cubeApiUrl,
     cubeApiSecret,
@@ -349,6 +356,17 @@ function trustProxyOf(env: NodeJS.ProcessEnv): readonly string[] | undefined {
 /** A DNS host name: dot-separated labels of letters, digits and inner hyphens. */
 const HOST_NAME =
   /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+
+/** A limit a minute (T779, AC-472): a whole number from 1, or `fallback` unset. */
+function perMinuteOf(env: NodeJS.ProcessEnv, setting: string, fallback: number): number {
+  const said = (env[setting] ?? '').trim();
+  if (said === '') return fallback;
+  if (!/^[1-9]\d*$/.test(said))
+    throw new ConfigError(
+      `${setting} is "${said}". It is how many requests are taken a minute: a whole number from 1.`,
+    );
+  return Number(said);
+}
 
 /** The MCP host (T774, AC-476): a host name alone, or none for MCP off. */
 function mcpHostOf(env: NodeJS.ProcessEnv): string | undefined {

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb } from '../db/client';
 import { accessTokenStore } from '../repos/access-tokens';
 import { buildServer } from '../server';
+import { rateLimitCounter } from './rateLimitStore';
 import { MCP_INSTRUCTIONS } from './server';
 import { mintToken } from './tokenText';
 
@@ -49,6 +50,7 @@ function wechart() {
       mcpHost: HOST,
     },
     accessTokens: accessTokenStore(getDb()),
+    mcpRateLimits: rateLimitCounter(getDb()),
   });
 }
 

@@ -173,6 +173,14 @@ export interface Database {
   calc_request_takers: CalcRequestTakerTable;
   personal_access_tokens: PersonalAccessTokenTable;
   latest_sign_ins: LatestSignInTable;
+  mcp_rate_limit: McpRateLimitTable;
+}
+
+/** `/mcp`'s request count for one key, in its current window (T779, AC-472). */
+export interface McpRateLimitTable {
+  key: string;
+  window_start: Date;
+  hits: number;
 }
 
 /** A user's latest web sign-in: its groups, which their tokens act with on `/mcp` (T777, AC-471). */
