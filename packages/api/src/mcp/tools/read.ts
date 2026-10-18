@@ -76,8 +76,20 @@ const NOT_THERE = 'There’s no such item, or it isn’t yours to see.';
  */
 export function refusedBy(answer: WebAnswer): CallToolResult {
   if (answer.status >= 500) throw new Error(`The web route answered ${answer.status}.`);
-  const said = (answer.body as { error?: unknown } | null)?.error;
-  return typeof said === 'string' ? routeRefusal(said) : refusal(NOT_THERE);
+  const { error: said, errors } = (answer.body ?? {}) as { error?: unknown; errors?: unknown };
+  if (typeof said === 'string') return routeRefusal(said);
+  // A model save's or check's errors, each on its file (T786): every one said.
+  if (Array.isArray(errors) && errors.length > 0)
+    return routeRefusal(
+      errors
+        .map((each) => {
+          const { path, message } = (each ?? {}) as { path?: unknown; message?: unknown };
+          const text = typeof message === 'string' ? message : JSON.stringify(each);
+          return typeof path === 'string' ? `${path}: ${text}` : text;
+        })
+        .join('\n'),
+    );
+  return refusal(NOT_THERE);
 }
 
 /**

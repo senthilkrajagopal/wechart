@@ -31,6 +31,11 @@ const TOOL_NAMES = [
   'query',
   'next_page',
   'edit_in_my_workspace',
+  'create_item',
+  'change_item',
+  'delete_item',
+  'save_model_file',
+  'delete_model_file',
 ];
 const NAME = 't778 transport';
 let token = '';

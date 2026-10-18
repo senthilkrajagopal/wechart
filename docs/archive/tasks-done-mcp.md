@@ -407,6 +407,20 @@
       - **For the user:** the project folder's time zone defaults to UTC where the client gives none (decision T785-2), the lane's call. It is raised in the lane's handoff.
       - **Left as is:** `scopes.test.ts` doesn't check the order of telling and answering; the answer is returned after the awaited telling.
 
+- [x] T786 (AC-438) Create, change and delete dashboards, charts, cubes and views in the owner's workspace through MCP, and nowhere else
+  - Lane: MCP
+  - Files: `packages/api/src/mcp/tools/workspace.ts` (+ `workspace-items.test.ts`).
+  - Failing test: `workspace-items.test.ts`: a dashboard, a chart, a draft cube and a draft view are created, changed and deleted in the owner's workspace with the web app's own checks (names held to AC-422 included); a change or delete aimed at an item in a shared folder, or at another user's workspace, is refused and changes nothing; nothing is ever created outside the owner's workspace (AC-438).
+  - Depends on: T785
+  - **Built 2026-10-18** (lane MCP, batch 5). **AC-438 is ticked**, with T785's copy.
+    - **The tools** (`mcp/tools/workspace.ts`, `ITEM_TOOLS`): `create_item`, `change_item`, `delete_item`, `save_model_file` and `delete_model_file`, each by the web app's own route as the caller (`POST /api/documents`, `PUT` and `DELETE /api/documents/:kind/:id`, `POST /api/model/publish`, `DELETE /api/model/files`), each needing workspace-edit (decision T786-2).
+    - **Only My workspace** (T786-1): each first asks where the item or folder is, as the caller, and goes on only inside their own workspace (`mine`, followed up `/api/folders`; a dashboard's own chart by its dashboard). A change that would move an item out is refused too. The refusal is fixed text, `NOT_IN_MY_WORKSPACE`.
+    - **A save's errors** (T786-3): `refusedBy` now gives a route's `{ errors: [{ path, message }] }` as "‹path›: ‹message›" under `userData.reason`. Before, a draft's name in use read as "no such item".
+    - **Tests:** `mcp/tools/workspace-items.test.ts` (6, new), with sign-in on and the stub xcube, set up as `routes/draft-names.test.ts` is. `writer`'s token creates, changes (whole body, at its version) and deletes a dashboard and a chart in a project folder of their workspace. It saves a draft cube and a draft view over it, changes the cube, and deletes both. A draft named as a cube landed in /Ops, which they can't see, is refused with "The name “…” is already in use." and nothing is saved. Changing or deleting /Sales' shared dashboard, or one in `super`'s workspace, is refused, and both are as they were. So is moving their own dashboard to /Sales, which stays put. Creating in /Sales, the shared root or `super`'s workspace is refused. Saving or deleting /Sales' model file, or one in `super`'s workspace, is refused, and the file is as it was. Throughout, no document or model file outside every workspace appears or changes (the files run one at a time).
+    - **Tests changed:** `mcp/transport.test.ts` lists the five new tools last. `workspace.test.ts`'s every-tool 403 test now covers them too.
+    - **Not seen red before the code:** the test was written first but first run after the tools. It then failed on one case, the AC-422 refusal read as "no such item", which T786-3 fixed.
+    - **Unit suite:** web 3,117, core 550, charts 556, recommender 133, ui 47 green; api 2,033 passed, 6 failed, all in `route-matrix.test.ts`: one 5 s timeout at load average 14, the five after it left state behind. It passes alone (134/134).
+
 ## The route matrix's 5 s timeouts (lane MCP, batch 4, at the coordinator's request)
 
 - **Asked:** why `GET /api/images/:id` in `access/route-matrix.test.ts` times out at 5 s in most full unit runs.

@@ -1626,11 +1626,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T785 (AC-438, AC-433, AC-469, AC-432) Edit in my workspace through MCP: copy a shared dashboard, chart or model into its project folder in the owner's workspace; refuse with 403 `insufficient_scope` without workspace-edit
 
-- [ ] T786 (AC-438) Create, change and delete dashboards, charts, cubes and views in the owner's workspace through MCP, and nowhere else
-  - Lane: MCP
-  - Files: `packages/api/src/mcp/tools/workspace.ts` (+ `workspace-items.test.ts`).
-  - Failing test: `workspace-items.test.ts`: a dashboard, a chart, a draft cube and a draft view are created, changed and deleted in the owner's workspace with the web app's own checks (names held to AC-422 included); a change or delete aimed at an item in a shared folder, or at another user's workspace, is refused and changes nothing; nothing is ever created outside the owner's workspace (AC-438).
-  - Depends on: T785
+- [x] T786 (AC-438) Create, change and delete dashboards, charts, cubes and views in the owner's workspace through MCP, and nowhere else
 
 - [ ] T787 (AC-439, AC-442, AC-469) Propose, withdraw and list the owner's proposals through MCP, checked as the web app's are, and marked in the audit trail as through MCP
   - Lane: MCP
