@@ -31,3 +31,8 @@ Lane HEADER's ticked tasks from `docs/tasks.md` §P2.25 (F43), their sub-lines w
   - Files: `packages/web/src/dashboard/header/HeaderSheet.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
   - Failing test: `HeaderSheet.test.tsx`: while it moves, the sheet's contents are `inert`. The e2e: the sheet's computed `transition-property` is `height`, `0.2s` with `cubic-bezier(0, 0, 0, 1)` while opening and `0.15s` with `cubic-bezier(1, 0, 1, 1)` while closing; mid-opening, Tab doesn't reach a pill; with `page.emulateMedia({ reducedMotion: 'reduce' })` the duration is `0s` and the sheet has its full height in the first animation frame after the toggle is pressed (AC-488).
   - Depends on: T832
+
+- [x] T834 (AC-489, AC-119) Close the sheet with its toggle or with Escape in the header, innermost first and ahead of the dashboard's own Escape, focus to the toggle; a click on the tiles leaves it open
+  - Files: `packages/web/src/dashboard/header/HeaderSheet.tsx` (+ test), `packages/web/src/dashboard/DashboardView.tsx` (the dashboard-wide Escape that clears cross-filters, held while focus is in the open header), `e2e/dashboard-header.spec.ts`.
+  - Failing test: `HeaderSheet.test.tsx`, on a dashboard: with a filter's popover open, Escape closes it with focus back on its pill and the sheet still open, and a second Escape closes the sheet with focus on the toggle; with a cross-filter set and focus in the open sheet, Escape closes the sheet and the cross-filter stays, and Escape with focus outside the header then clears it (AC-489, AC-119); Escape on a focused tile unmarks that tile and the sheet stays open; a click on a tile leaves it open (AC-489). The e2e repeats the popover and cross-filter cases in Chrome.
+  - Depends on: T828

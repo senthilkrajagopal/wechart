@@ -1886,10 +1886,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T833 (AC-488) Open the sheet by its height over 200 ms decelerating and close it over 150 ms accelerating, its contents inert while it moves, and with no animation under reduced motion
 
-- [ ] T834 (AC-489, AC-119) Close the sheet with its toggle or with Escape in the header, innermost first and ahead of the dashboard's own Escape, focus to the toggle; a click on the tiles leaves it open
-  - Files: `packages/web/src/dashboard/header/HeaderSheet.tsx` (+ test), `packages/web/src/dashboard/DashboardView.tsx` (the dashboard-wide Escape that clears cross-filters, held while focus is in the open header), `e2e/dashboard-header.spec.ts`.
-  - Failing test: `HeaderSheet.test.tsx`, on a dashboard: with a filter's popover open, Escape closes it with focus back on its pill and the sheet still open, and a second Escape closes the sheet with focus on the toggle; with a cross-filter set and focus in the open sheet, Escape closes the sheet and the cross-filter stays, and Escape with focus outside the header then clears it (AC-489, AC-119); Escape on a focused tile unmarks that tile and the sheet stays open; a click on a tile leaves it open (AC-489). The e2e repeats the popover and cross-filter cases in Chrome.
-  - Depends on: T828
+- [x] T834 (AC-489, AC-119) Close the sheet with its toggle or with Escape in the header, innermost first and ahead of the dashboard's own Escape, focus to the toggle; a click on the tiles leaves it open
 
 - [ ] T835 (AC-490) Keep the sheet open or closed for the visit only, across page tabs, a bookmark applied and a refresh, storing it nowhere
   - Files: `packages/web/src/dashboard/header/useHeaderSheet.ts` (+ test), `packages/web/src/dashboard/DashboardView.tsx`, `e2e/dashboard-header.spec.ts`.

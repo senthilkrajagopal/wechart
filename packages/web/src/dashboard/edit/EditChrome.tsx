@@ -6,6 +6,7 @@ import type { FiltersSet } from '../header/filtersSet';
 import { FiltersToggle } from '../header/FiltersToggle';
 import { HeaderSheet } from '../header/HeaderSheet';
 import { HeaderTitle } from '../header/HeaderTitle';
+import { useSheetEscape } from '../header/useSheetEscape';
 import { EditBar } from './EditBar';
 import { EditSidebar, type SidebarContent } from './EditSidebar';
 
@@ -259,6 +260,10 @@ export function EditChrome<T>({
    */
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetId = useId();
+  const root = useRef<HTMLDivElement>(null);
+  useSheetEscape(root, sheetId, sheetOpen && !editing, () => {
+    setSheetOpen(false);
+  });
   /** The row has cut the title short: the sheet then starts with it whole (AC-485). */
   const [titleCut, setTitleCut] = useState(false);
   /** Edit, once a Discard has put it back: where focus goes (T223's review). */
@@ -429,6 +434,7 @@ export function EditChrome<T>({
     <>
       {overlaid ? <div className="dashboard dashboard--overlaid">{shown}</div> : null}
       <div
+        ref={root}
         className={overlaid ? 'dashboard dashboard--under-overlay' : 'dashboard'}
         data-editing={editing ? 'true' : undefined}
         inert={overlaid}

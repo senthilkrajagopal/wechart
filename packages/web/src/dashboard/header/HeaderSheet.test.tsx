@@ -345,3 +345,157 @@ describe('the header sheet in motion', () => {
     expect(sheet().hidden).toBe(true);
   });
 });
+
+/**
+ * T834 (AC-489, AC-119; design 19 screen 2 pin 5 and its keyboard table,
+ * 19-Q10, rule 85): the open sheet closes with its toggle, or Escape with
+ * focus in the header, innermost first and ahead of the dashboard's own
+ * Escape, focus then on the toggle; Escape on a tile and a click on one
+ * leave it open.
+ */
+describe('Escape and the open sheet', () => {
+  const BAR: RenderSpec = {
+    chartType: 'bar',
+    encoding: { x: ['orders.status'], y: ['orders.count'] },
+    rows: [
+      { 'orders.status': 'shipped', 'orders.count': 3 },
+      { 'orders.status': 'completed', 'orders.count': 5 },
+    ],
+  };
+  const byStatus: ChartDocument = {
+    schemaVersion: 1,
+    title: 'By status',
+    chart: {
+      source: { cube: 'orders' },
+      wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+      chartType: 'bar',
+    },
+  };
+
+  /** A dashboard of one bar tile, marking, or cross-filtering. */
+  function board(mode: 'markings' | 'crossFilter') {
+    // A chart's canvas sizes itself by one; jsdom has none.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <DashboardView
+          dashboardId="d1"
+          document={{
+            ...DOC,
+            settings: {
+              width: 'full',
+              interactions: { mode, crossFilter: { defaultAction: 'filter' } },
+            },
+            pages: [
+              {
+                id: 'p1',
+                title: 'Overview',
+                items: [{ id: 't-bar', kind: 'chart', chartId: 'c-bar', w: 6 }],
+              },
+            ],
+          }}
+          specs={{ 'c-bar': BAR }}
+          documents={{ 'c-bar': byStatus }}
+          onSave={vi.fn()}
+          place={{ line: OWNERSHIP, editsElsewhere: false }}
+          memberTitle={(member) => (member === 'orders.status' ? 'Status' : undefined)}
+        />
+      </QueryClientProvider>,
+    );
+  }
+  const tile = () => {
+    const found = document.querySelector<HTMLElement>('.grid-tile');
+    if (found === null) throw new Error('No tile');
+    return found;
+  };
+  const crossChips = () => document.querySelectorAll('[data-testid="cross-filter-chip"]');
+  const expanded = () => toggle().getAttribute('aria-expanded');
+
+  it("closes a filter's popover first, focus on its pill, and the sheet with a second Escape, focus on the toggle", async () => {
+    render(view());
+    await userEvent.click(toggle());
+    const summary = within(sheet()).getByRole('button', { name: /Status/, expanded: false });
+    await userEvent.click(summary);
+    expect(document.querySelector('.filter-popover')).not.toBeNull();
+
+    await userEvent.keyboard('{Escape}');
+    expect(document.querySelector('.filter-popover')).toBeNull();
+    expect(document.activeElement).toBe(summary);
+    expect(expanded()).toBe('true');
+    expect(sheet().hidden).toBe(false);
+
+    await userEvent.keyboard('{Escape}');
+    expect(expanded()).toBe('false');
+    expect(sheet().hidden).toBe(true);
+    expect(document.activeElement).toBe(toggle());
+  });
+
+  it('closes with Escape on the toggle itself, focus staying there', async () => {
+    render(view());
+    await userEvent.click(toggle());
+    expect(document.activeElement).toBe(toggle());
+    await userEvent.keyboard('{Escape}');
+    expect(expanded()).toBe('false');
+    expect(document.activeElement).toBe(toggle());
+  });
+
+  it('closes ahead of the dashboard’s Escape: a cross-filter stays, and Escape outside the header clears it (AC-119)', async () => {
+    board('crossFilter');
+    // A cross-filter from the keyboard (T405): Space on the focused tile.
+    tile().focus();
+    await userEvent.keyboard(' ');
+    expect(crossChips()).toHaveLength(1);
+
+    // Focus in the open sheet: Escape closes it and clears nothing.
+    await userEvent.click(toggle());
+    // On the cross-filter's own chip, in the sheet's bar.
+    within(sheet().querySelector<HTMLElement>('[data-testid="cross-filter-chip"]')!)
+      .getByRole('button', { name: /^Clear / })
+      .focus();
+    await userEvent.keyboard('{Escape}');
+    expect(expanded()).toBe('false');
+    expect(document.activeElement).toBe(toggle());
+    expect(crossChips()).toHaveLength(1);
+
+    // With the sheet closed, Escape is the dashboard's again.
+    await userEvent.keyboard('{Escape}');
+    expect(crossChips()).toHaveLength(0);
+
+    // Focus outside the header with the sheet open: the dashboard's Escape
+    // clears it, and the sheet stays open.
+    tile().focus();
+    await userEvent.keyboard(' ');
+    expect(crossChips()).toHaveLength(1);
+    await userEvent.click(toggle());
+    tile().focus();
+    await userEvent.keyboard('{Escape}');
+    expect(crossChips()).toHaveLength(0);
+    expect(expanded()).toBe('true');
+  });
+
+  it('leaves it open for Escape on a focused tile, which unmarks that tile only, and for a click on a tile (AC-489)', async () => {
+    board('markings');
+    await userEvent.click(toggle());
+    tile().focus();
+    await userEvent.keyboard(' ');
+    expect(within(sheet()).getAllByTestId('mark-chip')).toHaveLength(1);
+
+    await userEvent.keyboard('{Escape}');
+    expect(within(sheet()).queryAllByTestId('mark-chip')).toHaveLength(0);
+    expect(expanded()).toBe('true');
+    expect(sheet().hidden).toBe(false);
+
+    await userEvent.click(tile());
+    expect(expanded()).toBe('true');
+    expect(sheet().hidden).toBe(false);
+  });
+});

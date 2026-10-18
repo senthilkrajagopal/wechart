@@ -2974,12 +2974,13 @@ export function DashboardView({
    * Escape takes them all back, as the prototype's "Clear (Esc)" says it
    * does. Not while something is open over the dashboard — a dialog, a menu,
    * a filter's popover or the Bookmarks popover (T367) — where Escape means
-   * "close this".
+   * "close this". Nor once something has handled it: the open header sheet
+   * takes an Escape with focus in the header first (AC-489, AC-119).
    */
   useEffect(() => {
     if (!crossFiltering || crossSelections.length === 0) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
       const doc = window.document;
       if (
         doc.querySelector('[aria-modal="true"], [role="menu"], .filter-popover, .bookmarks') !==

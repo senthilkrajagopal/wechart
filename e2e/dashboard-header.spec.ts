@@ -1,7 +1,9 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 import { headerSheet, openHeaderSheet } from './dashboardHeader';
-import { sharedIn } from './workspace';
+import { IN_MY_WORKSPACE, sharedIn } from './workspace';
+
+const API = 'http://localhost:4100/api';
 
 /**
  * F43, the compact dashboard header (design 19; direction.md §7g).
@@ -471,6 +473,165 @@ test('with reduced motion the sheet opens and closes at once', async ({ page, re
 
   const closed = await pressed();
   expect(closed).toMatchObject({ hidden: true, motion: undefined, height: 0 });
+});
+
+/**
+ * T834 (AC-489; design 19's keyboard table, rule 85): with a filter's popover
+ * open, Escape closes it, focus back on its pill and the sheet still open; a
+ * second Escape closes the sheet, focus on the toggle.
+ */
+test("Escape closes a filter's popover first, then the sheet, focus on the toggle", async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await sharedDashboard(request);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+  const toggle = page.locator('.dashboard__header button.header-toggle');
+  await openHeaderSheet(page);
+  const sheet = headerSheet(page);
+  const summary = sheet.locator('.filter-pill button[aria-expanded]').first();
+  await summary.click();
+  await expect(page.locator('.filter-popover')).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.filter-popover')).toHaveCount(0);
+  await expect(summary).toBeFocused();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(sheet).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toBeFocused();
+  await expect(page.locator('.header-sheet')).toBeHidden();
+});
+
+/**
+ * A dashboard of its own in My workspace, marking or cross-filtering, with a
+ * description and one bar tile, orders by status ("tile-status"); opened.
+ */
+async function barBoard(
+  page: Page,
+  request: APIRequestContext,
+  mode: 'markings' | 'crossFilter',
+): Promise<Locator> {
+  const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const title = `Header ${mode} ${unique}`;
+  const board = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const chart = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'chart', title: 'By status', ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  await request.put(`${API}/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: 'By status',
+        owner: 'admin',
+        localToDashboardId: board.id,
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+          chartType: 'bar',
+        },
+      },
+    },
+  });
+  await request.put(`${API}/documents/dashboard/${board.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        description: 'Orders by status.',
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: {
+          width: 'fixed',
+          interactions: { mode, crossFilter: { defaultAction: 'filter' } },
+        },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [{ id: 'tile-status', kind: 'chart', w: 6, h: 40, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+  await page.goto(`/explore/dashboards/${board.id}`);
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+  const status = page.locator('[data-tile="tile-status"]');
+  await expect(status.getByTestId('chart-canvas')).toBeVisible();
+  return status;
+}
+
+/**
+ * T834 (AC-489, AC-119; design 19 state B4): with a cross-filter set and
+ * focus in the open sheet, Escape closes the sheet and clears nothing; Escape
+ * with focus outside the header then clears the cross-filter.
+ */
+test('Escape in the open sheet closes it ahead of the dashboard’s Escape, which then clears the cross-filter', async ({
+  page,
+  request,
+}) => {
+  const status = await barBoard(page, request, 'crossFilter');
+  const chips = page.getByTestId('cross-filter-chip');
+
+  // A cross-filter from the keyboard (T405).
+  await status.focus();
+  await page.keyboard.press('Space');
+  await expect(chips).toHaveCount(1);
+
+  // Focus in the open sheet, on the chip's own Clear: Escape closes the
+  // sheet, focus on the toggle, and the cross-filter stays.
+  const toggle = page.locator('.dashboard__header button.header-toggle');
+  await openHeaderSheet(page);
+  await chips.getByRole('button', { name: /^Clear / }).focus();
+  await page.keyboard.press('Escape');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toBeFocused();
+  await expect(chips).toHaveCount(1);
+
+  // Focus outside the header: the dashboard's Escape clears it.
+  await status.focus();
+  await page.keyboard.press('Escape');
+  await expect(chips).toHaveCount(0);
+});
+
+/**
+ * T834 (AC-489, AC-094; 19-Q10): Escape on a focused tile unmarks that tile
+ * only and leaves the open sheet open; so does a click on a tile.
+ */
+test('Escape on a focused tile unmarks it and leaves the sheet open, as a click on a tile does', async ({
+  page,
+  request,
+}) => {
+  const status = await barBoard(page, request, 'markings');
+  const toggle = page.locator('.dashboard__header button.header-toggle');
+  await openHeaderSheet(page);
+  const chips = headerSheet(page).getByTestId('mark-chip');
+
+  // Marked from the keyboard: Space on the focused tile.
+  await status.focus();
+  await page.keyboard.press('Space');
+  await expect(chips).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(chips).toHaveCount(0);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(headerSheet(page)).toBeVisible();
+
+  // A click on the tile marks, and the sheet stays open to show it.
+  await status.getByTestId('chart-canvas').click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(headerSheet(page)).toBeVisible();
 });
 
 /**
