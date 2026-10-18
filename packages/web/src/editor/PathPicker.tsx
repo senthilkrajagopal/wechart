@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -135,6 +136,7 @@ export function PathPicker({
   const button = buttonRef ?? own;
   const search = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState('');
   const [active, setActive] = useState<string | null>(null);
@@ -183,8 +185,29 @@ export function PathPicker({
         .left ?? rect.left;
     const width = Math.min(popWidth, window.innerWidth - 2 * GUTTER);
     const left = Math.max(GUTTER, Math.min(edge, window.innerWidth - width - GUTTER));
-    setAt({ top: rect.bottom + 4, left });
+    /**
+     * Under its button where it fits; above it where it doesn't and does
+     * there; else as low as keeps it within the window — never past its foot,
+     * where its fields would be out of reach (T936 follow-up: a well low in a
+     * 900 px editor). Its height once drawn; none before.
+     */
+    const height = pop.current?.getBoundingClientRect().height ?? 0;
+    const below = rect.bottom + 4;
+    const above = rect.top - 4 - height;
+    const top =
+      below + height <= window.innerHeight - GUTTER
+        ? below
+        : above >= GUTTER
+          ? above
+          : Math.max(GUTTER, window.innerHeight - GUTTER - height);
+    setAt({ top, left });
   };
+  // Placed again once drawn, by its own height.
+  useLayoutEffect(() => {
+    if (open) place();
+    // `place` only reads refs and sets state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   /** Closed, with what was typed and the active row let go of, so it opens afresh. */
   const dismiss = () => {
     setOpen(false);
@@ -326,6 +349,7 @@ export function PathPicker({
       </button>
       {open ? (
         <div
+          ref={pop}
           className={popClass === undefined ? 'cube-picker__pop' : `cube-picker__pop ${popClass}`}
           style={
             at === null ? undefined : { top: `${String(at.top)}px`, left: `${String(at.left)}px` }

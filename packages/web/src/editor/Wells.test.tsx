@@ -229,6 +229,50 @@ describe('each well’s "+" picker (AC-026)', () => {
     }
   });
 
+  /**
+   * T936 follow-up (the real-Chrome run): with a KPI's wells after Metrics,
+   * Dimensions sits low in a 900 px window, and its picker opened under it
+   * ran past the window's foot, its fields out of reach. It opens above its
+   * button where it doesn't fit below, and is never placed past the foot.
+   */
+  it('opens above its button where it wouldn’t fit below, within the window', async () => {
+    const box = (top: number, height: number) =>
+      ({
+        left: 24,
+        right: 124,
+        top,
+        bottom: top + height,
+        width: 100,
+        height,
+        x: 24,
+        y: top,
+      }) as DOMRect;
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      // The list itself 300 px tall; the button near the foot of an 800 px window.
+      return this.classList.contains('cube-picker__pop') ? box(0, 300) : box(700, 32);
+    });
+    const height = vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800);
+    try {
+      render(
+        <Wells
+          spec={emptySpec('orders')}
+          available={[measure]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+        />,
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Add to Metrics' }));
+      const pop = document.querySelector<HTMLElement>('.cube-picker__pop--fields');
+      // Above the button (700 − 4 − 300), not under it at 736.
+      expect(pop?.style.top).toBe('396px');
+    } finally {
+      rect.mockRestore();
+      height.mockRestore();
+    }
+  });
+
   /** T467, UX-063: until a cube or view is chosen there is nothing to add, and the wells say why. */
   it('is disabled until a cube or view is chosen, saying so', () => {
     const { rerender } = render(
