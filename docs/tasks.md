@@ -1890,10 +1890,7 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 
 - [x] T831 (AC-486) The toggle's count of filters set, its name and description, "Filters, none set", and "Details" on a dashboard with no filters
 
-- [ ] T832 (AC-487) The open sheet pushes the tiles down, covers none of them, keeps the canvas's scroll position, and grows as its pills wrap
-  - Files: `packages/web/src/dashboard/header/HeaderSheet.tsx`, `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
-  - Failing test: the e2e at 1,440 × 900: with the canvas scrolled 300 px, opening the sheet leaves its `scrollTop` at 300 and moves the canvas's top down by the sheet's height, and no tile's box intersects the sheet's; the sheet holds the description, the ownership line and the bar in that order; with 12 filters the bar wraps onto more rows, every pill wholly in view, and the sheet is as tall as its contents (AC-487).
-  - Depends on: T829
+- [x] T832 (AC-487) The open sheet pushes the tiles down, covers none of them, keeps the canvas's scroll position, and grows as its pills wrap
 
 - [ ] T833 (AC-488) Open the sheet by its height over 200 ms decelerating and close it over 150 ms accelerating, its contents inert while it moves, and with no animation under reduced motion
   - Files: `packages/web/src/dashboard/header/HeaderSheet.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.

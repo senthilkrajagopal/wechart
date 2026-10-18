@@ -21,3 +21,8 @@ Lane HEADER's ticked tasks from `docs/tasks.md` §P2.25 (F43), their sub-lines w
   - Files: `packages/web/src/dashboard/header/filtersSet.ts` (+ test), `packages/web/src/dashboard/header/FiltersToggle.tsx` (+ test), `packages/web/src/dashboard/DashboardView.tsx`.
   - Failing test: `filtersSet.test.ts`: four dashboard filters, three holding a value, and one filter made from a marking count 4 of 5, named in the bar's order. `FiltersToggle.test.tsx`: it shows "Filters" and 4, its accessible name is "Filters, 4 set" and its description and tooltip "4 of 5 filters set: Ordered at, Country, Category, Product"; with filters but none set, "Filters, none set" and no count; with no filters at all, "Details" with the info icon and no count (AC-486).
   - Depends on: T828
+
+- [x] T832 (AC-487) The open sheet pushes the tiles down, covers none of them, keeps the canvas's scroll position, and grows as its pills wrap
+  - Files: `packages/web/src/dashboard/header/HeaderSheet.tsx`, `packages/web/src/dashboard/edit/EditChrome.tsx`, `packages/web/src/shell/styles.ts`, `e2e/dashboard-header.spec.ts`.
+  - Failing test: the e2e at 1,440 × 900: with the canvas scrolled 300 px, opening the sheet leaves its `scrollTop` at 300 and moves the canvas's top down by the sheet's height, and no tile's box intersects the sheet's; the sheet holds the description, the ownership line and the bar in that order; with 12 filters the bar wraps onto more rows, every pill wholly in view, and the sheet is as tall as its contents (AC-487).
+  - Depends on: T829

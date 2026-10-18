@@ -104,6 +104,12 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
       // The ownership line is in the header sheet since T828 (F43).
       await openHeaderSheet(page);
       await expect(sheet(page).getByText(`In ${FOLDER} · version 1`)).toBeVisible();
+      // Before the filter bar, which ends the sheet (AC-487, T832).
+      const ownership = (await sheet(page).locator('.dashboard__ownership').boundingBox())!;
+      const bar = (await sheet(page)
+        .getByRole('region', { name: 'Filters', exact: true })
+        .boundingBox())!;
+      expect(ownership.y + ownership.height).toBeLessThanOrEqual(bar.y);
       // No edit in place (state E): no Edit, no settings, no way to start
       // editing from its empty page (T348's review).
       await expect(header.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
