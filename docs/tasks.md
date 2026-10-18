@@ -1744,6 +1744,12 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
   - Files: `packages/web/src/workspaces/sql/SchemaTree.tsx` (+ test), `packages/web/src/workspaces/sql/findTable.ts` (+ test), `e2e/security/sql-workspace.spec.ts`.
   - Failing test: `findTable.test.ts`: "ord" keeps every read table whose name holds it and hides the rest. `SchemaTree.test.tsx`: while a schema has unread pages the box says "Searching the n tables read". The e2e: `orders.order_id` shows **PK**, and `orders.customer_id` shows **FK** with a tooltip naming `customers` (AC-448).
   - Depends on: T805
+  - Waits on: xcube's catalog returning foreign keys (`~/Work/xcube-exchange/to-xcube/2026-10-17-2200-catalog-foreign-keys.md`).
+  - **Built in part 2026-10-17** (lane SQL, batch 3).
+    - Find a table and the PK and FK tags are built, an opt-in `extended` of the shared `SchemaBrowser`, which the workspace turns on and the data source page doesn't.
+    - The unit tests cover both. The e2e covers Find a table and **PK** on `orders.id`; the sample database's key is `id`, not `order_id`.
+    - **What's left once xcube reports the key:** add the e2e's **FK** check on `orders.customer_id` (its tooltip "References public.customers (id)"), then tick T806 and AC-448. Today xcube's catalog answers `foreignKeys: []` for it, though PostgreSQL shows the key to that login.
+    - "Unread" counts a schema never opened, or one with pages still to show (decision T806-1).
 
 - [ ] T807 (AC-449) A table's ⋯: Insert name, Insert SELECT with a 100-row limit in the driver's syntax, and Preview 100 rows as an ordinary run in a new tab; opening a node sends only catalog reads
   - Lane: SQL

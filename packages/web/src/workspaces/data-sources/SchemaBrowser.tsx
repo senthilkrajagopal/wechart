@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type Dispatch,
   type KeyboardEvent,
   type SetStateAction,
@@ -13,6 +14,7 @@ import {
 } from 'react';
 
 import { StateLine } from '../../shell/StatusIcon';
+import { findTables } from '../sql/findTable';
 
 /**
  * The schema browser beside the SQL editor (T539, AC-386; design 15's P3,
@@ -55,6 +57,18 @@ interface Column {
   readonly name: string;
   /** As the database names it. */
   readonly rawType: string;
+  /** Introspection's keys (research cube/introspection-api.md): none for a login that can't read them. */
+  readonly primaryKey?: boolean;
+  readonly foreignKeys?: readonly {
+    readonly schema?: string | null;
+    readonly table: string;
+    readonly column: string;
+  }[];
+}
+
+/** A table's pages read so far, as its schema's query keeps them. */
+interface TablePages {
+  readonly pages: readonly { readonly tables: readonly Table[]; readonly total: number }[];
 }
 
 /** The API's refusal, with its status: a 409 is a state to say, not a failure. */
@@ -95,6 +109,10 @@ interface Tree {
   /** Null hands it back to the first row. */
   readonly setStop: Dispatch<SetStateAction<string | null>>;
   readonly onChoose: (name: string) => void;
+  /** "Find a table"'s text: only read tables whose names hold it show (T806). */
+  readonly find: string;
+  /** PK and FK tags on columns (T806, design 17 pin 5). */
+  readonly keys: boolean;
 }
 const TreeContext = createContext<Tree | null>(null);
 const useTree = () => useContext(TreeContext)!;
@@ -105,6 +123,7 @@ export function SchemaBrowser({
   sourceName,
   onChoose,
   heading = 'Tables',
+  extended = false,
 }: {
   sourceId: string;
   /** Its settings' version: another reads it again. */
@@ -114,6 +133,12 @@ export function SchemaBrowser({
   onChoose: (name: string) => void;
   /** Its own heading; none where its pane has one (the SQL runner workspace's "Schema", T805). */
   heading?: string | null;
+  /**
+   * Design 17's additions, the SQL runner workspace's (T806, AC-448): "Find
+   * a table" over the names read, and PK and FK tags. The data source
+   * page's tree (design 15) has neither.
+   */
+  extended?: boolean;
 }) {
   const queryClient = useQueryClient();
   const root = useRef<HTMLUListElement>(null);
@@ -125,6 +150,32 @@ export function SchemaBrowser({
     staleTime: KEPT,
   });
   const listed = schemas.data?.schemas ?? [];
+  const [find, setFind] = useState('');
+  /**
+   * What the schemas' pages read so far hold (T806): the tables read, how
+   * many match "Find a table", and whether any schema has pages unread,
+   * never opened or with more to show. Read from the kept pages as they come.
+   */
+  const cache = queryClient.getQueryCache();
+  const reading = useSyncExternalStore(
+    (changed) => cache.subscribe(changed),
+    () => {
+      let read = 0;
+      let matching = 0;
+      let unread = false;
+      for (const { name } of listed) {
+        const kept = queryClient.getQueryData<TablePages>([...key, 'tables', name]);
+        const tables = kept?.pages.flatMap((page) => page.tables) ?? [];
+        read += tables.length;
+        matching += findTables(tables, find).length;
+        if (kept === undefined || tables.length < (kept.pages.at(-1)?.total ?? 0)) unread = true;
+      }
+      return `${String(read)} ${String(matching)} ${String(unread)}`;
+    },
+  );
+  const [read = 0, matching = 0] = reading.split(' ').map(Number);
+  const unread = reading.endsWith('true');
+  const finding = extended && find.trim() !== '';
   const tree: Tree = {
     sourceId,
     key,
@@ -133,6 +184,8 @@ export function SchemaBrowser({
     stop: stop ?? (listed[0] === undefined ? null : `s:${listed[0].name}`),
     setStop,
     onChoose,
+    find: extended ? find : '',
+    keys: extended,
   };
   return (
     <section className="sql-schema" aria-label={`Tables in ${sourceName}`}>
@@ -166,6 +219,29 @@ export function SchemaBrowser({
       ) : null}
       {schemas.isSuccess && listed.length === 0 ? (
         <p className="sql-schema__none">Its login sees no schemas.</p>
+      ) : null}
+      {extended && listed.length > 0 ? (
+        <>
+          <input
+            type="search"
+            className="sql-schema__find"
+            aria-label="Find a table"
+            placeholder="Find a table"
+            value={find}
+            onChange={(event) => {
+              setFind(event.target.value);
+              // The row holding the tab stop may be hidden now: the first row takes it.
+              setStop(null);
+            }}
+          />
+          {/* Mounted empty, so its words are announced as they come (T806's review). */}
+          <p className="sql-schema__none" role="status">
+            {finding && unread ? `Searching the ${read.toLocaleString('en')} tables read` : ''}
+          </p>
+          {finding && matching === 0 ? (
+            <p className="sql-schema__none">No table read so far matches “{find.trim()}”.</p>
+          ) : null}
+        </>
       ) : null}
       {listed.length === 0 ? null : (
         <TreeContext.Provider value={tree}>
@@ -336,23 +412,28 @@ function SchemaItem({ schema }: { schema: string }) {
     },
     staleTime: KEPT,
   });
-  const listed = tables.data?.pages.flatMap((page) => page.tables) ?? [];
+  const all = tables.data?.pages.flatMap((page) => page.tables) ?? [];
+  // While finding, only the tables read whose names hold the text (T806).
+  const listed = findTables(all, tree.find);
+  const finding = tree.find.trim() !== '';
   const total = tables.data?.pages.at(-1)?.total ?? 0;
-  const more = Math.min(PAGE, total - listed.length);
+  const more = Math.min(PAGE, total - all.length);
+  // Matches read in a schema since closed show too (T806's review).
+  const shown = open || (finding && listed.length > 0);
   return (
     <Row
       rowKey={`s:${schema}`}
       level={1}
       label={schema}
-      open={open}
+      open={shown}
       onToggle={() => {
-        setOpen(!open);
+        setOpen(!shown);
       }}
       onChoose={() => {
         tree.onChoose(schema);
       }}
       inside={
-        open ? (
+        shown ? (
           <ul role="group" aria-label={`Tables in ${schema}`}>
             {tables.isPending ? <Pending level={2}>Reading its tables…</Pending> : null}
             {tables.isError ? (
@@ -363,7 +444,7 @@ function SchemaItem({ schema }: { schema: string }) {
                 onRetry={() => void tables.refetch()}
               />
             ) : null}
-            {tables.isSuccess && listed.length === 0 ? (
+            {tables.isSuccess && all.length === 0 && !finding ? (
               <Pending level={2}>No tables.</Pending>
             ) : null}
             {listed.map((table) => (
@@ -448,23 +529,57 @@ function TableItem({ table }: { table: Table }) {
             {columns.isSuccess && columns.data.length === 0 ? (
               <Pending level={3}>No columns.</Pending>
             ) : null}
-            {columns.data?.map((column, at) => (
-              <Row
-                // By place: a table may name two columns alike in some databases.
-                key={String(at)}
-                rowKey={`c:${qualified}:${String(at)}`}
-                level={3}
-                label={`${column.name}, ${column.rawType}`}
-                onChoose={() => {
-                  tree.onChoose(column.name);
-                }}
-              >
-                <span className="sql-schema__name">{column.name}</span>
-                <span className="sql-schema__type" title={column.rawType}>
-                  {column.rawType}
-                </span>
-              </Row>
-            ))}
+            {columns.data?.map((column, at) => {
+              // Its keys, where the tree shows them (T806, AC-448; design 17 pin 5).
+              const primary = tree.keys && column.primaryKey === true;
+              const targets = tree.keys
+                ? (column.foreignKeys ?? []).map((key) => ({
+                    table: key.schema == null ? key.table : `${key.schema}.${key.table}`,
+                    column: key.column,
+                  }))
+                : [];
+              const label = [
+                column.name,
+                column.rawType,
+                ...(primary ? ['primary key'] : []),
+                ...(targets.length === 0
+                  ? []
+                  : [`foreign key to ${targets.map((target) => target.table).join(' and ')}`]),
+              ].join(', ');
+              return (
+                <Row
+                  // By place: a table may name two columns alike in some databases.
+                  key={String(at)}
+                  rowKey={`c:${qualified}:${String(at)}`}
+                  level={3}
+                  label={label}
+                  onChoose={() => {
+                    tree.onChoose(column.name);
+                  }}
+                >
+                  <span className="sql-schema__name">{column.name}</span>
+                  <span className="sql-schema__type" title={column.rawType}>
+                    {column.rawType}
+                  </span>
+                  {primary ? (
+                    <span className="sql-schema__tag" aria-hidden="true">
+                      PK
+                    </span>
+                  ) : null}
+                  {targets.length === 0 ? null : (
+                    <span
+                      className="sql-schema__tag"
+                      aria-hidden="true"
+                      title={`References ${targets
+                        .map((target) => `${target.table} (${target.column})`)
+                        .join('; ')}`}
+                    >
+                      FK
+                    </span>
+                  )}
+                </Row>
+              );
+            })}
           </ul>
         ) : undefined
       }

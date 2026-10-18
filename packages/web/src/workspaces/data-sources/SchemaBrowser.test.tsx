@@ -141,6 +141,19 @@ describe('the schema browser (T539, AC-386)', () => {
     expect(asked.filter((each) => each.url === `${BASE}/columns`)).toHaveLength(1);
   });
 
+  // T806: design 17's additions are the workspace's; design 15's page keeps its tree as it was.
+  it('has no Find a table and no PK or FK tags on the data source page', async () => {
+    serve();
+    open();
+    await userEvent.click(within(await item('public')).getByTestId('sql-schema-caret'));
+    await userEvent.click(within(await item('orders')).getByTestId('sql-schema-caret'));
+
+    // `id` is a primary key in the catalog, and reads as before.
+    expect(await item('id, integer')).toBeTruthy();
+    expect(within(region()).queryByText('PK')).toBeNull();
+    expect(within(region()).queryByRole('searchbox')).toBeNull();
+  });
+
   it('hands a chosen name to the editor: a schema’s, a table’s with its schema, a column’s', async () => {
     serve();
     const { onChoose } = open();

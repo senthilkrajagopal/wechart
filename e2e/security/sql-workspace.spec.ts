@@ -783,14 +783,55 @@ test.describe('the schema browser in the left pane (T805, AC-386)', () => {
         await item.getByTestId('sql-schema-caret').first().click();
         const listed = item.getByRole('group', { name: `Columns of public.${table}` }).getByRole('treeitem');
         await expect(listed).toHaveCount(columns.length);
-        // Each column by its name, with its type as the database names it.
-        const labels = await listed.evaluateAll((rows) => rows.map((row) => row.getAttribute('aria-label') ?? ''));
-        expect(labels).toEqual(columns);
+        // Each column by its name, with its type as the database names it (its keys follow, T806).
+        const shown = await listed.evaluateAll((rows) =>
+          rows.map(
+            (row) =>
+              `${row.querySelector('.sql-schema__name')?.textContent ?? ''}, ${row.querySelector('.sql-schema__type')?.textContent ?? ''}`,
+          ),
+        );
+        expect(shown).toEqual(columns);
       }
 
       // A table chosen goes into the editor, with its schema.
       await tables.getByRole('treeitem', { name: 'orders', exact: true }).locator('.sql-schema__name').first().click();
       await expect(page.locator('.sql-editor .cm-content')).toHaveText('public.orders');
+    } finally {
+      await context.close();
+    }
+  });
+
+  // T806 (AC-448): Find a table over the names read, and PK and FK tags.
+  test('Find a table keeps the read tables whose names hold the text; orders.id shows PK (T806, AC-448)', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'writer');
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto('/sql');
+      await pickerButton(page).click();
+      await groupOf(page).getByRole('option', { name: new RegExp(SOURCES.on) }).click();
+      const schema = leftPane(page).getByRole('treeitem', { name: 'public', exact: true });
+      await schema.getByTestId('sql-schema-caret').first().click();
+      const group = schema.getByRole('group', { name: 'Tables in public' });
+      const tables = group.locator('[role="treeitem"][aria-level="2"] > .sql-schema__row .sql-schema__name');
+      await expect(tables).toHaveText(['customers', 'orders', 'products']);
+
+      await leftPane(page).getByRole('searchbox', { name: 'Find a table' }).fill('ord');
+      await expect(tables).toHaveText(['orders']);
+      await leftPane(page).getByRole('searchbox', { name: 'Find a table' }).fill('');
+      await expect(tables).toHaveCount(3);
+
+      const orders = schema.getByRole('treeitem', { name: 'orders', exact: true });
+      await orders.getByTestId('sql-schema-caret').first().click();
+      const columns = orders.getByRole('group', { name: 'Columns of public.orders' });
+      const id = columns.getByRole('treeitem', { name: 'id, integer, primary key' });
+      await expect(id.locator('.sql-schema__tag')).toHaveText('PK');
+      await expect(columns.getByRole('treeitem', { name: 'status, text' }).locator('.sql-schema__tag')).toHaveCount(0);
+      // orders.customer_id's FK isn't checked here: xcube's catalog answers
+      // `foreignKeys: []` for it, though PostgreSQL shows the key to this
+      // login (lane SQL, 2026-10-17). T806 and AC-448 stay open until xcube
+      // reports it; the tag itself is unit-tested (SchemaTree.test.tsx).
     } finally {
       await context.close();
     }

@@ -261,4 +261,17 @@ main:has(.sql-workspace) {
 .sql-query__results { padding: 8px 12px; }
 /* The statement at the cursor, which Run runs with nothing selected (T803; pin 11). */
 .sql-query .cm-sql-statement { background: var(--wc-bg-subtle); box-shadow: inset 0 -1px var(--wc-border-strong, var(--wc-border-subtle)); }
+/* Find a table (T806; pin 4): the field's look, 28 px high, 12 px text. */
+.sql-schema__find {
+  box-sizing: border-box; width: 100%; height: 28px; margin: 0; padding: 0 8px;
+  border: 1px solid var(--wc-border-strong, var(--wc-border-subtle)); border-radius: 6px;
+  background: var(--wc-bg-surface); color: var(--wc-text-primary); font: inherit; font-size: 12px;
+}
+.sql-schema__find:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
+/* PK and FK, text tags in a 3 px outline: never colour alone (pin 5). */
+.sql-schema__tag {
+  flex: none; display: inline-flex; align-items: center; height: 16px; margin-left: 4px; padding: 0 4px;
+  border: 1px solid var(--wc-border-subtle); border-radius: 3px;
+  font-size: 12px; line-height: 14px; color: var(--wc-text-secondary); background: var(--wc-bg-surface);
+}
 `;

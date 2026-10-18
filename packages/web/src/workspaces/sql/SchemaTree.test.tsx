@@ -188,3 +188,131 @@ describe('the schema browser in the left pane (T805, AC-386)', () => {
     expect(asked.filter((url) => url.includes('/catalog/'))).toEqual([]);
   });
 });
+
+/**
+ * T806 (AC-448): WHILE a tab's schema browser is open, THE SYSTEM SHALL
+ * filter its tables by "Find a table" over the names already read, saying
+ * "Searching the n tables read" while a schema has unread pages, and show
+ * each column's PK or FK tag, the FK's tooltip naming its target table.
+ */
+describe('Find a table, and PK and FK tags (T806, AC-448)', () => {
+  /** `sales` has 150 tables, read 100 at a time; `staging` two. */
+  function serveMany() {
+    const json = (body: unknown, status = 200) => Response.json(body, { status });
+    const sales = Array.from({ length: 150 }, (_, at) => (at === 120 ? 'order_archive' : at === 3 ? 'orders' : `t${String(at)}`));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === '/api/sql/sources') return json([row('emea', 'emea_replica')]);
+        if (url === '/api/sql-runs/going') return json({ going: null });
+        if (url === '/api/data-sources/emea') return json(page('emea', 'emea_replica'));
+        if (url.endsWith('/catalog/schemas')) return json({ schemas: [{ name: 'sales' }, { name: 'staging' }] });
+        if (url.includes('/catalog/tables?')) {
+          const query = new URL(url, 'http://wechart.test').searchParams;
+          const schema = query.get('schema')!;
+          const names = schema === 'sales' ? sales : ['raw_orders', 'returns'];
+          const offset = Number(query.get('offset'));
+          return json({
+            tables: names.slice(offset, offset + 100).map((name) => ({ schema, name, type: 'table', rawType: 'BASE TABLE' })),
+            total: names.length,
+          });
+        }
+        if (url.endsWith('/catalog/columns') && init?.method === 'POST')
+          return json({
+            tables: [
+              {
+                schema: 'sales',
+                name: 'orders',
+                columns: [
+                  { name: 'id', rawType: 'int4', type: 'number', primaryKey: true, foreignKeys: [] },
+                  {
+                    name: 'customer_id',
+                    rawType: 'int4',
+                    type: 'number',
+                    primaryKey: false,
+                    foreignKeys: [{ schema: 'sales', table: 'customers', column: 'id' }],
+                  },
+                  { name: 'status', rawType: 'text', type: 'string', primaryKey: false, foreignKeys: [] },
+                ],
+              },
+            ],
+          });
+        return json([], 404);
+      }),
+    );
+  }
+  const find = () => within(leftPane()).getByRole('searchbox', { name: 'Find a table' });
+  const tablesShown = (schema: string) =>
+    within(within(leftPane()).getByRole('group', { name: `Tables in ${schema}` }))
+      .getAllByRole('treeitem')
+      .map((item) => item.getAttribute('aria-label'));
+
+  it('keeps the read tables whose names hold the text, saying so while a schema has pages unread', async () => {
+    serveMany();
+    open();
+    await choose('emea_replica');
+    await expand('sales');
+    await within(leftPane()).findByRole('treeitem', { name: 't99' });
+    await expand('staging');
+    await within(leftPane()).findByRole('treeitem', { name: 'raw_orders' });
+
+    await userEvent.type(find(), 'ord');
+    // order_archive is on sales' second page, unread: not found, and said so.
+    expect(tablesShown('sales')).toEqual(['orders', 'Show 50 more tables']);
+    expect(tablesShown('staging')).toEqual(['raw_orders']);
+    expect(within(leftPane()).getByText('Searching the 102 tables read')).toBeTruthy();
+
+    await userEvent.click(within(leftPane()).getByText('Show 50 more tables'));
+    expect(await within(leftPane()).findByRole('treeitem', { name: 'order_archive' })).toBeTruthy();
+    expect(tablesShown('sales')).toEqual(['orders', 'order_archive']);
+    expect(within(leftPane()).queryByText(/^Searching the/)).toBeNull();
+
+    await userEvent.clear(find());
+    await userEvent.type(find(), 'zzz');
+    expect(within(leftPane()).getByText('No table read so far matches “zzz”.')).toBeTruthy();
+    await userEvent.clear(find());
+    expect(tablesShown('staging')).toEqual(['raw_orders', 'returns']);
+  });
+
+  it('shows the matches read in a schema since closed (T806’s review)', async () => {
+    serveMany();
+    open();
+    await choose('emea_replica');
+    await expand('sales');
+    await within(leftPane()).findByRole('treeitem', { name: 't99' });
+    const sales = within(leftPane()).getByRole('treeitem', { name: 'sales' });
+    await userEvent.click(within(sales).getAllByTestId('sql-schema-caret')[0]!);
+    expect(within(leftPane()).queryByRole('group', { name: 'Tables in sales' })).toBeNull();
+
+    await userEvent.type(find(), 'ord');
+    expect(tablesShown('sales')).toEqual(['orders', 'Show 50 more tables']);
+  });
+
+  it('says it is searching only the tables read while a schema hasn’t been opened', async () => {
+    serveMany();
+    open();
+    await choose('emea_replica');
+    await expand('staging');
+    await within(leftPane()).findByRole('treeitem', { name: 'raw_orders' });
+
+    await userEvent.type(find(), 'ord');
+    expect(within(leftPane()).getByText('Searching the 2 tables read')).toBeTruthy();
+    expect(tablesShown('staging')).toEqual(['raw_orders']);
+  });
+
+  it('tags a primary key PK and a foreign key FK, its tooltip naming its target', async () => {
+    serveMany();
+    open();
+    await choose('emea_replica');
+    await expand('sales');
+    await expand('orders');
+
+    const id = await within(leftPane()).findByRole('treeitem', { name: 'id, int4, primary key' });
+    expect(within(id).getByText('PK')).toBeTruthy();
+    const fk = within(leftPane()).getByRole('treeitem', { name: 'customer_id, int4, foreign key to sales.customers' });
+    expect(within(fk).getByText('FK').getAttribute('title')).toBe('References sales.customers (id)');
+    const status = within(leftPane()).getByRole('treeitem', { name: 'status, text' });
+    expect(within(status).queryByText(/^(PK|FK)$/)).toBeNull();
+  });
+});

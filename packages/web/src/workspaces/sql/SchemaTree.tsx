@@ -53,6 +53,8 @@ function SourceTree({
       sourceVersion={page.data.version}
       sourceName={name}
       heading={null}
+      // Find a table, and PK and FK tags (T806, AC-448).
+      extended
       onChoose={onChoose}
     />
   );
