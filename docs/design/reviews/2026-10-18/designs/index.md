@@ -1,6 +1,6 @@
 # Designs for approval — UI design 2026-10-18 (phase 3, R80 and R81)
 
-**Status:** waiting for the user's approval. Nothing here is planned until it is approved.
+**Approved 2026-10-18** by the user: designs 20–22, "Approve (Recommended)", with three questions answered on their own (R80 in `docs/requirements-log.md`). Every other question takes the way its design draws it, option (a). See "Decided 2026-10-18" at the end. The spec's F44–F48 (AC-497 … AC-558) and the amended AC-037, AC-058, AC-116, AC-121, AC-123, AC-208, AC-218, AC-219 and AC-302 hold them.
 
 Three static mockups for R80: modern combo charts, rich text tiles, and the LLM settings they need now. They are numbered after designs 17–19 in `../../2026-10-17/designs/index.md`. A fourth, design 23, draws R81's fifteen new chart types, designed in parallel with R80 (R81: "In parallel"); its row, notes and questions follow R80's below.
 
@@ -251,3 +251,24 @@ R81 answered the study's Q1 (the `.dxp` inventory: "Proceed without them") and Q
 - **D-Q1. Rule numbering.** These designs take rules 115–146 (§7h). direction.md said the copilot's rules would follow 114, from 115; ~~they now follow these, from 147, when the copilot is taken up~~ design 23 takes 147–167 (§7i), so the copilot's rules follow from 168 when the copilot is taken up. The design-21 and 22 rules (138–145) already cover the shared AI settings and labelling; the copilot's rules 103 and 104 (its numbering) overlap them and would be merged then.
 - **D-Q2. Rule 30 and §6's dual-axis sentence.** Amended as design 20's criteria table says, once approved.
 - **D-Q3. §7i (design 23).** Its tokens and rules 147–167 are proposed with design 23 and amend §6's bar marks for histograms and waterfalls, and rule 50's wording; they are accepted or changed with design 23's answers.
+
+## Decided 2026-10-18
+
+The user approved designs 20–22: "Approve (Recommended)" (R80 in `docs/requirements-log.md`). Three questions were asked on their own; every other question takes option (a), as drawn, including those listed with no "Drawn" mark (20-Q13, 21-Q10, 22-Q3, 22-Q4, 22-Q8). The spec's F44 (design 20), F45–F47 (design 21) and F48 (design 22) hold them.
+
+**Design 20, the combo chart:** 20-Q1 … 20-Q12 (a), as drawn. 20-Q13 (a): "Index to 100" not now; research first.
+
+**Design 21, the Text tile:**
+- **21-Q1:** asked. "Canvas only (Recommended)": no markdown source view; existing markdown tiles are converted once on open (AC-512), and AC-302's source textarea goes.
+- **21-Q2 … 21-Q9, 21-Q12, 21-Q13:** (a), as drawn.
+- **21-Q10:** (a). Only authors draft; readers see reviewed text.
+- **21-Q11:** asked. "Yes, inside the text only (Recommended)": ⌘B, ⌘I and ⌘Z act inside the text only, approved under R75; the editor's other default keys stay off (AC-516).
+
+**Design 22, Security › AI:**
+- **22-Q1, 22-Q5, 22-Q6, 22-Q7, 22-Q9, 22-Q10, 22-Q11:** (a), as drawn.
+- **22-Q2:** asked. "Bedrock, Anthropic, Azure and openAI". Per `docs/research/llm-providers.md`: on Bedrock, which lacks strict structured output and forced tool use for current Claude models, wechart's draft validation alone keeps every number live, and a non-conforming draft is rejected and drafted once more (AC-538). Bedrock authenticates with AWS IAM credentials, the pods' IAM role preferred, or an access key pair stored encrypted like the other keys (AC-547 … AC-549). The packages are `@anthropic-ai/sdk@0.135.0`, `openai@7.38.0` (OpenAI and Azure OpenAI) and `@anthropic-ai/bedrock-sdk@0.35.0`.
+- **22-Q3:** (a). wechart's API encrypts the key at rest with a key of its own, its ciphertext bound to the provider and the endpoint, so changing either clears it (AC-549).
+- **22-Q4:** (a). Everyone who can edit dashboards, by default.
+- **22-Q8:** (a). No draft kept once inserted or discarded.
+
+**For direction.md:** D-Q1 and D-Q2 as proposed. §7h and rules 115–146 are accepted; rule 30, rule 25, §6's dual-axis sentence and §8's Markdown entry are amended there.

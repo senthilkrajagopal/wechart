@@ -212,14 +212,14 @@ From `docs/research/cube/` (Cube Core 1.7.42). **In** = phase 1. **Deferred** = 
 ## 7. Non-goals for phase 1
 
 - **Users, groups, roles and SSO** — phase 2 `[docs/inputs §7]`, `[R4]`.
-- **AI and chat authoring** — natural-language questions, AI chart generation, AI summaries `[R6]`.
+- **AI and chat authoring** — natural-language questions, AI chart generation, AI summaries `[R6]`. *Lifted 2026-10-18 for AI summaries in Text tiles `[R80]` (§P2.6 O); the copilot chat is §P2.6 M.*
 - **Scheduled delivery and alerts** — emailing or Slacking dashboards, threshold alerts `[R6]`.
 - **Embedding in other applications**, with tokens or white-labelling `[R6]`.
 - **Maps and geo charts** `[R6]`.
 - **`.dxp` migration tooling** — nothing automated in phase 1. The corpus serves as a parity checklist and as evidence of what analysts do `[R6]`. A `.dxp` **inspection** tool is planned for after phase 1, to size the migration `[R7]`.
 - **Spotfire Subsets, Tags and Lists, and data functions** — not phase 1, but the design must not rule them out later `[R7]`.
 - **Touch and tablet support** `[R7]`.
-- **Spotfire-style controls inside text tiles** (filter dropdowns, buttons and input fields placed in the text) `[R7]`.
+- **Spotfire-style controls inside text tiles** (filter dropdowns, buttons and input fields placed in the text) `[R7]`. *Lifted 2026-10-18 for the Text tile's filter controls, parameter controls and action buttons `[R80]` (§P2.6 O); scripts stay out.*
 - **Selling or open-sourcing wechart** — not a phase-1 concern `[R1]`.
 - Plus everything marked _Deferred_ in §6.
 
@@ -245,7 +245,7 @@ Decisions taken in R7:
 
 ## 9. Interview log
 
-Phase 1's interview log (rounds R1–R10) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R79]`; search that file for the round.
+Phase 1's interview log (rounds R1–R10) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R80]`; search that file for the round.
 
 # Part 2 — Phase 2 requirements (2026-09-25)
 
@@ -764,6 +764,30 @@ No criteria are written for these yet. Each gets its own questions where it is o
 - **Design 19's other questions take its drawn answers** ("Approve (Recommended)") `[R79]`: the sheet open and no toggle in edit mode (19-Q3); the title at `text-lg` (19-Q4); page tabs that don't fit behind "More ▾" in view mode (19-Q5); many filters wrap (19-Q7); the My workspace band unchanged (19-Q8); a one-step "← ‹folder›" way back (19-Q9).
 - **Narrow widths** as design 19 state D draws them: History and Bookmarks as icons from 1,024 to 1,279 px; below 1,024 px the row keeps the way back, the title, the toggle and ⋯, with the pages in a "Page: ‹name› ▾" menu.
 
+**O. Combo charts, the Text tile, dashboard parameters and AI summaries** `[R80]` *(added 2026-10-18, a priority from phase 3; input `docs/inputs/2026-10-18-phase-3-advanced-analytics.md`; studies `docs/design/references-combo-and-rich-tiles.md` and `docs/design/references-spotfire-combo-textarea.md`; research `docs/research/rich-tiles-and-combo-tech.md` and `docs/research/llm-providers.md`; designs 20–22, approved the same day, "Approve (Recommended)")*
+- **The request,** in the user's words: "let us work on combo charts and rich text charts... make it modern.. use the best technologies available. start working on this on priority..use ui/visualization/bi expert as well as spotfire expert." `[R80]`
+- **Combo charts** (design 20):
+  - each measure its own series, with its own mark (bar, line, area or point) and value axis (left or right), set in Customize › Series, the Metrics pill's menu and, in the chart editor only, the legend (20-Q5) `[R80]`;
+  - **two value axes at most**, left and right ("2: left and right (Recommended)"); a second axis only by the author's explicit choice, never by Auto or the recommender (AC-030 holds); when drawn, zero and ticks aligned, each axis titled with its measures' mark glyphs `[R80]`;
+  - **Synchronize axes**, offered only when both axes share a format (20-Q12); **log scale** per axis, the same on both, unavailable with bars (20-Q3); **reference lines and bands**, horizontal and vertical, labelled in the chart, from a fixed value or a drawn series' average, median, minimum or maximum, no set limit (20-Q7 … 20-Q9); stacking chart-wide, never across axes (20-Q11) `[R80]`;
+  - **split by one dimension across every measure** ("One dimension, all measures"): series are measure × member, colour the member, each split measure its own mark (20-Q1); **at most 8 series**, folding members to the top *k* + Other first, then leaving whole measures not drawn (20-Q2) `[R80]`;
+  - **the AC-218 warning** only while two unsynchronized axes are drawn, for authors only, stronger when both share a format (20-Q4, 20-Q6); inside a combo, R67's first offer is "Draw on a right axis" `[R80]`.
+- **The Text tile** (design 21), replacing the Markdown tile in place:
+  - **Tiptap 3** ("Tiptap 3 (Recommended)"), edited in place on the canvas in edit mode; stored as the editor's JSON document, validated by wechart's own schema; **no markdown source view** ("Canvas only (Recommended)"): an existing markdown tile is converted once, when opened, and reads the same `[R80]`;
+  - block styles from §3's type scale only, bold, italic, lists and links; markdown shortcuts as typed; **⌘B, ⌘I and ⌘Z inside the text only** ("Yes, inside the text only (Recommended)", approved under R75) `[R80]`;
+  - an insert menu opened by `/`, Insert or `{{`; **eight live elements**: Value, Change, Sparkline, Icon, Bullet graph, Marking, Filter value and As of, following the tile's filters and any marking they name; sparklines and bullet graphs as wechart's own SVG `[R80]`;
+  - **Spotfire parity** ("Spotfire parity (Recommended)"): filter controls that are the filter bar's own filters; declarative action buttons (page, bookmark, reset filters, export, the last as CSV, 21-Q8); parameter controls; **no scripts and no raw HTML**; read mode through a static renderer that never sets HTML `[R80]`;
+  - **10 elements per tile and 1,000 values in a list control** ("10 elements, 1,000 values (Recommended)"), every element counted (21-Q4) `[R80]`.
+- **Dashboard parameters** ("Field switch now, what-if later (Recommended)"): a dashboard-level object choosing which measure or dimension bound charts and elements use, defined in Dashboard settings › Parameters (21-Q6), set from a parameter control, bound only by dashboard-local charts (21-Q5), carried by bookmarks and copied links; Reset filters leaves parameters alone (21-Q7) `[R80]`.
+- **AI summaries** ("Now, with LLM settings"): drafted only at an author's request (21-Q10), from facts wechart computes through Cube as the author (change against the previous period, and top and bottom contributors, 21-Q12); every number a live element, a draft holding a digit outside one rejected and drafted once more; reviewed on a draft card before Insert; labelled "Written with Copilot · reviewed by ‹name›, ‹date›", kept through edits (21-Q9); never regenerated silently, with "Written for earlier data" for authors; no draft kept after it is inserted or discarded (22-Q8) `[R80]`.
+- **Security › AI** (design 22), for Super-Admins only (22-Q1), and the one user with sign-in off (22-Q11):
+  - AI on or off; who may use it, everyone who can edit dashboards by default (22-Q4); **providers Amazon Bedrock, Anthropic, Azure OpenAI and OpenAI** ("Bedrock, Anthropic, Azure and openAI"); one model (22-Q9) `[R80]`;
+  - the API key typed once, tested, stored encrypted by wechart's API with a key of its own, its ciphertext bound to the provider and the endpoint so that changing either clears it, never shown again (22-Q3; research § Key handling). **Bedrock** uses AWS IAM credentials: the IAM role the deployment gives wechart's pods, preferred, or an access key pair stored the same way `[R80]`;
+  - Test connection with four checks; Save held until it passes whenever the provider, endpoint, model or key changes (22-Q6); limits of summaries per person per day and for everyone per month, with a message of at most 280 characters (22-Q5, 22-Q10); usage this month; audit events for settings changes, key replacements and inserted summaries, never a key (22-Q7) `[R80]`.
+- **On Bedrock,** which offers no strict structured output or forced tool use for current Claude models, the rule that every number is a live element is enforced by wechart's validation alone, and a non-conforming draft is rejected and retried `[R80]` (`docs/research/llm-providers.md` Gotcha 3).
+- **Packages** (research): `@tiptap/core`, `@tiptap/pm`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/static-renderer` and `@tiptap/suggestion` at 3.32.0; `@anthropic-ai/sdk@0.135.0`; `openai@7.38.0`; `@anthropic-ai/bedrock-sdk@0.35.0`; `zod@4.6.5` (already in the lockfile). Not `@tiptap/markdown` (beta): wechart converts its own markdown subset.
+- **Lifted non-goals:** "Spotfire-style controls inside text tiles" (Part 1 §7) is lifted for filter controls, parameter controls and action buttons; scripts stay out. "AI and chat authoring" is lifted for AI summaries in Text tiles; the copilot chat stays in §P2.6 M `[R80]`.
+
 ## P2.7 Non-goals for phase 2
 
 - **Individual users on folders.** AD groups only `[P2 input, R16]`.
@@ -800,6 +824,15 @@ No criteria are written for these yet. Each gets its own questions where it is o
   - remembering the header open or closed, per person, per dashboard or as an author's default;
   - a sheet that covers the tiles, or closes on a click outside;
   - a sheet that opens by itself when a filter changes.
+- **Around combo charts, the Text tile and AI summaries** `[R80]`, the options designs 20–22 didn't choose:
+  - a third value axis, splitting by a second dimension, a stack group per series, and "Index to 100" (20-Q13, research first);
+  - reference lines from a measure's total in Cube or from a parameter, one computed line per member, and changing a series' mark or axis from a dashboard's legend;
+  - showing the AC-218 warning to viewers;
+  - a markdown source view or export in Properties, and free colour, font or size in text;
+  - raw HTML and scripts in Text tiles, ever;
+  - what-if (value) parameters, which come later; parameters bound by a chart from folders; a "Reset parameters" action; a PDF export;
+  - viewers drafting summaries; keeping drafts or prompts; statistics beyond change and contributors as facts (phase 3 stage A);
+  - Google Gemini, an endpoint compatible with OpenAI's API, Azure OpenAI through Entra ID, a second ("fast") model, and limits counted in provider tokens.
 
 Phase 1's non-goals still stand, except two that phase 2 brings into scope:
 - **Users, groups, roles and SSO** (§P2.6 A–B).
@@ -809,11 +842,30 @@ R78 brings in two more:
 - **Cube's SQL API**, in the SQL runner workspace only (§P2.6 L). Connecting external BI tools to it stays out.
 - **AI and chat authoring**, for the copilot, when it is taken up (§P2.6 M). The MCP server serves outside LLM clients; it adds no chat to wechart.
 
-The rest still apply: scheduled delivery and alerts, embedding, `.dxp` migration tooling, Spotfire Subsets, Tags and Lists and data functions, touch, controls inside text tiles, and selling wechart `[Part 1 §7]`.
+R80 brings in two more:
+- **Spotfire-style controls inside text tiles,** as the Text tile's filter controls, parameter controls and action buttons (§P2.6 O). Scripts stay out.
+- **AI and chat authoring,** for AI summaries in Text tiles (§P2.6 O). The copilot chat stays in §P2.6 M.
+
+The rest still apply: scheduled delivery and alerts, embedding, `.dxp` migration tooling, Spotfire Subsets, Tags and Lists and data functions, touch, and selling wechart `[Part 1 §7]`.
 
 ## P2.8 Open questions
 
-**None.** R78's fifteen, below, were resolved by the user on 2026-10-17 and are folded into §P2.6 K and L. All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way. The four xcube's slice 2 left open were settled in round R29, and are in §P2.4, "Slice 2 as built". The six xcube's slice 3 left open were settled in round R30, after xcube answered the questions they raised, and are in §P2.4, "Relaxed from phase 1" and "Slice 3 as built". The nine that slices 4–6 left open were settled in round R31, and are in §P2.4, "Slices 4–6 as built".
+### Round R80 (2026-10-18): still open
+
+Found while specifying §P2.6 O. The spec states no value for any of them; each holds back only the task named, which carries a "Waits on" line.
+
+| # | Question | Holds back |
+|---|---|---|
+| R80-1 | Which period a summary's "change against the previous period" compares. Design 21 draws "this quarter against the previous" on a page whose date filter is a year and whose chart is by month, with no period setting in Summarize. Options: a period setting in Summarize, as the Change element has; the date filter's own period; or each covered chart's time granularity | the facts task (F47, AC-536) |
+| R80-2 | Which day and month the AI limits count in: UTC (design 22's sample message says "midnight UTC"), or the deployment's time zone | the limit-counting task (AC-543) |
+| R80-3 | A draft call's timeout, its output-token cap, the most facts sent in one request, and the longest title or member name sent. The research's 60 s and 1,024 tokens are placeholders, not decisions (`llm-providers.md`, Open questions). Test connection's 30 s per check is design 22's and is decided | the draft-route task (AC-537) |
+| R80-4 | Redo inside the text (⇧⌘Z, Ctrl+Shift+Z, Ctrl+Y). Not among the keys approved under R75 (⌘B, ⌘I, ⌘Z), so it is off (AC-516) until the user approves it | nothing; AC-516 holds without it |
+| R80-5 | wechart's API starting without the AI key-encryption key: refuse to start, as R21 decided for the old credential key, or start with Security › AI unable to store a key and saying the deployment must provide one | the key-store task (AC-549) |
+| R80-6 | *Research, not a question for the user.* `@anthropic-ai/bedrock-sdk@0.35.0`'s options for a region, the pod's IAM role through the AWS default credential chain, an access key pair, and a base URL for the tests' fake provider; and how the Helm chart gives wechart's pods an IAM role (a service-account annotation). Both are UNVERIFIED in `llm-providers.md` | the Bedrock adapter and its Helm values (AC-547) |
+
+### Earlier rounds
+
+R78's fifteen, below, were resolved by the user on 2026-10-17 and are folded into §P2.6 K and L. All seven were resolved with the user on 2026-09-25 in round R18. The decisions are folded into §P2.2, §P2.4 and §P2.6, and the log is in §P2.9. The seventeen questions the architecture decisions left open were settled in round R27, and are folded into the same sections. The ten the 2026-09-26 plan left open were settled in round R28, in the same way. The four xcube's slice 2 left open were settled in round R29, and are in §P2.4, "Slice 2 as built". The six xcube's slice 3 left open were settled in round R30, after xcube answered the questions they raised, and are in §P2.4, "Relaxed from phase 1" and "Slice 3 as built". The nine that slices 4–6 left open were settled in round R31, and are in §P2.4, "Slices 4–6 as built".
 
 | # | Question | Decision |
 |---|---|---|
@@ -904,4 +956,4 @@ The questions as first asked:
 
 ## P2.9 Interview log
 
-Phase 2's interview log (rounds R11 onward, the user's later decisions included) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R79]`; search that file for the round.
+Phase 2's interview log (rounds R11 onward, the user's later decisions included) is in [`docs/requirements-log.md`](./requirements-log.md), word for word (moved 2026-10-17, the user's decision, to keep this file small). Requirements and the spec cite its rounds as `[R1]` … `[R80]`; search that file for the round.

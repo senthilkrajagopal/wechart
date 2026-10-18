@@ -273,6 +273,19 @@ Questions are Claude's; answers are the user's, verbatim.
   - inline sparklines are wechart's own SVG;
   - trend lines are computed by wechart.
 - **Lifted non-goal:** "Spotfire-style controls inside text tiles" (phase 1) is lifted for rich tiles.
+- **Designs 20–22, 2026-10-18** (the user; `docs/design/reviews/2026-10-18/designs/index.md`):
+  - Q: Approve designs 20–22, taking the drawn recommendation for every question not asked? A: "Approve (Recommended)". *Every question not asked below takes its design's drawn option (a), including those listed without a "Drawn" mark (20-Q13, 21-Q10, 22-Q3, 22-Q4, 22-Q8).*
+  - Q: Drop the Markdown source view (21-Q1)? A: "Canvas only (Recommended)". *Existing markdown tiles are converted once on open into the Text tile's stored document; AC-302's source textarea goes.*
+  - Q: AI providers on day one (22-Q2)? A: "Bedrock, Anthropic, Azure and openAI". *Per `docs/research/llm-providers.md`:*
+    - *Claude on Bedrock lacks strict structured output and forced tool use (Gotcha 3; § 4). On Bedrock, the rule that every number is a live-value token is enforced by wechart's draft validation alone, and a non-conforming draft is rejected with a retry (design 21 state J2: one automatic retry, then the failure is shown).*
+    - *Bedrock authenticates with AWS IAM credentials: an IAM role the deployment gives wechart's pods in Kubernetes, preferred, or an access key pair, stored encrypted like the other keys.*
+    - *Packages, pinned exactly from the research: `@anthropic-ai/sdk@0.135.0` (Anthropic); `openai@7.38.0` (OpenAI and Azure OpenAI, through Azure's v1 `baseURL`); `@anthropic-ai/bedrock-sdk@0.35.0` (Bedrock), not `@aws-sdk/client-bedrock-runtime`. The research's reason: current Claude models on Bedrock are served on its Messages-API ("Claude in Amazon Bedrock", Mantle) endpoint through `AnthropicBedrockMantle`, in the Messages API's own shape, while reaching `claude-*-5-5` through Converse with structured output is "UNVERIFIED and doubtful" (§ 4). Its peer range `@anthropic-ai/sdk >=0.115.1 <1` holds 0.135.0. The client's options for a region, the pod's IAM role and an access key pair, and a base URL for the tests' fake provider, aren't in the research yet; a research addendum precedes the Bedrock adapter (§P2.8, R80-6).*
+  - Q: The editor's keys ⌘B, ⌘I and ⌘Z inside the text (21-Q11)? A: "Yes, inside the text only (Recommended)". *Approved under R75. Inside the text only; the editor's other default key bindings stay off.*
+  - *The coordinator's calls while specifying (2026-10-18), overturnable:*
+    - *an action button's Export of several tiles downloads one CSV per tile, each as AC-171 makes it (21-Q8 (a), "the chosen tiles' data as CSV");*
+    - *an author's allowance counts each Summarize, Regenerate and Try again once; the automatic retry after a rejected draft doesn't count;*
+    - *the endpoints of Anthropic and OpenAI are fixed (`https://api.anthropic.com`, `https://api.openai.com/v1`, the research's defaults); only Azure OpenAI takes a typed endpoint, and Bedrock a region;*
+    - *an inserted summary keeps, with its text, which facts it cited and each one's sign and rank when inserted, so "Written for earlier data" can be told; nothing else of the draft is kept (22-Q8 (a)).*
 
 **R79 — a compact dashboard header** (2026-10-17, the user; input `docs/inputs/2026-10-17-compact-dashboard-header.md`; design study `docs/design/references-compact-header.md`; design 19 in `docs/design/reviews/2026-10-17/designs/index.md`)
 - **The request:** "in the on the dashboard page.. nearly 30% of the page goes away for the dashboard header and the filters. Can we have a more compressed header that can be expanded with a slide down so that the complete header can be seen... default will be the compressed header. use a UI expert who can specify what this behavior should look like."

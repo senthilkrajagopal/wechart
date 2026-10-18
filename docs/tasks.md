@@ -1850,6 +1850,486 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
   - Failing test: `design-conformance.spec.ts`: the compact row (48 px, padded 0 24, `border-subtle` rule), the title (20/26/600), the page tabs (13/600, 2 px `accent` underline), the toggle (32 px, radius 6) and its count pill (18 px, 12/600), a compact chip (24 px, radius 999, 12 px, 1.5 px border) and the sheet's description (`text-sm`, at most 860 px) and ownership line (12/16) each measure as §7g's table gives them, and design 04's crumbs row and separate tab row are gone (AC-352, AC-343, AC-187).
   - Depends on: T830, T831, T832, T838, T841, T842
 
+## P2.26 Combo charts, the Text tile, dashboard parameters and AI summaries (F44–F48, added 2026-10-18, `[R80]`)
+
+F44 gives combo charts per-series marks and axes, two aligned value axes, one split dimension, reference lines and bands, and the amended AC-218 warning. F45 replaces the Markdown tile with the Text tile, edited in place with Tiptap 3 and read through its static renderer. F46 adds filter controls, action buttons and field-switch dashboard parameters. F47 drafts AI summaries from facts computed through Cube, and F48 is Security › AI. Designs 20–22 were approved on 2026-10-18 (`docs/design/reviews/2026-10-18/designs/index.md`, "Decided 2026-10-18"); their tokens are direction.md §7h and rules 115–146.
+
+**Packages,** each covered by its research doc and pinned exactly: `@tiptap/core`, `@tiptap/pm`, `@tiptap/react`, `@tiptap/starter-kit`, `@tiptap/static-renderer` and `@tiptap/suggestion` at 3.32.0, all identical, `@tiptap/pm` resolving `prosemirror-view` ≥ 1.42.3 (`rich-tiles-and-combo-tech.md`); `@anthropic-ai/sdk@0.135.0`, `openai@7.38.0`, `@anthropic-ai/bedrock-sdk@0.35.0` and `zod@4.6.5` as a direct dependency of `@wechart/api` (`llm-providers.md`, `supporting-utilities.md`). Not `@tiptap/markdown` (beta), `echarts-stat` or `d3-shape`: wechart converts its own markdown subset and draws its own SVG.
+
+**Two lanes,** each in its own worktree, touching disjoint files as far as possible. Foundations come first in each.
+- **Lane COMBO:** `packages/core/src/combo.ts`, `render-spec.ts` and `undrawn.ts`; `packages/charts/`; `packages/recommender/`; the chart editor's combo parts in `packages/web/src/editor/`; `e2e/combo.spec.ts`. Order: T845, T846, T847, T848, T849, T850, T851, T852, T853, T854, T855, T856, T857, T858, T859, T860, T861, T862, T863, T864, T865, T866, T867. T845 depends on nothing.
+- **Lane TEXT:** `packages/core/src/text-document*.ts` and the dashboard parameter model; `packages/web/src/tiles/text/`, the dashboard's model, edit sidebar, settings, bookmarks and filters; `packages/api/src/ai/`, the AI routes and repos, `packages/api/src/mcp/tools/`; `packages/web/src/workspaces/security/ai/`; `deploy/helm/`. Order: T868, T869, T870, T871, T872, T873, T874, T875, T876, T877, T878, T879, T880, T881, T882, T883, T884, T885, T886, T887, T888, T889, T891, T892, T893, T894, T895, T896, T897, T898, T899, T900, T890; the AI service T901, T902, T903, T904, T906, T907, T908, T909, T913; the AI pages T916, T917, T918, T919, T920, T921, T922, T924, T925, T926; then, once their questions are answered, T910, T911, T912, T914, T923, T927, T928, T929, T930, T931, T932, T933, and T905 and T915. T868, T895 and T901 depend on nothing and can go first.
+- **Shared files** (expect cherry-pick conflicts there only): `packages/web/src/editor/Wells.tsx` (lane COMBO's pill menu, Split by well and offers; lane TEXT's Parameters group, T898); `packages/core/src/index.ts`; `packages/web/src/shell/styles.ts`; `packages/web/src/dashboard/DashboardView.tsx` (lane COMBO's tile edit-head warning, T861; lane TEXT's Text tile).
+- **Migrations,** lane TEXT only, from 1758700000000.
+- **Tests never call a provider.** Unit tests point each client at an in-process fake provider (`packages/api/src/ai/fake.ts`, after `packages/api/src/xcube/fake.ts`); the e2e stack runs the same fake over HTTPS with a test certificate the API trusts through `NODE_EXTRA_CA_CERTS`, set up as Azure OpenAI at the fake's address (`llm-providers.md` § Testing).
+
+**Waiting on answers** (`docs/requirements.md` §P2.8, R80): T910 waits on R80-1 (the period a change compares); T912 on R80-2 (the day and month limits count in); T911 on R80-3 (a draft call's timeout and size caps; its test holds for any values, which come from config); T915 on R80-5 (starting without the key-encryption key) and R80-6; T905 on R80-6 (a research addendum to `llm-providers.md` for the Bedrock client's options). The draft route's dependants wait with it: T914, T923, T927 … T933. T901's test holds without R80-5's answer. Every other task can start now.
+
+### Lane COMBO: the spec and the drawing
+
+- [ ] T845 [P] (AC-497, AC-498, AC-037) Carry each combo series' mark and axis in the chart spec, and resolve Auto: the first measure as bars, the rest as lines, all on the left
+  - Files: `packages/core/src/combo.ts` (+ test), `packages/core/src/render-spec.ts` (the sparse `options.series` and `options.combo` shapes), `packages/core/src/chart-spec.ts`, `packages/core/src/index.ts`.
+  - Failing test: `combo.test.ts`: a combo of Revenue, Target and Margin % with no settings resolves to bar/left, line/left, line/left; with Margin % set to point/right it resolves so, and keeps that when Orders is added before it, Target removed or the measures reordered; `comboProblems` refuses a stored fifth mark or a third axis; a spec saved and parsed again keeps every setting (AC-497, AC-498, AC-037).
+  - Depends on: none
+
+- [ ] T846 (AC-497, AC-037) Draw each combo series with its own mark on its own value axis, in §7h's draw order, a line over bars on its surface halo
+  - Files: `packages/charts/src/series/combo.ts` (+ test), `packages/charts/src/theme.ts`, `packages/charts/src/optionFor.ts`.
+  - Failing test: `combo.test.ts`: Revenue bar/left, Target line/left, Margin % point/right and Cost area/left give ECharts series of type bar, line, scatter, and line with `areaStyle` at 0.24 opacity; Margin %'s `yAxisIndex` is 1 and the others' 0; `z` orders area < bar < line < point; a line has a 5 px `bg-surface` halo under its 2 px stroke; a point has an 8 px marker with a 1.5 px surface ring (AC-497, AC-037).
+  - Depends on: T845
+
+- [ ] T847 (AC-499) Align a combo's two value axes: one zero height, the right axis's ticks on the left's gridlines, include zero forced while bars are drawn, and no right gridlines
+  - Files: `packages/charts/src/combo/alignedAxes.ts` (+ test), `packages/charts/src/series/combo.ts`.
+  - Failing test: `alignedAxes.test.ts`: left data −38K…155K and right −4 %…38 % give extents with the same negative share and five ticks each; with bars on either axis both ranges include zero; lines only with the right axis's include zero off keeps 20 %…40 %; the right axis's `splitLine.show` is false; over 500 random pairs whose ranges include zero, zero's fraction of each axis agrees within 1e-9 and the tick counts are equal (wechart's own algorithm: `alignTicks` doesn't align zero, research §2) (AC-499).
+  - Depends on: T846
+
+- [ ] T848 (AC-500) Title each value axis above itself with its measures' glyphs and its unit, keep ticks `text-secondary`, give legend entries their glyphs and "(right)", and emphasise a hovered series' axis
+  - Files: `packages/charts/src/combo/axisTitles.ts` (+ test), `packages/charts/src/legend.ts` (+ test), `packages/charts/src/series/combo.ts`, `packages/charts/src/interaction/axisEmphasis.ts` (+ test).
+  - Failing test: `axisTitles.test.ts`: the left axis's name is rich text with a bar glyph (8 × 8, radius 2) and a line glyph (12 × 2), each in its series' colour, then "Revenue · Target ($)", `nameRotate` 0, at the axis's top; tick labels take `text-secondary` in light and dark; `legend.test.ts`: Margin % on the right reads "Margin % (right)" with the point glyph; `axisEmphasis.test.ts`: hovering Margin % puts the right axis's name and labels in `text-primary` and the left axis's series at opacity 0.28 (AC-500).
+  - Depends on: T846
+
+- [ ] T849 (AC-501) Synchronize a combo's two axes into one scale, labelled on both sides, only while both share a format
+  - Files: `packages/core/src/combo.ts` (`canSynchronize`), `packages/charts/src/combo/alignedAxes.ts`, their tests.
+  - Failing test: `combo.test.ts`: `canSynchronize` holds for $ and $, and for $ and % fails with "Revenue is in $ and Margin % in %"; `alignedAxes.test.ts`: synchronized, both axes have the same min, max and interval, and the right axis's fixed min and max are dropped (AC-501).
+  - Depends on: T847
+
+- [ ] T850 (AC-502) Give both axes one scale type, refuse log scale while bars are drawn, and count the values at or below zero a log axis leaves out
+  - Files: `packages/core/src/combo.ts` (`logScaleState`), `packages/charts/src/series/combo.ts`, their tests.
+  - Failing test: `combo.test.ts`: log on the left with two axes drawn makes the right log too; with a bar series, `logScaleState` is unavailable, "Log scale · unavailable: Revenue draws bars, which need a zero baseline"; the charts' `combo.test.ts`: Orders 0, 0, 0 and 12 on a log axis draws one point and reports 3 values not drawn (AC-502).
+  - Depends on: T847
+
+- [ ] T851 (AC-503) Stack a combo's bars, and its areas, for the whole chart and per axis, never across axes
+  - Files: `packages/core/src/combo.ts` (the stacking options), `packages/charts/src/series/combo.ts`, their tests.
+  - Failing test: `combo.test.ts`: Stacked bars give the left's bar series `stack` "0:bars" and the right's "1:bars"; Overlap areas give no `stack` and Stacked areas "‹axis›:areas"; a combo with no area series offers no area stacking (AC-503).
+  - Depends on: T846
+
+- [ ] T852 (AC-504) Split a combo by one dimension across every measure: a series per measure × member, coloured by member, on its measure's axis, one mark per measure
+  - Files: `packages/core/src/render-spec.ts` (`seriesOf` for a split combo; + test), `packages/core/src/combo.ts` (`markTakenBy`), `packages/charts/src/series/combo.ts`, `packages/charts/src/colorAssignment.ts` (+ test).
+  - Failing test: `render-spec.test.ts`: Revenue and Margin % split by 4 regions give 8 series, Revenue's on the left and Margin %'s on the right, a measure's bars grouped in member order; `colorAssignment.test.ts`: EMEA takes in the combo the colour it takes in a bar chart on the same dashboard; `combo.test.ts`: with Revenue on bars, `markTakenBy('bar')` names Revenue while split and nothing unsplit; a second split dimension replaces the first (AC-504).
+  - Depends on: T845
+
+- [ ] T853 (AC-505) Hold a combo to 8 series: fold members to the top k + Other unless the author chose, then leave whole measures out, last added first
+  - Files: `packages/core/src/combo.ts` (`comboLimit`), `packages/core/src/undrawn.ts` ("over 8 series"; + test), `packages/core/src/topN.ts`.
+  - Failing test: `combo.test.ts`: 2 measures × 21 countries fold to top 3 + Other (8 series); 3 measures × 4 regions with nothing chosen fold to top 1 + Other (6); the same with "All" chosen draws 2 measures × 4 and leaves the third, last added, "not drawn · over 8 series"; 5 measures × 4 regions with nothing chosen draw 4 measures × (top 1 + Other); 9 unsplit measures draw 8; a hidden member and a member with no data each count (AC-505).
+  - Depends on: T852
+
+- [ ] T854 (AC-506) Inside a combo, offer "Draw on a right axis" first for a measure on another scale, putting it there
+  - Files: `packages/core/src/undrawn.ts` (the offers per chart type; + test), `packages/web/src/editor/Wells.tsx` (the offers row), `packages/web/src/editor/Wells.test.tsx`.
+  - Failing test: `undrawn.test.ts`: a combo of Revenue and Margin %, both on Auto, gives Margin % "not drawn · on another scale" with offers right axis, small multiples, table in that order; a line chart of the same gives small multiples and table only; `Wells.test.tsx`: pressing "Draw on a right axis" sets Margin %'s axis to right and its pill to its R tag (AC-506).
+  - Depends on: T845
+
+- [ ] T855 (AC-497, AC-498, AC-504, AC-219) Customize › Series: a 28 px row per series with its Mark and Axis radio groups and Back to Auto, grouped by measure while split
+  - Files: `packages/web/src/editor/combo/SeriesRows.tsx` (+ test), `packages/web/src/editor/CustomizeTab.tsx`.
+  - Failing test: `SeriesRows.test.tsx`: three rows with radio groups named "Revenue mark" and "Revenue axis", four mark buttons named Bar, Line, Area and Point in their tooltips and accessible names; ← and → move along a group; choosing Point and Right for Margin % updates the spec and shows "Back to Auto for Margin %: line, left", which restores it; split by Region, rows group under each measure with member rows of swatch, name and visibility; Margin %'s Bar is disabled with "Revenue draws bars. While the chart is split by Region, each measure needs its own mark." (AC-497, AC-498, AC-504, AC-219).
+  - Depends on: T845, T852
+
+- [ ] T856 (AC-497) The Metrics pill's menu: Draw as and Axis as `menuitemradio` groups, Back to Auto, Format… and Remove; the pill's mark glyph and L or R tag
+  - Files: `packages/web/src/editor/Wells.tsx`, `packages/web/src/editor/combo/PillMarkMenu.tsx` (+ test).
+  - Failing test: `PillMarkMenu.test.tsx`: Margin %'s menu holds Draw as (Bar, Line, Area, Point) and Axis (Left, Right) as `menuitemradio` with the current ones checked, then Back to Auto, Format… and Remove; choosing Right puts an R tag before ×, and Customize › Series shows Right; Esc returns focus to the pill (AC-497).
+  - Depends on: T855
+
+- [ ] T857 (AC-497, AC-500) In the chart editor only, make each legend entry's glyph a 20 px button opening the pill's menu
+  - Files: `packages/web/src/editor/combo/LegendGlyphButtons.tsx` (+ test), `packages/web/src/editor/PreviewFrame.tsx`, `e2e/combo.spec.ts`.
+  - Failing test: `LegendGlyphButtons.test.tsx`: in the editor's preview each entry has a button named "Revenue target: line, left axis. Change mark or axis" opening the same menu; the e2e: on a dashboard, in view and edit mode, a combo tile's legend has no such button (AC-497, AC-500).
+  - Depends on: T856, T848
+
+- [ ] T858 (AC-219, AC-499, AC-501, AC-502) Customize › Axes: the Left and Right axis groups, include zero locked with its reason, Synchronize with its toast, log scale on both, and the canvas line
+  - Files: `packages/web/src/editor/AxisPanel.tsx` (+ test), `packages/web/src/editor/combo/SynchronizeSwitch.tsx` (+ test), `packages/web/src/editor/PreviewFrame.tsx`.
+  - Failing test: `AxisPanel.test.tsx`: with every series on the left there's no Right group and no Synchronize; with Margin % on the right, the Right group lists "Margin % · %" and has no gridlines field; with a bar series, include zero reads "Include zero · on, because Revenue draws bars" and can't be switched; Log on one axis announces "Log scale on for both axes" and shows on both; `SynchronizeSwitch.test.tsx`: disabled for $ and % with the reason, and for $ and $ turning it on clears the right's fixed max with "Right axis now follows the left axis · Undo", which restores it; the canvas line reads "3 series on 2 value axes, aligned at zero", then "3 series on 2 axes, synchronized" (AC-219, AC-499, AC-501, AC-502).
+  - Depends on: T849, T850, T855
+
+- [ ] T859 (AC-503) The stacking rows, Bars side by side or stacked, and Areas overlap or stacked while an area is drawn
+  - Files: `packages/web/src/editor/combo/StackingRows.tsx` (+ test), `packages/web/src/editor/CustomizeTab.tsx`.
+  - Failing test: `StackingRows.test.tsx`: Bars offers Side by side and Stacked; Areas shows only once Cost is drawn as an area; choosing Stacked sets the spec's stacking for every bar series (AC-503).
+  - Depends on: T851, T855
+
+- [ ] T860 (AC-504, AC-505) The combo's Split by well, its count against 8, "‹dimension› shown", and "not drawn · over 8 series" with its offers
+  - Files: `packages/web/src/editor/Wells.tsx`, `packages/web/src/editor/combo/SplitCount.tsx` (+ test), `packages/web/src/editor/Wells.test.tsx`.
+  - Failing test: `Wells.test.tsx`: a combo's Data tab has a Split by well taking one dimension, a second replacing the first; `SplitCount.test.tsx`: "2 measures × 4 regions = 8 of 8 series"; adding Orders with "Regions shown" at All gives its pill "not drawn · over 8 series" and the row "Orders isn't drawn…" with Small multiples by Region, Table and Remove Orders; with nothing chosen the well reads "top 1 + Other of 4" (AC-504, AC-505).
+  - Depends on: T853, T855
+
+- [ ] T861 (AC-218) Warn the author only while a combo draws two unsynchronized axes, in Customize › Axes, on the type card and in the tile's edit-mode head, with its variants and offers, and never a viewer
+  - Files: `packages/recommender/src/warnings.ts` (+ test), `packages/web/src/editor/combo/ComboWarning.tsx` (+ test), `packages/web/src/editor/ChartTypeCard.tsx`, `packages/web/src/tiles/ChartTile.tsx` (the edit head), `e2e/combo.spec.ts`.
+  - Failing test: `warnings.test.ts`: a combo on one axis, or two synchronized, gives no warning; two unsynchronized axes in $ and % give "Two scales: Revenue ($) and Margin % (%) can be made to look related." with One axis, Synchronize (disabled, with the reason), Small multiples and Table; $ and $ give the stronger wording with Synchronize first; lines with the right axis off zero add "The right axis doesn't start at zero."; a pie of 7 slices still warns; `ComboWarning.test.tsx`: One axis puts every series on the left; the e2e: the tile's edit head shows ⚠ opening the editor at Axes, and in view mode no part of the warning shows (AC-218).
+  - Depends on: T849, T858
+
+- [ ] T862 (AC-507) Reference lines and bands: the list and its form in Customize, horizontal or vertical, fixed or computed from a drawn series, with Edit, Duplicate and Delete with Undo
+  - Files: `packages/core/src/combo.ts` (the references' shape and `referenceProblems`), `packages/web/src/editor/combo/ReferenceList.tsx` (+ test), `packages/web/src/editor/combo/ReferenceForm.tsx` (+ test).
+  - Failing test: `ReferenceForm.test.tsx`: a horizontal line on the right axis offers Fixed, Average, Median, Minimum and Maximum of a drawn series; a vertical line on a month axis takes a month; a band with From $120K and To $90K keeps Add disabled with "A band's From must be below its To"; an empty label keeps Add disabled; `ReferenceList.test.tsx`: each row shows its icon, label, value and axis; Delete shows an Undo toast that restores it; `combo.test.ts`: an average on a split chart is one line per measure over every member (AC-507).
+  - Depends on: T855
+
+- [ ] T863 (AC-508) Draw reference lines and bands with their styles and order, label them in the chart, move a colliding label, and leave out one outside its axis's range
+  - Files: `packages/charts/src/combo/references.ts` (+ test), `packages/charts/src/series/combo.ts`.
+  - Failing test: `references.test.ts`: a fixed line is a `markLine` of width 1.5, dash [5, 4], in `text-secondary`; one from Margin %'s average is dashed in Margin %'s colour; a band is a `markArea` in `bg-subtle` with no border, below every series; labels are `text-xs` `text-primary` on a 3 px surface halo and not in the legend; two lines 2 px apart get their labels at opposite ends, then 16 px inward; a line at $500K on a $0–$160K axis isn't drawn and its row reads "Outside the axis range" (AC-508).
+  - Depends on: T862, T847
+
+- [ ] T864 (AC-509) Name each series' mark, axis and unit, and each reference line, in the text alternative and the table view
+  - Files: `packages/charts/src/combo/describe.ts` (+ test), `packages/web/src/tiles/DataTable.tsx` (+ test), `packages/web/src/tiles/ChartCanvas.tsx`.
+  - Failing test: `describe.test.ts`: the split example reads "Combo, by quarter, split by Region. Revenue: bars, left axis, dollars. Margin %: line, right axis, percent. Axes aligned at zero. 8 series." and adds "Monthly plan: line at $100K, left axis"; `DataTable.test.tsx`: a split combo's table has two header rows, the first "Revenue · bars, left · $" (AC-509).
+  - Depends on: T852, T863
+
+- [ ] T865 (AC-510) Keep the recommendation as it is when the author draws a second axis, and say so in "Why this recommendation?"
+  - Files: `packages/recommender/src/explain.ts` (+ test), `packages/web/src/editor/WhyThisChart.tsx`.
+  - Failing test: `explain.test.ts`: for time × 2 measures on different scales, a combo with Margin % on the right gives the same recommendation and runners-up as one without, and the one-value-axis rule reads "You drew a second axis by hand; the recommender never does" (AC-510).
+  - Depends on: T845
+
+- [ ] T866 (AC-511) Below 1,024 px, keep axis titles above their axes, compact ticks, thinned category labels, a wrapped legend and reference labels without values
+  - Files: `packages/charts/src/series/combo.ts`, `packages/charts/src/combo/references.ts`, `e2e/combo.spec.ts`.
+  - Failing test: the e2e at 390 px: a combo tile's axis titles sit above their axes; no two category labels' boxes overlap; the reference label reads "Monthly plan" alone and its tooltip "$100K"; the document doesn't scroll sideways (AC-511).
+  - Depends on: T848, T863
+
+- [ ] T867 (AC-037, AC-497, AC-499) A combo of three measures on two axes, made in the editor, saved, reopened and drawn the same on its dashboard
+  - Files: `e2e/combo.spec.ts`.
+  - Failing test: `combo.spec.ts`: in the chart editor, a combo of Revenue (bars), Revenue target (points) and Margin % (line, right) saves; reopened, Customize › Series shows the same; on the dashboard the tile's two zero lines are within 1 px of each other and the right axis's ticks fall on the left's gridlines (AC-037, AC-497, AC-499).
+  - Depends on: T858, T861
+
+### Lane TEXT: the document
+
+- [ ] T868 [P] (AC-513, AC-518) The Text tile's stored document: wechart's own schema and version, with its nodes, marks and attributes, link checks and element count
+  - Files: `packages/core/src/text-document.ts` (+ test), `packages/core/src/index.ts`.
+  - Failing test: `text-document.test.ts`: a document of paragraphs, three heading levels, a Large value, bold, italic, both lists, a link to `https://` and one to a wechart dashboard, and one element of each kind passes `textDocumentProblems`; it refuses an unknown node, an unknown mark, an attribute not declared (`onclick`, `style`, `class`), a `javascript:`, `data:` or `vbscript:` link, and 11 elements, each named; `elementsOf` counts live elements, controls and buttons (AC-513, AC-518).
+  - Depends on: none
+
+- [ ] T869 (AC-512, AC-116) Convert wechart's markdown subset and its `{{…}}` tokens into a Text document, an HTML tag kept as literal text
+  - Files: `packages/core/src/text-document-from-markdown.ts` (+ test), `packages/core/src/text-tokens.ts`.
+  - Failing test: `text-document-from-markdown.test.ts`: every case in `packages/web/src/tiles/Markdown.test.tsx` gives a document whose text, heading levels, lists, links and line breaks match; `{{measure:orders.revenue | marking:Marking}}` becomes a Value limited by Marking; `<b>hi</b>` stays the literal text "<b>hi</b>"; the result passes `textDocumentProblems` (AC-512, AC-116).
+  - Depends on: T868
+
+- [ ] T870 (AC-527) Write a Text document back as markdown, each element as a `{{…}}` token naming its kind and source
+  - Files: `packages/core/src/text-document-to-markdown.ts` (+ test).
+  - Failing test: `text-document-to-markdown.test.ts`: a document of every block, mark and element kind writes markdown whose tokens name each element's kind and source (`{{change:orders.revenue | vs:previous_period}}`, `{{filter-control:country}}`, `{{button:Go to Detail}}`), and converting that markdown back (T869) gives the same text and the same elements for the kinds markdown tiles had (AC-527).
+  - Depends on: T869
+
+- [ ] T871 (AC-513, AC-518) Refuse with 400, naming the tile, a dashboard save holding a Text tile that fails the schema or holds more than 10 elements
+  - Files: `packages/api/src/repos/documents.ts`, `packages/api/src/routes/text-tiles.test.ts`.
+  - Failing test: `text-tiles.test.ts`: saving a dashboard whose Text tile holds `{"type":"image","attrs":{"src":"x","onerror":"alert(1)"}}`, a `javascript:` link or 11 elements answers 400 naming the tile, and nothing is stored; a valid document saves; a tile still in markdown saves and is read back unchanged (AC-513, AC-518).
+  - Depends on: T868
+
+- [ ] T872 (AC-512) Bind at publish, and rename on copy, the members a Text tile's elements name
+  - Files: `packages/api/src/model/bind.ts`, `packages/core/src/text-document.ts` (`textDocumentMembers`, `textDocumentRenamed`), `packages/api/src/routes/text-tile-binding.test.ts`.
+  - Failing test: `text-tile-binding.test.ts`: publishing a dashboard whose only reference to `orders` is a Text tile's Value binds `orders`, and one naming a cube off its path is refused naming it, as for a token (AC-272); a copy into My workspace renames the element's member as it renamed tokens (AC-512).
+  - Depends on: T869
+
+### Lane TEXT: reading and editing
+
+- [ ] T873 (AC-208, AC-513) Read mode: render a Text tile through Tiptap's JSON static renderer into React elements, with wechart's own link check
+  - Files: `packages/web/package.json` (the `@tiptap/*` packages at 3.32.0), `packages/web/src/tiles/text/TextTile.tsx` (+ test), `packages/web/src/tiles/text/readMapping.tsx`, `packages/web/src/tiles/text/SafeLink.tsx` (+ test).
+  - Failing test: `TextTile.test.tsx`: headings render as `h3`, `h4` and `h5` at `text-xl`, `text-lg` and `text-md`, Large value at 32/40 tabular, lists as `ul` and `ol`, bold as `strong`; no element under the tile has `innerHTML` set from data (a document holding the text "<b>x</b>" renders that text); `SafeLink.test.tsx`: `javascript:alert(1)` renders as plain text with no `href`, `https://` and a dashboard link as links (AC-208, AC-513).
+  - Depends on: T868
+
+- [ ] T874 (AC-058) The `text` tile kind, and the Text element in Add in place of Markdown, inserting an empty Text tile
+  - Files: `packages/web/src/dashboard/model/document.ts` (+ test), `packages/web/src/dashboard/edit/AddPanel.tsx`, `packages/web/src/dashboard/edit/templates.ts` (+ test), `packages/web/src/dashboard/model/insert.ts`, `packages/web/src/dashboard/edit/Outline.tsx`.
+  - Failing test: `templates.test.ts`: Add's elements are chart, chart from folders, section, tab group, text, header, divider, image, link and filter, with no markdown; inserting Text after the selection adds a `text` tile with an empty document; `document.test.ts`: `TILE_KINDS` holds `text` and a new dashboard's tiles are never `markdown` (AC-058).
+  - Depends on: T873
+
+- [ ] T875 (AC-512) A markdown tile shown as a Text tile, converted on open, and stored as a document on the next save
+  - Files: `packages/web/src/dashboard/model/document.ts`, `packages/web/src/dashboard/model/stored.ts` (+ test), `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/Markdown.tsx` (removed with its test, whose cases move to T869's), `e2e/text-tile.spec.ts`.
+  - Failing test: `stored.test.ts`: a stored `markdown` tile reads as a `text` tile whose document equals T869's conversion; saving writes `kind: "text"` and the document; the e2e: a seeded markdown tile with "## Marked share" and two tokens shows the same heading, text and values before and after a save, and the saved body holds no markdown (AC-512).
+  - Depends on: T869, T874
+
+- [ ] T876 (AC-302) Edit a Text tile in place on the canvas: double-click, or "Edit text on the canvas" by keyboard; Esc, Tab or a click outside leaves; one Undo takes the whole edit
+  - Files: `packages/web/src/tiles/text/TextEditor.tsx` (+ test; loaded with `React.lazy`), `packages/web/src/tiles/text/editorExtensions.ts`, `packages/web/src/dashboard/edit/TileProperties.tsx` (the first control; no markdown textarea), `packages/web/src/dashboard/edit/EditChrome.tsx`, `e2e/text-tile.spec.ts`.
+  - Failing test: `TextEditor.test.tsx`: the editor is a `textbox` with `aria-multiline="true"` named after the tile; Esc leaves it with the tile selected and focused, Tab moves to the next control; the e2e: Enter on a focused Text tile then Enter on "Edit text on the canvas" puts focus at the text's end with a 2 px `accent` border; typing then clicking outside and pressing the edit bar's Undo once restores the old text whole; Properties has no textarea (AC-302).
+  - Depends on: T875
+
+- [ ] T877 (AC-514) Keep the editor's code out of view mode: no editor chunk until a Text tile is first edited
+  - Files: `packages/web/vite.config.ts` (the editor chunk's name), `e2e/text-tile.spec.ts`.
+  - Failing test: `text-tile.spec.ts`: opening a dashboard with two Text tiles in view mode requests no script whose name holds the editor chunk's; double-clicking a tile in edit mode then requests it (AC-514).
+  - Depends on: T876
+
+- [ ] T878 (AC-515) The toolbar: block style in §3's sizes, bold, italic, both lists, link, Insert and the element count, and nothing for colour, font or size
+  - Files: `packages/web/src/tiles/text/TextToolbar.tsx` (+ test).
+  - Failing test: `TextToolbar.test.tsx`: a `toolbar` with one Tab stop and ← → along it, holding in order the block-style menu button, Bold, Italic, Bulleted list, Numbered list, Link, Insert and "3 / 10 elements"; the block-style menu lists Paragraph, Heading small, Heading medium, Heading large and Large value, each in its own size; choosing Heading medium makes the line an `h4` at 20 px (AC-515).
+  - Depends on: T876
+
+- [ ] T879 (AC-516) Convert markdown patterns as typed, undone by the next Undo, and let only ⌘B, ⌘I and ⌘Z act inside the text
+  - Files: `packages/web/src/tiles/text/editorExtensions.ts` (the input rules and the keymap), `packages/web/src/tiles/text/keys.test.ts`.
+  - Failing test: `keys.test.ts`: `## ` makes Heading medium, `- ` a bulleted list, `1. ` a numbered list, `**a**` bold, `*a*` italic, `[a](https://x.example)` a link, each reversed by the next ⌘Z; ⌘B and ⌘I toggle bold and italic and ⌘Z undoes typing; ⌘U, ⌘E, ⇧⌘X, ⌘⌥1 and ⇧⌘Z change nothing; with focus outside the text, ⌘B does nothing (AC-516).
+  - Depends on: T876
+
+- [ ] T880 (AC-513) Strip what the schema doesn't allow from pasted content, and refuse unsafe links, in the editor
+  - Files: `packages/web/src/tiles/text/editorExtensions.ts` (`transformPastedHTML`, the Link mark's `isAllowedUri`), `e2e/text-tile.spec.ts`.
+  - Failing test: `text-tile.spec.ts`: pasting `<img src=x onerror="window.__xss=1"><script>window.__xss=2</script><iframe src="https://x.example"></iframe><a href="javascript:window.__xss=3">a</a>` leaves `window.__xss` undefined in edit mode and after saving and reloading in view mode; the tile's DOM holds no `img`, `script`, `iframe`, `on…` attribute or `javascript:` address; the text "a" remains (AC-513).
+  - Depends on: T876, T871
+
+- [ ] T881 (AC-517) The insert menu, opened by `/`, `{{` or Insert: a combobox of kinds in three groups, then measures by cube
+  - Files: `packages/web/src/tiles/text/InsertMenu.tsx` (+ test; on `@tiptap/suggestion`), `packages/web/src/tiles/text/editorExtensions.ts`.
+  - Failing test: `InsertMenu.test.tsx`: `/` at a line's start, after a space, `{{` and Insert each open a 320 px listbox with Live values (8 kinds), Controls (3) and Copilot groups in that order, focus staying in the text with `aria-activedescendant`; typing "marg" lists Margin % under Orders; Enter on it inserts a Value of it; → on it lists Value, Change, Sparkline, Icon, Bullet graph and As of; Esc closes it and leaves "{{marg" as text; `/` inside a word opens nothing (AC-517).
+  - Depends on: T878
+
+- [ ] T882 (AC-519) Live elements as atoms in edit mode, controls inert, and the Elements list in Properties
+  - Files: `packages/web/src/tiles/text/nodes/*.ts` (one node per kind, inline atoms with `ReactNodeViewRenderer`), `packages/web/src/tiles/text/ElementsList.tsx` (+ test), `packages/web/src/tiles/text/elementName.ts` (+ test).
+  - Failing test: `ElementsList.test.tsx`: elements listed in text order with kind and source and "3 of 10"; choosing a row selects that element and opens its settings; `elementName.test.ts`: "Change, Revenue against previous quarter"; a node test: → steps over an element as one character and selects it; Backspace after it removes it whole; a filter control in edit mode ignores a click's change (AC-519).
+  - Depends on: T881
+
+- [ ] T883 (AC-518) Hold a Text tile to 10 elements in the editor: the count, the disabled menu and Insert with the reason, and a refused paste
+  - Files: `packages/web/src/tiles/text/elementLimit.ts` (+ test), `packages/web/src/tiles/text/InsertMenu.tsx`, `packages/web/src/tiles/text/TextToolbar.tsx`.
+  - Failing test: `elementLimit.test.ts`: at 10 elements Insert and every menu row are disabled with "This tile holds 10 elements, the most a Text tile can. Remove one, or add another Text tile."; pasting text holding 2 elements into a tile of 9 is refused with that reason and changes nothing; a filter control and a button count (AC-518).
+  - Depends on: T882
+
+- [ ] T884 (AC-520, AC-116) The Value and Change elements: their settings, model formats, marking limits, own filters, and Change's triangle, sign and direction colour
+  - Files: `packages/web/src/tiles/text/elements/ValueElement.tsx` (+ test), `packages/web/src/tiles/text/elements/ChangeElement.tsx` (+ test), `packages/web/src/tiles/text/elementQueries.ts` (+ test).
+  - Failing test: `ValueElement.test.tsx`: Revenue in its model's currency format; limited by Marking, over the marked rows, and with nothing marked all data, or "—" when chosen; its own filter added to the tile's in the query; `ChangeElement.test.tsx`: +4.2 % with Higher is better reads "▲ 4.2%" in `status-success`, −2.1 % "▼ 2.1%" in `status-error`, Neutral in `text-secondary`; as an amount "▲ $50K" (AC-520, AC-116).
+  - Depends on: T882
+
+- [ ] T885 (AC-521) Sparkline and Bullet graph as wechart's own SVG, word-sized, each an image with its text alternative
+  - Files: `packages/web/src/tiles/text/elements/Sparkline.tsx` (+ test), `packages/web/src/tiles/text/elements/BulletGraph.tsx` (+ test).
+  - Failing test: `Sparkline.test.tsx`: a 64 × 16 `svg` with `role="img"`, one `path` of stroke width 2 in Revenue's dashboard colour, no axis, a last-point circle only when chosen, and the label "Revenue by month, last 12 months: from $1.0M to $1.27M, low $0.95M, high $1.3M"; `BulletGraph.test.tsx`: 96 × 16, a 4 px value bar and a 2 px target in `text-primary`, three range rects in `bg-subtle`, `border-subtle` and `border-strong`, a fourth range refused, and its label naming value, target and ranges (AC-521).
+  - Depends on: T884
+
+- [ ] T886 (AC-522, AC-116) The Icon, Marking, Filter value and As of elements
+  - Files: `packages/web/src/tiles/text/elements/IconElement.tsx` (+ test), `packages/web/src/tiles/text/elements/MarkingElement.tsx`, `packages/web/src/tiles/text/elements/FilterValueElement.tsx` (+ test), `packages/web/src/tiles/text/elements/AsOfElement.tsx` (+ test).
+  - Failing test: `IconElement.test.tsx`: rules ≥ 100 % On track, ≥ 90 % Watch, otherwise Behind show the first match's icon and word; with no data, "No rule matched" with a neutral ring; `FilterValueElement.test.tsx`: Country set to Germany and France reads "Germany, France", unset "all countries"; `AsOfElement.test.tsx`: "as of 14:05" with a tooltip naming a pre-aggregation; a Marking element shows its count (AC-522, AC-116).
+  - Depends on: T884
+
+- [ ] T887 (AC-523) A Text tile as a cross-filter target only, Filter or None, and its elements of one cube in one Cube request
+  - Files: `packages/web/src/dashboard/settings/CrossFilterMatrix.tsx`, `packages/web/src/tiles/text/elementQueries.ts` (+ test), `packages/web/src/dashboard/crossfilter/` (targets).
+  - Failing test: `elementQueries.test.ts`: three Values of `orders` measures under the same filters make one `/load` query; a fourth with its own filter makes a second; `CrossFilterMatrix` test: a Text tile's Highlight is disabled with "Text has no marks to highlight" and it isn't listed as a source; with Filter, a click on a bar changes the tile's Value (AC-523).
+  - Depends on: T884
+
+- [ ] T888 (AC-524) View mode: values as text in their sentence's type and weight, focusable, with a dotted underline and a tooltip that is their accessible description
+  - Files: `packages/web/src/tiles/text/ElementTooltip.tsx` (+ test), `packages/web/src/tiles/text/readMapping.tsx`.
+  - Failing test: `ElementTooltip.test.tsx`: a Value in a Heading large is 24 px at the heading's weight with `font-variant-numeric: tabular-nums` and no background or border; Tab reaches it; on focus it shows a dotted `text-muted` underline and a tooltip naming "Change · Revenue", "This quarter against the previous", the tile's and its own filters, "Marking: none" and "as of 14:05 · pre-aggregation", the same text as its `aria-describedby` (AC-524).
+  - Depends on: T884, T873
+
+- [ ] T889 (AC-525) The element states: loading, no data, error, no permission and a removed member; and the empty tile
+  - Files: `packages/web/src/tiles/text/ElementState.tsx` (+ test), `packages/web/src/tiles/text/TextTile.tsx`, `packages/web/src/dashboard/edit/Outline.tsx`.
+  - Failing test: `ElementState.test.tsx`: loading shows a skeleton the width of the last value, or 4ch, and the tile `aria-busy`; no data "—" with "No data for these filters"; an error the warning icon and "Unavailable", Details on focus; a 403 from Cube "Unavailable" with no member named, the same as a folder the groups can't reach; a removed member "Unavailable" and, in edit mode, "1 element needs fixing" with its Elements row marked; an empty tile shows the placeholder in edit mode, nothing in view mode, and "Empty text" in the Outline (AC-525).
+  - Depends on: T888
+
+- [ ] T890 (AC-526) Below 1,024 px, a Text tile full width with stacked controls, wrapping buttons and tooltips on tap
+  - Files: `packages/web/src/tiles/text/textStyles.ts`, `e2e/text-tile.spec.ts`.
+  - Failing test: `text-tile.spec.ts` at 390 px: a Controls tile's parameter control and filter control are on separate rows, each the tile's width; its four buttons wrap with none cut off; tapping a value shows its tooltip and tapping elsewhere hides it; the document doesn't scroll sideways (AC-526).
+  - Depends on: T888, T892, T894, T899 (built after T900, for its controls)
+
+- [ ] T891 (AC-527) Return Text tiles through MCP as markdown with tokens, and store a Text tile an MCP client writes in markdown as a checked document
+  - Files: `packages/api/src/mcp/tools/read.ts`, `packages/api/src/mcp/tools/workspace.ts`, `packages/api/src/mcp/tools/text-tiles.test.ts`.
+  - Failing test: `text-tiles.test.ts`: reading a dashboard returns its Text tile's content as T870's markdown inside the marked data field (AC-443); writing a dashboard with a markdown Text tile stores a document equal to T869's conversion; one holding `<script>` stores it as literal text; one of 11 tokens is refused (AC-527).
+  - Depends on: T870, T871
+
+### Lane TEXT: controls and dashboard parameters
+
+- [ ] T892 (AC-528) A Filter control that is one of the dashboard's filters: the bar's widget at 28 px with its scope tag, one value in both places, and a deleted filter's control needing fixing
+  - Files: `packages/web/src/tiles/text/elements/FilterControl.tsx` (+ test), `packages/web/src/filters/FilterBar.tsx` (the shared widget), `e2e/text-tile.spec.ts`.
+  - Failing test: `FilterControl.test.tsx`: the control renders the bar's widget for Country with its scope tag, at 28 px; the e2e: choosing Spain in the control updates the bar's pill, the header's count and every tile in scope, announced once; clearing it in the bar clears the control; a second Text tile's control of Country shows the same value; deleting Country shows "1 element needs fixing" in edit mode (AC-528).
+  - Depends on: T882
+
+- [ ] T893 (AC-529) A filter control of more than 1,000 values: the first 1,000, the count, and search through Cube
+  - Files: `packages/web/src/filters/widgets/` (the list widget's cap and search), `packages/web/src/tiles/text/elements/FilterControl.tsx`, tests.
+  - Failing test: the list widget's test over 4,212 customers: 1,000 options and "Showing 1,000 of 4,212 · type to find the rest"; typing "acme" queries Cube with `contains` and lists "Acme Retail SARL", which wasn't in the first 1,000, with "3 matches in all 4,212 customers" (AC-529).
+  - Depends on: T892
+
+- [ ] T894 (AC-530) Action buttons: a label, a style, and an ordered list of declared actions, run in order and nothing else
+  - Files: `packages/core/src/text-document.ts` (the four action kinds), `packages/web/src/tiles/text/elements/ActionButton.tsx` (+ test), `packages/web/src/tiles/text/ActionList.tsx` (+ test).
+  - Failing test: `ActionList.test.tsx`: + action offers Go to page tab, Apply bookmark, Reset filters and Export only; Move up reorders; `ActionButton.test.tsx`: Reset filters then Go to page tab Detail runs in that order; Reset filters leaves a parameter's value; Export of two tiles downloads two CSVs, each as AC-171 makes it; a stored button with `{"kind":"script"}` is refused by `textDocumentProblems` and runs nothing (AC-530).
+  - Depends on: T882
+
+- [ ] T895 [P] (AC-531) The dashboard parameter in the dashboard's document: a name, a role, ordered labelled choices of at most 1,000 and a default among them
+  - Files: `packages/core/src/dashboard-parameters.ts` (+ test), `packages/core/src/dashboard-document.ts`, `packages/core/src/index.ts`.
+  - Failing test: `dashboard-parameters.test.ts`: a Measure parameter of Revenue, Orders and Margin % with default Revenue passes; 1,001 choices, a default outside the choices, a Dimension choice in a Measure parameter, and an empty name are each refused, named (AC-531).
+  - Depends on: none
+
+- [ ] T896 (AC-531) Dashboard settings › Parameters: the section and its list, and New parameter in the section or a 520 px dialog from the insert menu and a well's picker
+  - Files: `packages/web/src/dashboard/settings/ParametersSettings.tsx` (+ test), `packages/web/src/dashboard/settings/ParameterForm.tsx` (+ test), `packages/web/src/dashboard/settings/SettingsPage.tsx`.
+  - Failing test: `ParametersSettings.test.tsx`: Parameters sits after Cross-filtering and before Layout with its count; rows show name, "Field switch", Measure, 3, Revenue and "3 · 1 chart, 2 Text tiles"; `ParameterForm.test.tsx`: choices are picked with the field picker and can't be typed; Move up reorders; switching to Dimension with choices set asks first; opened from the insert menu it is a 520 px dialog that returns focus there; one Undo reverses the saved settings (AC-531).
+  - Depends on: T895
+
+- [ ] T897 (AC-532) A parameter's uses as links, Save held for a choice a bound chart can't query, and deleting a used parameter
+  - Files: `packages/web/src/dashboard/settings/ParametersSettings.tsx`, `packages/web/src/dashboard/settings/parameterUses.ts` (+ test).
+  - Failing test: `parameterUses.test.ts`: uses list the chart's Metrics well, a parameter control and a Value; a choice from a cube the bound chart doesn't join holds Save settings with "Revenue by month can't query Products › Margin target"; deleting the parameter asks, then each use keeps the current choice as a fixed field and its tile says so (AC-532).
+  - Depends on: T896
+
+- [ ] T898 (AC-533) Bind a parameter from a local chart's well, follow it in the chart and in Value elements, and say "set by ‹parameter›" in view mode
+  - Files: `packages/web/src/editor/Wells.tsx` (the Parameters group), `packages/core/src/chart-spec.ts` (a parameter in a well; + test), `packages/web/src/dashboard/chartSpec.ts` (resolving it; + test), `packages/web/src/tiles/ChartTile.tsx` ("set by").
+  - Failing test: `chartSpec.test.ts`: a local chart whose Metrics well holds "Metric to show" queries Revenue, then Orders when the parameter changes, its title and format following; its pinned type stays; `Wells.test.tsx`: the picker lists "Parameters of this dashboard" first with Metric to show only in Metrics; the pill reads "Metric to show · now Revenue" with its tooltip; a chart from folders lists no Parameters group; the tile's head shows "· set by Metric to show" in view mode (AC-533).
+  - Depends on: T895
+
+- [ ] T899 (AC-534) The Parameter control in a Text tile: segments for up to 5 choices, a listbox beyond, the default at open, applied at once and announced once
+  - Files: `packages/web/src/tiles/text/elements/ParameterControl.tsx` (+ test), `packages/web/src/dashboard/parameters/useParameters.ts` (+ test).
+  - Failing test: `ParameterControl.test.tsx`: 3 choices render a `radiogroup`, 6 a `listbox`; choosing Orders re-queries the bound chart and Value with Orders and the polite region receives "Metric to show: Orders" once; `useParameters.test.ts`: a dashboard opened plainly starts at the default (AC-534).
+  - Depends on: T898, T882
+
+- [ ] T900 (AC-121, AC-123) Bookmarks and copied links carry each parameter's value, and applying one sets it
+  - Files: `packages/web/src/dashboard/bookmarks/viewState.ts` (+ test), `packages/web/src/dashboard/bookmarks/applyBookmark.ts` (+ test), `packages/web/src/filters/url.ts` (+ test).
+  - Failing test: `viewState.test.ts`: a bookmark saved with Metric to show at Orders stores it, and applying it sets it back from Revenue; `url.test.ts`: a copied link holds the parameter's value, and opening it starts there (AC-121, AC-123).
+  - Depends on: T899
+
+### Lane TEXT: the AI service
+
+- [ ] T901 [P] (AC-549) Encrypt the AI key at rest with AES-256-GCM under its own key-encryption key, bound to the settings, the provider and the endpoint's origin
+  - Files: `packages/api/src/ai/keyStore.ts` (+ test), `packages/api/src/config.ts` (`WECHART_AI_KEY_KEYRING_FILE`, through `keyOf`), `packages/api/src/config.test.ts`.
+  - Failing test: `keyStore.test.ts`: a key sealed for Azure OpenAI at `https://acme.openai.azure.com` opens with the same binding and fails to open for OpenAI or for `https://evil.example`; each seal has a fresh 12-byte IV and a 16-byte tag; `config.test.ts`: the keyring is refused when it equals the signing, service or seed key (AC-549).
+  - Depends on: none
+  - What the API does with no keyring at all is R80-5's, and T915's; this task's test provides one.
+
+- [ ] T902 (AC-546, AC-548) The AI settings in wechart's database and their API, for Super-Admins only (404 for others), the key write-only, and the single user with sign-in off
+  - Files: `packages/api/src/db/migrations/1758700000000_ai-settings.cjs`, `packages/api/src/repos/ai-settings.ts` (+ test), `packages/api/src/routes/ai-settings.ts` (+ test), `packages/api/src/server.ts`.
+  - Failing test: `ai-settings.test.ts`: a Super-Admin's GET returns provider, model, endpoint, limits and "stored" with who and when, and no key or ciphertext field; a read-write member's GET and PUT answer 404; with sign-in off the single user's answer 200; the key column is in its own table, not read by `SELECT` on the settings; a canary key never appears in any response or the captured log (AC-546, AC-548).
+  - Depends on: T901
+
+- [ ] T903 (AC-549, AC-547) Clear the stored key when the provider or the endpoint changes, and keep Anthropic's and OpenAI's endpoints fixed
+  - Files: `packages/api/src/routes/ai-settings.ts`, `packages/api/src/ai/providers.ts` (the providers and their fields; + test).
+  - Failing test: `ai-settings.test.ts`: changing Azure's endpoint, or the provider, clears the key and a test without a new one answers 409 "Enter the key again"; a PUT setting Anthropic's endpoint to anything but `https://api.anthropic.com` is refused 400; `providers.test.ts`: each provider's fields are as AC-547 lists, Bedrock's credentials IAM role first (AC-549, AC-547).
+  - Depends on: T902
+
+- [ ] T904 (AC-537, AC-558) A provider port with Anthropic and OpenAI / Azure OpenAI clients set explicitly, schema-constrained, `store: false`, with no tools, against a fake provider
+  - Files: `packages/api/package.json` (`@anthropic-ai/sdk@0.135.0`, `openai@7.38.0`, `zod@4.6.5`), `packages/api/src/ai/llm.ts` (the port and the `Narrative` schema), `packages/api/src/ai/anthropic.ts` (+ test), `packages/api/src/ai/openai.ts` (+ test), `packages/api/src/ai/fake.ts`.
+  - Failing test: `anthropic.test.ts`, with `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL` and `ANTHROPIC_LOG=debug` set in the environment: the fake receives one request, at the configured base URL, with the saved key, `output_config.format`, no `tools`, and a system prompt holding no fixture title; a 500 isn't retried; nothing is logged; `openai.test.ts`, with the OpenAI variables set: a Responses request with `store: false`, `text.format` strict, the saved key and base URL; zod 4.6.5's schema for `Narrative` uses `anyOf`, not `oneOf` (AC-537, AC-558).
+  - Depends on: T903
+
+- [ ] T905 (AC-558, AC-547) The Amazon Bedrock client through `AnthropicBedrockMantle`: the region, and the pods' IAM role or a saved access key pair
+  - Files: `packages/api/package.json` (`@anthropic-ai/bedrock-sdk@0.35.0`), `packages/api/src/ai/bedrock.ts` (+ test).
+  - Failing test: `bedrock.test.ts`: with an access key pair saved and other AWS credentials in the environment, the fake receives a request signed with the saved pair for the saved region; with the IAM role chosen, the client takes the default credential chain and nothing is stored; no `output_config.format` is sent, and the response still goes through T906's check (AC-558, AC-547).
+  - Depends on: T904, T906
+  - Waits on: R80-6, a research addendum to `docs/research/llm-providers.md` for the client's region, credential and base-URL options.
+
+- [ ] T906 (AC-538) Check every draft, and retry once: typed segments only, known facts only, no digit in text, no refusal or cut-off
+  - Files: `packages/api/src/ai/validateNarrative.ts` (+ test), `packages/api/src/ai/draft.ts` (+ test).
+  - Failing test: `validateNarrative.test.ts`: rejects "grew 4.2%" in a text segment, Arabic-Indic "٤" in one, a `ref` not issued, an extra property, a non-array `segments`, `stop_reason` "refusal" and "max_tokens", and an OpenAI refusal; `draft.test.ts`: a first rejection is drafted once more and a second ends with the "couldn't keep every number live" outcome; a Bedrock-shaped answer goes through the same check (AC-538).
+  - Depends on: T904
+
+- [ ] T907 (AC-550) Test connection: four checks in order, 30 s each, mapped from the provider's errors, the test summary checked in 2 tries
+  - Files: `packages/api/src/ai/testConnection.ts` (+ test), `packages/api/src/routes/ai-settings.ts`.
+  - Failing test: `testConnection.test.ts` against the fake: success gives four passed checks with Reachable's ms; a 401 gives "Key refused. The provider answered "401 Unauthorized". …" and the last two "not run"; a 404 for the model gives "The model or deployment wasn't found. "wechart-narative" doesn't exist at this endpoint."; no answer gives "Timed out" at 30 s; two digit-holding answers give the warning "… in 2 of 2 tries …"; no result holds the key or a stack (AC-550).
+  - Depends on: T906
+
+- [ ] T908 (AC-551) Hold a save of the provider, endpoint or region, model, key or Bedrock credentials until a test made with them passed
+  - Files: `packages/api/src/ai/testConnection.ts` (the passed test's fingerprint), `packages/api/src/routes/ai-settings.ts`, `packages/api/src/routes/ai-settings-save.test.ts`.
+  - Failing test: `ai-settings-save.test.ts`: changing the model and saving without a test answers 409 "Save is held until Test connection passes"; after a passing test with that model it saves; a test passed with another key doesn't count; a limit change saves with no test (AC-551).
+  - Depends on: T907
+
+- [ ] T909 (AC-552, AC-556) Replace the key only after a passing test with the new one, and audit settings changes and key replacements, never a key
+  - Files: `packages/api/src/routes/ai-settings.ts`, `packages/api/src/audit/record.ts` ("AI settings changed", "AI key replaced"), `packages/api/src/routes/ai-key-replace.test.ts`.
+  - Failing test: `ai-key-replace.test.ts`: replacing without a passing test with the new key answers 409 and the old key is still used; after one, drafts use the new key; the audit records "AI key replaced" with "Tested: 4 of 4 checks passed" and neither key; a limit change from 10 to 20 records "Summaries per person per day: 10 → 20" (AC-552, AC-556).
+  - Depends on: T908
+
+- [ ] T910 (AC-536) Compute a summary's facts through Cube as the author, under the page's filters: change against the previous period, and top and bottom contributors
+  - Files: `packages/api/src/ai/facts.ts` (+ test), `packages/api/src/cube/` (queries as the user).
+  - Failing test: `facts.test.ts`: for Revenue under Country = Germany, France, the change fact's two queries carry the author's token and that filter; the contributors fact ranks members by Revenue; a measure in a folder the author can't reach gives no fact and is never sent (AC-536).
+  - Depends on: T904
+  - Waits on: R80-1, which period a change compares.
+
+- [ ] T911 (AC-535, AC-537, AC-540) The draft route: AI on, Who may use AI (403 otherwise), facts then the provider then the check, and nothing of the draft kept
+  - Files: `packages/api/src/routes/ai-summaries.ts` (+ test), `packages/api/src/ai/draft.ts`.
+  - Failing test: `ai-summaries.test.ts`: a viewer, and a member outside the chosen AD groups, get 403; with AI off, 409; a draft answers segments and facts; afterwards no table holds the draft's text or the facts sent, and the captured log holds neither; the provider request carries the timeout and output cap from config (AC-535, AC-537, AC-540).
+  - Depends on: T906, T910
+  - Waits on: R80-3, for the timeout's and caps' values (config; the test holds for any).
+
+- [ ] T912 (AC-543) Count drafts against the daily and monthly limits, and refuse one over a limit with 429 before any provider call
+  - Files: `packages/api/src/ai/limits.ts` (+ test), `packages/api/src/routes/ai-summaries.ts`.
+  - Failing test: `limits.test.ts`: with 20 a day, the 21st draft the same day answers 429 with the Super-Admin's message and the fake receives nothing; an automatic retry counts nothing; the monthly limit answers its own message (AC-543).
+  - Depends on: T911
+  - Waits on: R80-2, which day and month the limits count in.
+
+- [ ] T913 (AC-544) Report a provider that can't be reached, refuses the key or is past its spending limit with wechart's own words and the request id, never retrying a spending-limit refusal
+  - Files: `packages/api/src/ai/errors.ts` (+ test), `packages/api/src/ai/draft.ts`.
+  - Failing test: `errors.test.ts`: a connection error, a 401 and a 429 with `enforced_spend_limit_reached` each give "provider unreachable" with the provider's request id; the 429 is sent once only; a provider message echoing the key is scrubbed from everything stored, returned or logged (AC-544).
+  - Depends on: T906
+
+- [ ] T914 (AC-545) Keep a usage record per draft request and an "AI summary inserted" audit event per insert, holding no prompt, fact value or draft
+  - Files: `packages/api/src/db/migrations/1758700001000_ai-usage.cjs`, `packages/api/src/repos/ai-usage.ts` (+ test), `packages/api/src/routes/ai-summaries.ts` (the insert record), `packages/api/src/audit/record.ts`.
+  - Failing test: `ai-usage.test.ts`: a draft records who, provider, model, input and output tokens, request id, duration and outcome; an insert records "AI summary inserted" with the folder, "Revenue overview › EMEA summary" and "5 live values · 4 facts"; neither holds a fact's value or any text of the draft (AC-545).
+  - Depends on: T911
+
+- [ ] T915 (AC-549, AC-547) The Helm chart: the AI keyring as its own Secret mounted for `_FILE`, and the pods' IAM role for Bedrock
+  - Files: `deploy/helm/wechart/values.yaml`, `deploy/helm/wechart/templates/` (the Secret, the mount and the service account's annotations), `deploy/helm/verify.sh`.
+  - Failing test: `verify.sh`: the rendered chart mounts the AI keyring Secret at the path `WECHART_AI_KEY_KEYRING_FILE` names, apart from the signing and service keys; with `ai.bedrock.roleArn` set, the API's service account carries the annotation the research names (AC-549, AC-547).
+  - Depends on: T901
+  - Waits on: R80-5 and R80-6.
+
+### Lane TEXT: Security › AI
+
+- [ ] T916 (AC-546) Security's fifth tab, AI, at `/security/ai`, with its state chip, and Not found for everyone else
+  - Files: `packages/web/src/workspaces/security/ai/AiTab.tsx` (+ test), `packages/web/src/workspaces/security/SecurityPage.tsx`, `packages/web/src/router/routes.tsx`.
+  - Failing test: `AiTab.test.tsx`: a Super-Admin sees AI after Access tokens with "Not set up", then "On · tested 18 Oct, 09:12" once saved and tested, each with its icon; a read-write member at `/security/ai` sees Not found; with sign-in off the single user sees the tab (AC-546).
+  - Depends on: T902
+
+- [ ] T917 (AC-547, AC-548) The settings form: AI on, Who may use AI, the provider and its fields, the key typed once or stored, and what's sent
+  - Files: `packages/web/src/workspaces/security/ai/AiSettingsForm.tsx` (+ test), `packages/web/src/workspaces/security/ai/StoredKey.tsx` (+ test).
+  - Failing test: `AiSettingsForm.test.tsx`: Who may use AI defaults to "Everyone who can edit dashboards"; the AD group combobox appears for "Only these AD groups"; Anthropic shows model and key with the endpoint read-only; Azure endpoint, deployment and key; Bedrock region, model ID and credentials with IAM role first; no second model; the What's sent card reads as AC-547 says; `StoredKey.test.tsx`: the key field is `type="password"` with `autocomplete="off"` and no show button; once stored it reads "Stored · encrypted · set 2 Oct 2026 by Ada Admin" with Replace… (AC-547, AC-548).
+  - Depends on: T916, T903
+
+- [ ] T918 (AC-550) The Test connection card: the four checks running in order, their results and failures, the announcement, and the last result kept
+  - Files: `packages/web/src/workspaces/security/ai/ConnectionChecks.tsx` (+ test).
+  - Failing test: `ConnectionChecks.test.tsx`: checks show running, then passed, each with an icon and label; after "Key refused…" the rest read "not run"; Stop appears after 10 s; the polite region receives "4 of 4 checks passed" once and focus stays on the button; the card keeps "passed · 18 Oct, 09:12 · Ada Admin" (AC-550).
+  - Depends on: T917, T907
+
+- [ ] T919 (AC-551) Save ‹n› changes, held with its reason until the test passes, and asking before leaving or Discard
+  - Files: `packages/web/src/workspaces/security/ai/AiSettingsForm.tsx`, `packages/web/src/workspaces/security/ai/useAiDraft.ts` (+ test).
+  - Failing test: `useAiDraft.test.ts`: two changed fields give "Save 2 changes"; a model change holds Save with "Save is held until Test connection passes" beside it until a pass; a limit change doesn't; switching to the Audit trail tab asks "Leave without saving 2 changes?" with focus on Keep editing; Discard asks first and clears the typed key (AC-551).
+  - Depends on: T918, T908
+
+- [ ] T920 (AC-552) The Replace the API key dialog: tested before Replace key, Cancel changing nothing
+  - Files: `packages/web/src/workspaces/security/ai/ReplaceKeyDialog.tsx` (+ test).
+  - Failing test: `ReplaceKeyDialog.test.tsx`: a 520 px dialog taking focus; Replace key disabled until "Tested with the new key: all 4 checks passed"; Cancel and Esc close it with the stored line unchanged and focus back on Replace… (AC-552).
+  - Depends on: T918, T909
+
+- [ ] T921 (AC-553) Turning AI off: the line saying what Save will do, no confirmation, everything kept
+  - Files: `packages/web/src/workspaces/security/ai/AiSettingsForm.tsx`, `packages/web/src/workspaces/security/ai/AiOffLine.test.tsx`.
+  - Failing test: `AiOffLine.test.tsx`: switching AI off shows "When saved: no one can draft summaries. The 38 summaries already in Text tiles stay, …" and no dialog; after Save and back on, the provider, the stored key and the limits are as before (AC-553).
+  - Depends on: T919
+
+- [ ] T922 (AC-554) The limits and the limit message: whole numbers or "No limit", "Was ‹old› · unsaved", the 280-character counter, and the 90 % line
+  - Files: `packages/web/src/workspaces/security/ai/LimitsCard.tsx` (+ test).
+  - Failing test: `LimitsCard.test.tsx`: an empty limit reads "No limit"; 2.5 is refused; changing 10 to 20 shows "Was 10 · unsaved"; a 281-character message holds Save with "281 / 280"; at 1,812 of 2,000 the page shows "1,812 of 2,000 summaries used this month.", and at 1,799 it doesn't (AC-554).
+  - Depends on: T919
+
+- [ ] T923 (AC-555) Usage this month for Super-Admins: person, drafted, inserted and last used, newest first, with its empty and loading states
+  - Files: `packages/web/src/workspaces/security/ai/UsageTable.tsx` (+ test), `packages/api/src/routes/ai-settings.ts` (the usage read).
+  - Failing test: `UsageTable.test.tsx`: rows of 34 px in newest-use order with counts from the usage records and "This month 1,284 of 2,000"; none gives "No summaries drafted yet. Authors find Summarize… in a Text tile's insert menu."; loading shows a skeleton; the API's usage read answers a read-write member 404 (AC-555).
+  - Depends on: T916, T914
+
+- [ ] T924 (AC-557) Below 1,024 px, Security › AI read-only with its reason
+  - Files: `packages/web/src/workspaces/security/ai/AiTab.tsx`, `e2e/security/ai-settings.spec.ts`.
+  - Failing test: `ai-settings.spec.ts` at 900 px: the state and settings show with "Changing AI settings needs a window at least 1,024 px wide.", and no Save, Replace… or Test connection (AC-557).
+  - Depends on: T917
+
+### Lane TEXT: Summarize
+
+- [ ] T925 (AC-535) The Copilot group in the insert menu for those who may use AI, a disabled row with its link for Super-Admins while AI is off, and nothing for viewers
+  - Files: `packages/web/src/tiles/text/InsertMenu.tsx`, `packages/web/src/tiles/text/ai/useAiAvailability.ts` (+ test).
+  - Failing test: `useAiAvailability.test.ts`: with AI on, an author in Who may use AI sees "Summarize… a reviewed draft"; a read-write member outside the chosen groups sees no Copilot group; with AI off a Super-Admin sees it disabled with "Set up AI in Security › AI" linking to `/security/ai`, and an author nothing (AC-535).
+  - Depends on: T881, T902
+
+- [ ] T926 (AC-536) Summarize's settings in the edit sidebar: what it covers, which facts, the length, and what Copilot is sent
+  - Files: `packages/web/src/tiles/text/ai/SummarizePanel.tsx` (+ test).
+  - Failing test: `SummarizePanel.test.tsx`: the page's chart tiles and the tile's measures are checked; "Latest orders · a table; no facts to compute" is unchecked and disabled; both fact kinds and 1 sentence or A short paragraph are offered; the panel reads "It sees those facts, the tiles' titles and the members' names; never rows."; after a draft, "Computed 4 facts · 2 Cube queries" (AC-536).
+  - Depends on: T925
+
+- [ ] T927 (AC-539) The draft card: not in the text, its heading and number, live numbers, the facts, the provider line, a fixed setting as text, Writing… with Stop, and nothing saved
+  - Files: `packages/web/src/tiles/text/ai/DraftCard.tsx` (+ test).
+  - Failing test: `DraftCard.test.tsx`: a group named "Draft from Copilot · not in the tile yet" with "Draft 1", its numbers as element atoms, "Facts wechart computed through Cube · 4" with values, "Azure OpenAI · wechart-narrative · set by your Super-Admin", and Insert, Regenerate and Discard; the bullet graph's 25 % goes in as text with the note; while writing, "Writing…" and Stop, which aborts the request; the tile's document and the saved dashboard don't hold the card's text (AC-539).
+  - Depends on: T926, T911
+
+- [ ] T928 (AC-538) After a second rejected draft, say Copilot couldn't keep every number live, with Try again and Details
+  - Files: `packages/web/src/tiles/text/ai/DraftCard.tsx`, `packages/web/src/tiles/text/ai/DraftFailed.test.tsx`.
+  - Failing test: `DraftFailed.test.tsx`: the API's "couldn't keep every number live" outcome shows "Copilot couldn't write a summary that keeps every number live. Try again, or write it yourself with the facts below." with Try again and Details, and the facts still listed (AC-538).
+  - Depends on: T927
+
+- [ ] T929 (AC-540, AC-545) Insert, Regenerate and Discard: the draft inserted as editable text, its elements counted, undoable and announced, and the insert audited
+  - Files: `packages/web/src/tiles/text/ai/DraftCard.tsx`, `packages/web/src/tiles/text/ai/insertDraft.ts` (+ test), `e2e/ai-summary.spec.ts`.
+  - Failing test: `insertDraft.test.ts`: Insert puts the paragraph at the cursor with its 5 elements, the count going from 0 to 5; the polite region receives "Summary inserted, 5 live values"; one Undo removes it; Regenerate shows "Draft 2"; Discard removes the card; the e2e, against the fake provider: an inserted summary records "AI summary inserted" in the audit trail (AC-540, AC-545).
+  - Depends on: T927, T914
+
+- [ ] T930 (AC-541) The "Written with Copilot · reviewed by ‹name›, ‹date›" chip, kept through edits and gone with its text
+  - Files: `packages/web/src/tiles/text/ai/AiLabel.tsx` (+ test), `packages/core/src/text-document.ts` (the summary block's label attributes).
+  - Failing test: `AiLabel.test.tsx`: under the inserted paragraph, in view and edit mode, a 24 px chip of an icon and "Written with Copilot · reviewed by Wren Writer, 12 Jul 2026" in `text-secondary`; after Finn edits the paragraph it still names Wren and 12 Jul 2026; deleting the paragraph removes it (AC-541).
+  - Depends on: T929
+
+- [ ] T931 (AC-542) "Written for earlier data" for authors when a cited fact changes sign or rank, with Review and Keep as written, and "wording as of ‹date›" for viewers
+  - Files: `packages/web/src/tiles/text/ai/EarlierData.tsx` (+ test), `packages/web/src/tiles/text/ai/citedFacts.ts` (+ test), `packages/api/src/routes/ai-summaries.ts` (recomputing cited facts, with no provider call).
+  - Failing test: `citedFacts.test.ts`: APAC ranked first at insert and EMEA first now is a change of rank; a change from +6.8 % to +4.2 % isn't; `EarlierData.test.tsx`: authors in edit mode see the row naming "APAC was the fastest-growing region" with Review and Keep as written, which hides it; viewers see "wording as of 12 Jul 2026" in the chip and no row; a refresh or a filter change makes no provider request (AC-542).
+  - Depends on: T930, T910
+
+- [ ] T932 (AC-543) At a limit, Summarize's message from the Super-Admin, and the author's allowance
+  - Files: `packages/web/src/tiles/text/ai/SummarizePanel.tsx`, `packages/web/src/tiles/text/ai/LimitReached.test.tsx`.
+  - Failing test: `LimitReached.test.tsx`: the API's 429 shows "You've used today's 20 summaries. "Summaries reset at midnight UTC. Ask the BI team if you need more." · from your Super-Admin" in place of the button; the monthly one "wechart has used this month's 2,000 summaries."; the panel reads "You've drafted 3 of 20 today." (AC-543).
+  - Depends on: T926, T912
+
+- [ ] T933 (AC-544) A provider failure in the draft card: one sentence, Retry and Details, "Open Security › AI" for Super-Admins, and no key or stack
+  - Files: `packages/web/src/tiles/text/ai/ProviderFailed.tsx` (+ test).
+  - Failing test: `ProviderFailed.test.tsx`: the warning icon, "Copilot can't reach its provider. Tell your Super-Admin.", Retry and Details holding the request id; a Super-Admin also sees "Open Security › AI"; Details never holds the text of the API's internal error (AC-544).
+  - Depends on: T927, T913
+
 ## Phase 2 coverage: acceptance criterion → task
 
 | AC | Tasks | AC | Tasks | AC | Tasks |
@@ -1963,5 +2443,29 @@ F43 folds the dashboard's header into one 48 px row by default, with the descrip
 | AC-496 | T829, T843 | AC-196 (again, the compact header, `[R79]`) | T828, T829 | AC-200 (again, compact chips, `[R79]`) | T838 |
 | AC-119 (again, compact chips and Escape's order, `[R79]`) | T834, T838 | AC-352 (again, design 19) | T844 | AC-343 (again, design 19) | T844 |
 | AC-187 (design 19 counts as conformance) | T844 | AC-195, AC-206, AC-056, AC-098, AC-304 (held, retested with the compact header) | T830, T836, T838, T842 | | |
+| AC-497 | T845, T846, T855, T856, T857, T867 | AC-498 | T845, T855 | AC-499 | T847, T858, T867 |
+| AC-500 | T848, T857 | AC-501 | T849, T858 | AC-502 | T850, T858 |
+| AC-503 | T851, T859 | AC-504 | T852, T855, T860 | AC-505 | T853, T860 |
+| AC-506 | T854 | AC-507 | T862 | AC-508 | T863 |
+| AC-509 | T864 | AC-510 | T865 | AC-511 | T866 |
+| AC-037 (again, the combo, `[R80]`) | T845, T846, T867 | AC-218 (again, two unsynchronized axes, `[R80]`) | T861 | AC-219 (again, the combo's settings, `[R80]`) | T855, T858 |
+| AC-512 | T869, T872, T875 | AC-513 | T868, T871, T873, T880 | AC-514 | T877 |
+| AC-515 | T878 | AC-516 | T879 | AC-517 | T881 |
+| AC-518 | T868, T871, T883 | AC-519 | T882 | AC-520 | T884 |
+| AC-521 | T885 | AC-522 | T886 | AC-523 | T887 |
+| AC-524 | T888 | AC-525 | T889 | AC-526 | T890 |
+| AC-527 | T870, T891 | AC-528 | T892 | AC-529 | T893 |
+| AC-530 | T894 | AC-531 | T895, T896 | AC-532 | T897 |
+| AC-533 | T898 | AC-534 | T899 | AC-535 | T911 (waits on R80-3), T925 |
+| AC-536 | T910 (waits on R80-1), T926 | AC-537 | T904, T911 | AC-538 | T906, T928 |
+| AC-539 | T927 | AC-540 | T911, T929 | AC-541 | T930 |
+| AC-542 | T931 | AC-543 | T912 (waits on R80-2), T932 | AC-544 | T913, T933 |
+| AC-545 | T914, T929 | AC-546 | T902, T916 | AC-547 | T903, T905 (waits on R80-6), T915 (waits on R80-5, R80-6), T917 |
+| AC-548 | T902, T917 | AC-549 | T901, T903, T915 | AC-550 | T907, T918 |
+| AC-551 | T908, T919 | AC-552 | T909, T920 | AC-553 | T921 |
+| AC-554 | T922 | AC-555 | T923 | AC-556 | T909 |
+| AC-557 | T924 | AC-558 | T904, T905 | | |
+| AC-058 (again, Text in place of Markdown, `[R80]`) | T874 | AC-116 (again, every element kind, `[R80]`) | T869, T884, T886 | AC-208 (again, the Text tile, `[R80]`) | T873 |
+| AC-302 (again, editing on the canvas, `[R80]`) | T876 | AC-121, AC-123 (again, parameter values, `[R80]`) | T900 | AC-030, AC-029, AC-443 (held, `[R80]`) | T865, T891 |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.

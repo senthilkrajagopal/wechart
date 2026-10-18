@@ -3,7 +3,7 @@
 **Status:** proposed on 2026-09-19. Waiting for the user to accept it after reviewing the prototype.
 **Phase 2 (2026-09-25):** principles 6–9, §7e and rules 59–89 extend this direction to sign-in, folder access, workspaces, proposals, history, bookmarks, the audit trail, the country map and the box plot. Evidence: `references.md` › "Phase 2". **Accepted by the user on 2026-09-25.**
 **R78 (2026-10-17):** §7f and rules 90–108 extend it to the SQL runner workspace and personal access tokens. Evidence: `references-sql-runner.md` (its checklist rules 107–125, renumbered here and amended for R78's answers) and designs 17 and 18 (`reviews/2026-10-17/designs/`). **Accepted with designs 17 and 18 on 2026-10-17** ("Approve with defaults (Recommended)"; the defaults taken are in that review's `index.md`). Rule 107's Ctrl+Q and Ctrl+Alt+[ and ] wait on `docs/research/keyboard-shortcuts-sql-runner.md` (17-Q3, "Research first").
-**R80 (2026-10-18):** §7h and rules 115–146 extend it to the combo chart, the Text tile (which replaces Markdown), dashboard parameters and the AI provider settings. Evidence: `references-combo-and-rich-tiles.md`, `references-spotfire-combo-textarea.md`, `references-copilot.md` §9, research `rich-tiles-and-combo-tech.md`, and designs 20–22 (`reviews/2026-10-18/designs/`). **Proposed; waiting for the user's approval of designs 20–22.**
+**R80 (2026-10-18):** §7h and rules 115–146 extend it to the combo chart, the Text tile (which replaces Markdown), dashboard parameters and the AI provider settings. Evidence: `references-combo-and-rich-tiles.md`, `references-spotfire-combo-textarea.md`, `references-copilot.md` §9, research `rich-tiles-and-combo-tech.md`, and designs 20–22 (`reviews/2026-10-18/designs/`). **Accepted with designs 20–22 on 2026-10-18** ("Approve (Recommended)"; the answers taken are in that review's `index.md`, "Decided 2026-10-18").
 **R81 (2026-10-18):** §7i and rules 147–167 extend it to fifteen new chart types: the KPI with comparison, target, sparkline and tile-by; the graphical table; waterfall; histogram; bubble; map layers; parallel coordinates; bullet chart; 100 % stacked bar and area; Sankey; box plot points and violin; funnel; timeline; calendar heatmap; icicle and sunburst. Evidence: `references-new-chart-components.md` and design 23 (`reviews/2026-10-18/designs/23-new-chart-types.html`). **Proposed; waiting for the user's approval of design 23.**
 **Sources:**
 
@@ -80,7 +80,7 @@ Phase 2 adds four (evidence in `references.md` › Phase 2):
   - **Page tabs** at the top.
   - **Sections** (titled, collapsible, header can be hidden in view mode) inside page tabs.
   - **Tab groups** only inside a section. Adding one elsewhere wraps it in a new section.
-  - **Chart, Markdown, Header, Divider, Image, Link/button** inside any of these (Image and Link/button were the user's choice on 2026-09-19, `docs/inputs` §9; iframe embeds are out of phase 1).
+  - **Chart, Text (Markdown until R80, §7h), Header, Divider, Image, Link/button** inside any of these (Image and Link/button were the user's choice on 2026-09-19, `docs/inputs` §9; iframe embeds are out of phase 1).
   - **Image:** PNG, JPEG, WebP, GIF or SVG up to 2 MB, stored with the dashboard, with required alt text (flagged on the tile until set) and Fit inside or Fill and crop. In view mode it has no tile chrome.
   - **Link/button:** a label; a style of Button, Primary or Text link; and a target that is either another dashboard (optionally passing the current filters) or an http(s) URL opened in a new tab with `rel="noopener noreferrer"`. Any other URL scheme is rejected.
   - No Row/Column containers; the 12-column grid does that job. Section templates come from Metabase.
@@ -262,7 +262,7 @@ Two further changes made at the same time, neither of them a contrast failure:
   - gridlines on/off
   - number format (auto, compact, full, %, currency)
 - **Trellis axes:** axes are synchronized by default; each can be set to independent.
-- **Dual y-axes:** the recommender never proposes them. Two measures with different scales become small multiples or an indexed chart instead. The inspector allows a dual axis only as an explicit override, and shows a warning when it is on.
+- **Dual y-axes:** the recommender never proposes them. Two measures with different scales become small multiples or an indexed chart instead. ~~The inspector allows a dual axis only as an explicit override, and shows a warning when it is on.~~ A second value axis is drawn only by the author's choice, in a combo, aligned at zero and in its ticks; while it isn't synchronized, the author sees a warning (R80, 2026-10-18; §7h, rules 116–121).
 - **Marks:**
   - bars have a 2 px surface gap and 4 px rounded data-ends anchored at the baseline
   - lines are 2 px
@@ -552,7 +552,7 @@ No new colour, type size or weight. Every value reuses a token:
 | Change highlight | `accent-soft` ground and an `accent` border on the toggle's count, 2 s | existing tokens; the 2 s is wechart's (19-Q6) |
 | Below 1,024 px | the page menu on a 40 px second row; the sheet padded 16 px, pills one under another | design 19 state D; §2 breakpoints |
 
-## 7h. R80: combo charts, the Text tile, dashboard parameters and the AI provider (proposed 2026-10-18)
+## 7h. R80: combo charts, the Text tile, dashboard parameters and the AI provider (accepted 2026-10-18)
 
 **Direction** (both studies' common ground, settled by R80's answers). A combo is a set of per-series layers on one category axis: each measure picks its mark (bar, line, area, point) and its side (left, right); a second value axis exists only by the author's choice, and when drawn its zero and ticks align and it's titled by mark glyph; one dimension may split every measure, colour then meaning the member. The Text tile is today's Markdown tile edited in place with Tiptap 3: typed blocks on §3's scale, live elements that follow filters and markings, Spotfire's controls and action buttons built as declarations, and an AI summary written from facts wechart computed, reviewed before it lands and never silently regenerated. The AI provider is set once, by a Super-Admin, in Security › AI.
 
@@ -667,7 +667,7 @@ Nothing in §2–§7h changes except as design 23's criteria table says: §6's b
   - ConnectionForm (General · Connection · Advanced · Test, with per-check results)
   - Schedule editor
   - JobDetail (history table and dependency graph)
-- **Markdown:** MarkdownTile with typed live-value tokens: `{{filter:region}}`, `{{measure:orders.revenue}}`, `{{sparkline:…}}`. No raw HTML.
+- **Text** (Markdown until R80): ~~MarkdownTile with typed live-value tokens: `{{filter:region}}`, `{{measure:orders.revenue}}`, `{{sparkline:…}}`.~~ TextTile with typed elements (R80's entry below); an existing markdown tile's tokens become its elements. No raw HTML.
 - **Phase 2:**
   - AccountButton and AccountMenu; SingleUserChip; SignedOutState (the five states of §7e)
   - AccessPanel, GroupRow (set here, inherited with source link, outranked), GroupCombobox
@@ -684,7 +684,7 @@ Nothing in §2–§7h changes except as design 23's criteria table says: §6's b
   - EditorTabs (state icon, ⋯, ×); RunLine; ParameterStrip; RunBar (held, with its reason); ResultHead (Make a cube…, Make a chart…, Download CSV)
   - SavedList and HistoryList (Only me); SaveQueryDialog; MakeCubePane (columns table)
   - TokenList (working, no longer working); NewTokenDialog; TokenShownOnce; ConnectHelp; RevokeDialog
-- **R80 (§7h, proposed):**
+- **R80 (§7h, accepted 2026-10-18):**
   - SeriesRow (swatch, name, MarkSegmented, AxisSegmented, Auto); SeriesGroup (a split measure and its members); AxisGroup (Left, Right, with the locked include-zero line); ComboWarning; NotDrawnPill; SplitByWell; LegendGlyphButton; ReferenceList and ReferenceForm (line, band; horizontal, vertical)
   - TextTile (view: static renderer; edit: the Tiptap editor); TextToolbar (block style, bold, italic, lists, link, Insert, the element counter); InsertMenu (combobox and listbox)
   - LiveElement kinds: Value, Change, Sparkline, Icon, BulletGraph, Marking, FilterValue, AsOf; each with edit, view, loading, no-data, error, no-permission and broken states; ElementTooltip
@@ -724,12 +724,12 @@ Nothing in §2–§7h changes except as design 23's criteria table says: §6's b
 22. The jobs list shows name, status (icon + label), last success, duration against average, trigger, and model link.
 23. A data-source connection can't be saved until a Test step passes, ~~or the user overrides it explicitly~~ with no override (the user's answer, 2026-09-27). The Test step shows each check's result.
 24. Light and dark themes are both complete. Neither is produced by automatically inverting the other.
-25. Markdown tiles never render raw HTML. Live values use typed tokens.
+25. ~~Markdown tiles never render raw HTML. Live values use typed tokens.~~ Text tiles never render raw HTML or run scripts. Live values are typed elements. *(Amended 2026-10-18, R80, design 21.)*
 26. Every key the Cube YAML schema accepts for a cube or view can be edited in the Form view, and every enum offers exactly the validator's allowed values.
 27. A form edit appears in the YAML within one render, and a valid YAML edit appears in the form within 500 ms.
 28. A YAML parse error names its line in Problems and puts the form in read-only mode until the error is fixed.
 29. Every chart recommendation offers ~~a "Why this chart?" trace listing the signature, the cardinalities, and each hard rule's pass or fail~~ "Why this recommendation?": a checklist with ✓/⚠ icons of the signature, the cardinalities and the rules that decided, with every hard rule's pass or fail for every type one link away ("Show every rule for every type") (R76, 2026-10-08; AC-029).
-30. A dual-axis (combo) chart is reachable only as a manual pick, and while it's active it shows a warning.
+30. ~~A dual-axis (combo) chart is reachable only as a manual pick, and while it's active it shows a warning.~~ A second value axis is drawn only by the author's choice, in a combo, and while unsynchronized it shows a warning. *(Amended 2026-10-18, R80, design 20; AC-218.)*
 31. Clicking a mark in Explore offers Drill into (when a hierarchy exists), Keep only, Exclude, and View underlying rows. Drill-down shows a breadcrumb that goes back.
 32. In cross-filter mode, Settings › Cross-filtering sets Filter, Highlight or None for every source → target tile pair. The default comes from "Default for tile pairs", which starts at Filter.
 33. A details tile offers "Limit data using markings", "Rows must be included in: All markings (AND) / Any marking (OR)" and "If no items are marked in the master tiles, show: All data / Empty visualization / Message on empty background".
@@ -824,7 +824,7 @@ R79, the compact dashboard header (§7g; design 19, approved 2026-10-17). From `
 113. A filter changed while the sheet is closed changes the toggle's count, or a compact chip, and is announced politely. *(AC-493)*
 114. In edit mode the sheet is open and has no toggle. *(AC-491)*
 
-R80, combo charts, the Text tile, dashboard parameters and the AI provider (§7h; designs 20–22, **proposed 2026-10-18**). Drawn from both studies' proposed rules and R80's answers. ~~The copilot study's rules follow from 147 when the copilot is taken up~~ R81's rules follow from 147; the copilot study's rules follow those, from 168, when the copilot is taken up; its 103 and 104 (its numbering) overlap 142–144 and would be merged then.
+R80, combo charts, the Text tile, dashboard parameters and the AI provider (§7h; designs 20–22, **accepted 2026-10-18**, "Approve (Recommended)"). Drawn from both studies' proposed rules and R80's answers. R81's rules follow from 147; the copilot study's rules follow those, from 168, when the copilot is taken up; its 103 and 104 (its numbering) overlap 142–144 and would be merged then.
 
 *Combo charts (design 20)*
 
@@ -871,7 +871,7 @@ R80, combo charts, the Text tile, dashboard parameters and the AI provider (§7h
 
 *For all of R80*
 
-146. Designs 20–22 add no colour, type size or weight and keep the 12 px floor. They add no keyboard shortcut beyond the insert menu's combobox keys and markdown's typing patterns (the editor's standard text keys wait on 21-Q11), and every panel, dialog and popover follows rule 85.
+146. Designs 20–22 add no colour, type size or weight and keep the 12 px floor. They add no keyboard shortcut beyond the insert menu's combobox keys, markdown's typing patterns, and ⌘B, ⌘I and ⌘Z inside a Text tile's text only (21-Q11, "Yes, inside the text only (Recommended)", approved under R75; the editor's other default keys stay off), and every panel, dialog and popover follows rule 85.
 
 R81, the new chart types (§7i; design 23, **proposed 2026-10-18**). Drawn from `references-new-chart-components.md` §5 and R81's answers. Caps named here are 23-Q5's proposals until decided. The copilot study's rules follow from 168 when the copilot is taken up.
 
