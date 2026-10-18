@@ -1712,11 +1712,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T819 (AC-461) Offer Make a cube… and Make a chart… on a finished or limited SELECT on a data source to someone who may make a model, and disabled with the reason elsewhere
 
-- [ ] T820 (AC-462) The Make a cube pane: a checked name, the folder starting at the source's own writable one, the source fixed, the SQL that ran read-only, numeric columns as `sum` measures and the rest as typed dimensions, one key, and a draft with `count` in My workspace
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/MakeCubePane.tsx` (+ test), `packages/web/src/workspaces/sql/columnKinds.ts` (+ test), `packages/api/src/routes/workspace-models.ts` (+ test, if the draft's route needs the SQL cube), `e2e/security/sql-make-cube.spec.ts`.
-  - Failing test: `columnKinds.test.ts`: `numeric`, `integer`, `bigint`, `double precision` and SQL Server's numbers start as `sum` measures, except the chosen key; `text`, `varchar` start as string dimensions, `date` and `timestamp` as time, `boolean` as boolean. `MakeCubePane.test.tsx`: headed "Make a cube from this query · in My workspace"; the suggested name in the grammar, a taken or ungrammatical one refused as AC-422 checks; the folder starts at the source's folder when the user may write there, else empty; the SQL shown is what ran (only the selection when a selection ran). The e2e: Add to My workspace adds an unpublished draft cube with a `count` measure to the workspace model and nothing to any folder (AC-462).
-  - Depends on: T819
+- [x] T820 (AC-462) The Make a cube pane: a checked name, the folder starting at the source's own writable one, the source fixed, the SQL that ran read-only, numeric columns as `sum` measures and the rest as typed dimensions, one key, and a draft with `count` in My workspace
 
 - [ ] T821 (AC-463) Make a chart: save the cube as Make a cube does, then open the chart editor on a new chart in My workspace over it, nothing placed, with "← Back to SQL runner"
   - Lane: SQL

@@ -7,7 +7,13 @@ import { StatusIcon } from '../../shell/StatusIcon';
 import { CUBE_STORE_ID } from '../data-sources/cubeStore';
 import { csvFileName, csvOf } from '../data-sources/sqlCsv';
 import { SqlEditor } from '../data-sources/SqlEditor';
-import { ResultHead, seconds, SqlResult, type SqlOutcome } from '../data-sources/SqlResult';
+import {
+  ResultHead,
+  seconds,
+  SqlResult,
+  type SqlColumn,
+  type SqlOutcome,
+} from '../data-sources/SqlResult';
 import { catalogRead, schemaCompletion } from './completion';
 import { makeFrom } from './makeFrom';
 import { parameterNames } from './parameterNames';
@@ -219,8 +225,8 @@ export function QueryTab({
   readonly insertion?: Insertion | undefined;
   /** Run its text as it opens, if this is that tab and it hasn't (Preview 100 rows, T807). */
   readonly runOnOpen?: RunOnOpen | undefined;
-  /** Make a cube… or Make a chart… chosen on its result (T819, AC-461). */
-  readonly onMake?: (kind: MakeKind) => void;
+  /** Make a cube… or Make a chart… chosen on its result: the SQL that ran and its columns (T819, T820). */
+  readonly onMake?: (kind: MakeKind, run: { readonly sql: string; readonly columns: readonly SqlColumn[] }) => void;
 }) {
   const toInsert =
     insertion !== undefined && insertion.tabId === tab.id && !inserted.has(insertion) ? insertion : undefined;
@@ -604,7 +610,18 @@ export function QueryTab({
             state={state}
             // Cube Store's run on has ended, as xcube says since its answer (T548).
             ended={state.label !== 'Cube Store still finishing'}
-            actions={make === null ? null : <MakeFromButtons make={make} onMake={onMake} />}
+            actions={
+              make === null ? null : (
+                <MakeFromButtons
+                  make={make}
+                  onMake={(kind) => {
+                    // Enabled only on a finished run, whose columns are known.
+                    if (shown.outcome.outcome === 'finished')
+                      onMake(kind, { sql: shown.sql, columns: shown.outcome.columns });
+                  }}
+                />
+              )
+            }
           />
         )}
         <p className="visually-hidden" role="status" aria-live="polite">

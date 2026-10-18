@@ -87,7 +87,15 @@ afterEach(() => {
 });
 
 /** The tab, as the workspace holds it; its state shown for the test to read. */
-function Harness({ start, source }: { readonly start: SqlTab; readonly source: SqlSource }) {
+function Harness({
+  start,
+  source,
+  onMake,
+}: {
+  readonly start: SqlTab;
+  readonly source: SqlSource;
+  readonly onMake?: Parameters<typeof QueryTab>[0]['onMake'];
+}) {
   const [state, dispatch] = useReducer(
     (now: TabsState, action: TabsAction) => tabsReducer(now, action),
     { tabs: [start], active: start.id },
@@ -103,7 +111,13 @@ function Harness({ start, source }: { readonly start: SqlTab; readonly source: S
       }}
     >
       <SaveKeyContext.Provider value={keys.slot}>
-        <QueryTab tab={open} source={source} dispatch={dispatch} grip={<span data-testid="grip" />} />
+        <QueryTab
+          tab={open}
+          source={source}
+          dispatch={dispatch}
+          grip={<span data-testid="grip" />}
+          {...(onMake === undefined ? {} : { onMake })}
+        />
       </SaveKeyContext.Provider>
       <output data-testid="kept-sql">{open.sql}</output>
       <output data-testid="kept-run">{open.run?.kind ?? 'none'}</output>
@@ -893,6 +907,25 @@ describe('Make a cube… and Make a chart… on a result (T819, AC-461)', () => 
     expect(reasonOf(cube)).toBe(
       'Two columns are named a: give each its own name with AS, and run it again.',
     );
+  });
+
+  it('hands Make a cube… the SQL that ran, only the selection when a selection ran, and its columns (T820, AC-462)', async () => {
+    answering(READ_WRITE, FINISHED);
+    const onMake = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(
+      <QueryClientProvider client={client}>
+        <Harness start={tab({ sql: 'SELECT 1 AS one; SELECT 2' })} source={EMEA} onMake={onMake} />
+      </QueryClientProvider>,
+    );
+    const editor = EditorView.findFromDOM(container.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+    act(() => {
+      editor.dispatch({ selection: { anchor: 0, head: 'SELECT 1 AS one'.length } });
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Run selection' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Make a cube…' }));
+
+    expect(onMake).toHaveBeenCalledWith('cube', { sql: 'SELECT 1 AS one', columns: FINISHED.columns });
   });
 
   it('shows neither to someone read-only everywhere, who may not make a model', async () => {

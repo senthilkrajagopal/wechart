@@ -25,6 +25,10 @@ import { endedAway } from './awayRun';
 import { GOING_QUERY } from './going';
 import { holdTabs, releaseTabs, tabsStoreFor } from './liveTabs';
 import { QueryTab, type Insertion, type RunHold, type RunOnOpen } from './QueryTab';
+import type { SqlColumn } from '../data-sources/SqlResult';
+import { fileHref } from '../model/inFolder';
+import { MakeCubePane, type Added } from './MakeCubePane';
+import type { MakeKind } from './ResultHead';
 import { SchemaTree } from './SchemaTree';
 import { runState, type RunState } from './runState';
 import { UndoToast } from '../../dashboard/edit/UndoToast';
@@ -90,6 +94,9 @@ export function SqlWorkspace({
     />
   );
 }
+
+/** Make a cube's docked pane, as Generate cubes' is: 480 px (design 17 §6). */
+const MAKE_PANE = 480;
 
 /** The browser's storage, where it has one it lets the page use. */
 const browserStorage = (): Storage | undefined => {
@@ -174,6 +181,8 @@ function ChosenOn({
     readonly onGoTo: (id: string) => void;
     readonly insertion: Insertion | undefined;
     readonly runOnOpen: RunOnOpen | undefined;
+    /** Make a cube… or Make a chart… on its result (T820). */
+    readonly onMake: (kind: MakeKind, made: { readonly sql: string; readonly columns: readonly SqlColumn[] }) => void;
   };
 }) {
   const page = useQuery({ ...sourceQuery(row.id), retry: false, enabled: !row.cubeStore });
@@ -507,7 +516,17 @@ function Workbench({
     // On opening only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const rightShown = rightFolded ? RIGHT_PANE.rail : right;
+  /** Make a cube… or Make a chart… open, on a run of a tab (T820, AC-462): the pane in the right pane's place. */
+  const [making, setMaking] = useState<{
+    readonly kind: MakeKind;
+    readonly row: SqlSourceRow;
+    readonly sql: string;
+    readonly columns: readonly SqlColumn[];
+    readonly tabName: string;
+  } | null>(null);
+  /** What was last added, said until dismissed (design 17 §6). */
+  const [made, setMade] = useState<Added | null>(null);
+  const rightShown = making !== null ? MAKE_PANE : rightFolded ? RIGHT_PANE.rail : right;
 
   // A pane opened over the centre, then unfolded by a wider window: closed,
   // so it doesn't come back open, and take focus, when the window narrows
@@ -661,6 +680,10 @@ function Workbench({
                 },
                 insertion,
                 runOnOpen,
+                onMake: (kind, { sql, columns }) => {
+                  setMade(null);
+                  setMaking({ kind, row: chosenRow, sql, columns, tabName: openTab.name });
+                },
               }}
             />
           ) : (
@@ -680,6 +703,23 @@ function Workbench({
           )}
         </div>
       </div>
+      {making !== null ? (
+        // Docked in the right pane's place, 480 px, as Generate cubes' pane is (T820; design 17 §6).
+        <MakeCubePane
+          kind={making.kind}
+          source={making.row}
+          sql={making.sql}
+          columns={making.columns}
+          suggested={making.tabName}
+          onClose={() => {
+            setMaking(null);
+          }}
+          onAdded={(added) => {
+            setMaking(null);
+            setMade(added);
+          }}
+        />
+      ) : (
       <SidePane
         side="right"
         label="Saved and History"
@@ -751,7 +791,24 @@ function Workbench({
           />
         )}
       </SidePane>
+      )}
       </SaveKeyContext.Provider>
+      {made === null ? null : (
+        // Said until dismissed: a draft, in My workspace (design 17 §6).
+        <div className="undo-toast sql-made" role="status" data-testid="sql-made">
+          <span>
+            {made.name} is in My workspace, unpublished ·{' '}
+            <a href={fileHref(made.path, 'mine')}>Open in Model</a>          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setMade(null);
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* A History row put into a tab, with Undo (T818, AC-465; design 17, J). */}
       <UndoToast
         message={replaced === null ? '' : 'Put back from History into this tab.'}

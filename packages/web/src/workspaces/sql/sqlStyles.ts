@@ -378,4 +378,24 @@ main:has(.sql-workspace) {
    (T819, AC-461; rule 101). */
 .sql-make__why { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .sql-make__why code { font-family: var(--wc-font-code); }
+
+/* Make a cube's pane, docked in the right pane's place (T820, AC-462; design
+   17 §6): Generate cubes' .source-pane, its SQL in the code face, read-only. */
+.sql-make { grid-column: 3; }
+.sql-make__name, .sql-make__member { width: 100%; font-family: var(--wc-font-code); }
+.sql-make__fixed { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.sql-make__sql {
+  margin: 0; padding: 8px; max-height: 160px; overflow: auto;
+  border: 1px solid var(--wc-border-subtle); border-radius: 4px; background: var(--wc-bg-subtle);
+  font: 400 12px/16px var(--wc-font-code); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.sql-make__columns { overflow-x: auto; }
+.sql-make__table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sql-make__table th {
+  text-align: left; font-weight: 600; color: var(--wc-text-secondary);
+  padding: 4px 6px; border-bottom: 1px solid var(--wc-border-subtle);
+}
+.sql-make__table td { padding: 4px 6px; border-bottom: 1px solid var(--wc-border-subtle); }
+.sql-make__table select { font-size: 12px; }
+.sql-made a { color: inherit; text-decoration: underline; }
 `;

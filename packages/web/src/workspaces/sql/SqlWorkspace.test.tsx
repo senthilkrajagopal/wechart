@@ -1277,3 +1277,144 @@ describe('opening a saved query whose source is no longer available (T814, AC-45
     expect(await screen.findByText('Choose a data source to write SQL against.')).toBeTruthy();
   });
 });
+
+/**
+ * T820 (AC-462): Make a cube… on a run's result opens the docked pane, in
+ * the right pane's place, on that run's SQL, columns and source; Add to My
+ * workspace saves the cube into My workspace's model and says so.
+ */
+describe('Make a cube… from a run (T820, AC-462)', () => {
+  afterEach(() => {
+    cleanup();
+    forgetLiveTabs();
+  });
+  const listed = [
+    {
+      id: 'emea',
+      name: 'emea_replica',
+      driver: 'postgres',
+      cubeStore: false,
+      folderId: 'f-sales',
+      folderPath: [{ id: 'f-sales', title: 'Sales' }],
+      inWorkspace: false,
+      runner: 'on',
+    },
+  ];
+  const page = {
+    id: 'emea',
+    folderId: 'f-sales',
+    name: 'emea_replica',
+    driver: 'postgres',
+    authMethod: 'password',
+    fields: { host: 'emea-host', port: 5432, database: 'sales', user: 'cube_reader', ssl: false },
+    secrets: {},
+    targetFolderId: null,
+    origin: null,
+    version: 1,
+    updatedAt: '2026-10-17T10:00:00Z',
+    folderPath: [{ id: 'f-sales', title: 'Sales' }],
+    canWrite: true,
+    inWorkspace: false,
+    description: null,
+    sqlRunner: { on: true },
+    sqlAccess: { tab: true, runs: true },
+  };
+  const finished = {
+    outcome: 'finished',
+    columns: [
+      { name: 'customer', type: 'text' },
+      { name: 'total', type: 'numeric' },
+    ],
+    rows: [['Ann', '12.50']],
+    rowCount: 1,
+    truncated: null,
+    durationMs: 12,
+    statement: 'select',
+  };
+
+  it('opens the pane in the right pane’s place on the run, and Add to My workspace saves it there and says so', async () => {
+    const published: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        const json = (body: unknown, status = 200) =>
+          Promise.resolve(new Response(JSON.stringify(body), { status }));
+        if (url === '/api/model/publish') {
+          published.push(JSON.parse(String(init?.body)));
+          return json({ version: 'v2' });
+        }
+        if (init?.method === 'POST') return json(finished);
+        if (url === '/api/sql-runs/going') return json({ going: null });
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/data-sources/emea') return json(page);
+        if (url === '/api/folders/targets') return json([{ id: 'f-sales', path: ['Sales'] }]);
+        if (url === '/api/model/files?folder=mine') return json({ files: [] });
+        return json([], 404);
+      }),
+    );
+    windowOf(1440);
+    renderAs(writer);
+    await userEvent.click(await screen.findByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: /emea_replica/ }));
+    await screen.findByTestId('sql-warning');
+    const view = EditorView.findFromDOM(document.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+    act(() => {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'SELECT customer, total FROM orders' } });
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Make a cube…' }));
+
+    const pane = screen.getByRole('dialog', { name: 'Make a cube from this query · in My workspace' });
+    expect(screen.queryByRole('complementary', { name: 'Saved and History' })).toBeNull();
+    expect(workspaceOf().style.getPropertyValue('--sql-right')).toBe('480px');
+    expect(within(pane).getByTestId('make-cube-sql').textContent).toBe('SELECT customer, total FROM orders');
+    expect((within(pane).getByRole('textbox', { name: 'Cube name' }) as HTMLInputElement).value).toBe('query_1');
+    await within(pane).findByRole('treeitem', { selected: true });
+    await vi.waitFor(() => {
+      expect(within(pane).getByRole('button', { name: 'Add to My workspace' }).getAttribute('aria-disabled')).toBeNull();
+    });
+    await userEvent.click(within(pane).getByRole('button', { name: 'Add to My workspace' }));
+
+    const said = await screen.findByTestId('sql-made');
+    expect(said.textContent).toMatch(/^query_1 is in My workspace, unpublished · Open in Model/);
+    expect(within(said).getByRole('link', { name: 'Open in Model' }).getAttribute('href')).toBe(
+      '/explore/folders/mine/models/cubes%2Fquery_1.yml',
+    );
+    expect(published).toHaveLength(1);
+    expect(screen.queryByRole('dialog', { name: /Make a cube/ })).toBeNull();
+    expect(screen.getByRole('complementary', { name: 'Saved and History' })).toBeTruthy();
+  });
+
+  it('closes the pane on Cancel, the right pane back as it was', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        const json = (body: unknown, status = 200) =>
+          Promise.resolve(new Response(JSON.stringify(body), { status }));
+        if (init?.method === 'POST') return json(finished);
+        if (url === '/api/sql-runs/going') return json({ going: null });
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/data-sources/emea') return json(page);
+        if (url === '/api/folders/targets') return json([]);
+        if (url === '/api/model/files?folder=mine') return json({ files: [] });
+        return json([], 404);
+      }),
+    );
+    windowOf(1440);
+    renderAs(writer);
+    await userEvent.click(await screen.findByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: /emea_replica/ }));
+    await screen.findByTestId('sql-warning');
+    const view = EditorView.findFromDOM(document.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+    act(() => {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'SELECT 1' } });
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Make a cube…' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog', { name: /Make a cube/ })).toBeNull();
+    expect(screen.getByRole('complementary', { name: 'Saved and History' })).toBeTruthy();
+    expect(workspaceOf().style.getPropertyValue('--sql-right')).toBe('320px');
+  });
+});
