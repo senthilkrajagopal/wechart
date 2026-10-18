@@ -6,15 +6,20 @@ import {
   verifyBearerToken,
 } from '@modelcontextprotocol/server';
 
+import type { WechartUser } from '../auth/user';
 import type { AccessTokenStore, PresentedToken } from '../repos/access-tokens';
+import type { McpCallerOf } from './caller';
 import { digestOf, wellFormed } from './tokenText';
 
 /** One answer for every token that doesn't work, so none tells an unknown token from a stopped one. */
 const REFUSED = 'The token is unknown, revoked or expired.';
 
-/** What `/mcp` knows of its caller once the token is taken: the token, its owner and scopes. */
+/**
+ * What `/mcp` knows of its caller once the token is taken: the token, its
+ * owner and scopes, and the user it acts as (T777).
+ */
 export interface McpAuth extends AuthInfo {
-  readonly extra: { readonly token: PresentedToken };
+  readonly extra: { readonly token: PresentedToken; readonly caller: WechartUser };
 }
 
 /**
@@ -46,14 +51,16 @@ export function tokenVerifier(store: AccessTokenStore, now: () => Date): OAuthTo
  * none there, whatever the query string or a session cookie holds, is no
  * token. A token taken is recorded as used now (AC-430). A refusal throws
  * the SDK's `OAuthError`, which `bearerAuthChallengeResponse` answers 401
- * with its `WWW-Authenticate: Bearer` challenge.
+ * with its `WWW-Authenticate: Bearer` challenge. The caller is the token's
+ * owner as `callerOf` makes them (T777).
  */
-export function bearerAuth(store: AccessTokenStore, now: () => Date) {
+export function bearerAuth(store: AccessTokenStore, now: () => Date, callerOf: McpCallerOf) {
   const verifier = tokenVerifier(store, now);
   return async (authorization: string | undefined): Promise<McpAuth> => {
-    const auth = (await verifyBearerToken(authorization, { verifier })) as McpAuth;
-    await store.used(auth.extra.token.id, now());
-    return auth;
+    const auth = await verifyBearerToken(authorization, { verifier });
+    const token = (auth.extra as { token: PresentedToken }).token;
+    await store.used(token.id, now());
+    return { ...auth, extra: { token, caller: await callerOf(token.owner) } };
   };
 }
 

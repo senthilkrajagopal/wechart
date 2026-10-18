@@ -208,3 +208,32 @@
     - **The web app's cross-site check (`auth/guard.ts`) skips `/mcp`.** `/mcp` checks its own Origin against the MCP host (T775) and takes no cookie, so the cookie-based CSRF check isn't needed there. Without the skip, with sign-in on, a POST with the MCP host's own `Origin` was refused 403. (This was the T775 review's finding.)
     - **Research:** what the installed helpers do (the order of checks, the challenge format, the real clock for expiry) is in `docs/research/mcp-sdk-installed-notes.md`, items 4–7.
     - **Tests:** `mcp/auth.test.ts` (5, new), `auth/user.test.ts` (1 new). Changed: `mcp/guard.test.ts`'s spy now throws `OAuthError`, and `mcp/plugin.test.ts` expects the SDK's challenge.
+    - **After the cold review:** it passed, with no bug found.
+      - **Its test gap 2 was filled in T777's commit:** with sign-in on, a working token sent beside a working session cookie to `/api/me` gets 401 (`mcp/auth.test.ts`, the cookie-only test).
+      - **Left as is:**
+        - The other-routes refusal is shown on `GET /api/folders` and `/api/me` only. The hook is global and keyed on the header, not the route.
+        - "Runs nothing" is shown by 401 against the stub's 501 until tools exist (T778, T782).
+        - A failed Last-used write answers 500 for a valid token. This fails closed.
+      - **The reviewer's own test run failed.** Its vitest ran without `COMPOSE_PROJECT_NAME`/`COMPOSE_FILE`, and docker compose created a network `agent-aa6c4254a97f55a2a_default` and a volume `agent-aa6c4254a97f55a2a_wechart-meta-data`. No containers were created and the shared ones weren't touched. The lane's `docker network rm` / `docker volume rm` were refused by the permission classifier, so both are still there for the user to remove.
+
+- [x] T777 (AC-471, AC-432) Act on `/mcp` as the token's owner, with the groups of the owner's latest web sign-in
+  - Lane: MCP
+  - Files: `packages/api/src/db/migrations/1758670001000_latest-sign-in-groups.cjs`, `packages/api/src/repos/sign-ins.ts` (+ test), `packages/api/src/auth/oidc.ts` (+ `oidc.test.ts`), `packages/api/src/mcp/caller.ts` (+ `caller.test.ts`).
+  - Failing test: `caller.test.ts`: a token's caller is its owner with the groups of their latest web sign-in; after the owner signs in again without group A, the caller's visible folders (through `access/visible.ts`, as the web app's) no longer include a folder granted only to A, and after signing in with group B they include B's (AC-471); with sign-in off the caller is the single user. `oidc.test.ts`: each sign-in records the user's groups and the time.
+  - Depends on: T776
+  - **Built 2026-10-17** (lane MCP, batch 3). **No AC is ticked.** AC-471 and AC-432 fail on what an MCP call can reach, and no tool exists until T782. This task builds and tests the caller those tools will act as.
+    - **The migration is `1758670002000_latest-sign-in-groups.cjs`,** not the planned `…1001000`, which T768's `access-token-removal` already held. T779's rate-limit migration moves to `1758670003000`, and its entry in tasks.md says so.
+    - **Table `latest_sign_ins`:** `user_key` (primary key), `groups text[]` and `signed_in_at`. There is one row per user. A later sign-in replaces it, and an older one finishing late doesn't (`ON CONFLICT … DO UPDATE … WHERE signed_in_at <= excluded.signed_in_at`).
+    - **Where it's recorded:** in the sign-in callback (`auth/routes.ts`, where sign-in actually happens; `oidc.ts` holds only the claim helpers), with the groups the session gets, before the session is regenerated.
+      - **If the record fails, the sign-in fails** (the lane's call). The session isn't saved yet, so no one is signed in on groups their tokens don't share.
+      - The test sits in `oidc.test.ts` as planned. It signs in at Dex through `buildServer` with a recording fake.
+    - **`mcp/caller.ts`:** `mcpCaller({ security, superAdminGroup, signIns })` returns the owner's `WechartUser`: their key and name, the latest sign-in's groups, and Super-Admin by those groups, as on the web (T323).
+      - An owner with no sign-in on record has no groups.
+      - With sign-in off, the caller is `SINGLE_USER` (AC-479).
+    - **Wiring:**
+      - `bearerAuth(store, now, callerOf)` puts the caller in `McpAuth.extra.caller`, for the SDK factory's `authInfo` in T778.
+      - The `/mcp` POST's own `preParsing` hook sets `request.wechartUser` to the caller. It runs after the session's global `preParsing`, so a cookie's user never stands in, and the web app's own checks (`visibilityOf` and the rest) apply as they are.
+      - `buildServer` takes `signIns`, and `main.ts` passes `signInStore(db)`.
+      - With sign-in on and no `signIns` store, `/mcp` takes no token, so it never falls back to no groups.
+    - **"Through `access/visible.ts`":** the web app works out a user's folders in `server.ts`'s `visibilityOf`, from `folderRights` (`@wechart/core`). `access/visible.ts` only counts and searches. The test therefore checks the caller's folders with `folderRights`, as `visibilityOf` does. The whole path is T782's to show through a tool.
+    - **Tests:** `repos/sign-ins.test.ts` (2), `mcp/caller.test.ts` (3), `auth/oidc.test.ts` (1 new). `mcp/auth.test.ts`'s sign-in-on server now gets the `signIns` store.

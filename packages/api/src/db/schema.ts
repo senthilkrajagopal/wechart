@@ -172,6 +172,14 @@ export interface Database {
   calc_requests: CalcRequestTable;
   calc_request_takers: CalcRequestTakerTable;
   personal_access_tokens: PersonalAccessTokenTable;
+  latest_sign_ins: LatestSignInTable;
+}
+
+/** A user's latest web sign-in: its groups, which their tokens act with on `/mcp` (T777, AC-471). */
+export interface LatestSignInTable {
+  user_key: string;
+  groups: string[];
+  signed_in_at: Date;
 }
 
 /** A personal access token for MCP (T767, AC-430): its SHA-256, never its text. */

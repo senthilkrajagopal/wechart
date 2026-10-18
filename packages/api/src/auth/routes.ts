@@ -8,6 +8,7 @@ import * as oidc from 'openid-client';
 import { recordIn } from '../audit/record';
 import type { Config, OidcSettings } from '../config';
 import type { AuditStore } from '../repos/audit';
+import type { SignInStore } from '../repos/sign-ins';
 import { PUBLIC } from './guard';
 import { displayNameFrom, groupsFrom, identityFrom, oidcConfig } from './oidc';
 import { signedOutPage, signInFailedPage } from './statePages';
@@ -114,6 +115,8 @@ export interface SignInOptions {
   readonly store?: SessionStore;
   /** Where each sign-in is recorded (T368, AC-294). */
   readonly audit?: Pick<AuditStore, 'record'>;
+  /** Where each sign-in's groups are kept, for the user's tokens on `/mcp` (T777, AC-471). */
+  readonly signIns?: Pick<SignInStore, 'record'>;
 }
 
 export function signInOptionsOf(config: Config, store?: SessionStore): SignInOptions {
@@ -331,6 +334,11 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
         );
       }
     }
+
+    // The groups this user's tokens act with on /mcp from now on (T777,
+    // AC-471): kept before the session is, so a sign-in whose groups can't
+    // be kept fails rather than leave a token acting on stale ones.
+    await options.signIns?.record(userKeyOf(claims.iss, claims.sub), groups, new Date());
 
     // A new session id once signed in (session fixation; research, OWASP),
     // lasting 12 hours from now (AC-316).

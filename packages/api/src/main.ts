@@ -28,6 +28,7 @@ import { xcubeQueue } from './xcube/queue';
 import { xcubeRefreshWorker } from './xcube/refresh-worker';
 import { calcRequestStore } from './repos/calc-requests';
 import { accessTokenStore } from './repos/access-tokens';
+import { signInStore } from './repos/sign-ins';
 import { AUDIT_RETENTION_DAYS, startAuditRetention } from './audit/retention';
 import { readModelDir } from './model/read-dir';
 import { startModel } from './model/split';
@@ -295,6 +296,8 @@ async function main(): Promise<void> {
     calcRequests: calcRequestStore(db),
     // Personal access tokens for MCP (T767, AC-430).
     accessTokens: accessTokenStore(db),
+    // Each user's latest sign-in, whose groups their tokens act with (T777, AC-471).
+    signIns: signInStore(db),
     // Read-only SQL run by xcube, on a data source's connection (T532, AC-373).
     ...(config.xcube === undefined || service === undefined
       ? {}

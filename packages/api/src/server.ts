@@ -148,9 +148,11 @@ import type { ModelOrigin } from './db/schema';
 import type { StoredModelFile, WorkspaceModelFile } from './repos/model-files';
 import { workspaceModels } from './routes/workspace-models';
 import { bearerAuth } from './mcp/auth';
+import { mcpCaller } from './mcp/caller';
 import { mcpUrlOf, registerMcp } from './mcp/plugin';
 import { registerAccessTokens } from './routes/access-tokens';
 import type { AccessTokenStore } from './repos/access-tokens';
+import type { SignInStore } from './repos/sign-ins';
 import {
   overlayContentOf,
   overlaySync,
@@ -268,6 +270,8 @@ export interface BuildOptions {
   readonly calcRequests?: CalcRequestStore;
   /** Personal access tokens for MCP (T767, AC-430). Unset: none can be made. */
   readonly accessTokens?: AccessTokenStore;
+  /** Each user's latest web sign-in, whose groups their tokens act with (T777, AC-471). */
+  readonly signIns?: SignInStore;
   /**
    * Where a data source lands before it is stored, and leaves before it is
    * removed (T442): xcube's connections. Unset without xcube.
@@ -506,6 +510,7 @@ export function buildServer({
   schedules,
   calcRequests,
   accessTokens,
+  signIns,
   dataSourceLanding,
   connectionTest,
   connectionTests,
@@ -630,6 +635,7 @@ export function buildServer({
     registerSignIn(app, {
       ...signInOptionsOf(config, sessions),
       ...(audit === undefined ? {} : { audit }),
+      ...(signIns === undefined ? {} : { signIns }),
     });
   registerUser(app, security, config.superAdminGroup);
   registerGuard(app, security, config.publicUrl);
@@ -4506,7 +4512,23 @@ export function buildServer({
   if (config.mcpHost !== undefined)
     registerMcp(app, {
       host: config.mcpHost,
-      ...(accessTokens === undefined ? {} : { verifyToken: bearerAuth(accessTokens, now) }),
+      // A token acts as its owner, with their latest sign-in's groups (T777,
+      // AC-471); with none kept, no token is taken with sign-in on.
+      ...(accessTokens === undefined || (security === 'oidc' && signIns === undefined)
+        ? {}
+        : {
+            verifyToken: bearerAuth(
+              accessTokens,
+              now,
+              mcpCaller({
+                security,
+                ...(config.superAdminGroup === undefined
+                  ? {}
+                  : { superAdminGroup: config.superAdminGroup }),
+                ...(signIns === undefined ? {} : { signIns }),
+              }),
+            ),
+          }),
     });
 
   /**

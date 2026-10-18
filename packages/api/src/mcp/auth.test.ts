@@ -4,6 +4,7 @@ import { pgSessionStore } from '../auth/session-store';
 import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
 import { closeDb, getDb } from '../db/client';
 import { accessTokenStore } from '../repos/access-tokens';
+import { signInStore } from '../repos/sign-ins';
 import { buildServer } from '../server';
 import { mintToken } from './tokenText';
 
@@ -165,6 +166,8 @@ describe('the token on /mcp, sign-in on (T776, AC-435)', () => {
       },
       sessions: pgSessionStore(getDb()),
       accessTokens: store(),
+      // Whose groups a token acts with (T777): with none kept, no token is taken.
+      signIns: signInStore(getDb()),
     });
 
   it('refuses a request signed in only by the web app’s session cookie', async () => {
@@ -182,6 +185,18 @@ describe('the token on /mcp, sign-in on (T776, AC-435)', () => {
       });
       expect(answer.statusCode).toBe(401);
       expect(answer.headers['www-authenticate']).toBe(MISSING);
+      // And the other way: a working token beside that cookie, on the web
+      // app's route, is refused (T776's review).
+      const working = await tokenOf(`t776-both-${Date.now()}`, 0, 30);
+      const both = await app.inject({
+        method: 'GET',
+        url: '/api/me',
+        headers: { cookie, authorization: `Bearer ${working.text}` },
+      });
+      expect(both.statusCode).toBe(401);
+      expect(both.json<{ error: string }>().error).toBe(
+        'A personal access token is taken on /mcp alone.',
+      );
     } finally {
       await app.close();
     }

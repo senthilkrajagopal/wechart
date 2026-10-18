@@ -62,8 +62,17 @@ export function registerMcp(app: FastifyInstance, options: McpOptions): void {
   // One JSON-RPC request per POST (the 2026-07-28 Streamable HTTP transport,
   // `mcp-typescript-sdk.md`, "Transports and client support"). Until T778
   // serves it, a request past the token check is answered 501.
-  app.post(MCP_PATH, { ...PUBLIC, onRequest: [...guard, tokenCheck] }, async (_request, reply) =>
-    reply.status(501).send({ error: 'MCP isn’t served here yet.' }),
+  // The request acts as the token's caller, the web app's user for every
+  // check it makes (T777, AC-432). Set in the route's own `preParsing`,
+  // which runs after the session's, so no cookie's user can stand in.
+  const actAsCaller = async (request: FastifyRequest, _reply: FastifyReply, payload: unknown) => {
+    request.wechartUser = request.mcpAuth?.extra.caller ?? null;
+    return payload;
+  };
+  app.post(
+    MCP_PATH,
+    { ...PUBLIC, onRequest: [...guard, tokenCheck], preParsing: actAsCaller },
+    async (_request, reply) => reply.status(501).send({ error: 'MCP isn’t served here yet.' }),
   );
   // "GET and DELETE should be answered with 405" (same source).
   const notAllowed = async (_request: unknown, reply: FastifyReply) =>

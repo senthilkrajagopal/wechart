@@ -1606,11 +1606,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T776 (AC-435, AC-431, AC-430) Take a token only from `Authorization: Bearer` on `/mcp`: 401 with `WWW-Authenticate: Bearer` for none, a bad, revoked or expired one, the query string or the session cookie; refuse tokens on every other route; record Last used
 
-- [ ] T777 (AC-471, AC-432) Act on `/mcp` as the token's owner, with the groups of the owner's latest web sign-in
-  - Lane: MCP
-  - Files: `packages/api/src/db/migrations/1758670001000_latest-sign-in-groups.cjs`, `packages/api/src/repos/sign-ins.ts` (+ test), `packages/api/src/auth/oidc.ts` (+ `oidc.test.ts`), `packages/api/src/mcp/caller.ts` (+ `caller.test.ts`).
-  - Failing test: `caller.test.ts`: a token's caller is its owner with the groups of their latest web sign-in; after the owner signs in again without group A, the caller's visible folders (through `access/visible.ts`, as the web app's) no longer include a folder granted only to A, and after signing in with group B they include B's (AC-471); with sign-in off the caller is the single user. `oidc.test.ts`: each sign-in records the user's groups and the time.
-  - Depends on: T776
+- [x] T777 (AC-471, AC-432) Act on `/mcp` as the token's owner, with the groups of the owner's latest web sign-in
 
 - [ ] T778 (AC-434) Serve MCP at `/mcp` over Streamable HTTP at 2026-07-28, 2025-era clients through the stateless fallback, and GET and DELETE with 405
   - Lane: MCP
@@ -1620,7 +1616,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [ ] T779 (AC-472, AC-473) Limit each token's requests to `/mcp` in the metadata database, 60 a minute where unset, with 429 and `Retry-After` over it and 503 while the store fails; the error handler answers both
   - Lane: MCP
-  - Files: `packages/api/package.json` (`@fastify/rate-limit` 11.2.1), `packages/api/src/db/migrations/1758670002000_mcp-rate-limit.cjs`, `packages/api/src/mcp/rateLimitStore.ts` (+ test; variant A of `mcp-deployment-and-tokens.md`, `INSERT … ON CONFLICT DO UPDATE … RETURNING`), `packages/api/src/mcp/plugin.ts`, `packages/api/src/config.ts` (`WECHART_MCP_RATE_LIMIT`), `packages/api/src/server.ts` (the global error handler), `packages/api/src/mcp/rate-limit.test.ts`.
+  - Files: `packages/api/package.json` (`@fastify/rate-limit` 11.2.1), `packages/api/src/db/migrations/1758670003000_mcp-rate-limit.cjs` (renumbered 2026-10-17: T777's took 1758670002000, since 1758670001000 was T768's), `packages/api/src/mcp/rateLimitStore.ts` (+ test; variant A of `mcp-deployment-and-tokens.md`, `INSERT … ON CONFLICT DO UPDATE … RETURNING`), `packages/api/src/mcp/plugin.ts`, `packages/api/src/config.ts` (`WECHART_MCP_RATE_LIMIT`), `packages/api/src/server.ts` (the global error handler), `packages/api/src/mcp/rate-limit.test.ts`.
   - Today: the global `setErrorHandler` turns the limiter's error into a 500 (`fastify-rate-limit.md`, Gotcha 1).
   - Failing test: `rate-limit.test.ts`: two Fastify instances on one metadata database, the limit at 60: a token's 61st request in a minute, across both, answers 429 with `Retry-After` and runs nothing, and an `initialize` or `tools/list` request counts as a `tools/call` does (AC-472); with the store's table unreachable, a request answers 503 and runs nothing, and answers normally once it's back (AC-473). `rateLimitStore.test.ts`: concurrent increments of one key never lose a count; an old window is cleaned up.
   - Depends on: T778
