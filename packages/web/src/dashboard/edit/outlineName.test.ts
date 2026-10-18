@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { textDocumentFromMarkdown } from '@wechart/core';
+
 import type { Element_ } from '../model/document';
 import { outlineNameOf } from './Outline';
 
@@ -41,5 +43,32 @@ describe('a Markdown tile’s name', () => {
     expect(outlineNameOf(markdown('order_line_items by _status_'), noCharts)).toBe(
       'Markdown: order_line_items by status',
     );
+  });
+});
+
+/**
+ * T874's review, AC-209 and design 21 G6: a Text tile is named by its first
+ * line; "Empty text" is only a tile holding nothing at all, never one that
+ * draws a value.
+ */
+describe('a Text tile’s name', () => {
+  const text = (markdownText: string) =>
+    ({
+      id: 't',
+      kind: 'text',
+      w: 6,
+      document: textDocumentFromMarkdown(markdownText),
+    }) as Element_;
+
+  it('is its first line', () => {
+    expect(outlineNameOf(text('## Notes\n\nMore.'), noCharts)).toBe('Text: Notes');
+  });
+
+  it('is "Empty text" when it holds nothing', () => {
+    expect(outlineNameOf(text(''), noCharts)).toBe('Empty text');
+  });
+
+  it('is its kind, not "Empty text", when it holds only an element', () => {
+    expect(outlineNameOf(text('{{measure:orders.count}}'), noCharts)).toBe('Text');
   });
 });

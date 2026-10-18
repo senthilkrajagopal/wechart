@@ -1,5 +1,5 @@
 import { firstReadingOf } from '../../tiles/Markdown';
-import { firstReadingOfDocument } from '../../tiles/text/documents';
+import { firstReadingOfDocument, isEmptyTextDocument } from '../../tiles/text/documents';
 import { KIND_ICON } from './kindIcon';
 import { elementAt, placeOf, type DashboardDocument, type Element_ } from '../model/document';
 
@@ -49,12 +49,12 @@ export function outlineNameOf(
 ): string {
   const kind = KIND_LABEL[element.kind] ?? element.kind;
   if (element.kind === 'text') {
-    // By its first line, or "Empty text" for a tile with no words yet
-    // (design 21 G6).
+    // By its first line; "Empty text" only for a tile holding nothing at
+    // all (design 21 G6), so one drawing only a value is "Text" (T874's
+    // review).
     const read = firstReadingOfDocument(element.document);
-    return read === ''
-      ? 'Empty text'
-      : `${kind}: ${read.length > 40 ? `${read.slice(0, 40)}…` : read}`;
+    if (read !== '') return `${kind}: ${read.length > 40 ? `${read.slice(0, 40)}…` : read}`;
+    return isEmptyTextDocument(element.document) ? 'Empty text' : kind;
   }
   if (element.kind === 'tabs') return `${kind}: ${element.tabs.map((tab) => tab.title).join(', ')}`;
   const own =

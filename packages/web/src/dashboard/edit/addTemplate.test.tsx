@@ -102,7 +102,7 @@ describe('adding a section template', () => {
     expect(screen.getAllByTestId('tile-empty-chart')).toHaveLength(1);
 
     /**
-     * The markdown tile arrives with prompting text rather than blank, so the
+     * The Text tile arrives with prompting text rather than blank, so the
      * pair reads as a layout waiting to be filled in rather than as damage.
      *
      * Asserted as the exact strings the template produces, rendered (AC-208):
