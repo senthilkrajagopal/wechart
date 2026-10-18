@@ -188,9 +188,10 @@ describe('an item’s history (T357, AC-289)', () => {
   /**
    * T695 (R76 explore-Q6, data-sources-Q5): where none is kept, the API lists
    * the current version as the item is now, not kept: Current, "before
-   * proposals", and nothing to view or restore beyond the item itself.
+   * proposals". T766 (AC-289; R78, "View opens it as now"): it offers View,
+   * which opens the item as it is now, and no restore.
    */
-  it('lists a current version kept for none as before proposals, with nothing to view', async () => {
+  function unkept(kind: 'dashboard' | 'data-source', onViewNow?: () => void) {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -216,20 +217,59 @@ describe('an item’s history (T357, AC-289)', () => {
         ),
       ),
     );
+    const onView = vi.fn();
     render(
       <QueryClientProvider client={new QueryClient()}>
         <HistoryPanel
-          kind="dashboard"
+          kind={kind}
           id="d1"
-          onView={vi.fn()}
+          onView={onView}
+          onViewNow={onViewNow}
           onRestore={vi.fn()}
           onClose={vi.fn()}
         />
       </QueryClientProvider>,
     );
+    return { onView };
+  }
+
+  it('lists a current version kept for none as before proposals, offering View and no restore (T766)', async () => {
+    const onViewNow = vi.fn();
+    const { onView } = unkept('dashboard', onViewNow);
     const [row] = await screen.findAllByRole('listitem');
     expect(within(row!).getByTestId('version-head').textContent).toBe('Version 1Current');
     expect(within(row!).getByTestId('version-by').textContent).toBe('before proposals');
+    expect(
+      within(row!)
+        .getAllByRole('button')
+        .map((each) => each.textContent),
+    ).toEqual(['View']);
+
+    // View opens the item as it is now: no kept copy of it is asked for.
+    expect(row!.getAttribute('aria-current')).toBeNull();
+    await userEvent.click(within(row!).getByRole('button', { name: 'View version 1' }));
+    expect(onViewNow).toHaveBeenCalledTimes(1);
+    expect(onView).not.toHaveBeenCalled();
+    // Marked as the version drawn, as a kept one viewed is.
+    expect(row!.getAttribute('aria-current')).toBe('true');
+  });
+
+  it('offers a data source’s unkept Current row View, with nothing to compare it with (T766)', async () => {
+    const onViewNow = vi.fn();
+    unkept('data-source', onViewNow);
+    const [row] = await screen.findAllByRole('listitem');
+    expect(
+      within(row!)
+        .getAllByRole('button')
+        .map((each) => each.textContent),
+    ).toEqual(['View']);
+    await userEvent.click(within(row!).getByRole('button', { name: 'View version 1' }));
+    expect(onViewNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no View on the unkept row where the page opens nothing for it', async () => {
+    unkept('dashboard');
+    const [row] = await screen.findAllByRole('listitem');
     expect(within(row!).queryAllByRole('button')).toEqual([]);
   });
 

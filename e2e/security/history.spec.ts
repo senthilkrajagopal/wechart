@@ -94,7 +94,8 @@ test.describe('an item’s history, and restoring a version (T357, AC-289)', () 
       await expect(row.getByTestId('version-head')).toHaveText(['Version 1Current']);
       await expect(row.getByTestId('version-by')).toHaveText(['before proposals']);
       await expect(row.getByTestId('version-when')).toHaveText([/^Today \d\d:\d\d$/]);
-      await expect(row.getByRole('button')).toHaveCount(0);
+      // T766 (AC-289; R78, "View opens it as now"): View, and no restore.
+      await expect(row.getByRole('button')).toHaveText(['View']);
 
       const box = (await panel.boundingBox())!;
       const bar = (await page.locator('.app-bar').boundingBox())!;
@@ -120,6 +121,36 @@ test.describe('an item’s history, and restoring a version (T357, AC-289)', () 
       const when = (await row.getByTestId('version-when').boundingBox())!;
       expect(Math.round(box.x + box.width - (when.x + when.width))).toBe(16);
       expect(await row.evaluate((each) => getComputedStyle(each).borderBottomWidth)).toBe('1px');
+    });
+
+    /**
+     * T766 (AC-289; R78, "View opens it as now"): the unkept Current row's
+     * View opens the dashboard as it is now, as Explore opens it, asking for
+     * no kept copy of it; History stays open beside it.
+     */
+    test('views a version none was kept for as the dashboard is now', async ({ page }) => {
+      await page.goto(`/explore/dashboards/${made.unkept}`);
+      const asOpened = page.getByRole('heading', { name: `${BOARD} unkept`, exact: true });
+      await expect(asOpened).toBeVisible();
+
+      await page.getByRole('button', { name: 'History', exact: true }).click();
+      const panel = page.getByRole('complementary', { name: 'History' });
+      const asked: string[] = [];
+      page.on('request', (request) => {
+        if (request.url().includes('/versions/')) asked.push(request.url());
+      });
+      await panel.getByRole('button', { name: 'View version 1' }).click();
+
+      // Marked as the version drawn, as a kept one viewed is.
+      await expect(panel.getByRole('listitem')).toHaveAttribute('aria-current', 'true');
+      await expect(
+        page.getByRole('heading', { name: `${BOARD} unkept`, exact: true }),
+      ).toBeVisible();
+      await expect(page.getByRole('status', { name: 'Version shown' })).toHaveCount(0);
+      await expect(page.getByText('Version 1 could not be read.')).toHaveCount(0);
+      await expect(panel).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`/explore/dashboards/${made.unkept}`));
+      expect(asked).toEqual([]);
     });
   });
 

@@ -97,6 +97,7 @@ export function HistoryPanel({
   id,
   viewing,
   onView,
+  onViewNow,
   onRestore,
   onClose,
   now = new Date(),
@@ -107,6 +108,12 @@ export function HistoryPanel({
   readonly viewing?: number | undefined;
   /** Draw a version, read-only (state A); dashboards and charts. */
   readonly onView?: ((version: number) => void) | undefined;
+  /**
+   * Open the item as it is now: View on the Current row where no version
+   * was kept, which has no kept copy to draw (T766, AC-289; R78). Unset, that
+   * row offers no View.
+   */
+  readonly onViewNow?: (() => void) | undefined;
   /** Ask for a draft of a version, to propose (state C). */
   readonly onRestore?:
     ((version: KeptVersion & { readonly approvedText: string }) => void) | undefined;
@@ -116,6 +123,8 @@ export function HistoryPanel({
   const ids = useId();
   const history = useQuery(historyQuery(kind, id));
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set());
+  /** The unkept Current row viewed: the item as it is now is the version drawn (T766). */
+  const [nowViewed, setNowViewed] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const box = useRef<HTMLElement>(null);
   // Focus to it as it opens (pin 2).
@@ -187,11 +196,25 @@ export function HistoryPanel({
               const more = open.has(version.version);
               // The current version kept for none is the item itself (T695).
               const kept = version.kept !== false;
+              // Where none was kept, View opens the item as it is now (T766; R78).
+              const view = kept
+                ? onView === undefined
+                  ? undefined
+                  : () => {
+                      onView(version.version);
+                    }
+                : version.current && onViewNow !== undefined
+                  ? () => {
+                      setNowViewed(true);
+                      onViewNow();
+                    }
+                  : undefined;
+              const drawn = kept ? viewing === version.version : nowViewed;
               return (
                 <li
                   key={version.version}
                   className="history-panel__row"
-                  aria-current={viewing === version.version ? 'true' : undefined}
+                  aria-current={drawn ? 'true' : undefined}
                 >
                   {/* Its number, Current, and its time at the right (pins 3 and 4). */}
                   <p className="history-panel__version">
@@ -220,21 +243,20 @@ export function HistoryPanel({
                   </p>
                   {/* View · More · Propose restoring… as link buttons (pin 6; EXP-24). */}
                   <div className="history-panel__actions">
-                    {onView === undefined || !kept ? null : (
+                    {view === undefined ? null : (
                       <button
                         type="button"
                         className="btn-link"
                         aria-label={
-                          kind === 'data-source'
+                          kind === 'data-source' && kept
                             ? `Compare version ${String(version.version)} with current`
                             : `View version ${String(version.version)}`
                         }
-                        onClick={() => {
-                          onView(version.version);
-                        }}
+                        onClick={view}
                       >
-                        {/* A data source's settings are set against now (design 06, pin 6). */}
-                        {kind === 'data-source' ? 'Compare with current' : 'View'}
+                        {/* A data source's settings are set against now (design 06,
+                            pin 6); one kept for none is now, with nothing to compare. */}
+                        {kind === 'data-source' && kept ? 'Compare with current' : 'View'}
                       </button>
                     )}
                     {long ? (

@@ -451,6 +451,10 @@ export function DashboardPage({
             id={dashboardId}
             viewing={viewing}
             onView={setViewing}
+            // Where none was kept, the dashboard as it is now (T766, AC-289).
+            onViewNow={() => {
+              setViewing(undefined);
+            }}
             onRestore={restore.start}
             onClose={() => {
               setViewing(undefined);

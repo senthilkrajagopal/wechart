@@ -957,6 +957,9 @@ export function LibraryChartPage({ chartId, panel }: LibraryChartPageProps) {
         <HistoryPanel
           kind="chart"
           id={chartId}
+          // Where none was kept, View is the chart as it is now, drawn
+          // beside History already (T766, AC-289).
+          onViewNow={() => undefined}
           onRestore={restore.start}
           onClose={() => {
             setHistoryOpen(false);

@@ -1105,10 +1105,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [x] T693 (AC-187, AC-343, AC-369, AC-370) Explore's list, head, tree and menus as designs 14 and 04 draw them *(added 2026-10-08 by T406)*
 - [x] T694 (AC-343, AC-278, AC-284, AC-289, AC-281) Each row's ⋯ by its kind and place, and My workspace's rows on two lines *(added 2026-10-08 by T406)*
 - [x] T695 (AC-289, AC-343) The History panel as design 06 draws it: docked full height, its rows, and the current version always listed *(added 2026-10-08 by T406)*
-- [ ] T766 (AC-289) History's Current row for an item with no kept version offers View, which opens the item as it is now *(added 2026-10-17: the user's answer to T695-1, "View opens it as now (Recommended)", R78)*
-  - Files: `packages/web/src/workspaces/history/HistoryPanel.tsx` (+ test), `e2e/security/history.spec.ts`.
-  - Today: the Current row with `kept: false` offers no View and no restore (T695-1, now overturned in `docs/design/decisions-2026-10-08.md`).
-  - Failing test: for an item with no kept version (phase-1 content, or one made directly), the History panel's Current row offers View and no restore, and View opens the item as it is now, the same as opening it from Explore. A kept Current row keeps its View unchanged.
+- [x] T766 (AC-289) History's Current row for an item with no kept version offers View, which opens the item as it is now *(added 2026-10-17: the user's answer to T695-1, "View opens it as now (Recommended)", R78)*
 - [x] T696 (AC-187, AC-004, AC-252, AC-254, AC-287, AC-304, AC-190) The app bar, the account menu and the single-user chip as design 09 draws them *(added 2026-10-08 by T406)*
 - [x] T697 (AC-251, AC-253, AC-343) wechart's own pages after signing out, when sign-in fails, and when no group list comes back, as design 09 states C–E draw them *(added 2026-10-08 by T406)*
 - [x] T698 (AC-343, AC-284, AC-374, AC-187) A data source's pages as designs 03 and 15 draw them: Propose and the version line, the frame, the editor, Test to save, the save bar, and the SQL tab's off panel *(added 2026-10-08 by T406)*

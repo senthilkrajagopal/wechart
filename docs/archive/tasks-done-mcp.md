@@ -571,6 +571,18 @@
     - **No e2e:** the main stack names no MCP host.
     - **Unit suite:** web 3,290, core 664, charts 622, recommender 136, ui 47 green; api 2,106 passed, 4 failed, all `access/route-matrix.test.ts` timing out at 5 s at load average 24, which passes alone (136/136).
 
+- [x] T766 (AC-289) History's Current row for an item with no kept version offers View, which opens the item as it is now *(added 2026-10-17: the user's answer to T695-1, "View opens it as now (Recommended)", R78)*
+  - Files: `packages/web/src/workspaces/history/HistoryPanel.tsx` (+ test), `e2e/security/history.spec.ts`.
+  - Today: the Current row with `kept: false` offers no View and no restore (T695-1, now overturned in `docs/design/decisions-2026-10-08.md`).
+  - Failing test: for an item with no kept version (phase-1 content, or one made directly), the History panel's Current row offers View and no restore, and View opens the item as it is now, the same as opening it from Explore. A kept Current row keeps its View unchanged.
+  - **Built 2026-10-18** (lane MCP, batch 8). **Re-ticks AC-289** (unticked by R78's amendment).
+    - **Panel:** a new `onViewNow`. The Current row kept for none offers View ("View version ‹n›", and "View" on a data source too, T766-2) where the page gives one; it calls `onViewNow`, never `onView`, so no kept copy is asked for, and marks the row `aria-current` (T766-1). Still no restore. Kept rows unchanged.
+    - **Pages:** the dashboard and the data source leave any version view (`setViewing(undefined)`), drawing the item as it is now; the library chart passes a no-op, the chart being drawn beside History already.
+    - **Tests:** `HistoryPanel.test.tsx`, the T695 case replaced by three: View alone on the unkept row, calling `onViewNow` and marking the row; a data source's "View"; no View without `onViewNow`. `history.spec.ts`: the T695 test now expects `['View']` (red first: no button), and a new test opens the unkept dashboard, clicks View, and sees the row marked, the dashboard's heading, no "Version shown" band and no error, History still open, and no `/versions/` request. The unit tests weren't seen red: the panel's code was written before they first ran.
+    - **E2e (headless Chromium):** `history.spec.ts` 7/7; red first, 1 failed and 5 did not run (serial).
+    - **Unit suite:** api 2,110, web 3,290, core 664, charts 622, recommender 136, ui 47, all green.
+    - **Left:** a library chart's kept rows still have no View (T357's "Left").
+
 ## Security specs failing alone: xcube's folder tree stuck (lane MCP, batch 7, at the coordinator's request)
 
 - **Asked:** why `calc-request-resolve.spec.ts:200`, `reviews.spec.ts:168` and `export-import.spec.ts:393` (422, "No folder on the path holds ‹run›_margin") fail when run alone on feat/xcube.

@@ -753,6 +753,10 @@ function Settings({ source }: { source: StoredSource }) {
           id={source.id}
           viewing={viewing}
           onView={setViewing}
+          // Where none was kept, its settings as they are now (T766, AC-289).
+          onViewNow={() => {
+            setViewing(undefined);
+          }}
           onRestore={restore.start}
           onClose={() => {
             setHistoryOpen(false);
