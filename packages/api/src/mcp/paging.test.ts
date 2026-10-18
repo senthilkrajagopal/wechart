@@ -180,7 +180,7 @@ beforeAll(async () => {
     audit: auditStore(getDb()),
     mcpRateLimits: testCounter(),
     mcpPages: mcpPageStore(getDb()),
-    mcpTools: [...mcpTools('UTC'),...TEST_TOOLS.filter((tool) => tool !== NEXT_PAGE)],
+    mcpTools: [...mcpTools('UTC'), ...TEST_TOOLS.filter((tool) => tool !== NEXT_PAGE)],
   });
   await signIn(app, USERS['writer']!);
   const writerKey = (
