@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { openHeaderSheet } from './dashboardHeader';
 import { viewAs } from './tileMenu';
 import { IN_MY_WORKSPACE } from './workspace';
 
@@ -243,8 +244,9 @@ test('a link tile opens another dashboard carrying the filters, and a web addres
   await expect(web).toHaveAttribute('target', '_blank');
   await expect(web).toHaveAttribute('rel', 'noopener noreferrer');
 
-  // The dashboard, with the current filters.
-  const filterBar = page.getByRole('region', { name: 'Filters' });
+  // The dashboard, with the current filters, in the header sheet (T828).
+  const filterBar = page.getByRole('region', { name: 'Filters', exact: true });
+  await openHeaderSheet(page);
   // A filter's control opens from its pill (AC-187).
   await filterBar.locator('button[aria-expanded]').click();
   await filterBar.getByRole('checkbox', { name: 'shipped' }).check();
@@ -252,6 +254,7 @@ test('a link tile opens another dashboard carrying the filters, and a web addres
   await page.getByRole('link', { name: 'See the orders' }).click();
 
   await expect(page.getByRole('heading', { name: target.title })).toBeVisible();
+  await openHeaderSheet(page);
   await filterBar.locator('button[aria-expanded]').click();
   await expect(filterBar.getByRole('checkbox', { name: 'shipped' })).toBeChecked();
   const orders = page.locator('[data-tile="tile-orders"]');

@@ -1,7 +1,9 @@
-import { isValidElement, useEffect, useRef, useState, type ReactNode } from 'react';
+import { isValidElement, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import { canRedo, canUndo, discard, historyOf, push, redo, undo } from '../../editor/history';
 import { FolderCrumbs } from '../../workspaces/explore/FolderCrumbs';
+import { FiltersToggle } from '../header/FiltersToggle';
+import { HeaderSheet } from '../header/HeaderSheet';
 import { EditBar } from './EditBar';
 import { EditSidebar, type SidebarContent } from './EditSidebar';
 
@@ -174,6 +176,13 @@ export interface EditChromeProps<T> {
    */
   readonly band?: ((session: EditSession<T>) => ReactNode) | undefined;
   /**
+   * What the header sheet holds after the description and the ownership
+   * line — a dashboard's filter bar (F43; design 19 screen 2). The sheet is
+   * closed whenever the chrome mounts and opened by the Filters toggle
+   * (AC-486, AC-490); while editing it is open and the toggle gone (rule 114).
+   */
+  readonly sheet?: ((session: EditSession<T>) => ReactNode) | undefined;
+  /**
    * Docked under the canvas, full width — the details panel (T269, AC-240):
    * the canvas gives it room rather than go under it.
    */
@@ -212,10 +221,19 @@ export function EditChrome<T>({
   onDiscard,
   readOnly = false,
   band,
+  sheet,
   foot,
   children,
 }: EditChromeProps<T>) {
   const [editing, setEditing] = useState(false);
+  /**
+   * The header sheet, as the reader left it: closed whenever the chrome
+   * mounts (AC-490), kept in this state alone — nothing stores it. Editing
+   * shows the sheet without changing it, so leaving edit mode puts back
+   * what the reader had (rule 114).
+   */
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const sheetId = useId();
   /** Edit, once a Discard has put it back: where focus goes (T223's review). */
   const editButton = useRef<HTMLButtonElement>(null);
   const focusEditNext = useRef(false);
@@ -358,6 +376,10 @@ export function EditChrome<T>({
   const shown = overlay?.(session);
   const overlaid = isValidElement(shown);
 
+  /** What the sheet holds before the bar: none of it is in the row (AC-484). */
+  const about = { description: description?.(current)?.trim() ?? '', ownership: subtitle };
+  const hasSheet = sheet !== undefined || about.description !== '' || about.ownership !== undefined;
+
   /**
    * The overlay covers the dashboard; it does not replace it.
    *
@@ -439,21 +461,44 @@ export function EditChrome<T>({
               Edit
             </button>
           )}
-          {/* Last, as the prototype has the settings gear. */}
+          {/* After the primary, as the prototype has the settings gear. */}
           {typeof headerActions === 'function' ? headerActions(session) : headerActions}
-          {/* Its description, on its own line under the title (T684). */}
-          {(() => {
-            const text = description?.(current)?.trim() ?? '';
-            return text === '' ? null : <p className="dashboard__description">{text}</p>;
-          })()}
-          {/* Where it lives, on its own line (T348; design 04, states E and F). */}
-          {subtitle === undefined ? null : <p className="dashboard__ownership">{subtitle}</p>}
+          {/* Last: the toggle for the sheet (AC-486; design 19 pin 6), gone
+              while editing, when the sheet is open throughout (rule 114). */}
+          {hasSheet && !editing ? (
+            <FiltersToggle
+              open={sheetOpen}
+              controls={sheetId}
+              onToggle={() => {
+                setSheetOpen((was) => !was);
+              }}
+            />
+          ) : null}
         </header>
 
-        {band === undefined ? null : (
+        {!hasSheet && band === undefined ? null : (
           // Inert with the body while a save is under way, as it was inside it.
           <div className="dashboard__fixed" inert={saving}>
-            {band(session)}
+            {band?.(session)}
+            {hasSheet ? (
+              // Directly after the row and its page tabs (design 19's keyboard
+              // table; the tabs join the row in T829).
+              <HeaderSheet id={sheetId} open={editing || sheetOpen}>
+                {about.description === '' && about.ownership === undefined ? null : (
+                  <div className="header-sheet__about">
+                    {/* Its description first (T684; R76 dashboard-Q2). */}
+                    {about.description === '' ? null : (
+                      <p className="dashboard__description">{about.description}</p>
+                    )}
+                    {/* Where it lives (T348; design 04, states E and F). */}
+                    {about.ownership === undefined ? null : (
+                      <p className="dashboard__ownership">{about.ownership}</p>
+                    )}
+                  </div>
+                )}
+                {sheet?.(session)}
+              </HeaderSheet>
+            ) : null}
           </div>
         )}
 

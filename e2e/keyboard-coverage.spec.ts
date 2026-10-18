@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
+import { openHeaderSheet } from './dashboardHeader';
 import { IN_MY_WORKSPACE, seedDashboardCopy, sharedIn } from './workspace';
 
 /**
@@ -203,6 +204,8 @@ test('clearing a filter leaves focus on the filter', async ({ page, request }) =
   const { id, title } = await filteredDashboard(request);
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // The bar is in the header sheet (T828).
+  await openHeaderSheet(page);
 
   const status = pill(page, 'f-status');
   const summary = status.locator('button[aria-expanded]');
@@ -458,6 +461,8 @@ for (const theme of ['light', 'dark'] as const) {
     const { id, title } = await listFilterDashboard(request);
     await page.goto(`/explore/dashboards/${id}`);
     await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    // The bar is in the header sheet (T828).
+    await openHeaderSheet(page);
     const filter = pill(page, 'f-list');
     await filter.locator('button[aria-expanded]').focus();
     await page.keyboard.press('Enter');

@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
+import { openHeaderSheet } from './dashboardHeader';
 import { ownCubeFile } from './model-files';
 import { viewAs } from './tileMenu';
 import { IN_MY_WORKSPACE } from './workspace';
@@ -1439,6 +1440,8 @@ test('Copy link with marks gives a URL that opens the dashboard with the same fi
   await expect(tile(page, 'tile-status').getByTestId('mark-badge')).toContainText('2 marked');
   await page.getByRole('tab', { name: 'Second' }).click();
 
+  // The marking's chip is in the filter bar, in the header sheet (T828).
+  await openHeaderSheet(page);
   await page.getByRole('button', { name: 'Marking menu' }).click();
   await page.getByRole('menuitem', { name: 'Copy link with marks' }).click();
   await expect(page.getByTestId('link-note')).toHaveText(
@@ -1666,6 +1669,12 @@ test('a right-click on the chart, Shift+F10 or the Menu key opens the tile’s m
 }) => {
   const { id, title } = await markingDashboard(request);
   await open(page, id, title);
+  // It reads the marking's chip, in the filter bar: the header sheet opened
+  // first (T828). Open, it also keeps the tile where this test measured it:
+  // closed, the tile sits 75 px higher in the 720 px window, where the 536 px
+  // menu fits neither under the pointer nor over it and is turned back from
+  // the window's top instead.
+  await openHeaderSheet(page);
   const status = tile(page, 'tile-status');
   await clickBar(page, status, 'shipped');
   const badge = status.getByTestId('mark-badge');
@@ -1912,8 +1921,9 @@ test('the marking’s chip names its values by title and its tile, is bordered i
   const status = tile(page, 'tile-status');
   await clickBar(page, status, 'shipped');
 
-  // In the filter bar.
-  const bar = page.getByRole('region', { name: 'Filters' });
+  // In the filter bar, in the header sheet (T828).
+  await openHeaderSheet(page);
+  const bar = page.getByRole('region', { name: 'Filters', exact: true });
   const chip = bar.getByTestId('mark-chip');
   await expect(chip).toContainText('Marking');
   await expect(chip).toContainText('Orders Status: shipped');
@@ -1990,11 +2000,15 @@ test('the chip and the badge are the prototype’s: their padding, inks and ring
     );
   const ring = await probe('box-shadow', 'inset 0 0 0 1px var(--wc-border-strong)');
 
-  const chip = page.getByRole('region', { name: 'Filters' }).getByTestId('mark-chip');
+  // The chip is in the filter bar, in the header sheet (T828).
+  await openHeaderSheet(page);
+  const chip = page.getByRole('region', { name: 'Filters', exact: true }).getByTestId('mark-chip');
   await expect(chip).toBeVisible();
   // The band keeps its 53 px with a chip in it, as with a hint or a pill (N8;
   // T246's review: it was 45 px here).
-  expect((await page.getByRole('region', { name: 'Filters' }).boundingBox())?.height).toBe(53);
+  expect(
+    (await page.getByRole('region', { name: 'Filters', exact: true }).boundingBox())?.height,
+  ).toBe(53);
   expect(await computed(chip, 'padding-left', 'padding-right')).toEqual({
     'padding-left': '8px',
     'padding-right': '2px',
@@ -2617,10 +2631,12 @@ test('Filter to marked and Filter out marked filter every tile they reach, clear
   await page.keyboard.press('Escape');
 
   // Removed from its chip: every status again, and the keyboard is left on the
-  // filter bar rather than nowhere (T120's review).
+  // filter bar rather than nowhere (T120's review). The chip is in the header
+  // sheet (T828).
+  await openHeaderSheet(page);
   await chip.getByRole('button', { name: /^Remove: / }).click();
   await expect(chip).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Filters' })).toBeFocused();
+  await expect(page.getByRole('region', { name: 'Filters', exact: true })).toBeFocused();
   await expect.poll(() => labels(status)).toEqual(['completed', 'processing', 'shipped']);
 
   // Out of marked: every status but shipped.
@@ -3634,12 +3650,16 @@ test('in range mode a drag along the time axis marks its buckets, striped on the
   const to = await stripe.getAttribute('data-to');
   expect(from).not.toBeNull();
   expect(from! < to!).toBe(true);
+  // The chip and the filters are in the header sheet (T828).
+  await openHeaderSheet(page);
   const chip = page.getByTestId('mark-chip');
   await expect(chip).toBeVisible();
   const said = await chip.textContent();
 
   // A filter changes what the chart shows: the bounds stay where they were.
-  const status = page.getByRole('region', { name: 'Filters' }).locator('[data-widget="checkbox"]');
+  const status = page
+    .getByRole('region', { name: 'Filters', exact: true })
+    .locator('[data-widget="checkbox"]');
   await status.locator('button[aria-expanded]').click();
   // The chart asked again with the filter, and drawn from that answer
   // (T386's review: not the render from before it).
@@ -3649,7 +3669,7 @@ test('in range mode a drag along the time axis marks its buckets, striped on the
       JSON.stringify(response.request().postDataJSON()).includes('orders.status'),
   );
   await page
-    .getByRole('region', { name: 'Filters' })
+    .getByRole('region', { name: 'Filters', exact: true })
     .getByRole('checkbox', { name: 'shipped' })
     .check();
   expect((await refiltered).status()).toBe(200);

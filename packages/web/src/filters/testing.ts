@@ -1,6 +1,8 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { openHeaderSheet } from '../dashboard/header/testing';
+
 /** A filter pill's summary button: `filter` is its group; left out, the bar's only filter. */
 async function summaryOf(filter?: HTMLElement): Promise<HTMLElement> {
   return waitFor(() => {
@@ -20,6 +22,8 @@ async function summaryOf(filter?: HTMLElement): Promise<HTMLElement> {
  * selected takes two presses: the first selects it (T468).
  */
 export async function openFilter(filter?: HTMLElement): Promise<void> {
+  // The bar is in the header sheet, opened first (T828).
+  await openHeaderSheet();
   const summary = await summaryOf(filter);
   if (summary.getAttribute('aria-expanded') === 'true') return;
   await userEvent.click(summary);
@@ -31,6 +35,7 @@ export async function openFilter(filter?: HTMLElement): Promise<void> {
  * and Remove are then in the sidebar's Properties (T468, UX-031).
  */
 export async function selectFilter(filter?: HTMLElement): Promise<void> {
+  await openHeaderSheet();
   await userEvent.click(await summaryOf(filter));
 }
 

@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
+import { openHeaderSheet } from './dashboardHeader';
 import { IN_MY_WORKSPACE, newInMyWorkspace, seedDashboardCopy, sharedIn } from './workspace';
 
 /**
@@ -511,9 +512,11 @@ test.describe('T204: the filter bar', () => {
     });
     await page.goto(`/explore/dashboards/${id}`);
     await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+    // In the header sheet since T828: opened first.
+    await openHeaderSheet(page);
 
     // .filterbar { padding: 10px 24px; background: var(--bg-page); border-bottom: 1px solid var(--border-subtle) }
-    const bar = page.getByRole('region', { name: 'Filters' });
+    const bar = page.getByRole('region', { name: 'Filters', exact: true });
     expect(
       await style(
         bar,
@@ -1475,7 +1478,7 @@ test.describe('T245: the app bar’s search and avatar, the palette, and a new d
 test.describe('T246: the dashboard header and the filter band', () => {
   const title = (page: Page) =>
     page.getByRole('heading', { name: 'Company dashboard 01', level: 1 });
-  const band = (page: Page) => page.getByRole('region', { name: 'Filters' });
+  const band = (page: Page) => page.getByRole('region', { name: 'Filters', exact: true });
   test.beforeEach(async ({ page }) => {
     await page.goto('/explore/dashboards/seed-root-dashboard-1');
     await expect(title(page)).toBeVisible();
@@ -1491,9 +1494,12 @@ test.describe('T246: the dashboard header and the filter band', () => {
     const head = await title(page).locator('..').boundingBox();
     const titled = await title(page).boundingBox();
     expect((titled?.y ?? 0) + (titled?.height ?? 0) - (head?.y ?? 0)).toBe(80);
+    // The ownership line is in the header sheet since T828 (F43, AC-487):
+    // opened first.
+    await openHeaderSheet(page);
     await expect(
-      title(page)
-        .locator('..')
+      page
+        .getByRole('region', { name: 'Filters and details' })
         .getByText(/^In Shared · version \d+$/),
     ).toBeVisible();
     const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
@@ -1569,7 +1575,9 @@ test.describe('T246: the dashboard header and the filter band', () => {
     await page.goto(await editableSeed());
     await expect(title(page)).toBeVisible();
     // .filterbar { padding: 10px 24px } around a 32 px pill, ruled off: 53 px
-    // with only its hint as with a pill (N8, mismatch 6).
+    // with only its hint as with a pill (N8, mismatch 6). In the header sheet
+    // since T828: opened first.
+    await openHeaderSheet(page);
     await expect(band(page)).toBeVisible();
     expect((await band(page).boundingBox())?.height).toBe(53);
     const hint = band(page).getByText(/to mark|to cross-filter/);
@@ -2501,8 +2509,10 @@ test.describe('T253’s review: menus, the grip and the bands', () => {
 
   test('the grip sits on the chart’s head, not on a note above it', async ({ page }) => {
     // Finding 6: with a filter the chart's cube can't reach, the note comes
-    // first, and the grip at the tile's first row covered it.
-    const bar = page.getByRole('region', { name: 'Filters' });
+    // first, and the grip at the tile's first row covered it. The bar is in
+    // the header sheet since T828.
+    await openHeaderSheet(page);
+    const bar = page.getByRole('region', { name: 'Filters', exact: true });
     await bar.locator('[data-widget="checkbox"] button[aria-expanded]').click();
     await bar.getByRole('checkbox', { name: 'Components' }).check();
     const tile = page.locator('[data-tile="tile-summary"]');

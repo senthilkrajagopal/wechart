@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
+import { openHeaderSheet } from './dashboardHeader';
 import { viewAs } from './tileMenu';
 import { IN_MY_WORKSPACE } from './workspace';
 
@@ -367,6 +368,8 @@ test('a chip names the cross-filter, and dismissing it leaves nothing filtered',
 }) => {
   const { id, title } = await crossFilterDashboard(request, { defaultAction: 'filter' });
   await open(page, id, title);
+  // The full chip is in the filter bar, in the header sheet (T828).
+  await openHeaderSheet(page);
 
   const category = tile(page, 'tile-category');
   const before = await valuesIn(category);

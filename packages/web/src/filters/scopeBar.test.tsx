@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
+import { openHeaderSheet } from '../dashboard/header/testing';
 import type { DashboardDocument } from '../dashboard/model/document';
 import { fieldButton, pickField, properties, selectFilter } from './testing';
 
@@ -90,7 +91,11 @@ function dashboard(document = DOC) {
 }
 
 const bar = () => screen.getByRole('region', { name: 'Filters' });
-const badge = async () => (await within(bar()).findByTestId('scope-badge')).textContent;
+/** The scope's badge, the header sheet opened first (T828). */
+const badge = async () => {
+  await openHeaderSheet();
+  return (await within(bar()).findByTestId('scope-badge')).textContent;
+};
 
 describe('a filter’s scope, on its widget', () => {
   it('is shown to a reader: the whole dashboard, until set otherwise', async () => {

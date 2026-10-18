@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 import { fieldPicker } from './cubePicker';
+import { openHeaderSheet } from './dashboardHeader';
 import { viewAs } from './tileMenu';
 import { IN_MY_WORKSPACE } from './workspace';
 
@@ -161,7 +162,7 @@ async function makeChartsDashboard(
   return { id, title };
 }
 
-const filterBar = (page: Page) => page.getByRole('region', { name: 'Filters' });
+const filterBar = (page: Page) => page.getByRole('region', { name: 'Filters', exact: true });
 
 /** The seeded model's title for `orders.ordered_at`. */
 const ORDERED_AT = 'Orders Ordered at';
@@ -175,6 +176,8 @@ const pill = (page: Page, widget: string) => filterBar(page).locator(`[data-widg
  * first selects it (T468).
  */
 async function open(filter: Locator) {
+  // The bar is in the header sheet, opened first (T828).
+  await openHeaderSheet(filter.page());
   const summary = filter.locator('button[aria-expanded]');
   if ((await summary.getAttribute('aria-expanded')) === 'true') return;
   await summary.click();
@@ -205,6 +208,8 @@ test('each of the four filter widgets can be added to a dashboard, and is kept',
   const { id, title } = await makeDashboard(request);
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // The filter bar is in the header sheet (T828).
+  await openHeaderSheet(page);
 
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page
@@ -235,8 +240,10 @@ test('each of the four filter widgets can be added to a dashboard, and is kept',
     .click();
   await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeHidden();
 
-  // Kept with the dashboard: a reload shows all four, each on its field.
+  // Kept with the dashboard: a reload shows all four, each on its field —
+  // in the header sheet, closed again by the reload (T828, AC-490).
   await page.reload();
+  await openHeaderSheet(page);
   await expect(filterBar(page).locator('[data-widget]')).toHaveCount(4);
   expect(
     await filterBar(page)
@@ -263,6 +270,8 @@ test('a filter is scoped to the dashboard, a tab or chosen tiles, and shows it',
   const { id, title } = await makeTwoTabDashboard(request);
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // The filter bar is in the header sheet (T828).
+  await openHeaderSheet(page);
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page
     .getByRole('complementary', { name: 'Edit sidebar' })
@@ -292,6 +301,7 @@ test('a filter is scoped to the dashboard, a tab or chosen tiles, and shows it',
 
   // Kept, and shown to a reader in view mode.
   await page.reload();
+  await openHeaderSheet(page);
   await expect(filterBar(page).getByTestId('scope-badge')).toHaveText('Tab: Sales');
 });
 
@@ -320,6 +330,8 @@ test('a value re-queries the tiles in its scope, and a tab’s filter leaves the
   ]);
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // The filter bar is in the header sheet (T828).
+  await openHeaderSheet(page);
 
   const sales = page.locator('[data-tile="tile-sales"]');
   await viewAs(sales, 'table');
@@ -377,6 +389,8 @@ test('a relative preset is sent to Cube as those words, not as dates', async ({
   ]);
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // The filter bar is in the header sheet (T828).
+  await openHeaderSheet(page);
   const sales = page.locator('[data-tile="tile-sales"]');
   await expect(sales.getByTestId('chart-canvas')).toBeVisible();
 
@@ -425,6 +439,8 @@ test('the filters in effect are in the URL, and the URL opens with them', async 
   });
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // The filter bar is in the header sheet (T828).
+  await openHeaderSheet(page);
 
   await open(pill(page, 'checkbox'));
   await filterBar(page).getByRole('checkbox', { name: 'shipped' }).check();
@@ -456,6 +472,7 @@ test('the filters in effect are in the URL, and the URL opens with them', async 
   const opened = await other.newPage();
   await opened.goto(page.url());
   await expect(opened.getByRole('heading', { name: title })).toBeVisible();
+  await openHeaderSheet(opened);
   await open(pill(opened, 'checkbox'));
   await expect(filterBar(opened).getByRole('checkbox', { name: 'shipped' })).toBeChecked();
   await expect(filterBar(opened).getByRole('checkbox', { name: 'completed' })).not.toBeChecked();
@@ -494,6 +511,8 @@ test('the URL keeps the dashboard’s filters through the chart editor, Back and
   ]);
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // The filter bar is in the header sheet (T828).
+  await openHeaderSheet(page);
   const picked = () => {
     const raw = new URL(page.url()).searchParams.get('filters');
     if (raw === null) return null;
@@ -562,6 +581,8 @@ test('a tile a filter cannot reach is left unfiltered and marked, with no error'
   );
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // The filter bar is in the header sheet (T828).
+  await openHeaderSheet(page);
   const orders = page.locator('[data-tile="tile-orders"]');
   const summary = page.locator('[data-tile="tile-summary"]');
   await expect(summary.getByTestId('chart-canvas')).toBeVisible();
@@ -616,6 +637,8 @@ test('a filter Cube cannot join to a tile leaves it unfiltered and marked; the o
   );
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // The filter bar is in the header sheet (T828).
+  await openHeaderSheet(page);
   const customers = page.locator('[data-tile="tile-customers"]');
   await viewAs(customers, 'table');
   const everyCountry = await customers.getByTestId('table-row').count();
@@ -662,6 +685,8 @@ test('a view takes a filter on a cube field it offers, by its own name for it', 
   );
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // The filter bar is in the header sheet (T828).
+  await openHeaderSheet(page);
   const summary = page.locator('[data-tile="tile-summary"]');
   await viewAs(summary, 'table');
   await expect(summary.getByTestId('table-row')).toHaveCount(3);
@@ -693,6 +718,8 @@ test('a filtered tile with no rows says so, naming every filter in effect', asyn
   ]);
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // The filter bar is in the header sheet (T828).
+  await openHeaderSheet(page);
   const sales = page.locator('[data-tile="tile-sales"]');
   await expect(sales.getByTestId('chart-canvas')).toBeVisible();
 
@@ -725,6 +752,8 @@ test('clearing a filter returns every tile in its scope to the unfiltered result
   ]);
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // The filter bar is in the header sheet (T828).
+  await openHeaderSheet(page);
   const sales = page.locator('[data-tile="tile-sales"]');
   await viewAs(sales, 'table');
   await expect(sales.getByTestId('table-row')).toHaveCount(3);

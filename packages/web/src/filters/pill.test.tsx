@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
+import { openHeaderSheet } from '../dashboard/header/testing';
 import type { DashboardDocument } from '../dashboard/model/document';
 import { summaryOf } from './describe';
 import { openFilter } from './testing';
@@ -67,8 +68,14 @@ function dashboard() {
   );
 }
 
-const pills = async () =>
-  (await screen.findAllByRole('group', { name: /filter \d$/ })) as [HTMLElement, HTMLElement];
+/** The bar's pills, its header sheet opened first (T828). */
+const pills = async () => {
+  await openHeaderSheet();
+  return (await screen.findAllByRole('group', { name: /filter \d$/ })) as [
+    HTMLElement,
+    HTMLElement,
+  ];
+};
 const summaryIn = (pill: HTMLElement) =>
   within(pill)
     .getAllByRole('button')

@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
+import { openHeaderSheet } from '../dashboard/header/testing';
 import type { DashboardDocument } from '../dashboard/model/document';
 import { reachFrom } from './coverage';
 import { openFilter } from './testing';
@@ -292,6 +293,7 @@ describe('a filter Cube cannot join to a tile', () => {
 
   it('shows the tile unfiltered and marked, with no error', async () => {
     customers();
+    await openHeaderSheet();
     const [category] = (await within(bar()).findAllByRole('group', {
       name: /filter \d$/,
     })) as [HTMLElement];
@@ -308,6 +310,7 @@ describe('a filter Cube cannot join to a tile', () => {
 
   it('keeps the filters it can join, asked again without the one it cannot', async () => {
     customers();
+    await openHeaderSheet();
     const [category, country] = (await within(bar()).findAllByRole('group', {
       name: /filter \d$/,
     })) as [HTMLElement, HTMLElement];
@@ -335,6 +338,7 @@ describe('a filter Cube cannot join to a tile', () => {
   it('leaves a refused filter out of the filters an empty tile names', async () => {
     answerNothing = true;
     customers();
+    await openHeaderSheet();
     const [category, country] = (await within(bar()).findAllByRole('group', {
       name: /filter \d$/,
     })) as [HTMLElement, HTMLElement];

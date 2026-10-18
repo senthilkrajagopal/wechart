@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
+import { openHeaderSheet } from '../dashboard/header/testing';
 import type { DashboardDocument } from '../dashboard/model/document';
 import { openFilter } from './testing';
 
@@ -189,6 +190,7 @@ describe('a filter, cleared', () => {
         { id: 'f2', widget: 'list', member: 'orders.status' },
       ],
     });
+    await openHeaderSheet();
     const [boxes, list] = (await within(bar()).findAllByRole('group', { name: /filter \d$/ })) as [
       HTMLElement,
       HTMLElement,

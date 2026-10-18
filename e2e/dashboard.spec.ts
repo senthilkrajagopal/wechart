@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { cubePicker } from './cubePicker';
+import { openHeaderSheet } from './dashboardHeader';
 import { chartGone } from './store';
 import { viewAs } from './tileMenu';
 import { IN_MY_WORKSPACE, landedAs, seedDashboardCopy, shared } from './workspace';
@@ -1735,8 +1736,11 @@ test('the page tabs and filter bar stay above the tiles as they scroll, the bar 
 }) => {
   await page.setViewportSize({ width: 1280, height: 520 });
   await open(page);
+  // The bar is in the header sheet since T828 (AC-196 as amended by R79):
+  // shown, with its hint, whenever the sheet is open.
+  await openHeaderSheet(page);
   const tabs = page.getByRole('tablist', { name: 'Pages' });
-  const bar = page.getByRole('region', { name: 'Filters' });
+  const bar = page.getByRole('region', { name: 'Filters', exact: true });
   // Nothing set, and the bar is there, saying how to mark.
   await expect(bar).toContainText(
     'Click, drag or Alt+drag to mark · Ctrl/⌘ adds or toggles · Esc unmarks',

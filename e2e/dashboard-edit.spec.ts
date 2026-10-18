@@ -199,7 +199,7 @@ test('adding a filter selects it: Properties, its field picker focused; its pill
 }) => {
   await edit(page);
   const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
-  const bar = page.getByRole('region', { name: 'Filters' });
+  const bar = page.getByRole('region', { name: 'Filters', exact: true });
   const before = await bar.locator('[data-widget]').count();
 
   await page.getByTestId('add-filter').click();
@@ -287,7 +287,7 @@ test('selecting a filter with a field: its field picker focused, Escape back, a 
 }) => {
   await edit(page);
   const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
-  const bar = page.getByRole('region', { name: 'Filters' });
+  const bar = page.getByRole('region', { name: 'Filters', exact: true });
   await page.getByTestId('add-filter').click();
   await page.getByTestId('add-filter-list').click();
   await fieldPicker(sidebar).selectOption('orders.status');

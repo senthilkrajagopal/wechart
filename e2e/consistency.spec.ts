@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import { openHeaderSheet } from './dashboardHeader';
 import { IN_MY_WORKSPACE, myCopyOf, sharedIn } from './workspace';
 
 /**
@@ -378,6 +379,8 @@ test.describe('control sizes by surface (T476)', () => {
     });
     expect(saved.ok(), await saved.text()).toBe(true);
     await page.goto(`/explore/dashboards/${made.id}`);
+    // The bar is in the header sheet (T828).
+    await openHeaderSheet(page);
     // The pill, the design's `.fw`; its value's button sits inside it.
     const pill = page.locator('[data-filter-id="f-list"]');
     await expect(pill).toBeVisible();
@@ -457,6 +460,8 @@ test.describe('one button rule and one pressed state (T684)', () => {
       /^Bookmarks/,
       /^(Edit in my workspace|Open my copy)$/,
       '⋯',
+      // Last, the Filters toggle (T828, AC-486).
+      /^Filters/,
     ]);
     for (const at of [0, 1, 2]) {
       const button = buttons.nth(at);
@@ -481,8 +486,12 @@ test.describe('one button rule and one pressed state (T684)', () => {
       weight: '600',
     });
 
-    // The description, under the title in text-sm, text-secondary (R76 dashboard-Q2).
-    const description = header.locator('.dashboard__description');
+    // The description, under the title in text-sm, text-secondary (R76 dashboard-Q2),
+    // in the header sheet since T828 (F43): opened first.
+    await openHeaderSheet(page);
+    const description = page
+      .getByRole('region', { name: 'Filters and details' })
+      .locator('.dashboard__description');
     await expect(description).toHaveText('Revenue for EMEA, refreshed nightly.');
     expect(
       await description.evaluate((node) => ({

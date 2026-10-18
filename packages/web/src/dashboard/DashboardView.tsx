@@ -5823,8 +5823,12 @@ export function DashboardView({
           ) : undefined
         }
         band={(session) => (
+          <PageTabsRow session={session} pageId={pageId} onOpenPage={setOpenPage} />
+        )}
+        // The filter bar is in the header sheet, opened by the Filters toggle
+        // (F43; design 19 screen 2).
+        sheet={(session) => (
           <>
-            <PageTabsRow session={session} pageId={pageId} onOpenPage={setOpenPage} />
             <FilterBar
               /**
                * The right-hand group (direction.md §7): the cross-filters
