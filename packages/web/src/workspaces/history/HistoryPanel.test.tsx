@@ -218,19 +218,27 @@ describe('an item’s history (T357, AC-289)', () => {
       ),
     );
     const onView = vi.fn();
-    render(
-      <QueryClientProvider client={new QueryClient()}>
+    const client = new QueryClient();
+    const panelFor = (id: string) => (
+      <QueryClientProvider client={client}>
         <HistoryPanel
           kind={kind}
-          id="d1"
+          id={id}
           onView={onView}
           onViewNow={onViewNow}
           onRestore={vi.fn()}
           onClose={vi.fn()}
         />
-      </QueryClientProvider>,
+      </QueryClientProvider>
     );
-    return { onView };
+    const { rerender } = render(panelFor('d1'));
+    return {
+      onView,
+      /** The same panel, open on another item, as the page moves to it. */
+      openOn: (id: string) => {
+        rerender(panelFor(id));
+      },
+    };
   }
 
   it('lists a current version kept for none as before proposals, offering View and no restore (T766)', async () => {
@@ -265,6 +273,40 @@ describe('an item’s history (T357, AC-289)', () => {
     ).toEqual(['View']);
     await userEvent.click(within(row!).getByRole('button', { name: 'View version 1' }));
     expect(onViewNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks only the item whose View was clicked, not the next one opened beside it (T766’s review)', async () => {
+    const { openOn } = unkept('dashboard', vi.fn());
+    const [row] = await screen.findAllByRole('listitem');
+    await userEvent.click(within(row!).getByRole('button', { name: 'View version 1' }));
+    expect(row!.getAttribute('aria-current')).toBe('true');
+
+    openOn('d2');
+    const [next] = await screen.findAllByRole('listitem');
+    expect(next!.getAttribute('aria-current')).toBeNull();
+  });
+
+  it('keeps a data source’s kept rows as Compare with current (T766’s review)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(history)))),
+    );
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <HistoryPanel
+          kind="data-source"
+          id="s1"
+          onView={vi.fn()}
+          onViewNow={vi.fn()}
+          onRestore={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    const rows = await screen.findAllByRole('listitem');
+    expect(
+      within(rows[0]!).getByRole('button', { name: 'Compare version 8 with current' }).textContent,
+    ).toBe('Compare with current');
   });
 
   it('offers no View on the unkept row where the page opens nothing for it', async () => {

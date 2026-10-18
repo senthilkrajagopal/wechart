@@ -123,8 +123,12 @@ export function HistoryPanel({
   const ids = useId();
   const history = useQuery(historyQuery(kind, id));
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set());
-  /** The unkept Current row viewed: the item as it is now is the version drawn (T766). */
-  const [nowViewed, setNowViewed] = useState(false);
+  /**
+   * The item whose unkept Current row was viewed: the item as it is now is
+   * the version drawn (T766). By id, so the next item opened beside the
+   * same panel isn't marked (T766's review).
+   */
+  const [nowViewedId, setNowViewedId] = useState<string | undefined>(undefined);
   const heading = useRef<HTMLHeadingElement>(null);
   const box = useRef<HTMLElement>(null);
   // Focus to it as it opens (pin 2).
@@ -205,11 +209,11 @@ export function HistoryPanel({
                     }
                 : version.current && onViewNow !== undefined
                   ? () => {
-                      setNowViewed(true);
+                      setNowViewedId(id);
                       onViewNow();
                     }
                   : undefined;
-              const drawn = kept ? viewing === version.version : nowViewed;
+              const drawn = kept ? viewing === version.version : nowViewedId === id;
               return (
                 <li
                   key={version.version}

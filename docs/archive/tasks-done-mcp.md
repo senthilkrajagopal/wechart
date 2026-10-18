@@ -582,6 +582,9 @@
     - **E2e (headless Chromium):** `history.spec.ts` 7/7; red first, 1 failed and 5 did not run (serial).
     - **Unit suite:** api 2,110, web 3,290, core 664, charts 622, recommender 136, ui 47, all green.
     - **Left:** a library chart's kept rows still have no View (T357's "Left").
+    - **Cold review (one round): PASS**, four low findings.
+      - **Fixed in a follow-up:** the "viewed now" mark carried over to the next item opened beside the same panel (the dashboard and chart pages aren't keyed by item), since it wasn't kept by item. It is now kept by the item's id; a new unit test, seen red first. A kept data-source row's "Compare with current", whose condition the commit touched, gets a test of its own.
+      - **Left:** only the dashboard is shown end to end (the chart's View marks the row only, as T766-1 says; the data source's is unit-tested); the unit tests not seen red, as said above.
 
 ## Security specs failing alone: xcube's folder tree stuck (lane MCP, batch 7, at the coordinator's request)
 
