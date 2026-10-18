@@ -47,7 +47,10 @@ describe('literalOf, Text (T822, AC-462)', () => {
   it('Oracle: its quote doubled, split after a $; longer than 4,000 bytes refused', () => {
     expect(literalOf('oracle', text("O'Brien"))).toEqual({ literal: "'O''Brien'" });
     expect(literalOf('oracle', text('a$1$b'))).toEqual({ literal: "('a$' || '1$' || 'b')" });
-    expect(literalOf('oracle', text('x'.repeat(4001)))).toHaveProperty('refused');
+    expect(literalOf('oracle', text('x'.repeat(4001)))).toEqual({ refused: 'long' });
+    // By bytes, not characters: 2,001 two-byte characters are 4,002 bytes (T822's review).
+    expect(literalOf('oracle', text('é'.repeat(2001)))).toEqual({ refused: 'long' });
+    expect(literalOf('oracle', text('é'.repeat(2000)))).toEqual({ literal: `'${'é'.repeat(2000)}'` });
   });
 
   it('refuses a NUL in Text on every driver', () => {
