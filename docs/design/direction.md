@@ -637,7 +637,7 @@ Nothing in §2–§7h changes except as design 23's criteria table says: §6's b
 | Surface | Placement |
 | --- | --- |
 | The new types | The chart-type gallery (AC-217), on the shelves design 23's screen 1 lists, one new shelf, Flow (23-Q11) |
-| New wells | The chart editor's Data tab, after Metrics and Dimensions in each type's order (design 23's sheets) |
+| New wells | The chart editor's Data tab, after Metrics in each type's order (design 23's sheets; amended 2026-10-18 by lane CHARTS-A's T936, from "after Metrics and Dimensions": sheet 1 draws the KPI's after Metrics, as AC-564 says) |
 | Stack 100 %, Draw as, Points and Violin, Colour links by, Percent of, Scale, Week starts | The chart editor's Customize tab |
 | Boundary sets (custom GeoJSON) | Uploaded by the semantic-layer engineer (23-Q6, "Admin-1 + custom + points + density (Recommended)"); who exactly and where, requirements §P2.8 R81-1 and research |
 | Bin dimensions | Drafted from the histogram's "Make bins in the model…" into My workspace, in the model editor (23-Q4) |

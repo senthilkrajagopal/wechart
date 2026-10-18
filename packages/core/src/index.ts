@@ -41,6 +41,18 @@ export {
 export { CHART_TYPE_NAMES, chartTypeName } from './chart-type-names';
 export { CHART_TYPE_MODULES, type ChartTypeModule } from './chart-types';
 export {
+  KPI_COMPARE_TO,
+  KPI_DIRECTIONS,
+  kpiModule,
+  kpiOptionsOf,
+  withKpiOptions,
+  type KpiCompareTo,
+  type KpiDirection,
+  type KpiOptions,
+  type KpiTarget,
+  type KpiTime,
+} from './chart-types/kpi';
+export {
   EXPORT_EXTENSION,
   EXPORT_FORMAT,
   EXPORT_VERSION,

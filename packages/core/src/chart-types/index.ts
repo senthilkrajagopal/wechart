@@ -1,4 +1,5 @@
 import type { ChartType } from '../render-spec';
+import { kpiModule } from './kpi';
 import { mapModule } from './map';
 import { parallelModule } from './parallel';
 
@@ -19,6 +20,7 @@ export interface ChartTypeModule<Options = unknown> {
 
 /** Every type with a module of its own, by its type. One line per type. */
 export const CHART_TYPE_MODULES: Partial<Record<ChartType, ChartTypeModule>> = {
+  kpi: kpiModule as ChartTypeModule,
   map: mapModule as ChartTypeModule,
   parallel: parallelModule as ChartTypeModule,
 };

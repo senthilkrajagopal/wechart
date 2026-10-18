@@ -1170,8 +1170,8 @@ describe('a metric the form doesn’t draw (T510)', () => {
 /**
  * T934 / AC-217 (R81): … still letting the type be chosen, the editor then
  * highlighting the well it needs. And R81's wells live in `editor/wells/`,
- * one module per type, routed from here once, after Metrics and Dimensions
- * (direction.md §7i, "New wells").
+ * one module per type, routed from here once, after Metrics (direction.md
+ * §7i, "New wells").
  */
 describe('R81’s wells, and the well a chosen type needs (T934)', () => {
   const Stub = ({ chartType, highlight }: TypeWellsProps) => (
@@ -1199,7 +1199,17 @@ describe('R81’s wells, and the well a chosen type needs (T934)', () => {
     expect(screen.getByTestId('well-dimensions').getAttribute('data-highlight')).toBeNull();
   });
 
-  it('draws a type’s own wells from its module, after Dimensions, passing the highlight on', () => {
+  const own = (chartType: TypeWellsProps['chartType']) => ({
+    chartType,
+    available: [measure, timeDimension],
+    options: {},
+    onOptions: vi.fn(),
+    titleOf: (name: string) => name,
+  });
+
+  // After Metrics, as design 23's sheets order a type's wells (T936 moved
+  // them up from after Time: a KPI's follow Metrics, AC-564).
+  it('draws a type’s own wells from its module, after Metrics, passing the highlight on', () => {
     TYPE_WELLS.waterfall = Stub;
     render(
       <Wells
@@ -1208,14 +1218,19 @@ describe('R81’s wells, and the well a chosen type needs (T934)', () => {
         onAdd={vi.fn()}
         onRemove={vi.fn()}
         highlight="target"
-        typeWells={{ chartType: 'waterfall' }}
+        typeWells={own('waterfall')}
       />,
     );
-    const own = screen.getByTestId('stub-wells');
-    expect(own.textContent).toBe('waterfall target');
-    const dimensions = screen.getByTestId('well-dimensions');
-    expect(dimensions.compareDocumentPosition(own) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByTestId('well-filters').compareDocumentPosition(own)).toBe(
+    const drawn = screen.getByTestId('stub-wells');
+    expect(drawn.textContent).toBe('waterfall target');
+    const metrics = screen.getByTestId('well-measures');
+    expect(metrics.compareDocumentPosition(drawn) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(screen.getByTestId('well-dimensions').compareDocumentPosition(drawn)).toBe(
+      Node.DOCUMENT_POSITION_PRECEDING,
+    );
+    expect(screen.getByTestId('well-filters').compareDocumentPosition(drawn)).toBe(
       Node.DOCUMENT_POSITION_PRECEDING,
     );
   });
@@ -1227,7 +1242,7 @@ describe('R81’s wells, and the well a chosen type needs (T934)', () => {
         available={[measure]}
         onAdd={vi.fn()}
         onRemove={vi.fn()}
-        typeWells={{ chartType: 'bar' }}
+        typeWells={own('bar')}
       />,
     );
     expect(screen.queryByTestId('stub-wells')).toBeNull();

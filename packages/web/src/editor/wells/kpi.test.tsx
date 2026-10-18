@@ -1,0 +1,197 @@
+import { emptySpec, kpiOptionsOf } from '@wechart/core';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
+import { describe, expect, it, vi } from 'vitest';
+
+import { Wells } from '../Wells';
+import type { Member } from '../fields';
+import { KpiWells } from './kpi';
+import { TYPE_WELLS } from './registry';
+
+/**
+ * T936 / AC-564: WHEN a KPI is edited, THE SYSTEM SHALL offer, after Metrics,
+ * the optional wells Compare to (Previous period, Same period last year,
+ * Another measure, A value, or None), Target (a measure or a value), Time
+ * (the period and the trend's time dimension), Tile by (one dimension) and
+ * Direction (Higher is better, the default, Lower is better, or Neutral) …
+ * `Fails when: a well or a Compare to choice is missing, or another is
+ * offered; Direction starts other than Higher is better …`
+ */
+const member = (name: string, kind: Member['kind'], type: string, title: string): Member => ({
+  name,
+  title,
+  shortTitle: title,
+  kind,
+  type,
+  cube: 'orders',
+});
+
+const revenue = member('orders.revenue', 'measure', 'number', 'Revenue');
+const target = member('orders.revenue_target', 'measure', 'number', 'Revenue target');
+const region = member('orders.region', 'dimension', 'string', 'Region');
+const orderedAt = member('orders.ordered_at', 'timeDimension', 'time', 'Ordered at');
+const available = [revenue, target, region, orderedAt];
+const titleOf = (name: string) => available.find((each) => each.name === name)?.title ?? name;
+
+/** The KPI's wells over options kept as the editor keeps them: each change a patch. */
+function Harness({ onPatch }: { onPatch?: (patch: Readonly<Record<string, unknown>>) => void }) {
+  const [options, setOptions] = useState<Readonly<Record<string, unknown>>>({});
+  return (
+    <>
+      <KpiWells
+        chartType="kpi"
+        available={available}
+        options={options}
+        titleOf={titleOf}
+        onOptions={(patch) => {
+          onPatch?.(patch);
+          setOptions((current) => ({ ...current, ...patch }));
+        }}
+      />
+      <output data-testid="options">{JSON.stringify(options)}</output>
+      {/* What an undo does to them (AC-035): the options as they were. */}
+      <button type="button" onClick={() => setOptions({})}>
+        Undo all
+      </button>
+    </>
+  );
+}
+
+const stored = () =>
+  JSON.parse(screen.getByTestId('options').textContent ?? '{}') as Record<string, unknown>;
+
+describe('the KPI’s wells (AC-564)', () => {
+  it('offers its five wells after Metrics, from its own module', () => {
+    expect(TYPE_WELLS.kpi).toBe(KpiWells);
+    const spec = { ...emptySpec('orders'), measures: ['orders.revenue'] };
+    render(
+      <Wells
+        spec={spec}
+        available={available}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        typeWells={{
+          chartType: 'kpi',
+          available,
+          options: {},
+          titleOf,
+          onOptions: vi.fn(),
+        }}
+      />,
+    );
+    const labels = [...document.querySelectorAll('.well-field__label')].map((label) =>
+      (label.textContent ?? '').trim(),
+    );
+    const at = labels.findIndex((label) => label.startsWith('Metrics'));
+    expect(labels.slice(at, at + 6)).toEqual([
+      'Metrics',
+      'Compare to',
+      'Target',
+      'Time',
+      'Tile by',
+      'Direction',
+    ]);
+  });
+
+  it('offers Compare to’s five choices and None, None chosen at first', () => {
+    render(<Harness />);
+    const compare = screen.getByRole('combobox', { name: 'Compare to' });
+    expect(
+      within(compare)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['None', 'Previous period', 'Same period last year', 'Another measure', 'A value']);
+    expect((compare as HTMLSelectElement).value).toBe('none');
+  });
+
+  it('starts Direction at Higher is better, and keeps nothing until something is set', () => {
+    render(<Harness />);
+    const direction = screen.getByRole('radiogroup', { name: 'Direction' });
+    const radios = within(direction).getAllByRole('radio');
+    expect(radios.map((radio) => radio.closest('label')?.textContent)).toEqual([
+      'Higher is better',
+      'Lower is better',
+      'Neutral',
+    ]);
+    expect(within(direction).getByRole('radio', { name: 'Higher is better' })).toHaveProperty(
+      'checked',
+      true,
+    );
+    expect(stored()).toEqual({});
+  });
+
+  it('keeps each setting as it is chosen, in the chart’s options under `kpi`', async () => {
+    render(<Harness />);
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Compare to' }),
+      'samePeriodLastYear',
+    );
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Target' }),
+      'orders.revenue_target',
+    );
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Time' }),
+      'orders.ordered_at',
+    );
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Time by' }), 'month');
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Tile by' }),
+      'orders.region',
+    );
+    await userEvent.click(screen.getByRole('radio', { name: 'Lower is better' }));
+    expect(kpiOptionsOf(stored())).toEqual({
+      compareTo: { kind: 'samePeriodLastYear' },
+      target: { kind: 'measure', member: 'orders.revenue_target' },
+      time: { member: 'orders.ordered_at', granularity: 'month' },
+      tileBy: 'orders.region',
+      direction: 'lower',
+    });
+  });
+
+  it('takes another measure or a typed value to compare to, and a typed value as the target', async () => {
+    render(<Harness />);
+    const compare = screen.getByRole('combobox', { name: 'Compare to' });
+    await userEvent.selectOptions(compare, 'measure');
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Compare to: measure' }),
+      'orders.revenue_target',
+    );
+    expect(kpiOptionsOf(stored()).compareTo).toEqual({
+      kind: 'measure',
+      member: 'orders.revenue_target',
+    });
+    await userEvent.selectOptions(compare, 'value');
+    const compareValue = screen.getByRole('spinbutton', { name: 'Compare to: value' });
+    await userEvent.type(compareValue, '1320000');
+    await userEvent.tab();
+    expect(kpiOptionsOf(stored()).compareTo).toEqual({ kind: 'value', value: 1_320_000 });
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Target' }), 'value');
+    await userEvent.type(screen.getByRole('spinbutton', { name: 'Target: value' }), '1400000');
+    await userEvent.tab();
+    expect(kpiOptionsOf(stored()).target).toEqual({ kind: 'value', value: 1_400_000 });
+  });
+
+  it('shows what is stored after an undo, not the choice last made (T936’s review)', async () => {
+    render(<Harness />);
+    const compare = screen.getByRole('combobox', { name: 'Compare to' });
+    const time = screen.getByRole('combobox', { name: 'Time' });
+    await userEvent.selectOptions(compare, 'previousPeriod');
+    await userEvent.selectOptions(time, 'orders.ordered_at');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Time by' }), 'month');
+    await userEvent.click(screen.getByRole('button', { name: 'Undo all' }));
+    expect(stored()).toEqual({});
+    expect((compare as HTMLSelectElement).value).toBe('none');
+    expect((time as HTMLSelectElement).value).toBe('');
+  });
+
+  it('clears a setting back to none, leaving no `kpi` key behind', async () => {
+    render(<Harness />);
+    const tileBy = screen.getByRole('combobox', { name: 'Tile by' });
+    await userEvent.selectOptions(tileBy, 'orders.region');
+    await userEvent.selectOptions(tileBy, '');
+    expect(stored()).toEqual({});
+  });
+});

@@ -201,3 +201,43 @@ describe('a KPI with nothing to show', () => {
     expect(screen.getByTestId('kpi-empty')).toBeTruthy();
   });
 });
+
+/**
+ * T936 / AC-564: … a KPI with none of the new wells set, a KPI saved before
+ * R81 included, SHALL draw exactly as before, with no change line, sparkline
+ * or target, and its "Marked $X · p%" badge.
+ * `Fails when: … a KPI with none set gains a change line, a sparkline, a
+ * target or a new layout.`
+ */
+describe('a KPI with none of R81’s settings (AC-564)', () => {
+  const marked: Partial<RenderSpec> = {
+    marking: {
+      predicate: { items: [[{ member: 'orders.status', value: 'shipped' }]], ranges: [] },
+      colour: '#151107',
+      share: [{ [COUNT]: '617' }],
+      aggTypes: { [COUNT]: 'count' },
+    },
+  };
+  const cases: [string, Partial<RenderSpec>][] = [
+    ['a value', {}],
+    ['a value in its format', { rows: [{ [COUNT]: 0.1234 }], formats: { [COUNT]: '.1~%' } }],
+    ['a value under a marking', marked],
+    ['no rows', { rows: [] }],
+    ['a value that is no number', { rows: [{ [COUNT]: 'n/a' }] }],
+  ];
+
+  for (const [name, over] of cases) {
+    it(`draws ${name} exactly as before, whether its options hold an empty \`kpi\` or none`, () => {
+      const before = render(<Kpi spec={spec(over)} />);
+      const html = before.container.innerHTML;
+      before.unmount();
+      for (const options of [{ kpi: {} }, { kpi: { direction: 'higher' } }, { legend: 'top' }]) {
+        const after = render(<Kpi spec={spec({ ...over, options })} />);
+        expect(after.container.innerHTML).toBe(html);
+        for (const part of ['kpi-change', 'kpi-trend', 'kpi-target'])
+          expect(screen.queryByTestId(part)).toBeNull();
+        after.unmount();
+      }
+    });
+  }
+});

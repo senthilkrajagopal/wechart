@@ -321,7 +321,7 @@ export interface WellsProps {
    * one's, or one of the type's own, which it is handed.
    */
   readonly highlight?: TypeWellsProps['highlight'];
-  /** R81's type's own wells, drawn from its module after Time (T934). */
+  /** R81's type's own wells, drawn from its module after Metrics (T934, T936). */
   readonly typeWells?: Omit<TypeWellsProps, 'highlight'> | undefined;
 }
 
@@ -676,19 +676,23 @@ export function Wells({
               : null}
           </section>
         );
-        // A box plot's "Each point is" sits below the value (direction.md §7, Box plot).
-        return well.name === 'measures' && pointWell !== null ? (
+        // A box plot's "Each point is" sits below the value (direction.md §7,
+        // Box plot); R81's type's own wells follow Metrics, as design 23's
+        // sheets order them (T934, T936).
+        const own =
+          TypeWells === undefined || typeWells === undefined ? null : (
+            <TypeWells {...typeWells} highlight={highlight} />
+          );
+        return well.name === 'measures' && (pointWell !== null || own !== null) ? (
           <Fragment key={well.name}>
             {section}
             {pointWell}
+            {own}
           </Fragment>
         ) : (
           section
         );
       })}
-      {TypeWells === undefined || typeWells === undefined ? null : (
-        <TypeWells {...typeWells} highlight={highlight} />
-      )}
 
       {/* The chart's own filters (AC-216), the prototype's Filters well. */}
       <section className="well-field">

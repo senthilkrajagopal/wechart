@@ -1136,11 +1136,14 @@ function EditorBody({
                       ? undefined
                       : {
                           chartType: shownType,
-                          // What a type's own wells read and set (T973: the Map's).
+                          // What a type's own wells read and set (T936: the KPI's; T973: the Map's).
+                          available,
                           options,
                           onOptions: setOptions,
-                          available,
-                          titleOf: (member: string) => titles[member] ?? member,
+                          titleOf: (member: string) =>
+                            available.find((each) => each.name === member)?.title ??
+                            titles[member] ??
+                            member,
                           spec,
                           formats,
                           onAdd: (well, member) =>

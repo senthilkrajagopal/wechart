@@ -2317,10 +2317,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 ### Lane CHARTS-A: the KPI
 
-- [ ] T936 (AC-564, AC-037) The KPI's Compare to, Target, Time, Tile by and Direction in its spec and wells, and a KPI with none set drawn as before
-  - Files: `packages/core/src/chart-types/kpi.ts` (+ test), `packages/core/src/chart-spec.ts`, `packages/web/src/editor/wells/kpi.tsx` (+ test), `packages/web/src/tiles/Kpi.test.tsx`.
-  - Failing test: `kpi.test.ts`: a KPI spec with Compare to Same period last year, a Target measure, Time by month, Tile by Region and Lower is better parses and saves back the same; a spec with none of them parses with Direction Higher is better; `kpi.test.tsx` (wells): the five wells follow Metrics, Compare to offers its five choices; `Kpi.test.tsx`: every existing case renders the same DOM, with no change line, sparkline or target (AC-564, AC-037).
-  - Depends on: T934
+- [x] T936 (AC-564, AC-037) The KPI's Compare to, Target, Time, Tile by and Direction in its spec and wells, and a KPI with none set drawn as before
 
 - [ ] T937 (AC-565) A KPI's comparison through `compareDateRange`, another measure or a value, and its change line coloured by Direction
   - Files: `packages/core/src/chart-types/kpi.ts` (`kpiQueries`; + test), `packages/web/src/tiles/kpi/KpiChange.tsx` (+ test), `packages/web/src/tiles/Kpi.tsx`.
