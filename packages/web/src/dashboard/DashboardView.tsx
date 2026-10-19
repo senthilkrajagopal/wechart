@@ -2532,7 +2532,11 @@ export function DashboardView({
    * default (`parameterValueOf`).
    */
   const liveParameters = live.parameters ?? NO_PARAMETERS;
-  const parameterState = useParameters(liveParameters);
+  // Opened from a link, each where the link set it (T900, AC-123).
+  const parameterState = useParameters(
+    liveParameters,
+    urlView === undefined ? undefined : viewFor(document, urlView).parameters,
+  );
   const parameterValues: ParameterValues = parameterState.values;
   /**
    * The charts as drawn and asked (T898, AC-533): a local chart's wells that
@@ -6144,6 +6148,8 @@ export function DashboardView({
     const view = restored(state, live);
     setOpenPage(view.page);
     setFilterValues(view.filters);
+    // Each parameter as the bookmark holds it; one from before F46, at its default (AC-121).
+    parameterState.replace(view.parameters ?? {});
     setMarks(view.marks);
     setMarkFilters(view.markFilters);
     setMarkSources(view.from);
@@ -6256,6 +6262,8 @@ export function DashboardView({
       marks,
       markFilters,
       from: markSources,
+      // Each parameter's value (T900, AC-123).
+      parameters: parameterValues,
     });
     clipboard.writeText(link).then(
       () => {
@@ -6499,6 +6507,8 @@ export function DashboardView({
                   marks,
                   markFilters,
                   from: markSources,
+                  // Each parameter's value (T900, AC-121).
+                  parameters: parameterValues,
                 }}
                 onApply={applyView}
                 // Below 1,024 px, opened from ⋯'s "Bookmarks…", the same

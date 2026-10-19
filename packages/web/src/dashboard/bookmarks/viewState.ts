@@ -1,7 +1,7 @@
 import { predicateFrom } from '@wechart/core';
 
 import type { FilterValues } from '../../filters/model';
-import { valueFrom } from '../../filters/url';
+import { parameterValuesFrom, valueFrom } from '../../filters/url';
 import { markFilterFrom, type MarkFilter } from '../markings/filterToMarked';
 import { summariseMarking } from '../markings/MarkChip';
 import type { MarkingState } from '../markings/store';
@@ -20,6 +20,12 @@ export interface ViewState {
   readonly marks: MarkingState;
   readonly markFilters: readonly MarkFilter[];
   readonly from: Readonly<Record<string, string>>;
+  /**
+   * Each dashboard parameter's value, by its id (F46; T900, AC-121,
+   * AC-123). Absent in a bookmark or link from before F46: each at its
+   * default.
+   */
+  readonly parameters?: Readonly<Record<string, string>>;
 }
 
 const isRecord = (raw: unknown): raw is Record<string, unknown> =>
@@ -79,5 +85,9 @@ export function viewStateFrom(raw: unknown): ViewState | undefined {
       ? raw['markFilters'].flatMap((each) => restoredMarkFilter(each) ?? [])
       : [],
     from: kept(raw['from'], (value) => (typeof value === 'string' ? value : undefined)),
+    // Its parameters' values, where it carries any (T900).
+    ...(raw['parameters'] === undefined
+      ? {}
+      : { parameters: parameterValuesFrom(raw['parameters']) }),
   };
 }

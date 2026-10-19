@@ -147,3 +147,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/tiles/text/elements/ParameterControl.tsx` (+ test), `packages/web/src/dashboard/parameters/useParameters.ts` (+ test).
   - Failing test: `ParameterControl.test.tsx`: 3 choices render a `radiogroup`, 6 a `listbox`; choosing Orders re-queries the bound chart and Value with Orders and the polite region receives "Metric to show: Orders" once; `useParameters.test.ts`: a dashboard opened plainly starts at the default (AC-534).
   - Depends on: T898, T882
+
+- [x] T900 (AC-121, AC-123) Bookmarks and copied links carry each parameter's value, and applying one sets it
+  - Files: `packages/web/src/dashboard/bookmarks/viewState.ts` (+ test), `packages/web/src/dashboard/bookmarks/applyBookmark.ts` (+ test), `packages/web/src/filters/url.ts` (+ test).
+  - Failing test: `viewState.test.ts`: a bookmark saved with Metric to show at Orders stores it, and applying it sets it back from Revenue; `url.test.ts`: a copied link holds the parameter's value, and opening it starts there (AC-121, AC-123).
+  - Depends on: T899

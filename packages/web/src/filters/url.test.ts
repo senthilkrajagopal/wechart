@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { valueKeyOf, type FilterValues } from './model';
-import { adoptValues, valuesFromSearch, valuesToSearch } from './url';
+import type { ViewState } from '../dashboard/bookmarks/viewState';
+import { linkWithMarks, viewFromLink } from '../dashboard/markings/shareLink';
+import { adoptValues, parameterValuesFrom, valuesFromSearch, valuesToSearch } from './url';
 
 /**
  * T087 / AC-081: WHEN filters are active, THE SYSTEM SHALL include them in the
@@ -22,6 +24,40 @@ const VALUES: FilterValues = {
   [key('f-between', 'orders.shipped_at')]: { kind: 'dates', from: '2026-01-01', to: '2026-03-31' },
   [key('f-amount', 'orders.amount')]: { kind: 'range', min: 10 },
 };
+
+/**
+ * T900 / AC-123: WHEN the user copies a link with marks, THE SYSTEM SHALL
+ * produce a URL that reproduces the current filters, marks and dashboard
+ * parameter values when opened. `Fails when: opening the link produces
+ * different … parameter values.`
+ */
+describe('parameter values in a copied link (T900, AC-123)', () => {
+  it('holds each parameter’s value, and opening it starts there', () => {
+    const view: ViewState = {
+      page: 'only',
+      filters: VALUES,
+      marks: {},
+      markFilters: [],
+      from: {},
+      parameters: { 'p-metric': 'orders.count' },
+    };
+    const link = new URL(linkWithMarks('http://localhost:5273/explore/dashboards/d1', view));
+    const read = (name: string) => {
+      const raw = link.searchParams.get(name);
+      return raw === null ? undefined : (JSON.parse(raw) as unknown);
+    };
+    expect(viewFromLink({ filters: read('filters'), view: read('view') })?.parameters).toEqual({
+      'p-metric': 'orders.count',
+    });
+  });
+
+  it('reads only a member’s name as a parameter’s value', () => {
+    expect(parameterValuesFrom({ 'p-metric': 'orders.count', bad: 4, worse: 'no dot' })).toEqual({
+      'p-metric': 'orders.count',
+    });
+    expect(parameterValuesFrom('nope')).toEqual({});
+  });
+});
 
 describe('filter values in the URL', () => {
   it('read back exactly as written', () => {

@@ -1925,10 +1925,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T899 (AC-534) The Parameter control in a Text tile: segments for up to 5 choices, a listbox beyond, the default at open, applied at once and announced once
 
-- [ ] T900 (AC-121, AC-123) Bookmarks and copied links carry each parameter's value, and applying one sets it
-  - Files: `packages/web/src/dashboard/bookmarks/viewState.ts` (+ test), `packages/web/src/dashboard/bookmarks/applyBookmark.ts` (+ test), `packages/web/src/filters/url.ts` (+ test).
-  - Failing test: `viewState.test.ts`: a bookmark saved with Metric to show at Orders stores it, and applying it sets it back from Revenue; `url.test.ts`: a copied link holds the parameter's value, and opening it starts there (AC-121, AC-123).
-  - Depends on: T899
+- [x] T900 (AC-121, AC-123) Bookmarks and copied links carry each parameter's value, and applying one sets it
 
 ### Parked (user, 2026-10-18): AI summaries and Security › AI
 

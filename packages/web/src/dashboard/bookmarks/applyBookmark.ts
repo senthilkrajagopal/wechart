@@ -33,5 +33,15 @@ export function viewFor(document: DashboardDocument, state: ViewState): ViewStat
     // Chips of a marking, as its marks are: none outside Markings mode (AC-120).
     markFilters: marking ? state.markFilters : [],
     from: ours(state.from),
+    // Each parameter's value, on the parameters still there (T900, AC-121).
+    ...(state.parameters === undefined
+      ? {}
+      : {
+          parameters: Object.fromEntries(
+            Object.entries(state.parameters).filter(([id]) =>
+              (document.parameters ?? []).some((parameter) => parameter.id === id),
+            ),
+          ),
+        }),
   };
 }

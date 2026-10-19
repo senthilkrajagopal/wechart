@@ -479,11 +479,11 @@ Traces to: `[docs/inputs §12]`, direction.md §7, rules 13, 32.
 Purpose: return to a state, and send it to someone.
 Traces to: `[R7]`, direction.md §7a.
 
-- [ ] AC-121 WHEN the user saves a bookmark, THE SYSTEM SHALL store the page tab, the filter values, the current marks and each dashboard parameter's value (F46) under a name the user gives, and applying it SHALL set them all (amended 2026-10-18, `[R80]`: design 21 screen 2 pin 5 and screen 3 pin 6; unticked until retested).
+- [x] AC-121 WHEN the user saves a bookmark, THE SYSTEM SHALL store the page tab, the filter values, the current marks and each dashboard parameter's value (F46) under a name the user gives, and applying it SHALL set them all (amended 2026-10-18, `[R80]`: design 21 screen 2 pin 5 and screen 3 pin 6; unticked until retested).
       Fails when: applying the bookmark restores a different tab, filter value, mark set or parameter value (amended 2026-10-18).
 - [x] AC-122 WHEN the user applies a bookmark, THE SYSTEM SHALL restore that state without changing the dashboard's saved definition.
       Fails when: applying a bookmark modifies the dashboard for other users.
-- [ ] AC-123 WHEN the user copies a link with marks, THE SYSTEM SHALL produce a URL that reproduces the current filters, marks and dashboard parameter values when opened (amended 2026-10-18, `[R80]`: design 21 screen 2 pin 5, "goes into bookmarks and Copy link"; unticked until retested).
+- [x] AC-123 WHEN the user copies a link with marks, THE SYSTEM SHALL produce a URL that reproduces the current filters, marks and dashboard parameter values when opened (amended 2026-10-18, `[R80]`: design 21 screen 2 pin 5, "goes into bookmarks and Copy link"; unticked until retested).
       Fails when: opening the link produces different marks, filters or parameter values (amended 2026-10-18).
 - [x] AC-124 WHEN a dashboard is opened without a bookmark or link parameters, THE SYSTEM SHALL open it with no marks (direction.md rule 54).
       Fails when: a dashboard opens with marks the author left behind.

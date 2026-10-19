@@ -1,7 +1,9 @@
-import type { MarkingPredicate } from '@wechart/core';
+import type { DashboardParameter, MarkingPredicate } from '@wechart/core';
 import { describe, expect, it } from 'vitest';
 
 import { markFilterFrom, type MarkFilter } from '../markings/filterToMarked';
+import type { DashboardDocument } from '../model/document';
+import { viewFor } from './applyBookmark';
 import { summariseMarking } from '../markings/MarkChip';
 import { viewStateFrom, type ViewState } from './viewState';
 
@@ -39,6 +41,55 @@ const STATE: ViewState = {
   markFilters: [madeFrom(PROCESSING, true, 'mark-filter-1')],
   from: { m1: 'tile-status' },
 };
+
+/**
+ * T900 / AC-121: WHEN the user saves a bookmark, THE SYSTEM SHALL store …
+ * each dashboard parameter's value (F46) …, and applying it SHALL set them
+ * all. `Fails when: applying the bookmark restores a different … parameter
+ * value.`
+ */
+describe('a bookmark’s parameter values (T900, AC-121)', () => {
+  const metric: DashboardParameter = {
+    id: 'p-metric',
+    name: 'Metric to show',
+    kind: 'fieldSwitch',
+    role: 'measure',
+    choices: [
+      { member: 'orders.revenue', label: 'Revenue' },
+      { member: 'orders.count', label: 'Orders' },
+    ],
+    default: 'orders.revenue',
+  };
+  const saved: ViewState = { ...STATE, parameters: { 'p-metric': 'orders.count' } };
+
+  it('stores Metric to show at Orders, and reads it back as stored', () => {
+    expect(viewStateFrom(JSON.parse(JSON.stringify(saved)))?.parameters).toEqual({
+      'p-metric': 'orders.count',
+    });
+  });
+
+  it('sets it back, from Revenue, when applied; one the dashboard no longer has is dropped', () => {
+    const document: DashboardDocument = {
+      schemaVersion: 1,
+      title: 'Sales',
+      settings: { width: 'fixed' },
+      parameters: [metric],
+      pages: [{ id: 'second', title: 'Second', items: [] }],
+    };
+    const applied = viewFor(document, {
+      ...saved,
+      parameters: { 'p-metric': 'orders.count', 'p-gone': 'orders.x' },
+    });
+    expect(applied.parameters).toEqual({ 'p-metric': 'orders.count' });
+  });
+
+  it('drops a value that isn’t a member’s name, as anything else read back is', () => {
+    expect(
+      viewStateFrom({ ...JSON.parse(JSON.stringify(STATE)), parameters: { a: 3, b: 'x.y' } })
+        ?.parameters,
+    ).toEqual({ b: 'x.y' });
+  });
+});
 
 describe('a view state read back', () => {
   it('is what was written, when all of it is', () => {

@@ -19,8 +19,18 @@ export function linkWithMarks(href: string, view: ViewState): string {
   for (const key of ['edit', 'editing', 'preview', 'filters', 'view']) url.searchParams.delete(key);
   const filters = valuesToSearch(view.filters);
   if (filters !== undefined) url.searchParams.set('filters', JSON.stringify(filters));
-  const { page, marks, markFilters, from } = view;
-  url.searchParams.set('view', JSON.stringify({ page, marks, markFilters, from }));
+  const { page, marks, markFilters, from, parameters } = view;
+  // Each dashboard parameter's value too (T900, AC-123), where it has any.
+  url.searchParams.set(
+    'view',
+    JSON.stringify({
+      page,
+      marks,
+      markFilters,
+      from,
+      ...(parameters === undefined ? {} : { parameters }),
+    }),
+  );
   return url.toString();
 }
 

@@ -113,6 +113,25 @@ export function valueFrom(raw: unknown): FilterValue | undefined {
   }
 }
 
+/** A member's name, `cube.member`: what a parameter's value can be. */
+const MEMBER = /^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * Each dashboard parameter's value as a link or a bookmark carries it (T900,
+ * AC-121, AC-123): by the parameter's id, a member's name; anything else
+ * dropped, never trusted. Whether it is still one of the parameter's choices
+ * is the dashboard's to say as it opens (`parameterValueOf`).
+ */
+export function parameterValuesFrom(raw: unknown): Record<string, string> {
+  if (!isRecord(raw)) return {};
+  return Object.fromEntries(
+    Object.entries(raw).filter(
+      (entry): entry is [string, string] =>
+        entry[0] !== '' && typeof entry[1] === 'string' && MEMBER.test(entry[1]),
+    ),
+  );
+}
+
 /** The values the URL carries, each checked; anything else dropped. */
 export function valuesFromSearch(raw: unknown): FilterValues {
   if (!Array.isArray(raw)) return {};

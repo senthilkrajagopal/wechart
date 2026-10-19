@@ -245,6 +245,100 @@ test('a Parameter control applies its choice at once to the bound chart and Valu
   await expect(chart.locator('.tile-head__set-by')).toHaveText(' · set by Metric to show');
 });
 
+/** A Text tile of a Parameter control of Metric to show and a Value of it. */
+const controlsTile = {
+  id: 'tile-text',
+  kind: 'text',
+  w: 6,
+  h: 12,
+  document: {
+    version: 1,
+    doc: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Show ' },
+            { type: 'parameterControl', attrs: { parameter: 'p-metric' } },
+            { type: 'text', text: ' · now ' },
+            { type: 'value', attrs: { parameter: 'p-metric' } },
+          ],
+        },
+      ],
+    },
+  },
+};
+
+/**
+ * T900 / AC-121, AC-123: a bookmark saved with Metric to show at Orders
+ * sets it back from Revenue when applied; a link carrying Orders opens there.
+ */
+test('a bookmark and a link carry a parameter’s value, and applying or opening one sets it', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardOf(request, {
+    parameters: [METRIC],
+    pages: [{ id: 'only', title: 'Only', items: [controlsTile] }],
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const text = page.locator('[data-tile="tile-text"] .text-tile');
+  const control = text.getByRole('radiogroup', { name: 'Metric to show' });
+  const value = text.locator('.text-value');
+  await control.getByRole('radio', { name: 'Orders' }).click();
+  await expect(value).toHaveText('240');
+
+  // Saved at Orders.
+  await page.getByRole('button', { name: 'Bookmarks' }).click();
+  await page
+    .getByRole('dialog', { name: 'Bookmarks' })
+    .getByRole('button', { name: 'Bookmark this view…' })
+    .click();
+  const naming = page.getByRole('dialog', { name: 'Save a bookmark' });
+  await naming.getByRole('textbox', { name: 'Name' }).fill('By orders');
+  await naming.getByRole('button', { name: 'Save' }).click();
+  await expect(naming).toHaveCount(0);
+
+  // Back to Revenue, then the bookmark applied: Orders again.
+  await control.getByRole('radio', { name: 'Revenue' }).click();
+  await expect(value).toHaveText(/^\$[\d,.]+$/);
+  await page.getByRole('button', { name: 'Bookmarks' }).click();
+  await page
+    .getByRole('dialog', { name: 'Bookmarks' })
+    .getByRole('list', { name: 'Mine' })
+    .getByRole('button', { name: 'By orders', exact: true })
+    .click();
+  await expect(control.getByRole('radio', { name: 'Orders' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(value).toHaveText('240');
+
+  // A link carrying Orders, as Copy link with marks writes one, opens at Orders.
+  const view = {
+    page: 'only',
+    marks: {},
+    markFilters: [],
+    from: {},
+    parameters: { 'p-metric': 'orders.count' },
+  };
+  await page.goto(`/explore/dashboards/${id}?view=${encodeURIComponent(JSON.stringify(view))}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await expect(control.getByRole('radio', { name: 'Orders' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(value).toHaveText('240');
+  // Opened plainly, at its default.
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(control.getByRole('radio', { name: 'Revenue' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+});
+
 /**
  * T896 / AC-531: Dashboard settings › Parameters, after Cross-filtering and
  * before Layout with its count; New parameter takes a name, a Measure,
