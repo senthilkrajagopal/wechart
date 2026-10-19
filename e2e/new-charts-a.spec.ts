@@ -818,11 +818,83 @@ test('a bullet chart on a 5-column tile marks a bullet as its member, and splits
   const chip = page.getByTestId('mark-chip');
   await expect(chip).toContainText('shipped');
 
+  /** Where a status's value bar starts, on its row. */
+  const rowOf = async (status: string) => {
+    const text = tile.locator('svg text', { hasText: new RegExp(`^${status}$`) });
+    await expect(text).toBeVisible();
+    const box = await text.boundingBox();
+    if (box === null) throw new Error(`${status} is not drawn`);
+    return { x: box.x + box.width + 40, y: box.y + box.height + 2 };
+  };
+  // Ctrl/⌘ adds a bullet, and takes it off again (checkpoint 1's review).
+  const completed = await rowOf('completed');
+  await page.keyboard.down('ControlOrMeta');
+  await page.mouse.click(completed.x, completed.y);
+  await page.keyboard.up('ControlOrMeta');
+  await expect(chip).toContainText('completed');
+  await expect(chip).toContainText('shipped');
+  await page.keyboard.down('ControlOrMeta');
+  await page.mouse.click(completed.x, completed.y);
+  await page.keyboard.up('ControlOrMeta');
+  await expect(chip).not.toContainText('completed');
+  await expect(chip).toContainText('shipped');
+
+  // A drag along processing's row, past its target to the plot's edge,
+  // marks processing alone: a target is its member, never "75".
+  const processing = await rowOf('processing');
+  await page.mouse.move(processing.x - 20, processing.y - 6);
+  await page.mouse.down();
+  await page.mouse.move(processing.x + 60, processing.y + 6, { steps: 4 });
+  await page.mouse.move(plot.x + plot.width - 4, processing.y + 6, { steps: 4 });
+  await page.mouse.up();
+  await expect(chip).toContainText('processing');
+  await expect(chip).not.toContainText('shipped');
+  await expect(chip).not.toContainText('75');
+
   // Germany's orders, marked on the other tile: each bullet's value bar is
   // split into its marked part from zero and the rest.
   await clickAbove(page, page.locator('[data-tile="tile-country"]'), 'Germany');
   await expect(chip).toContainText('Germany');
   await expect.poll(() => ink.count()).toBeGreaterThan(6);
+
+  // In cross-filter mode a bullet filters the other tile to its member
+  // (checkpoint 1's review: AC-582's cross-filter, on the running app).
+  const stored = (await (
+    await request.get(`${API}/documents/dashboard/${dashboard.id}`)
+  ).json()) as { version: number; body: { settings: Record<string, unknown> } };
+  const crossFiltering = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: stored.version,
+      body: {
+        ...stored.body,
+        settings: {
+          ...stored.body.settings,
+          interactions: { mode: 'crossFilter', crossFilter: { defaultAction: 'filter' } },
+        },
+      },
+    },
+  });
+  expect(crossFiltering.ok(), await crossFiltering.text()).toBe(true);
+  const asked: unknown[] = [];
+  page.on('request', (sent) => {
+    if (!sent.url().endsWith('/api/load') || sent.method() !== 'POST') return;
+    asked.push((sent.postDataJSON() as { query?: unknown } | null)?.query);
+  });
+  await page.reload();
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await expect(ink).toHaveCount(6);
+  const shippedRow = await rowOf('shipped');
+  await page.mouse.click(shippedRow.x, shippedRow.y);
+  await expect(page.getByTestId('cross-filter-chip')).toContainText('shipped');
+  // The country tile asked again, filtered to shipped.
+  await expect
+    .poll(() =>
+      asked.some((query) => {
+        const text = JSON.stringify(query);
+        return text.includes('customers.country') && text.includes('"shipped"');
+      }),
+    )
+    .toBe(true);
 });
 
 /**
