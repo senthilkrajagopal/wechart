@@ -25,6 +25,7 @@ import type { ItemShare } from './marking/partialOption';
 import { nameWriter, seriesWriter, titleOf } from './modelWriter';
 import { boxesOf, whiskerRuleOf } from './series/boxplot';
 import { isPieType } from './series/pie';
+import { sankeyDrawnOf } from './series/sankey';
 
 /** Types where a shared crosshair reads better than a per-mark hit. */
 const CROSSHAIR_TYPES: readonly ChartType[] = ['line', 'multiLine', 'area', 'stackedArea', 'combo'];
@@ -175,6 +176,39 @@ function boxplotTooltip(spec: RenderSpec): EChartsOption {
   return { tooltip: { trigger: 'item', formatter: render } };
 }
 
+/**
+ * A Sankey's node or link (T987; design 23 sheet 10): a node its name and
+ * total; a link "‹source› → ‹target›", its value, and its share of what
+ * leaves its source and of what reaches its target ("32 % of Web · 51 % of
+ * EMEA").
+ */
+function sankeyTooltip(spec: RenderSpec): EChartsOption {
+  const { measure, flows } = sankeyDrawnOf(spec);
+  const write = formatterFor(measure ?? '', spec.formats ?? {});
+  const title = escapeHtml(titleOf(spec, measure ?? ''));
+  const out = new Map<string, number>();
+  const into = new Map<string, number>();
+  for (const flow of flows) {
+    out.set(flow.source, (out.get(flow.source) ?? 0) + flow.value);
+    into.set(flow.target, (into.get(flow.target) ?? 0) + flow.value);
+  }
+  const pct = (part: number, whole: number | undefined) =>
+    whole === undefined || whole === 0 ? '' : `${String(Math.round((part / whole) * 100))} %`;
+  const render = (params: Params & { dataType?: string }) => {
+    const value = Number(params.value ?? 0);
+    const link = params.data as { source?: string; target?: string } | undefined;
+    if (params.dataType === 'edge' && link?.source !== undefined && link.target !== undefined) {
+      return [
+        `${escapeHtml(link.source)} → ${escapeHtml(link.target)}`,
+        `${title}: ${escapeHtml(write(value))}`,
+        `${pct(value, out.get(link.source))} of ${escapeHtml(link.source)} · ${pct(value, into.get(link.target))} of ${escapeHtml(link.target)}`,
+      ].join('<br/>');
+    }
+    return [escapeHtml(params.name ?? ''), `${title}: ${escapeHtml(write(value))}`].join('<br/>');
+  };
+  return { tooltip: { trigger: 'item', formatter: render } };
+}
+
 /** A parallel-coordinate line (T982): its member, then its value on each axis, in order. */
 function parallelTooltip(spec: RenderSpec): EChartsOption {
   const axes = membersOn(spec.encoding, 'y');
@@ -205,6 +239,7 @@ export function tooltipFor(
 ): EChartsOption {
   if (NO_TOOLTIP.includes(spec.chartType)) return {};
   if (spec.chartType === 'parallel') return parallelTooltip(spec);
+  if (spec.chartType === 'sankey') return sankeyTooltip(spec);
   if (spec.chartType === 'scatter') return scatterTooltip(spec);
   if (spec.chartType === 'heatmap') return heatmapTooltip(spec);
   if (spec.chartType === 'boxplot') return boxplotTooltip(spec);

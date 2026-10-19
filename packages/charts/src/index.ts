@@ -21,6 +21,16 @@ export {
   parallelOption,
   type ParallelLines,
 } from './series/parallel';
+export {
+  isSankeyType,
+  SANKEY_FLOW_CAP,
+  sankeyDrawnOf,
+  sankeyNotes,
+  sankeyOption,
+  type SankeyDrawn,
+  type SankeyFlow,
+  type SankeyNode,
+} from './series/sankey';
 export { DRAWABLE_TYPES, isDrawable, optionFor } from './optionFor';
 export { SERIES, type SeriesOption } from './series/registry';
 export { DESCRIBE, describeChart, type Describe } from './describe';

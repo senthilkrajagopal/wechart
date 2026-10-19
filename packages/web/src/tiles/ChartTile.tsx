@@ -20,6 +20,7 @@ import { PivotTable } from './PivotTable';
 import { TileEmpty } from './TileEmpty';
 import { LogScaleNote } from './LogScaleNote';
 import { ParallelNotes } from './ParallelNotes';
+import { SankeyNotes } from './SankeyNotes';
 import { UnplacedCodes } from './UnplacedCodes';
 
 /**
@@ -530,6 +531,8 @@ export function ChartTile({
             : {})}
         />
       ) : null}
+      {/* A Sankey's split members and its fold, as text (T987, AC-611). */}
+      {spec.chartType === 'sankey' && !showingTable ? <SankeyNotes spec={spec} /> : null}
       {/* A combo's values a log axis leaves out, counted under it (T850, AC-502). */}
       {spec.chartType === 'combo' && !showingTable ? <LogScaleNote spec={spec} /> : null}
       {foot}

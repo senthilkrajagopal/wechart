@@ -20,6 +20,7 @@ import {
   MapChart,
   ParallelChart,
   PieChart,
+  SankeyChart,
   ScatterChart,
   TreemapChart,
 } from 'echarts/charts';
@@ -49,6 +50,7 @@ echarts.use([
   HeatmapChart,
   MapChart,
   ParallelChart,
+  SankeyChart,
   DataZoomInsideComponent,
   DataZoomSliderComponent,
   GraphicComponent,

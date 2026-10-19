@@ -166,6 +166,19 @@ describe('the default encoding of the types that read their channels differently
     });
   });
 
+  it('lays a Sankey’s steps, every plain dimension in order, across, of its first measure (T987)', () => {
+    const threeSteps = documentFor((spec) => {
+      let next = addToWell(spec, 'measures', 'orders.total');
+      next = addToWell(next, 'dimensions', 'orders.channel');
+      next = addToWell(next, 'dimensions', 'orders.region');
+      return addToWell(next, 'dimensions', 'orders.status');
+    });
+    expect(defaultEncoding(threeSteps.chart, 'sankey')).toEqual({
+      x: ['orders.channel', 'orders.region', 'orders.status'],
+      y: ['orders.total'],
+    });
+  });
+
   it('encodes every other type as before, and a compile uses the type it draws', () => {
     expect(defaultEncoding(twoMeasuresTwoDimensions.chart, 'groupedBar')).toEqual(
       defaultEncoding(twoMeasuresTwoDimensions.chart),

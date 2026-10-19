@@ -43,3 +43,8 @@ Lane CHARTS-B's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Files: `packages/charts/src/series/boxplot.ts`, `packages/charts/src/describe/boxplot.ts` (+ test), `packages/web/src/tiles/tableView/boxplot.ts` (+ test), `packages/charts/src/series/boxplotMarking.test.ts`.
   - Failing test: `boxplotMarking.test.ts`: clicking a point marks its Order ID; a lasso over 1,200 points refuses as AC-102 says; a box marks its Region; (describe) adds "Points: every order, as a beeswarm. Violin: …"; (table view) "View points" lists the orders and their values (AC-593).
   - Depends on: T991
+
+- [x] T987 (AC-611) Draw the Sankey's nodes and links, split a repeated member as "‹member› (2)", and fold flows past 50 into "Other"
+  - Files: `packages/charts/src/series/sankey.ts` (+ test).
+  - Failing test: `sankey.test.ts` (series): nodes 12 px wide; the colouring step's nodes in their members' colours, others `text-secondary`; links at 0.4, emphasis 0.6; EMEA in steps 1 and 3 yields a node "EMEA (2)" and the note; 214 flows keep each step's members carrying its top 50 and fold the rest into "Other" with the note (AC-611).
+  - Depends on: T986

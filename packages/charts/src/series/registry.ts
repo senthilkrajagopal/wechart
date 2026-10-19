@@ -4,6 +4,7 @@ import type { EChartsOption } from '../theme';
 import type { Canvas } from './bar';
 import { bulletOption } from './bullet';
 import { parallelOption } from './parallel';
+import { sankeyOption } from './sankey';
 
 /**
  * R81's series, one module per type (T934; docs/tasks.md §P2.27): each new
@@ -19,4 +20,5 @@ export type SeriesOption = (spec: RenderSpec, canvas: Canvas) => EChartsOption;
 export const SERIES: Partial<Record<ChartType, SeriesOption>> = {
   bullet: bulletOption,
   parallel: parallelOption,
+  sankey: sankeyOption,
 };

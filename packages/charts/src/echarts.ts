@@ -22,6 +22,7 @@ import {
   MapChart,
   ParallelChart,
   PieChart,
+  SankeyChart,
   ScatterChart,
   TreemapChart,
 } from 'echarts/charts';
@@ -57,6 +58,8 @@ echarts.use([
   // Parallel coordinates (T982): it installs its `parallel` component itself
   // (research/echarts-parallel.md).
   ParallelChart,
+  // The Sankey (T987; research/echarts-sankey.md).
+  SankeyChart,
   // A bullet chart's members past the tile's height, scrolled by the wheel or
   // a slider, the value axis fixed (T954; research/echarts-bullet.md §2).
   DataZoomInsideComponent,

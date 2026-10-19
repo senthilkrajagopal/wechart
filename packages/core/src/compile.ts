@@ -106,6 +106,12 @@ export function defaultEncoding(chart: ChartDefinition, chartType?: ChartType): 
   // (T954, AC-581): never per day of a time dimension.
   if (chartType === 'bullet')
     return encoded({ x: channel(firstDimension), y: channel(firstMeasure) });
+  // A Sankey's steps, every plain dimension in order, of its one measure (T987).
+  if (chartType === 'sankey')
+    return encoded({
+      x: dimensions.length === 0 ? undefined : [...dimensions],
+      y: channel(firstMeasure),
+    });
   // Its groupings down the rows and across the columns, its measures in the cells.
   if (chartType === 'pivot')
     return encoded({
@@ -173,32 +179,34 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
       // A split combo's members folded within its 8 series (T853, AC-505).
       applyComboFold(
         applyTopN({
-        chartType: chart.chartType ?? options.chartType,
-        encoding,
-        rows: options.rows,
-        // Carried through unchanged. Compile decides the encoding; it has no
-        // business interpreting what a chart type does with its own options.
-        ...(chart.options === undefined ? {} : { options: chart.options }),
-        // What one point is, for a box plot's Points (T991).
-        ...(chart.wells.eachPointIs === undefined ? {} : { eachPointIs: chart.wells.eachPointIs }),
-        ...(options.formats === undefined ? {} : { formats: options.formats }),
-        ...(options.titles === undefined ? {} : { titles: options.titles }),
-        ...(options.shortTitles === undefined ? {} : { shortTitles: options.shortTitles }),
-        ...(options.measureTypes === undefined ? {} : { measureTypes: options.measureTypes }),
-        ...(Object.keys(calculated).length === 0 ? {} : { calculated }),
-        // By the grain each was asked at, chosen or not (AC-188, AC-216).
-        granularities,
-        measures: [...chart.wells.measures],
-        // The wells' order, which a table heads its columns by (T393, AC-301).
-        fields: [
-          ...chart.wells.timeDimensions,
-          ...chart.wells.dimensions,
-          // A box plot's "Each point is" is a dimension too (T393's review).
-          ...(chart.wells.eachPointIs === undefined ? [] : [chart.wells.eachPointIs]),
-          ...chart.wells.measures,
-        ],
-        ...(options.palette === undefined ? {} : { palette: options.palette }),
-        ...(options.surface === undefined ? {} : { surface: options.surface }),
+          chartType: chart.chartType ?? options.chartType,
+          encoding,
+          rows: options.rows,
+          // Carried through unchanged. Compile decides the encoding; it has no
+          // business interpreting what a chart type does with its own options.
+          ...(chart.options === undefined ? {} : { options: chart.options }),
+          // What one point is, for a box plot's Points (T991).
+          ...(chart.wells.eachPointIs === undefined
+            ? {}
+            : { eachPointIs: chart.wells.eachPointIs }),
+          ...(options.formats === undefined ? {} : { formats: options.formats }),
+          ...(options.titles === undefined ? {} : { titles: options.titles }),
+          ...(options.shortTitles === undefined ? {} : { shortTitles: options.shortTitles }),
+          ...(options.measureTypes === undefined ? {} : { measureTypes: options.measureTypes }),
+          ...(Object.keys(calculated).length === 0 ? {} : { calculated }),
+          // By the grain each was asked at, chosen or not (AC-188, AC-216).
+          granularities,
+          measures: [...chart.wells.measures],
+          // The wells' order, which a table heads its columns by (T393, AC-301).
+          fields: [
+            ...chart.wells.timeDimensions,
+            ...chart.wells.dimensions,
+            // A box plot's "Each point is" is a dimension too (T393's review).
+            ...(chart.wells.eachPointIs === undefined ? [] : [chart.wells.eachPointIs]),
+            ...chart.wells.measures,
+          ],
+          ...(options.palette === undefined ? {} : { palette: options.palette }),
+          ...(options.surface === undefined ? {} : { surface: options.surface }),
         }),
       ),
     ),

@@ -1,9 +1,11 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
 import { cubePicker } from './cubePicker';
 import { wellPicker } from './wells';
-import { newInMyWorkspace } from './workspace';
+import { IN_MY_WORKSPACE, newInMyWorkspace } from './workspace';
+
+const API = 'http://localhost:4100';
 
 /**
  * Lane CHARTS-B's types, on the running app (docs/tasks.md §P2.27; T1014
@@ -221,4 +223,89 @@ test('a Sankey takes its steps in order, one summed measure and Colour links by,
       .getByRole('radiogroup', { name: 'Colour links by' })
       .getByRole('radio', { name: 'Target' }),
   ).toBeChecked();
+});
+
+/** A saved Sankey of order amounts through these steps, in My workspace. */
+async function sankeyChart(request: APIRequestContext, steps: readonly string[]): Promise<string> {
+  const created = await request.post(`${API}/api/documents`, {
+    data: { kind: 'chart', title: `Sankey ${String(Date.now())}`, ...IN_MY_WORKSPACE },
+  });
+  expect(created.status()).toBe(201);
+  const { id } = (await created.json()) as { id: string };
+  const stored = (await (await request.get(`${API}/api/documents/chart/${id}`)).json()) as {
+    version: number;
+    body: Record<string, unknown>;
+  };
+  const saved = await request.put(`${API}/api/documents/chart/${id}`, {
+    data: {
+      version: stored.version,
+      body: {
+        ...stored.body,
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.total_amount'], dimensions: steps, timeDimensions: [] },
+          chartType: 'sankey',
+        },
+      },
+    },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  return id;
+}
+
+/**
+ * T987 / AC-611: THE SYSTEM SHALL draw a Sankey's nodes 12 px wide, the
+ * colouring step's nodes in their members' colours and the other steps' in
+ * `text-secondary`; links in that colour at 0.4 …; labels outside the nodes
+ * with their totals; … and past 50 flows, each step keeping the members that
+ * carry its top 50 flows and folding the rest into "Other", saying "‹n›
+ * flows: …". `Fails when: a size, colour or opacity differs; … or more than
+ * 50 flows draw, or the fold isn't said.`
+ *
+ * The real surface: the chart's page, against the seeded Cube.
+ */
+test('a Sankey draws its steps’ nodes 12 px wide and its flows at 0.4, folding past 50 flows and saying so', async ({
+  page,
+  request,
+}) => {
+  const id = await sankeyChart(request, ['orders.status', 'products.category']);
+  await page.goto(`/explore/charts/${id}`);
+  const chart = page.locator('svg').filter({ has: page.locator('path[fill-opacity="0.4"]') });
+  await expect(chart).toHaveCount(1);
+  // Flows: filled bands at 0.4, one for each status and category the rows join.
+  const links = chart.locator('path[fill-opacity="0.4"]');
+  const flows = await links.count();
+  expect(flows).toBeGreaterThan(3);
+  expect(flows).toBeLessThanOrEqual(50);
+  // Nodes: 12 px wide, the statuses in their colours, the categories grey.
+  const nodes = await chart.locator('path:not([fill-opacity])').evaluateAll((all) =>
+    all
+      .filter((path) => /^M[\d.]+ [\d.]+l[\d.]+ 0/.test(path.getAttribute('d') ?? ''))
+      .map((path) => ({
+        width: Math.round(path.getBoundingClientRect().width),
+        x: Math.round(path.getBoundingClientRect().x),
+        fill: path.getAttribute('fill') ?? '',
+      })),
+  );
+  expect(nodes.length).toBeGreaterThan(4);
+  for (const node of nodes) expect(node.width).toBe(12);
+  const left = Math.min(...nodes.map((node) => node.x));
+  const statuses = nodes.filter((node) => node.x === left);
+  const categories = nodes.filter((node) => node.x !== left);
+  expect(new Set(statuses.map((node) => node.fill)).size).toBe(statuses.length);
+  for (const node of categories) expect(node.fill).toBe('#5c5b57');
+  // Labels outside the nodes, each with its total.
+  await expect(chart).toContainText('completed');
+  await expect(chart.locator('text', { hasText: /^\$[\d,.]+$/ }).first()).toBeVisible();
+  await expect(page.getByTestId('sankey-notes')).toHaveCount(0);
+
+  // Each order its own step: 240 flows fold into at most 50, and it says so.
+  const many = await sankeyChart(request, ['orders.status', 'orders.id']);
+  await page.goto(`/explore/charts/${many}`);
+  await expect(page.getByTestId('sankey-notes')).toHaveText(
+    /^\d+ flows: each step keeps the members carrying its top 50 flows and folds the rest into "Other"\.$/,
+  );
+  const folded = page.locator('svg').filter({ has: page.locator('path[fill-opacity="0.4"]') });
+  await expect(folded).toContainText('Other');
+  expect(await folded.locator('path[fill-opacity="0.4"]').count()).toBeLessThanOrEqual(50);
 });
