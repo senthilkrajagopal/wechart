@@ -621,13 +621,20 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
       made.sources.push(copyId);
       const project = await projectFolderOf(page.request, 'data-source', copyId);
 
-      // Its head's primary, last (pin 3).
+      // Its head's primary, last of its buttons (pin 3), then the ⋯ that T823
+      // gives one who may run SQL on it (AC-464): its owner may, on a copy
+      // (AC-383), so it holds "Open in SQL runner" and no Delete (AC-280).
       const target = `Sources parent ${RUN} / Sources ${RUN}`;
       const head = main.locator('.source-settings__head');
       await expect(head.getByRole('button')).toHaveText([
         'Discard my copy…',
         `Propose to ${target}…`,
+        '⋯',
       ]);
+      await head.getByRole('button', { name: `More actions for sales_${RUN}` }).click();
+      await expect(page.getByRole('menuitem')).toHaveText(['Open in SQL runner']);
+      await head.getByRole('button', { name: `More actions for sales_${RUN}` }).click();
+      await expect(page.getByRole('menuitem')).toHaveCount(0);
       const propose = head.getByRole('button', { name: `Propose to ${target}…` });
       expect(
         await propose.evaluate((node) => ({
