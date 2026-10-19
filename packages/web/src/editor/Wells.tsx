@@ -16,6 +16,8 @@ import { loadTile } from '../query/loadTile';
 import { MenuButton, type MenuItem } from '../shell/MenuButton';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { PillAxisTag, PillMarkMenu, type ComboPillProps } from './combo/PillMarkMenu';
+import { SplitCount, type SplitCountProps } from './combo/SplitCount';
+import { comboSplitMember } from './combo/comboWells';
 import { FieldIcon } from './FieldList';
 import { fieldMetaOf, type Member } from './fields';
 import { PathPicker } from './PathPicker';
@@ -320,6 +322,13 @@ export interface WellsProps {
          * it's drawn (AC-506), offered first (`undrawnOffers`).
          */
         readonly onRightAxis?: ((member: string) => void) | undefined;
+        /**
+         * A combo's measures past 8 series (T860, AC-505): why, "2 measures
+         * × 4 regions already make 8 series, the most a combo draws."
+         */
+        readonly overLimit?: string | undefined;
+        /** Split, Small multiples is by the split's dimension (AC-505). */
+        readonly smallMultiplesBy?: string | undefined;
       }
     | undefined;
   /**
@@ -337,6 +346,11 @@ export interface WellsProps {
     | (Omit<ComboPillProps, 'measures'> & {
         /** Format… on a pill's menu: that measure's format. */
         readonly onFormat: (member: string) => void;
+        /**
+         * Split, its count against 8 and "‹dimension› shown" (T860, AC-504,
+         * AC-505), under the Split by well, whose pill counts the members.
+         */
+        readonly count?: SplitCountProps | undefined;
       })
     | undefined;
 }
@@ -476,12 +490,19 @@ export function Wells({
     const drawn = spec.measures.length - undrawn.metrics.length;
     const onScale = undrawn.metrics.every((each) => each.reason === 'scale');
     const first = spec.measures[0] === undefined ? '' : titleOf(spec.measures[0]);
-    const lead = onScale
-      ? `${undrawn.drawnAs} draws one scale.`
-      : `${undrawn.drawnAs} draws ${drawn === 1 ? 'one metric' : `${String(drawn)} metrics`}.`;
-    const rest = onScale
-      ? ` ${listed} ${are} on another scale than ${first}: in the query and the results, but not on the chart.`
-      : ` ${listed} ${are} in the query and the results, but not on the chart.`;
+    // A combo's measures past its 8 series, and why (T860, AC-505).
+    const overLimit =
+      undrawn.overLimit !== undefined && undrawn.metrics.every((each) => each.reason === 'series');
+    const lead = overLimit
+      ? `${listed} ${names.length === 1 ? "isn't" : "aren't"} drawn.`
+      : onScale
+        ? `${undrawn.drawnAs} draws one scale.`
+        : `${undrawn.drawnAs} draws ${drawn === 1 ? 'one metric' : `${String(drawn)} metrics`}.`;
+    const rest = overLimit
+      ? ` ${undrawn.overLimit ?? ''}`
+      : onScale
+        ? ` ${listed} ${are} on another scale than ${first}: in the query and the results, but not on the chart.`
+        : ` ${listed} ${are} in the query and the results, but not on the chart.`;
     return (
       <div className="wells__undrawn" data-testid="undrawn-metrics">
         <StatusIcon kind="warn" />
@@ -519,7 +540,9 @@ export function Wells({
             })()}
             {undrawn.onSmallMultiples === undefined ? null : (
               <button type="button" className="btn btn-sm" onClick={undrawn.onSmallMultiples}>
-                Small multiples
+                {undrawn.smallMultiplesBy === undefined
+                  ? 'Small multiples'
+                  : `Small multiples by ${undrawn.smallMultiplesBy}`}
               </button>
             )}
             <button type="button" className="btn btn-sm" onClick={undrawn.onTable}>
@@ -562,6 +585,24 @@ export function Wells({
    */
   const noSource = spec.cube === '';
   const noSourceId = `${ids}-no-source`;
+  /**
+   * A combo's wells (T860, AC-504; design 20 screen 2 pin 5): with a time
+   * axis, its plain dimension is what splits it, one across every measure,
+   * so that well is "Split by", after Time. Without one, the first
+   * dimension is the category and the second splits, in Dimensions.
+   */
+  const splitMember = combo === undefined ? undefined : comboSplitMember(spec);
+  const wellsShown =
+    combo === undefined || spec.timeDimensions.length === 0
+      ? WELLS
+      : [
+          ...WELLS.filter((well) => well.name !== 'dimensions'),
+          ...WELLS.filter((well) => well.name === 'dimensions').map((well) => ({
+            ...well,
+            label: 'Split by',
+            aside: '· one dimension, across every measure',
+          })),
+        ];
 
   return (
     <div className="wells" ref={root}>
@@ -570,7 +611,7 @@ export function Wells({
           Choose a cube or view first.
         </p>
       ) : null}
-      {WELLS.map((well) => {
+      {wellsShown.map((well) => {
         const candidates = available.filter((member) => member.kind === well.accepts);
         const held = spec[well.name];
         const refusal = rejectionReason(well, dragging);
@@ -674,6 +715,15 @@ export function Wells({
                           }
                           testId={`calcs-${member}`}
                         />
+                      ) : well.name === 'dimensions' &&
+                        combo?.count !== undefined &&
+                        member === splitMember ? (
+                        // A combo's split, its members counted, or folded (AC-505).
+                        <span className="pill__tag" data-testid="split-members">
+                          {combo.count.top === undefined
+                            ? String(combo.count.members)
+                            : `top ${String(combo.count.top)} + Other of ${String(combo.count.members)}`}
+                        </span>
                       ) : well.name === 'dimensions' && channels[member] !== undefined ? (
                         // The channel it is drawn on, "Country Y" (EDI-09).
                         <span className="pill__tag" title={`Drawn on ${channels[member]}`}>
@@ -685,7 +735,11 @@ export function Wells({
                       {/* Not on the chart, and why (T510, design 01-5). */}
                       {off === undefined ? null : (
                         <span className="pill__tag pill__off">
-                          {off === 'scale' ? 'not drawn · on another scale' : 'not drawn'}
+                          {off === 'scale'
+                            ? 'not drawn · on another scale'
+                            : off === 'series'
+                              ? 'not drawn · over 8 series'
+                              : 'not drawn'}
                         </span>
                       )}
                       {/* …and ends with its axis, L or R, before × (T856, AC-497). */}
@@ -732,6 +786,10 @@ export function Wells({
               </p>
             ) : null}
             {well.name === 'measures' ? undrawnLine : null}
+            {/* A split combo's count against 8, and "‹dimension› shown" (T860). */}
+            {well.name === 'dimensions' && combo?.count !== undefined ? (
+              <SplitCount {...combo.count} />
+            ) : null}
             {well.name === 'measures'
               ? paused.map(({ measure, note }) => (
                   // A paused calculation, and what it needs (R45.4).

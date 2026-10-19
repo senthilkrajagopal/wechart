@@ -34,6 +34,7 @@ import {
   withComboSplit,
   withComboStacking,
   withLogScale,
+  withMembersShown,
   withSynchronize,
 } from './combo';
 import { undrawnMeasures } from './undrawn';
@@ -656,6 +657,19 @@ describe('held to 8 series (AC-505)', () => {
     expect(membersShownOf({ combo: { shown: 3 } })).toBe(3);
     expect(membersShownOf({})).toBeUndefined();
     expect(membersShownOf({ combo: { shown: 0 } })).toBeUndefined();
+  });
+
+  it('stores "‹dimension› shown" sparsely, beside the other combo settings (T860)', () => {
+    const start = { combo: { bars: 'stacked' }, series: {} };
+
+    expect(withMembersShown(start, 'all')).toEqual({
+      combo: { bars: 'stacked', shown: 'all' },
+      series: {},
+    });
+    expect(withMembersShown({ combo: { shown: 2 } }, 3)).toEqual({ combo: { shown: 3 } });
+    // Auto is no choice: nothing stored, and no empty combo left behind.
+    expect(withMembersShown({ combo: { shown: 2 } }, undefined)).toEqual({});
+    expect(withMembersShown(start, undefined)).toEqual(start);
   });
 
   it('refuses a stored shown other than All or a whole number from 1', () => {

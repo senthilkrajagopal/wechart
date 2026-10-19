@@ -387,6 +387,22 @@ export function membersShownOf(
   return isShown(shown) ? shown : undefined;
 }
 
+/**
+ * "‹dimension› shown" set (T860, AC-505), in `options.combo.shown`; Auto,
+ * no choice, stores nothing, and an emptied `combo` entry is dropped.
+ */
+export function withMembersShown(
+  options: Readonly<Record<string, unknown>>,
+  shown: MembersShown | undefined,
+): Record<string, unknown> {
+  const combo: Record<string, unknown> = { ...comboSettingsOf(options) };
+  if (shown === undefined) delete combo['shown'];
+  else combo['shown'] = shown;
+  const next: Record<string, unknown> = { ...options, combo };
+  if (Object.keys(combo).length === 0) delete next['combo'];
+  return next;
+}
+
 /** What a combo draws within its 8 series (AC-505). */
 export interface ComboLimit {
   /** The split's members, hidden and empty ones counted; 1 unsplit. */

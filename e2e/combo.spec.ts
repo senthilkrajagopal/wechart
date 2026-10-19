@@ -456,6 +456,68 @@ test('stacks a combo’s bars chart-wide from Customize › Series, and offers A
 });
 
 /**
+ * T860 (AC-504, AC-505; design 20 screen 2 pins 4 to 7, state G1): a
+ * combo's Split by well, its count against 8, its fold to the top k + Other,
+ * "Statuses shown", and a measure past 8 series not drawn, with its offers.
+ */
+test('splits a combo by one dimension, counts it against 8, folds it, and leaves a measure out past 8 (T860)', async ({
+  page,
+}) => {
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'measures').selectOption('orders.average_amount');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+  await chooseChartType(page, 'combo');
+
+  // The Split by well, after Time: one dimension, across every measure.
+  const split = page.getByTestId('well-dimensions');
+  await expect(page.locator('#well-dimensions-label')).toHaveText(
+    'Split by · one dimension, across every measure',
+  );
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  const status = page.getByTestId('in-dimensions-orders.status');
+  await expect(status.getByTestId('split-members')).toHaveText('3');
+  await expect(page.getByTestId('split-count')).toHaveText(
+    '2 measures × 3 statuses = 6 of 8 series',
+  );
+
+  // A third measure would make 9: Auto folds to the top 1 + Other.
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await page
+    .getByTestId('in-measures-orders.count')
+    .getByRole('button', { name: /Change mark or axis$/ })
+    .click();
+  await page.getByRole('menuitemradio', { name: 'Right' }).click();
+  await expect(status.getByTestId('split-members')).toHaveText('top 1 + Other of 3');
+  await expect(page.getByTestId('split-count')).toHaveText(
+    '3 measures × 2 (1 status + Other) = 6 of 8 series',
+  );
+  await expect(page.getByTestId('undrawn-metrics')).toHaveCount(0);
+
+  // All, chosen, folds nothing: the last added isn't drawn.
+  await page.getByRole('combobox', { name: 'Statuses shown' }).selectOption('all');
+  await expect(status.getByTestId('split-members')).toHaveText('3');
+  await expect(page.getByTestId('in-measures-orders.count')).toContainText(
+    'not drawn · over 8 series',
+  );
+  const line = page.getByTestId('undrawn-metrics');
+  await expect(line).toContainText(
+    "Count isn't drawn. 2 measures × 3 statuses already make 6 series, and another measure's 3 would pass the 8 a combo draws.",
+  );
+  await expect(line.getByRole('button')).toHaveText([
+    'Small multiples by Status',
+    'Table',
+    'Remove Count',
+  ]);
+
+  // A second dimension replaces the first.
+  await wellPicker(page, 'dimensions').selectOption('products.category');
+  await expect(split.getByTestId('in-dimensions-orders.status')).toHaveCount(0);
+  await expect(split.getByTestId('in-dimensions-products.category')).toBeVisible();
+});
+
+/**
  * T858 (AC-219, AC-499, AC-501, AC-502; design 20 pins 1, 5, 7, 8, 9):
  * Customize › Axes' Left and Right axis groups, include zero locked while
  * bars are drawn, Synchronize with its toast and Undo, log on both axes,

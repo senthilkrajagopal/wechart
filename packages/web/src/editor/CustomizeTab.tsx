@@ -1,4 +1,5 @@
 import {
+  COMBO_SERIES_LIMIT,
   comboAxisHead,
   comboSeriesOf,
   includeZeroLock,
@@ -67,6 +68,8 @@ export interface CustomizeTabProps {
     readonly drawn?: readonly string[];
     /** The model's formats, which Synchronize compares (AC-501). */
     readonly formats?: MemberFormats;
+    /** The series drawn, counted against 8 in the Series heading (T860, AC-505). */
+    readonly series?: number;
   };
   /** Customize › Stack, Sum or 100 %, on a stacked bar or area (T957, AC-584). */
   readonly stack?: ReactNode;
@@ -294,7 +297,10 @@ export function CustomizeTab({
           <summary>
             <h3 id={`${ids}-series`}>
               {/* A combo's every measure, one on another scale too (T855's follow-up). */}
-              Series ({combo === undefined ? series.length : combo.measures.length})
+              {combo?.series === undefined
+                ? `Series (${String(combo === undefined ? series.length : combo.measures.length)})`
+                : // The series drawn against a combo's 8 (T860, AC-505; pin 2).
+                  `Series ${String(combo.series)} of ${String(COMBO_SERIES_LIMIT)}`}
             </h3>
           </summary>
           {combo === undefined ? null : (

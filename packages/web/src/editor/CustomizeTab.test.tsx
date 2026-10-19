@@ -420,6 +420,24 @@ describe('a combo’s Series section (T855)', () => {
     expect(screen.getByRole('radiogroup', { name: 'Orders Count axis' })).toBeTruthy();
   });
 
+  it('counts a combo’s series drawn against its 8 (T860, AC-505; design 20 pin 2)', () => {
+    render(
+      <CustomizeTab
+        options={{}}
+        onOptions={vi.fn()}
+        cartesian
+        valueAxes={['y']}
+        drawn
+        stackable
+        series={series}
+        colourOf={() => '#123456'}
+        combo={{ ...combo, series: 8 }}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Series 8 of 8' })).toBeTruthy();
+  });
+
   /**
    * Checkpoint 1's review (AC-503): the Areas row shows while an area is
    * drawn, so a measure set to an area but not drawn (on another scale)

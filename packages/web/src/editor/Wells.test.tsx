@@ -1,11 +1,12 @@
-import { emptySpec, undrawnMeasures, type RenderSpec } from '@wechart/core';
+import { emptySpec, undrawnMeasures, type ChartSpec, type RenderSpec } from '@wechart/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { WELLS, Wells, rejectionReason } from './Wells';
+import { WELLS, Wells, rejectionReason, type WellsProps } from './Wells';
+import { addToWellAs } from './combo/comboWells';
 import { undrawnWell } from './combo/undrawnWell';
 import type { Member } from './fields';
 import { TYPE_WELLS, type TypeWellsProps } from './wells/registry';
@@ -1372,5 +1373,126 @@ describe('R81’s wells, and the well a chosen type needs (T934)', () => {
       />,
     );
     expect(screen.queryByTestId('stub-wells')).toBeNull();
+  });
+});
+
+/**
+ * T860 (AC-504, AC-505; design 20 screen 2 pins 4 to 7): a combo's Split by
+ * well, one dimension across every measure, a second replacing the first;
+ * its count against 8 and "‹dimension› shown"; and a measure past 8 series
+ * not drawn, its pill and its row saying so, with the offers.
+ */
+describe("a combo's Split by well (T860)", () => {
+  const member = (name: string, shortTitle: string, kind: Member['kind']): Member => ({
+    name,
+    title: `Orders ${shortTitle}`,
+    shortTitle,
+    kind,
+    type: kind === 'measure' ? 'number' : kind === 'timeDimension' ? 'time' : 'string',
+    cube: 'orders',
+    ...(kind === 'measure' ? { aggType: 'sum' } : {}),
+  });
+  const REVENUE = member('orders.revenue', 'Revenue', 'measure');
+  const MARGIN = member('orders.margin', 'Margin', 'measure');
+  const ORDERS = member('orders.count', 'Orders', 'measure');
+  const MONTH = member('orders.ordered_at', 'Ordered at', 'timeDimension');
+  const REGION = member('orders.region', 'Region', 'dimension');
+  const COUNTRY = member('orders.country', 'Country', 'dimension');
+  const available = [REVENUE, MARGIN, ORDERS, MONTH, REGION, COUNTRY];
+  const start = {
+    ...emptySpec('orders'),
+    measures: [REVENUE.name, MARGIN.name],
+    timeDimensions: [MONTH.name],
+    dimensions: [REGION.name],
+  };
+  const combo = { options: {}, onOptions: vi.fn(), onFormat: vi.fn() };
+
+  /** The wells over a spec held as the editor holds it, adding as the editor adds. */
+  function Held({ count }: { count: NonNullable<WellsProps['combo']>['count'] }) {
+    const [spec, setSpec] = useState<ChartSpec>(start);
+    return (
+      <Wells
+        spec={spec}
+        available={available}
+        onAdd={(well, name) => setSpec((current) => addToWellAs('combo', current, well, name))}
+        onRemove={vi.fn()}
+        combo={{ ...combo, count }}
+      />
+    );
+  }
+
+  it('heads the dimensions as Split by, after Time, its pill counting the regions', () => {
+    render(<Held count={{ measures: 2, members: 4, series: 8, dimension: 'Region' }} />);
+    const heads = screen.getAllByRole('heading', { level: 3 }).map((one) => one.textContent);
+
+    expect(heads.slice(0, 3)).toEqual([
+      'Metrics',
+      'Time',
+      'Split by · one dimension, across every measure',
+    ]);
+    expect(within(screen.getByTestId('in-dimensions-orders.region')).getByTestId('split-members').textContent).toBe('4');
+    expect(screen.getByTestId('split-count').textContent).toBe(
+      '2 measures × 4 regions = 8 of 8 series',
+    );
+  });
+
+  it('replaces the split with a second dimension added', async () => {
+    render(<Held count={{ measures: 2, members: 4, series: 8, dimension: 'Region' }} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add to Split by' }));
+    await userEvent.click(
+      within(screen.getByRole('listbox', { name: 'Fields' })).getByRole('option', {
+        name: /Orders Country/,
+      }),
+    );
+
+    expect(screen.queryByTestId('in-dimensions-orders.region')).toBeNull();
+    expect(screen.getByTestId('in-dimensions-orders.country')).toBeTruthy();
+  });
+
+  it('reads "top 1 + Other of 4" while folded', () => {
+    render(
+      <Held count={{ measures: 3, members: 4, top: 1, series: 6, dimension: 'Region' }} />,
+    );
+
+    expect(within(screen.getByTestId('in-dimensions-orders.region')).getByTestId('split-members').textContent).toBe('top 1 + Other of 4');
+  });
+
+  it('says a measure past 8 series isn’t drawn, with Small multiples by Region, Table and Remove', () => {
+    const onTable = vi.fn();
+    render(
+      <Wells
+        spec={{ ...start, measures: [REVENUE.name, MARGIN.name, ORDERS.name] }}
+        available={available}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        combo={{
+          ...combo,
+          count: { measures: 3, members: 4, series: 8, dimension: 'Region', shown: 'all' },
+        }}
+        undrawn={undrawnWell({
+          undrawn: [{ member: ORDERS.name, reason: 'series' }],
+          shownType: 'combo',
+          options: {},
+          onOptions: vi.fn(),
+          onSmallMultiples: vi.fn(),
+          onTable,
+          limit: { drawn: 2, members: 4, dimension: 'Region' },
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId('in-measures-orders.count').textContent).toContain(
+      'not drawn · over 8 series',
+    );
+    const line = screen.getByTestId('undrawn-metrics');
+    expect(line.textContent).toContain(
+      "Orders isn't drawn. 2 measures × 4 regions already make 8 series, the most a combo draws.",
+    );
+    expect(
+      within(line)
+        .getAllByRole('button')
+        .map((one) => one.textContent),
+    ).toEqual(['Small multiples by Region', 'Table', 'Remove Orders']);
   });
 });

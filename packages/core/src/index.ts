@@ -134,6 +134,7 @@ export {
   withComboSplit,
   withComboStacking,
   withLogScale,
+  withMembersShown,
   withSynchronize,
   type AreaStacking,
   type BarStacking,

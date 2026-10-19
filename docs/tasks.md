@@ -1827,10 +1827,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T859 (AC-503) The stacking rows, Bars side by side or stacked, and Areas overlap or stacked while an area is drawn
 
-- [ ] T860 (AC-504, AC-505) The combo's Split by well, its count against 8, "‹dimension› shown", and "not drawn · over 8 series" with its offers
-  - Files: `packages/web/src/editor/Wells.tsx`, `packages/web/src/editor/combo/SplitCount.tsx` (+ test), `packages/web/src/editor/Wells.test.tsx`.
-  - Failing test: `Wells.test.tsx`: a combo's Data tab has a Split by well taking one dimension, a second replacing the first; `SplitCount.test.tsx`: "2 measures × 4 regions = 8 of 8 series"; adding Orders with "Regions shown" at All gives its pill "not drawn · over 8 series" and the row "Orders isn't drawn…" with Small multiples by Region, Table and Remove Orders; with nothing chosen the well reads "top 1 + Other of 4" (AC-504, AC-505).
-  - Depends on: T853, T855
+- [x] T860 (AC-504, AC-505) The combo's Split by well, its count against 8, "‹dimension› shown", and "not drawn · over 8 series" with its offers
 
 - [ ] T861 (AC-218) Warn the author only while a combo draws two unsynchronized axes, in Customize › Axes, on the type card and in the tile's edit-mode head, with its variants and offers, and never a viewer
   - Files: `packages/recommender/src/warnings.ts` (+ test), `packages/web/src/editor/combo/ComboWarning.tsx` (+ test), `packages/web/src/editor/ChartTypeCard.tsx`, `packages/web/src/tiles/ChartTile.tsx` (the edit head), `e2e/combo.spec.ts`.

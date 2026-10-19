@@ -4,7 +4,11 @@ import {
   CHART_TYPE_NAMES,
   chartDocumentOf,
   comboAxesLine,
+  comboLimitOf,
   comboSeriesOf,
+  membersShownOf,
+  withMembersShown,
+  type MembersShown,
   compile,
   distinctValues,
   emptySpec,
@@ -73,6 +77,7 @@ import { CubeSourcePicker, FieldList, membersWithJoins, useJoined } from './Fiel
 import { Wells } from './Wells';
 import { LegendGlyphButtons } from './combo/LegendGlyphButtons';
 import { undrawnWell } from './combo/undrawnWell';
+import { addToWellAs } from './combo/comboWells';
 import { stackChoice, stackCustomize } from './wells/stack';
 import { requestCalculation } from './calcRequests';
 import { RequestCalcDialog } from './RequestCalcDialog';
@@ -817,6 +822,43 @@ function EditorBody({
         }
       : undefined;
   /**
+   * A combo held to 8 series (T860; AC-504, AC-505): the measures drawn on
+   * their scale, how many fit, and while split its members, their fold and
+   * "‹dimension› shown", for the Split by well, Customize's Series heading
+   * and the undrawn line.
+   */
+  const comboHeld = useMemo(() => {
+    if (drawnSpec === undefined || drawnSpec.chartType !== 'combo') return undefined;
+    const offScale = new Set(
+      undrawn.filter((each) => each.reason === 'scale').map((each) => each.member),
+    );
+    const onScale = membersOn(drawnSpec.encoding, 'y').filter((member) => !offScale.has(member));
+    const limit = comboLimitOf(drawnSpec, onScale);
+    const series = seriesOf(onOneScale(drawnSpec)).series.length;
+    const splitBy = memberOn(drawnSpec.encoding, 'color');
+    const dimension =
+      splitBy === undefined
+        ? undefined
+        : ((Object.hasOwn(shortTitles, splitBy) ? shortTitles[splitBy] : undefined) ??
+          (Object.hasOwn(titles, splitBy) ? titles[splitBy] : undefined) ??
+          splitBy);
+    return { limit, series, dimension };
+  }, [drawnSpec, undrawn, titles, shortTitles]);
+  /** The Split by well's count and "‹dimension› shown" (T860, AC-505). */
+  const comboCount =
+    comboHeld?.dimension === undefined
+      ? undefined
+      : {
+          measures: comboHeld.limit.drawn.length,
+          members: comboHeld.limit.members,
+          top: comboHeld.limit.top,
+          series: comboHeld.series,
+          dimension: comboHeld.dimension,
+          shown: membersShownOf(options),
+          onShown: (shown: MembersShown | undefined) =>
+            setOptions({ combo: withMembersShown(options, shown)['combo'] }),
+        };
+  /**
    * A combo's canvas line (T858; AC-499, AC-501; design 20 pin 1): its
    * series drawn on how many value axes, "3 series on 2 value axes, aligned
    * at zero".
@@ -975,7 +1017,8 @@ function EditorBody({
             const well = wellFor(member.kind);
             // Already there: nothing to add, so no change to undo (T229's review).
             if (well === null || spec[well].includes(member.name)) return;
-            setSpec((current) => addToWell(current, well, member.name));
+            // A combo's dimension splits it, replacing its split (T860, AC-504).
+            setSpec((current) => addToWellAs(shownType, current, well, member.name));
           }}
         />
       </aside>
@@ -1238,7 +1281,9 @@ function EditorBody({
                   channels={channels}
                   titles={titles}
                   dragging={dragging}
-                  onAdd={(well, member) => setSpec((current) => addToWell(current, well, member))}
+                  onAdd={(well, member) =>
+                    setSpec((current) => addToWellAs(shownType, current, well, member))
+                  }
                   onRemove={(well, member) =>
                     setSpec((current) => removeFromWell(current, well, member))
                   }
@@ -1315,13 +1360,31 @@ function EditorBody({
                     shownType,
                     options,
                     onOptions: setOptions,
-                    onSmallMultiples: byMetric ? () => chooseAndReturn('trellis') : undefined,
+                    // Split, a measure past 8 series is offered small multiples
+                    // by the split's dimension (AC-505).
+                    onSmallMultiples:
+                      byMetric || comboCount !== undefined
+                        ? () => chooseAndReturn('trellis')
+                        : undefined,
                     onTable: () => chooseAndReturn('table'),
+                    limit:
+                      comboHeld === undefined
+                        ? undefined
+                        : {
+                            drawn: comboHeld.limit.drawn.length,
+                            ...(comboCount === undefined
+                              ? {}
+                              : { members: comboCount.members, dimension: comboCount.dimension }),
+                          },
                   })}
                   // A combo's pills: each metric's mark and axis, from its
                   // glyph's menu (T856, AC-497). Format… is the value axis's
                   // Number format, on Customize (decision T856-1).
-                  combo={comboMenu}
+                  combo={
+                    comboMenu === undefined
+                      ? undefined
+                      : { ...comboMenu, ...(comboCount === undefined ? {} : { count: comboCount }) }
+                  }
                   topN={topN}
                   onTopN={(n) => setOption('topN', n)}
                   tail={options['tail'] === 'drop' ? 'drop' : undefined}
@@ -1400,7 +1463,15 @@ function EditorBody({
               whiskers={shownType === 'boxplot'}
               eachPointIs={spec.eachPointIs !== undefined}
               sankey={shownType === 'sankey'}
-              {...(comboRows === undefined ? {} : { combo: { ...comboRows, formats } })}
+              {...(comboRows === undefined
+                ? {}
+                : {
+                    combo: {
+                      ...comboRows,
+                      formats,
+                      ...(comboHeld === undefined ? {} : { series: comboHeld.series }),
+                    },
+                  })}
               {...stackCustomize(shownType, {
                 options,
                 onOptions: setOptions,

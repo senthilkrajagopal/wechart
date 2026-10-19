@@ -81,3 +81,8 @@ Lane COMBO's ticked tasks from `docs/tasks.md` §P2.26 (F44), their sub-lines wo
   - Files: `packages/web/src/editor/AxisPanel.tsx` (+ test), `packages/web/src/editor/combo/SynchronizeSwitch.tsx` (+ test), `packages/web/src/editor/PreviewFrame.tsx`.
   - Failing test: `AxisPanel.test.tsx`: with every series on the left there's no Right group and no Synchronize; with Margin % on the right, the Right group lists "Margin % · %" and has no gridlines field; with a bar series, include zero reads "Include zero · on, because Revenue draws bars" and can't be switched; Log on one axis announces "Log scale on for both axes" and shows on both; `SynchronizeSwitch.test.tsx`: disabled for $ and % with the reason, and for $ and $ turning it on clears the right's fixed max with "Right axis now follows the left axis · Undo", which restores it; the canvas line reads "3 series on 2 value axes, aligned at zero", then "3 series on 2 axes, synchronized" (AC-219, AC-499, AC-501, AC-502).
   - Depends on: T849, T850, T855
+
+- [x] T860 (AC-504, AC-505) The combo's Split by well, its count against 8, "‹dimension› shown", and "not drawn · over 8 series" with its offers
+  - Files: `packages/web/src/editor/Wells.tsx`, `packages/web/src/editor/combo/SplitCount.tsx` (+ test), `packages/web/src/editor/Wells.test.tsx`.
+  - Failing test: `Wells.test.tsx`: a combo's Data tab has a Split by well taking one dimension, a second replacing the first; `SplitCount.test.tsx`: "2 measures × 4 regions = 8 of 8 series"; adding Orders with "Regions shown" at All gives its pill "not drawn · over 8 series" and the row "Orders isn't drawn…" with Small multiples by Region, Table and Remove Orders; with nothing chosen the well reads "top 1 + Other of 4" (AC-504, AC-505).
+  - Depends on: T853, T855
