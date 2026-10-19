@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { IN_MY_WORKSPACE, seedDashboardCopy } from './workspace';
+import { IN_MY_WORKSPACE, madeIn, seedDashboardCopy } from './workspace';
 
 /**
  * T184 / AC-179: THE SYSTEM SHALL render dashboards, the chart editor and the
@@ -45,6 +45,56 @@ test('a dashboard does not scroll sideways at 1,280 px, viewed or edited', async
   expect(await overflowOf(page)).toEqual(NONE);
 
   // In edit mode, with its sidebar beside the canvas.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByRole('complementary', { name: 'Edit sidebar' })).toBeVisible();
+  expect(await overflowOf(page)).toEqual(NONE);
+});
+
+/**
+ * A filter scoped to many tiles (the user, 2026-10-18: Shipping's "Tiles:
+ * …" chip, 9 tiles, scrolled the page sideways at 1,471 px): its scope tag
+ * ends in an ellipsis at its width, as the pill's summary does, its whole
+ * list in its tooltip and its text, and the page doesn't scroll sideways,
+ * viewed or edited.
+ */
+test('a filter scoped to a dozen tiles keeps its scope tag to its width, and the dashboard does not scroll sideways', async ({
+  page,
+}) => {
+  const unique = String(Date.now());
+  const chart = await madeIn(page.request, 'chart', IN_MY_WORKSPACE.folderId, {
+    title: `Shipments by carrier and destination region ${unique}`,
+    chart: {
+      source: { cube: 'orders' },
+      wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+    },
+  });
+  const tiles = Array.from({ length: 12 }, (_, index) => `tile-${String(index + 1)}`);
+  const board = await madeIn(page.request, 'dashboard', IN_MY_WORKSPACE.folderId, {
+    title: `Twelve tiles ${unique}`,
+    pages: [
+      {
+        id: 'p1',
+        title: 'Only',
+        items: tiles.map((id) => ({ id, kind: 'chart', w: 3, h: 20, chartId: chart })),
+      },
+    ],
+    filters: [
+      { id: 'f-status', widget: 'checkbox', member: 'orders.status', scope: { kind: 'tiles', tileIds: tiles } },
+    ],
+  });
+  await page.goto(`/explore/dashboards/${board}`);
+  // The sheet open, its filter bar in view.
+  await page.locator('.dashboard__header').getByRole('button', { name: /^Filters\b/ }).click();
+  const scope = page.getByTestId('filter-f-status').getByTestId('scope-badge');
+  await expect(scope).toBeVisible();
+  const whole = `Tiles: ${Array.from({ length: 12 }, () => `Shipments by carrier and destination region ${unique}`).join(', ')}`;
+  await expect(scope).toHaveText(whole);
+  await expect(scope).toHaveAttribute('title', whole);
+  // Cut at its width, with an ellipsis.
+  expect(await scope.evaluate((node) => getComputedStyle(node).textOverflow)).toBe('ellipsis');
+  expect(await scope.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
+  expect(await overflowOf(page)).toEqual(NONE);
+
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByRole('complementary', { name: 'Edit sidebar' })).toBeVisible();
   expect(await overflowOf(page)).toEqual(NONE);

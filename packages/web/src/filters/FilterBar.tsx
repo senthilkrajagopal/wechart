@@ -383,8 +383,14 @@ function Filters({
                 setChosenOpen({ id: null });
             }}
           >
-            {/* Its scope, on the widget, in either mode (direction.md rule 14). */}
-            <span className="filter-pill__scope" data-testid="scope-badge">
+            {/* Its scope, on the widget, in either mode (direction.md rule 14):
+              cut at its width with an ellipsis, as the summary is, its whole
+              text kept and in its tooltip (the user, 2026-10-18). */}
+            <span
+              className="filter-pill__scope"
+              data-testid="scope-badge"
+              title={scopeLabel(filter, dashboard, chartTitleOf)}
+            >
               {scopeLabel(filter, dashboard, chartTitleOf)}
             </span>
             <button

@@ -7508,6 +7508,7 @@ details.panel-section { display: block; }
   align-items: center;
   gap: 6px;
   height: 32px;
+  max-width: 100%;
   padding: 0 6px 0 10px;
   border: 1px solid var(--wc-border-strong);
   border-radius: 6px;
@@ -7522,6 +7523,13 @@ details.panel-section { display: block; }
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
+  /* A scope naming many tiles is cut with an ellipsis, as the summary is,
+     its whole text in its tooltip: never wider than the bar. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 button.filter-pill__summary {
   display: inline-flex;
