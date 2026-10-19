@@ -65,10 +65,12 @@ const ROW_HEIGHT = 24;
 const VIEWS_BAR_PX = 32;
 
 /**
- * The table view, a type's own where it has one (T993, AC-593): a box plot's
- * statistics, a row per box, with "View points" switching to the points it
- * draws, each its entity and value — shown and marked as any table's rows
- * are — and "View statistics" back. The rows as queried otherwise.
+ * The table view, a type's own where it has one (T956, T993; AC-178, rule
+ * 166): the numbers behind its marks in place of its rows as queried — a
+ * bullet's target, share and band; a box plot's statistics, a row per box,
+ * with "View points" switching to the points it draws, each its entity and
+ * value, shown and marked as any table's rows are, and "View statistics"
+ * back. The rows as queried otherwise.
  */
 export function DataTable(props: DataTableProps) {
   const { spec, height = DEFAULT_HEIGHT, label } = props;
@@ -79,6 +81,11 @@ export function DataTable(props: DataTableProps) {
 
   const showingPoints = viewing === 'points' && points !== undefined;
   const inner = Math.max(ROW_HEIGHT * 2, height - (points === undefined ? 0 : VIEWS_BAR_PX));
+  // Its columns of figures set right, as a measure's are (T956): those it
+  // names, or, naming none, every column after the first.
+  const figures = own.figures === undefined ? undefined : new Set(own.figures);
+  const align = (at: number) =>
+    (figures === undefined ? at > 0 : figures.has(at)) ? 'num' : undefined;
   return (
     <div data-testid="table-view-of-type">
       {points === undefined ? null : (
@@ -111,7 +118,7 @@ export function DataTable(props: DataTableProps) {
             <thead>
               <tr>
                 {own.columns.map((column, at) => (
-                  <th scope="col" key={column} className={at === 0 ? undefined : 'num'}>
+                  <th scope="col" key={column} className={align(at)}>
                     {column}
                   </th>
                 ))}
@@ -120,15 +127,13 @@ export function DataTable(props: DataTableProps) {
             <tbody>
               {own.rows.map((row, index) => (
                 <tr
-                  key={row[0] ?? String(index)}
+                  // Its first cell names it; its place keeps two alike apart.
+                  key={`${String(index)} ${row[0] ?? ''}`}
                   data-testid="table-row"
                   style={{ height: `${String(ROW_HEIGHT)}px` }}
                 >
                   {row.map((cell, at) => (
-                    <td
-                      key={own.columns[at] ?? String(at)}
-                      className={at === 0 ? undefined : 'num'}
-                    >
+                    <td key={own.columns[at] ?? String(at)} className={align(at)}>
                       {cell}
                     </td>
                   ))}
@@ -237,61 +242,11 @@ function RowsTable({ spec, height = DEFAULT_HEIGHT, marking, label }: DataTableP
    * (T958, AC-585). Once per answer, not once per scroll.
    */
   const added = useMemo(() => addedColumnsOf(spec), [spec]);
-  /**
-   * A type's own table view, where it has one (T956; AC-178, rule 166): the
-   * numbers behind its marks — a bullet's target, share and band — in place
-   * of its rows as queried.
-   */
-  const view = useMemo(() => tableViewOf(spec), [spec]);
 
   if (rows.length === 0) {
     return (
       <div className="data-table" data-testid="data-table">
         <p data-testid="table-empty">No rows.</p>
-      </div>
-    );
-  }
-
-  if (view !== undefined) {
-    const figures = new Set(view.figures ?? []);
-    return (
-      <div
-        className="data-table"
-        data-testid="data-table"
-        style={{ height: `${String(height)}px`, overflow: 'auto' }}
-        // A scrolling region, focusable and named, as the rows' table is (T182).
-        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-        tabIndex={0}
-        role="region"
-        aria-label={label === undefined ? 'Table' : `${label}, table`}
-      >
-        <table className="grid-table comfy">
-          <thead>
-            <tr>
-              {view.columns.map((column, at) => (
-                <th scope="col" key={column} className={figures.has(at) ? 'num' : undefined}>
-                  {column}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {view.rows.map((row, index) => (
-              <tr
-                // Its first cell names it; its place keeps two alike apart.
-                key={`${String(index)} ${row[0] ?? ''}`}
-                data-testid="table-row"
-                style={{ height: `${String(ROW_HEIGHT)}px` }}
-              >
-                {row.map((cell, at) => (
-                  <td key={view.columns[at] ?? at} className={figures.has(at) ? 'num' : undefined}>
-                    {cell}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     );
   }
