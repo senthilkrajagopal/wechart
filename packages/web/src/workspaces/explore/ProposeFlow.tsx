@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { refreshReviews } from '../reviews/reviews';
 import { ProposeDialog, type ProposalCheck, type ProposalCheckItem } from './ProposeDialog';
 
 /**
@@ -81,16 +82,8 @@ export function ProposeFlow({
       return (await response.json()) as { id: string; status: string };
     },
     onSuccess: async (proposal) => {
-      /**
-       * A read still on its way began before this proposal, and the first of
-       * one, with no data yet, would be reused by an invalidation rather than
-       * asked again (tanstack-query-mutations.md), leaving the item's row
-       * "Draft" (propose.spec:83 under load). Cancelled first, it is asked anew.
-       */
-      for (const queryKey of [['reviews'], ['proposal-of', item.kind, item.id]]) {
-        await client.cancelQueries({ queryKey });
-        await client.invalidateQueries({ queryKey });
-      }
+      // Asked anew, a read already on its way included (propose.spec:83).
+      await refreshReviews(client, ['proposal-of', item.kind, item.id]);
       onProposed(proposal, checked.data?.targetPath ?? targetPath);
     },
   });

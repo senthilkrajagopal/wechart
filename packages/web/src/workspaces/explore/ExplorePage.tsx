@@ -28,7 +28,7 @@ import { exploreHref, folderChain, FOLDERS_QUERY, targetPathOf } from './folders
 import { isMyWorkspace, ROOT_FOLDERS, SHARED_ROOT, rootTitleOf, visibleRoots } from './roots';
 import { WorkspaceBand } from './WorkspaceBand';
 import { ProposeFlow } from './ProposeFlow';
-import { REVIEWS_QUERY } from '../reviews/reviews';
+import { refreshReviews, REVIEWS_QUERY } from '../reviews/reviews';
 import { statusOfItem, waitingProposalOf } from './proposalStatus';
 import { EditInWorkspaceDialog } from './EditInWorkspaceDialog';
 import { browserTimeZone } from './projectFolder';
@@ -749,8 +749,7 @@ export function ExplorePage() {
     // A data source gone from its row leaves the Data sources page too (T526's review).
     void queryClient.invalidateQueries({ queryKey: ['data-sources'] });
     // A proposal withdrawn with its item leaves Reviews and the statuses (T528).
-    void queryClient.invalidateQueries({ queryKey: ['reviews'] });
-    void queryClient.invalidateQueries({ queryKey: ['proposal-of'] });
+    void refreshReviews(queryClient, ['proposal-of']);
   };
   const rowDeleted = (item: CatalogItem) => {
     // The rows as listed: of the kind shown (T525).

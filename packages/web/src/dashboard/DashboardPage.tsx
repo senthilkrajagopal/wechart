@@ -27,6 +27,7 @@ import {
   type KeptVersion,
 } from '../workspaces/history/HistoryPanel';
 import { RestoreDialogs, useRestore, type RestoringVersion } from '../workspaces/history/restore';
+import { refreshReviews } from '../workspaces/reviews/reviews';
 import { EditInWorkspaceDialog } from '../workspaces/explore/EditInWorkspaceDialog';
 import { exploreHref, FOLDERS_QUERY, targetPathOf } from '../workspaces/explore/folders';
 import { placeOf, type ItemWorkspace } from '../workspaces/explore/placeOf';
@@ -361,7 +362,7 @@ export function DashboardPage({
             void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
             void queryClient.invalidateQueries({ queryKey: ['folders'] });
             void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
-            void queryClient.invalidateQueries({ queryKey: ['reviews'] });
+            void refreshReviews(queryClient);
             router.history.push(exploreHref(document.folderId ?? SHARED_ROOT.id));
           }}
           onClose={() => {

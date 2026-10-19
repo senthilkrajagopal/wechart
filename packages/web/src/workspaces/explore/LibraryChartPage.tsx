@@ -38,6 +38,7 @@ import { FOLDERS_QUERY, targetPathOf } from './folders';
 import { placeOf, type ItemWorkspace } from './placeOf';
 import { WorkspaceBand } from './WorkspaceBand';
 import { RestoreDialogs, useRestore } from '../history/restore';
+import { refreshReviews } from '../reviews/reviews';
 import { StateLine } from '../../shell/StatusIcon';
 import { ChartTile } from '../../tiles/ChartTile';
 import { TileError } from '../../tiles/TileError';
@@ -474,7 +475,7 @@ export function LibraryChartPage({ chartId, panel }: LibraryChartPageProps) {
     void queryClient.invalidateQueries({ queryKey: ['folders'] });
     void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
     // Its open proposal, withdrawn with it, leaves Reviews (T528).
-    void queryClient.invalidateQueries({ queryKey: ['reviews'] });
+    void refreshReviews(queryClient);
     router.history.push(exploreHref(stored.data?.body.folderId ?? SHARED_ROOT.id));
   };
 

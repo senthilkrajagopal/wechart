@@ -1,3 +1,5 @@
+import type { QueryClient, QueryKey } from '@tanstack/react-query';
+
 import { clockOf } from '../../shell/formatTime';
 import { shortDay } from '../../shell/relativeAge';
 import type { StateKind } from '../../shell/StatusIcon';
@@ -90,6 +92,27 @@ export const REVIEWS_COUNT_QUERY = {
     return waiting;
   },
 };
+
+/**
+ * After a change to proposals: Reviews' lists and count, and any other keys
+ * named (an item's `proposal-of`, say), asked again. Every place that changes
+ * proposals goes through this, so none can drift back to a bare invalidation.
+ *
+ * Cancelled first: a read still on its way began before the change, and the
+ * first of one, with no data yet, would be reused by an invalidation rather
+ * than asked again (tanstack-query-mutations.md, "With no data yet, the
+ * in-flight promise is reused"), leaving an item's row "Draft" after it was
+ * proposed (propose.spec:83 under load; lane FIX).
+ */
+export async function refreshReviews(
+  client: QueryClient,
+  ...more: readonly QueryKey[]
+): Promise<void> {
+  for (const queryKey of [['reviews'], ...more]) {
+    await client.cancelQueries({ queryKey });
+    await client.invalidateQueries({ queryKey });
+  }
+}
 
 export const KIND_LABEL: Record<ReviewKind, string> = {
   dashboard: 'Dashboard',

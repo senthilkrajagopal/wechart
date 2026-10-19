@@ -1,6 +1,60 @@
-import { describe, expect, it } from 'vitest';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { folderText, includesText, proposedText, statusOf, type ReviewRow } from './reviews';
+import {
+  folderText,
+  includesText,
+  proposedText,
+  refreshReviews,
+  REVIEWS_QUERY,
+  statusOf,
+  type Reviews,
+  type ReviewRow,
+} from './reviews';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+/**
+ * Lane FIX (propose.spec:83's "Draft" under load): a change to proposals made
+ * while Reviews' first read is still on its way. Invalidated, TanStack Query
+ * reuses a first fetch that has no data yet (tanstack-query-mutations.md), so
+ * the lists would keep the answer from before the change.
+ */
+describe('refreshReviews', () => {
+  it('asks again for a first read still on its way, rather than keeping its answer from before the change', async () => {
+    let firstRead: ((response: Response) => void) | undefined;
+    let reads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url !== '/api/reviews') return Promise.resolve(new Response('{}', { status: 404 }));
+        reads += 1;
+        if (reads === 1)
+          return new Promise<Response>((resolve) => {
+            firstRead = resolve;
+          });
+        return Promise.resolve(
+          new Response(JSON.stringify({ toReview: [], mine: [{ id: 'p1' }] }), { status: 200 }),
+        );
+      }),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const stop = new QueryObserver(client, REVIEWS_QUERY).subscribe(() => undefined);
+    await vi.waitFor(() => {
+      expect(firstRead).toBeDefined();
+    });
+
+    const refreshed = refreshReviews(client);
+    // The read from before the change arrives only now.
+    firstRead?.(new Response(JSON.stringify({ toReview: [], mine: [] }), { status: 200 }));
+    await refreshed;
+
+    expect(client.getQueryData<Reviews>(['reviews'])?.mine.map((each) => each.id)).toEqual(['p1']);
+    stop();
+  });
+});
 
 /**
  * T355 (AC-287; design 05 of 2026-09-27, states D and E): how the Reviews

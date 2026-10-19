@@ -5,7 +5,7 @@ import { DiscardQuestion } from '../../shell/DiscardQuestion';
 import { PROPOSAL_TEXT_LIMIT } from '../explore/ProposeDialog';
 import { Refusal } from './Refusal';
 import { DecisionRefused, decide, shownItems, type ProposalDetail } from './review';
-import { folderText } from './reviews';
+import { folderText, refreshReviews } from './reviews';
 
 /**
  * Approve and Reject, only here (T356; design 05, states I, J, K and L;
@@ -44,8 +44,7 @@ export function DecisionPanel({
       decide(proposal.id, action, action === 'reject' && reason.trim() !== '' ? { reason } : {}),
     onSuccess: (answer, action) => {
       void client.invalidateQueries({ queryKey: ['proposal', proposal.id] });
-      void client.invalidateQueries({ queryKey: ['reviews'] });
-      void client.invalidateQueries({ queryKey: ['proposal-of'] });
+      void refreshReviews(client, ['proposal-of']);
       // An approval may resolve calculation requests (T385, AC-052).
       if (action === 'approve') void client.invalidateQueries({ queryKey: ['calc-requests'] });
       setStep('idle');
