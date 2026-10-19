@@ -109,6 +109,7 @@ export {
   type ChartMarking,
   type ComboAxis,
   type ComboMark,
+  type MapPointsAnswer,
   type ParallelBrush,
   type RenderSpec,
   type SeriesData,
@@ -358,6 +359,7 @@ export {
 } from './model/objects';
 
 export { boxStats, quantile7, type BoxStats, type WhiskerRule } from './stats/boxplot';
+export { geoPointOf, type GeoPoint } from './geo/geoValue';
 export { countryCodeMarkingOf, holdsCountryCodes, ISO_3166_ALPHA_3 } from './geo/iso3';
 export {
   isRegionKey,
@@ -425,7 +427,9 @@ export {
   DEFAULT_MAP,
   mapLayersOf,
   mapModule,
+  mapPointsQuery,
   mapSettingsOf,
+  pointsAsDensity,
   type BoundarySet,
   type DensityLayer,
   type MapLayers,

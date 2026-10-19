@@ -141,3 +141,82 @@ test('the map is offered for a dimension the model marks a country code only as 
   );
   expect((await mapCard(page)).drawable).toBe('true');
 });
+
+/**
+ * T976 / AC-625: THE SYSTEM SHALL draw a Points layer from a geo dimension's
+ * latitude and longitude as area-proportional circles 8–24 px across at 0.72
+ * with a 1 px surface ring, in categorical slot 2 over a Regions layer …
+ * `Fails when: a point is placed off its latitude and longitude; its size
+ * isn't proportional by area within 1 %, or outside 8–24 px; points over
+ * regions take slot 1; …`
+ *
+ * On the real Cube: the cube's `location` is a `geo` dimension, so its value
+ * is Cube's own "lat,lng", asked by the layer's own query.
+ */
+test('a Points layer draws each place from a geo dimension over the regions, sized by area', async ({
+  page,
+  request,
+}, testInfo) => {
+  const cube = await newChartOnCountries(page, request, testInfo.project.name);
+  await wellPicker(page, 'dimensions').selectOption(`${cube}.iso3`);
+  const result = page.getByTestId('editor-result');
+  await expect(result.locator('svg').first()).toContainText('FRA');
+  await chooseChartType(page, 'map');
+  await expectChartType(page, 'map');
+
+  await page.getByTestId('add-mapPoints').click();
+  await page.getByTestId(`pick-${cube}.location`).click();
+  await page.getByTestId('add-mapPointsSize').click();
+  await page.getByTestId(`pick-${cube}.total`).click();
+
+  // Five places, in slot 2 (the ramp is slot 1's hue), never slot 1.
+  const map = result.locator('svg').first();
+  const points = map.locator('path[fill="#eb6834"]');
+  await expect(points).toHaveCount(5);
+  await expect(map.locator('path[fill="#2a78d6"]')).toHaveCount(0);
+  // 8 px across for the least (French Guiana, 10), 24 px for the most (the
+  // United States, 300), each with its 1 px ring.
+  const across = await points.evaluateAll((paths) =>
+    paths.map((path) => path.getBoundingClientRect().width),
+  );
+  expect(Math.min(...across)).toBeGreaterThan(8 - 0.5);
+  expect(Math.min(...across)).toBeLessThan(9 + 0.5);
+  expect(Math.max(...across)).toBeGreaterThan(24 - 0.5);
+  expect(Math.max(...across)).toBeLessThan(25 + 0.5);
+
+  // Each place where it is: told apart by size (GUF 10, SGP 40, NOR 80,
+  // FRA 120, USA 300), they run west to east by longitude and north to
+  // south by latitude — which a swapped "lat,lng" would not.
+  const placed = await points.evaluateAll((paths) =>
+    paths
+      .map((path) => {
+        const box = path.getBoundingClientRect();
+        return { size: box.width, x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      })
+      .sort((one, other) => one.size - other.size),
+  );
+  const [guf, sgp, nor, fra, usa] = placed as [
+    (typeof placed)[0],
+    (typeof placed)[0],
+    (typeof placed)[0],
+    (typeof placed)[0],
+    (typeof placed)[0],
+  ];
+  const westToEast = [usa, guf, fra, nor, sgp].map((one) => one.x);
+  expect(westToEast).toEqual([...westToEast].sort((one, other) => one - other));
+  const northToSouth = [nor, fra, usa, guf, sgp].map((one) => one.y);
+  expect(northToSouth).toEqual([...northToSouth].sort((one, other) => one - other));
+  await expect(result.getByTestId('map-unlocated')).toHaveCount(0);
+
+  // A location with a row of none: four drawn, the fifth counted under the map.
+  await page
+    .getByTestId('map-layer-points')
+    .getByRole('button', { name: /^Remove .* from Points layer$/ })
+    .click();
+  await page.getByTestId('add-mapPoints').click();
+  await page.getByTestId(`pick-${cube}.location_but_guf`).click();
+  await expect(points).toHaveCount(4);
+  await expect(result.getByTestId('map-unlocated')).toHaveText(
+    /^1 of the country sales \S+ has no location\.$/,
+  );
+});

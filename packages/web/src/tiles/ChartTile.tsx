@@ -2,6 +2,7 @@ import { describeChart, isDrawable } from '@wechart/charts';
 import {
   BULLET_NO_TARGET,
   CHART_TYPE_NAMES,
+  mapSettingsOf,
   targetCount,
   type ChartType,
   type RenderSpec,
@@ -16,6 +17,7 @@ import { badgesIn, badgesNeeded, nextPlace, roomIn, type BadgePlace } from './ba
 import { FreshnessBadge } from './FreshnessBadge';
 import { DataTable, type DataTableProps } from './DataTable';
 import { GraphicalTable } from './GraphicalTable';
+import { MapNotes } from './MapNotes';
 import { Kpi } from './Kpi';
 import { PivotTable } from './PivotTable';
 import { TileEmpty } from './TileEmpty';
@@ -24,6 +26,7 @@ import { ParallelNotes } from './ParallelNotes';
 import { ParallelSliders } from './ParallelSliders';
 import { SankeyNotes } from './SankeyNotes';
 import { UnplacedCodes } from './UnplacedCodes';
+import { useMapPoints } from './useMapPoints';
 
 /**
  * One chart, whatever kind it is (AC-037), and the table behind it (AC-178).
@@ -127,6 +130,8 @@ export interface ChartTileProps {
    * where the tile has nowhere to filter.
    */
   readonly onFilter?: (() => void) | undefined;
+  /** A Map's "Draw as density", where its layers can be changed (T976, AC-625). */
+  readonly onDrawAsDensity?: (() => void) | undefined;
   /**
    * The marked-items badge, in the header row beside the title (AC-201): the
    * prototype's `.mbadge`, rather than a line above that pushed the title down.
@@ -314,7 +319,22 @@ function ChartBody({
   );
 }
 
-export function ChartTile({
+export function ChartTile(props: ChartTileProps) {
+  // A Map with a Points layer asks it of Cube apart (T976); no other tile
+  // asks anything here, nor needs a query client to be drawn.
+  return props.spec.chartType === 'map' && mapSettingsOf(props.spec.options).points !== undefined ? (
+    <MapPointsTile {...props} />
+  ) : (
+    <Tile {...props} />
+  );
+}
+
+function MapPointsTile(props: ChartTileProps) {
+  const spec = useMapPoints(props.spec, props.query);
+  return <Tile {...props} spec={spec} />;
+}
+
+function Tile({
   spec,
   height,
   tableView,
@@ -329,6 +349,7 @@ export function ChartTile({
   kpiSolo,
   countRows,
   onFilter,
+  onDrawAsDensity,
   onItemClick,
   onShapeMark,
   onAxisRange,
@@ -560,6 +581,10 @@ export function ChartTile({
       )}
       {/* A map's codes it can't place, named under it (T398, rule 87). */}
       {spec.chartType === 'map' && !showingTable ? <UnplacedCodes spec={spec} /> : null}
+      {/* Its Points layer's unlocated rows, refused Colour and cut (T976, AC-625). */}
+      {spec.chartType === 'map' && !showingTable ? (
+        <MapNotes spec={spec} onDrawAsDensity={onDrawAsDensity} onFilter={onFilter} />
+      ) : null}
       {/* Parallel coordinates' scale warning and cut, as text (T982, rule 159). */}
       {spec.chartType === 'parallel' && !showingTable ? (
         <ParallelNotes

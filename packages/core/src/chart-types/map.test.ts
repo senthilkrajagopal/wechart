@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { CHART_TYPE_MODULES } from './index';
-import { BOUNDARY_SETS, mapLayersOf, mapModule, mapSettingsOf } from './map';
+import {
+  BOUNDARY_SETS,
+  mapLayersOf,
+  mapModule,
+  mapPointsQuery,
+  mapSettingsOf,
+  pointsAsDensity,
+} from './map';
 
 /**
  * T973 / AC-622: THE SYSTEM SHALL offer one Map type, in place of the Country
@@ -78,5 +85,69 @@ describe('the Map’s settings (AC-622)', () => {
         options: { map: { points: { location: 'stores.location' } } },
       }),
     ).toEqual({ points: { location: 'stores.location' } });
+  });
+});
+
+/**
+ * T976 / AC-625: a Points layer from a geo dimension's latitude and longitude
+ * … IF Cube returned fewer rows than the data holds, THEN say "Showing ‹n› of
+ * ‹N› ‹members› (Cube's row limit)."
+ *
+ * The layer is asked of Cube on its own, as the tile's query is — its filters
+ * and date ranges kept — by its location (and Colour), sized by its measure,
+ * and told to count all its rows.
+ */
+describe('the Points layer’s own query (AC-625)', () => {
+  const tile = {
+    measures: ['orders.revenue'],
+    dimensions: ['stores.territory'],
+    filters: [{ member: 'orders.status', operator: 'equals', values: ['shipped'] }],
+    timeDimensions: [
+      { dimension: 'orders.created_at', granularity: 'month', dateRange: 'Last year' },
+      { dimension: 'orders.shipped_at', granularity: 'day' },
+    ],
+  };
+
+  it('asks by location, sized by its measure, its filters and date ranges kept, counting all', () => {
+    expect(
+      mapPointsQuery(tile, { location: 'stores.location', size: 'orders.revenue' }),
+    ).toEqual({
+      measures: ['orders.revenue'],
+      dimensions: ['stores.location'],
+      filters: tile.filters,
+      timeDimensions: [{ dimension: 'orders.created_at', dateRange: 'Last year' }],
+      total: true,
+    });
+  });
+
+  it('asks by Colour too, and for no measure when unsized', () => {
+    expect(
+      mapPointsQuery(
+        { measures: ['orders.count'], dimensions: [] },
+        { location: 'stores.location', colour: 'stores.format' },
+      ),
+    ).toEqual({
+      measures: [],
+      dimensions: ['stores.format', 'stores.location'],
+      total: true,
+    });
+  });
+
+  it('draws the points as density on "Draw as density"', () => {
+    expect(
+      pointsAsDensity({
+        boundarySet: 'admin1',
+        points: { location: 'stores.location', size: 'orders.revenue' },
+      }),
+    ).toEqual({ boundarySet: 'admin1', density: { location: 'stores.location' } });
+    expect(pointsAsDensity({ boundarySet: 'countries' })).toEqual({ boundarySet: 'countries' });
+  });
+
+  it('keeps Colour as stored', () => {
+    expect(
+      mapSettingsOf({
+        map: { points: { location: 'stores.location', colour: 'stores.format' } },
+      }).points,
+    ).toEqual({ location: 'stores.location', colour: 'stores.format' });
   });
 });

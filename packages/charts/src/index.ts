@@ -13,6 +13,12 @@ export { treemapOption, isTreemapType } from './series/treemap';
 export { heatmapOption, isHeatmapType } from './series/heatmap';
 export { boxesOf, drawnPointsOf, type Box } from './series/boxplot';
 export { isMapType, mapOption, regionSetIdOf, unplacedCodes, unplacedNote } from './series/map';
+export {
+  mapPointsOf,
+  POINT_COLOURS_MAX,
+  type MapPoint,
+  type MapPointsDrawn,
+} from './series/mapPoints';
 export { countryMap, loadCountryMap, type CountryMap } from './geo/countryMap';
 export {
   onRegionSets,

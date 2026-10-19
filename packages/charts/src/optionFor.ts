@@ -35,6 +35,7 @@ import { withNarrowCombo } from './combo/narrow';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { countryMap } from './geo/countryMap';
 import { isMapType, mapOption } from './series/map';
+import { withMapPoints } from './series/mapPoints';
 import { SERIES } from './series/registry';
 import { withShares } from './series/stack100';
 import { lineOption, isLineType } from './series/line';
@@ -206,8 +207,12 @@ export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): E
     // Marked, highlighted and focused as every chart is (T398's review), in
     // outline and fade only: a region's fill is the scale's, and a colour
     // of the item's own would stand in for it (direction.md, "Country map").
-    return regionsFilledByScale(
-      withKeyboardFocus(withMarks(withHighlight(mapOption(spec, map), spec), spec), spec),
+    // Its Points layer over the regions, in colours of its own (T976).
+    return withMapPoints(
+      regionsFilledByScale(
+        withKeyboardFocus(withMarks(withHighlight(mapOption(spec, map), spec), spec), spec),
+      ),
+      spec,
     );
   }
 

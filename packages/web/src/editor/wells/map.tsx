@@ -36,6 +36,7 @@ export function MapWells({
   const set = (next: MapSettings) => onOptions?.({ map: mapModule.save(next) });
   const locations = available.filter((one) => one.kind === 'dimension' && one.type === 'geo');
   const measures = available.filter((one) => one.kind === 'measure');
+  const dimensions = available.filter((one) => one.kind === 'dimension' && one.type !== 'geo');
   const [key] = spec?.dimensions ?? [];
   const [measure] = spec?.measures ?? [];
   const { points, density } = settings;
@@ -116,12 +117,26 @@ export function MapWells({
                 empty="+ measure"
                 candidates={measures}
                 titleOf={titleOf}
-                onChange={(size) =>
-                  set({
-                    ...settings,
-                    points: { location: points.location, ...(size === undefined ? {} : { size }) },
-                  })
-                }
+                onChange={(size) => {
+                  const { size: _old, ...rest } = points;
+                  void _old;
+                  set({ ...settings, points: size === undefined ? rest : { ...rest, size } });
+                }}
+              />
+              {/* At most 3 members, said under the map past that (T976, AC-625). */}
+              <span className="well__empty">coloured by</span>
+              <OneField
+                layer="Points layer’s colour"
+                testId="mapPointsColour"
+                member={points.colour}
+                empty="+ dimension"
+                candidates={dimensions}
+                titleOf={titleOf}
+                onChange={(colour) => {
+                  const { colour: _old, ...rest } = points;
+                  void _old;
+                  set({ ...settings, points: colour === undefined ? rest : { ...rest, colour } });
+                }}
               />
             </>
           )}
@@ -179,7 +194,9 @@ function OneField({
               label:
                 empty === '+ location'
                   ? 'No location (geo) dimension in this cube'
-                  : 'No measure in this cube',
+                  : empty === '+ dimension'
+                    ? 'No dimension in this cube'
+                    : 'No measure in this cube',
               disabled: true,
               onSelect: () => undefined,
             },

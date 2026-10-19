@@ -301,6 +301,17 @@ export interface RenderSpec {
    * stored: the marking is the members.
    */
   readonly parallelBrushes?: readonly ParallelBrush[];
+  /**
+   * A Map's Points layer as Cube answered its own query (T976, AC-625): a
+   * row per location, and Cube's count of them all where it was asked.
+   */
+  readonly mapPoints?: MapPointsAnswer;
+}
+
+/** The rows a Map's Points layer was answered with, and how many there are in all. */
+export interface MapPointsAnswer {
+  readonly rows: readonly Record<string, unknown>[];
+  readonly total?: number;
 }
 
 /** One brush along a parallel axis: its measure, from and to in its own units, inclusive. */

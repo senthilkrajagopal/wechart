@@ -149,6 +149,25 @@ describe('the Map’s wells (AC-622)', () => {
     expect(onOptions).toHaveBeenLastCalledWith({ map: undefined });
   });
 
+  /** T976 / AC-625: … or by a Colour dimension of at most 3 members. */
+  it('colours the Points layer by a dimension, not a location, and keeps its size', async () => {
+    const onOptions = wells({
+      options: { map: { points: { location: 'stores.location', size: 'orders.revenue' } } },
+    });
+    await userEvent.click(screen.getByTestId('add-mapPointsColour'));
+    expect(screen.queryByTestId('pick-stores.location')).toBeNull();
+    await userEvent.click(screen.getByTestId('pick-customers.country'));
+    expect(onOptions).toHaveBeenLastCalledWith({
+      map: {
+        points: {
+          location: 'stores.location',
+          size: 'orders.revenue',
+          colour: 'customers.country',
+        },
+      },
+    });
+  });
+
   it('takes a geo dimension as the Density layer’s location', async () => {
     const onOptions = wells();
     await userEvent.click(screen.getByTestId('add-mapDensity'));

@@ -28,6 +28,8 @@ export interface PointsLayer {
   readonly location: string;
   /** The measure its points are sized by; unsized without one. */
   readonly size?: string;
+  /** A dimension of at most 3 members its points are coloured by (T976, AC-625). */
+  readonly colour?: string;
 }
 
 export interface DensityLayer {
@@ -66,6 +68,7 @@ function parse(stored: unknown): MapSettings {
           points: {
             location: points['location'],
             ...(named(points['size']) ? { size: points['size'] } : {}),
+            ...(named(points['colour']) ? { colour: points['colour'] } : {}),
           },
         }
       : {}),
@@ -90,6 +93,45 @@ export const mapModule: ChartTypeModule<MapSettings> = { type: 'map', parse, sav
 /** The Map's settings from a chart's options. */
 export function mapSettingsOf(options: Readonly<Record<string, unknown>> | undefined): MapSettings {
   return parse(options?.['map']);
+}
+
+/**
+ * The Points layer's own query (T976, AC-625), asked apart from the tile's
+ * as a graphical table's trends are: by its location — one point per place,
+ * Cube grouping a geo dimension by its "lat,lng" text (research
+ * `cube-geo-values.md`) — and its Colour, sized by its measure, with the
+ * tile's filters and date ranges (not their grains), and `total` so a cut
+ * at Cube's row limit can be said.
+ */
+export function mapPointsQuery(
+  tile: Readonly<Record<string, unknown>>,
+  points: PointsLayer,
+): Record<string, unknown> {
+  const filters = tile['filters'];
+  const ranges = (Array.isArray(tile['timeDimensions']) ? tile['timeDimensions'] : [])
+    .map((each) => record(each))
+    .filter((each) => each !== undefined && each['dateRange'] !== undefined)
+    .map((each) => ({ dimension: each!['dimension'], dateRange: each!['dateRange'] }));
+  return {
+    measures: points.size === undefined ? [] : [points.size],
+    dimensions: [...new Set([points.location, ...(points.colour === undefined ? [] : [points.colour])])].sort(),
+    ...(Array.isArray(filters) && filters.length > 0 ? { filters } : {}),
+    ...(ranges.length > 0 ? { timeDimensions: ranges } : {}),
+    ...(Array.isArray(tile['segments']) && tile['segments'].length > 0
+      ? { segments: tile['segments'] }
+      : {}),
+    total: true,
+  };
+}
+
+/**
+ * "Draw as density" (T976, AC-625): the Points layer's location drawn as the
+ * Density layer instead, the points gone. Settings with no Points layer as
+ * they are.
+ */
+export function pointsAsDensity(settings: MapSettings): MapSettings {
+  const { points, ...rest } = settings;
+  return points === undefined ? settings : { ...rest, density: { location: points.location } };
 }
 
 export interface MapLayers {

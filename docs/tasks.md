@@ -2269,11 +2269,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Depends on: T974
   - Waits on: research: an admin-1 boundary dataset (source, licence, detail, key format) in `docs/research/`.
 
-- [ ] T976 (AC-625) A Points layer from a geo dimension: area-proportional circles of 8–24 px, slot 2 over regions, rows with no location counted, and a cut result said
-  - Files: `packages/charts/src/series/mapPoints.ts` (+ test), `packages/core/src/geo/geoValue.ts` (+ test), `packages/web/src/tiles/MapNotes.tsx` (+ test).
-  - Failing test: `geoValue.test.ts`: a `/v1/load` row's geo value, in the shape the research documents, gives its latitude and longitude; `mapPoints.test.ts`: 10 stores are scatter points on `geo` at their coordinates, 8 px for the smallest Revenue and 24 px for the largest by area; over a Regions layer they take categorical slot 2; Colour of 4 values is refused; `MapNotes.test.tsx`: "312 stores have no location." and, cut, "Showing 10,000 of 48,210 stores (Cube's row limit)." with "Draw as density" and Filter (AC-625).
-  - Depends on: T973
-  - Waits on: research: the shape of a Cube `geo` value in a `/v1/load` row and its client types; and the palette validator on categorical slot 2 over the sequential ramp.
+- [x] T976 (AC-625) A Points layer from a geo dimension: area-proportional circles of 8–24 px, slot 2 over regions, rows with no location counted, and a cut result said
 
 - [ ] T977 (AC-626) A Density layer on the ramp fading to transparent, regions as outlines while it shows, never markable, saying so
   - Files: `packages/charts/src/series/mapDensity.ts` (+ test), `packages/web/src/editor/wells/map.tsx`.

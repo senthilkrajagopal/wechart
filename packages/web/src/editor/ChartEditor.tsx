@@ -19,9 +19,12 @@ import {
   emptySpec,
   isEmpty,
   kpiOptionsOf,
+  mapModule,
+  mapSettingsOf,
   memberOn,
   membersOn,
   onOneScale,
+  pointsAsDensity,
   removeFromWell,
   swapMeasure,
   targetCount,
@@ -1252,6 +1255,12 @@ function EditorBody({
                       }}
                       // The query it asked: a KPI's trend asks it by Time's grain (T938).
                       query={query}
+                      // A Map's points cut at Cube's limit, drawn as density (T976, AC-625).
+                      onDrawAsDensity={() =>
+                        setOptions({
+                          map: mapModule.save(pointsAsDensity(mapSettingsOf(options))),
+                        })
+                      }
                       // A graphical table's + Column opens the Columns well's
                       // + Column (T944, AC-570).
                       onAddColumn={() => {
