@@ -2223,10 +2223,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Failing test: `kpiMarking.test.tsx`: clicking EMEA's tile marks Region = EMEA; Ctrl-click on APAC adds it; the marked tile has the 1.5 px outline and "● Marked", the others' values in `text-secondary` and their sparklines at opacity 0.28; limited by a marking of Channel = Web every tile's query carries it; in cross-filter mode a tile filters the others to its Region, and as a Highlight target shows "Selected: $X · p%" (AC-568).
   - Depends on: T940
 
-- [ ] T942 (AC-569) The KPI's table view and its sparkline's text alternative
-  - Files: `packages/web/src/tiles/tableView/kpi.ts` (+ test).
-  - Failing test: `kpi.test.ts` (table view): tiled by Region, rows read "EMEA · $412,000 · $395,000 · ▲ +4.2% · $450,000 · 92%"; each sparkline's alternative names the first, last, low and high values (AC-569).
-  - Depends on: T940
+- [x] T942 (AC-569) The KPI's table view and its sparkline's text alternative
 
 ### Lane CHARTS-A: the graphical table
 

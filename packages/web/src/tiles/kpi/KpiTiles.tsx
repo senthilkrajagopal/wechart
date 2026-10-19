@@ -1,15 +1,9 @@
 import { DEFAULT_PALETTE, labelOf } from '@wechart/charts';
-import {
-  formatValue,
-  kpiOptionsOf,
-  type KpiOptions,
-  type KpiTileOrder,
-  type RenderSpec,
-} from '@wechart/core';
+import { formatValue, kpiOptionsOf, type KpiOptions, type RenderSpec } from '@wechart/core';
 import { useState } from 'react';
 
 import { changeWordsOf, KpiChange, type KpiCompared } from './KpiChange';
-import { comparedOf, numberOf, periodStartOf, targetOf } from './kpiFigures';
+import { comparedOf, ordered, targetOf, tilesOf, type KpiTileRows as Tile } from './kpiFigures';
 import { kpiShort } from './kpiNumbers';
 import { KpiTarget } from './KpiTarget';
 import { KpiTrend } from './KpiTrend';
@@ -17,51 +11,6 @@ import { useBox } from './useBox';
 
 /** The most tiles on one page, as trellis panels page past 20 (§5; AC-567). */
 export const KPI_TILES_PER_PAGE = 20;
-
-type Row = Readonly<Record<string, unknown>>;
-
-interface Tile {
-  readonly member: string;
-  readonly value: number | undefined;
-  readonly current: Row;
-  readonly compared: Row | undefined;
-}
-
-/**
- * Each member's rows (T940): with a period compared, Cube answers each
- * period's rows tagged with it, the current period the latest; otherwise
- * every row is the current period's. In the order Cube gave the members.
- */
-function tilesOf(spec: RenderSpec, tileBy: string, measure: string): Tile[] {
-  const starts = spec.rows.flatMap((row) => periodStartOf(row) ?? []);
-  const latest = starts.length === 0 ? undefined : starts.reduce((a, b) => (a > b ? a : b));
-  const current = new Map<string, Row>();
-  const compared = new Map<string, Row>();
-  for (const row of spec.rows) {
-    const member = String(row[tileBy] ?? '');
-    const start = periodStartOf(row);
-    if (start === undefined || start === latest) {
-      if (!current.has(member)) current.set(member, row);
-    } else if (!compared.has(member)) compared.set(member, row);
-  }
-  return [...current].map(([member, row]) => ({
-    member,
-    value: numberOf(row[measure]),
-    current: row,
-    compared: compared.get(member),
-  }));
-}
-
-/** By value, highest first, unless the author chose otherwise (AC-567); no value last. */
-function ordered(tiles: readonly Tile[], order: KpiTileOrder | undefined): Tile[] {
-  if (order === 'name') return [...tiles].sort((a, b) => a.member.localeCompare(b.member));
-  const sign = order === 'valueAscending' ? 1 : -1;
-  return [...tiles].sort((a, b) => {
-    if (a.value === undefined || b.value === undefined)
-      return (a.value === undefined ? 1 : 0) - (b.value === undefined ? 1 : 0);
-    return sign * (a.value - b.value);
-  });
-}
 
 /** "EMEA: $412K, up 4.2% vs Sep 2026, 92% of $450K" (AC-567). */
 function nameOf(

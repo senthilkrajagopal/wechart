@@ -3,6 +3,7 @@ import {
   formatValue,
   kpiPeriodOf,
   type KpiOptions,
+  type KpiTileOrder,
   type KpiTime,
   type RenderSpec,
 } from '@wechart/core';
@@ -69,6 +70,53 @@ export function comparedOf(
   const value = numberOf(row?.[measure]);
   const noRows = value === 0 && spec.measureTypes?.[measure] === 'count';
   return value === undefined || noRows ? { value: undefined, against } : { value, against };
+}
+
+/** A tiled KPI's member: its value, its current period's row and its compared one's. */
+export interface KpiTileRows {
+  readonly member: string;
+  readonly value: number | undefined;
+  readonly current: Row;
+  readonly compared: Row | undefined;
+}
+
+/**
+ * Each member's rows (T940): with a period compared, Cube answers each
+ * period's rows tagged with it, the current period the latest; otherwise
+ * every row is the current period's. In the order Cube gave the members.
+ */
+export function tilesOf(spec: RenderSpec, tileBy: string, measure: string): KpiTileRows[] {
+  const starts = spec.rows.flatMap((row) => periodStartOf(row) ?? []);
+  const latest = starts.length === 0 ? undefined : starts.reduce((a, b) => (a > b ? a : b));
+  const current = new Map<string, Row>();
+  const compared = new Map<string, Row>();
+  for (const row of spec.rows) {
+    const member = String(row[tileBy] ?? '');
+    const start = periodStartOf(row);
+    if (start === undefined || start === latest) {
+      if (!current.has(member)) current.set(member, row);
+    } else if (!compared.has(member)) compared.set(member, row);
+  }
+  return [...current].map(([member, row]) => ({
+    member,
+    value: numberOf(row[measure]),
+    current: row,
+    compared: compared.get(member),
+  }));
+}
+
+/** By value, highest first, unless the author chose otherwise (AC-567); no value last. */
+export function ordered(
+  tiles: readonly KpiTileRows[],
+  order: KpiTileOrder | undefined,
+): KpiTileRows[] {
+  if (order === 'name') return [...tiles].sort((a, b) => a.member.localeCompare(b.member));
+  const sign = order === 'valueAscending' ? 1 : -1;
+  return [...tiles].sort((a, b) => {
+    if (a.value === undefined || b.value === undefined)
+      return (a.value === undefined ? 1 : 0) - (b.value === undefined ? 1 : 0);
+    return sign * (a.value - b.value);
+  });
 }
 
 /** Its target's figure: a value, or a Target measure on the value's row (T938). */

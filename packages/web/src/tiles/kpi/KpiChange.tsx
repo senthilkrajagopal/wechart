@@ -41,6 +41,23 @@ function sizeOf(
 }
 
 /**
+ * The change as R80's Change element writes it (AC-565): ▲ or ▼ by which way
+ * the value went, then its sign and size ("▲ +4.2%"); "—" for a compared
+ * period with no data. The change line's and the table view's (T942).
+ */
+export function changeTextOf(
+  current: number,
+  compared: KpiCompared,
+  member: string,
+  formats: MemberFormats | undefined,
+): string {
+  if (compared.value === undefined) return '—';
+  const delta = current - compared.value;
+  const glyph = delta > 0 ? '▲ ' : delta < 0 ? '▼ ' : '';
+  return `${glyph}${sizeOf(current, compared.value, member, formats)}`;
+}
+
+/**
  * The change in words, for a tile's name (T940, AC-567): "up 4.2% vs Sep
  * 2026", "down 0.4 pts vs Sep 2026", or "no data vs Sep 2026".
  */
@@ -89,13 +106,12 @@ export function KpiChange({
       </p>
     );
   const delta = current - compared.value;
-  const glyph = delta > 0 ? '▲ ' : delta < 0 ? '▼ ' : '';
   const value = kpiShort(compared.value, member, formats);
   const against = compared.against === undefined ? value : `${compared.against} (${value})`;
   return (
     <p className="kpi__change" data-testid="kpi-change">
       <span className="text-change" data-tone={toneOf(delta, direction)}>
-        {`${glyph}${sizeOf(current, compared.value, member, formats)}`}
+        {changeTextOf(current, compared, member, formats)}
       </span>{' '}
       <span className="kpi__vs">
         {`vs ${against}${direction === 'lower' ? ' · lower is better' : ''}`}

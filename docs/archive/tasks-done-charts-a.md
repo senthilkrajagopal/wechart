@@ -59,6 +59,16 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - **Order:** by value, highest first; the KPI's Tile by well offers "Tile order" (By value, highest first; By value, lowest first; By name), stored as `tileOrder` only when not the default.
     - **ACs:** AC-567 is ticked, and AC-565 with it (its tiled value at `text-kpi`, 32/40), on `e2e/new-charts-a.spec.ts`, "a KPI tiled by status draws a named tile per member by value…" (6- and 5-column tiles on a fixed clock), with T937–T939's KPI e2e tests, on headless Chromium; unit tests `KpiTiles.test.tsx`, `kpi.test.tsx` (wells) and `kpi.test.ts` (core) seen red, then green.
 
+- [x] T942 (AC-569) The KPI's table view and its sparkline's text alternative
+  - Files: `packages/web/src/tiles/tableView/kpi.ts` (+ test).
+  - Failing test: `kpi.test.ts` (table view): tiled by Region, rows read "EMEA · $412,000 · $395,000 · ▲ +4.2% · $450,000 · 92%"; each sparkline's alternative names the first, last, low and high values (AC-569).
+  - Depends on: T940
+  - Done (2026-10-18), decision T942-1:
+    - **Table view:** `tiles/tableView/kpi.ts`, registered as the KPI's `TABLE_VIEWS` entry. It lists one row per tile, in the tiles' order, or one row: the tile's member, the value under its period, the compared value under its period (or the measure's title, or "Compared with"), the change as R80's Change writes it (`changeTextOf`), the target and its share. It has only the columns the KPI has; a period with no data reads "—". A KPI with none of R81's settings keeps its rows as queried, so `TableViewOf` may now answer undefined.
+    - **Shared:** `tilesOf` and `ordered` moved to `kpi/kpiFigures.ts`, for the tiles and the table alike.
+    - **Text alternative:** each sparkline is R80's named image ("Count, shipped by month, last 12 months: from 30 to 29, low 28, high 31"), first, last, low and high.
+    - **AC-569** is ticked on `e2e/new-charts-a.spec.ts`, "a KPI tiled by status…" (its table view's columns and rows against its tiles, and a tile's sparkline name), and `table-view.spec.ts`'s kpi walk, on headless Chromium; `tableView/kpi.test.ts` seen red, then green.
+
 - [x] T943 (AC-570, AC-037) The graphical table's spec and wells: Rows, Group rows by, and ordered columns of R80's element kinds, moved and removed from a ⋯ menu with Undo
   - Files: `packages/core/src/chart-types/graphicalTable.ts` (+ test), `packages/web/src/editor/wells/graphicalTable.tsx` (+ test).
   - Failing test: `graphicalTable.test.ts`: a spec of Category with Value, Sparkline, Bullet, Icon and Change columns parses and saves back in order; `graphicalTable.test.tsx` (wells): + Column offers the five kinds; a column's row opens its R80 element settings; its ⋯ holds Move up, Move down and Remove, Remove offering Undo; with no column the tile says "Add a column: Value, Change, Sparkline, Bullet or Icon." (AC-570, AC-037).

@@ -1293,6 +1293,41 @@ test('a KPI tiled by status draws a named tile per member by value, and one tile
     });
     expect(inside).toBe(true);
   }
+  /**
+   * T942 / AC-569: … a KPI's table view one row per tile … with columns for
+   * the value in each compared period, the change with ▲ or ▼, the target and
+   * the percentage of it …, and its sparkline a text alternative naming the
+   * first, last, low and high values.
+   */
+  await expect(items.first().getByTestId('kpi-trend').locator('svg')).toHaveAttribute(
+    'aria-label',
+    /^Count, (completed|shipped|processing) by month, last 12 months: from \d+ to \d+, low \d+, high \d+$/,
+  );
+  await viewAs(status, 'table');
+  const table = status.getByTestId('data-table');
+  await expect(table.getByRole('columnheader')).toHaveText([
+    'Status',
+    'Aug 2026',
+    'Jul 2026',
+    'Change',
+    'Target',
+    '%',
+  ]);
+  const cells = await table
+    .getByTestId('table-row')
+    .evaluateAll((rows) =>
+      rows.map((row) => [...row.querySelectorAll('td')].map((cell) => cell.textContent ?? '')),
+    );
+  expect(cells).toHaveLength(3);
+  // Each row its tile: by value, highest first, as the tiles are.
+  expect(cells.map((row) => Number(row[1]))).toEqual(values);
+  for (const row of cells) {
+    expect(row[0]).toMatch(/^(completed|shipped|processing)$/);
+    expect(row[3]).toMatch(/^(▲ \+|▼ −)?[\d.]+%$|^—$/);
+    expect(row[4]).toBe('10');
+    expect(row[5]).toBe(`${String(Math.round((Number(row[1]) / 10) * 100))}%`);
+  }
+
   // 29 orders in August: 20 on the first page, the rest on the next.
   const orders = page.locator('[data-tile="kpi-orders"]');
   await expect(orders.getByRole('listitem')).toHaveCount(20);

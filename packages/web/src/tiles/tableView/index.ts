@@ -2,6 +2,7 @@ import type { ChartType, RenderSpec } from '@wechart/core';
 
 import { boxplotPointRows, boxplotStatistics } from './boxplot';
 import { bulletTableView } from './bullet';
+import { kpiTableView } from './kpi';
 import { sankeyFlows } from './sankey';
 import { stack100Columns } from './stack100';
 
@@ -18,12 +19,14 @@ export interface TableView {
   readonly figures?: readonly number[];
 }
 
-export type TableViewOf = (spec: RenderSpec) => TableView;
+/** A type's table view; undefined where the spec keeps its rows as queried (a KPI with no R81 setting). */
+export type TableViewOf = (spec: RenderSpec) => TableView | undefined;
 
 /** Each type with a table view of its own, by its type. One line per type. */
 export const TABLE_VIEWS: Partial<Record<ChartType, TableViewOf>> = {
   boxplot: boxplotStatistics,
   bullet: bulletTableView,
+  kpi: kpiTableView,
   sankey: sankeyFlows,
 };
 
