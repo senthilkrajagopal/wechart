@@ -5,7 +5,7 @@ Read this first when resuming. It holds only the current state and the rules in 
 ## Now (2026-10-17)
 
 - **Branch:** all work is on `feat/xcube` until the user merges it to main. The user pushes, or asks for a push.
-- **Deployed** on docker-desktop k8s (namespace `wechart`, http://localhost:8089): **f12b78e1** (2026-10-18, verify.sh 46/46), with xcube bb188d8ada, sign-in on, no MCP host set (MCP off; the Gateway waits on T795's cluster installs). It has the SQL runner through T822 (parameters, saved queries, History, Make a cube/chart), MCP through T794 plus T1015, the finished compact header (T828–T844), combo drawing T845–T848, the Text tile T868–T875, and R81's T934–T936, T973, T981, T990. Images are built from `deploy/Dockerfile` (`docker build -f deploy/Dockerfile --target api|web`). ghcr.io still has `:260e59aa` as latest; nothing newer is pushed.
+- **Deployed** on docker-desktop k8s (namespace `wechart`, http://localhost:8089): **6cb84ce7** (2026-10-18, verify.sh 46/46), with xcube bb188d8ada, sign-in on, no MCP host set (MCP off; the Gateway waits on T795's cluster installs). It has the SQL runner through T822 (parameters, saved queries, History, Make a cube/chart, "Data source" once), MCP through T794 plus T1015, the finished compact header (T828–T844), combo T845–T850, the Text tile T868–T875 and T872, and R81's T934–T936, T943, T973, T981, T982, T990, T991. Images are built from `deploy/Dockerfile` (`docker build -f deploy/Dockerfile --target api|web`). ghcr.io still has `:260e59aa` as latest; nothing newer is pushed.
 - **Compose** runs xcube **407622a6b8**, which the repo pins as of T690.
 - **ACs:** 394 of 403 are ticked.
   - **Active (4):** AC-187, AC-190, AC-343, AC-352, all design conformance.
