@@ -2,9 +2,7 @@ import {
   bucketRangeAt,
   bucketStripeFor,
   CLICK_SLOP_PX,
-  countryMap,
   dragGesture,
-  loadCountryMap,
   echarts,
   edgeBetween,
   emphasisPatch,
@@ -13,6 +11,8 @@ import {
   itemsInShape,
   legendEntryAt,
   legendGlyphBoxes,
+  loadMapBoundaries,
+  mapBoundariesReady,
   optionFor,
   parallelBrushOf,
   themed,
@@ -29,6 +29,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type ReactNode,
@@ -167,17 +168,19 @@ export function ChartCanvas({
   /**
    * A map's boundaries, registered before its first option is set, which
    * ECharts throws on without them (T398; research/country-map.md): fetched
-   * once, the first time a map is drawn.
+   * once, the first time a map is drawn — Countries, or Admin-1's index and
+   * the country its values name (T975).
    */
   const isMap = spec.chartType === 'map';
-  const [mapReady, setMapReady] = useState(() => countryMap() !== undefined);
+  const [, boundariesIn] = useReducer((count: number) => count + 1, 0);
+  const mapReady = isMap && mapBoundariesReady(spec);
   const [mapFailed, setMapFailed] = useState(false);
   useEffect(() => {
     if (!isMap || mapReady) return undefined;
     let current = true;
-    loadCountryMap().then(
+    loadMapBoundaries(spec).then(
       () => {
-        if (current) setMapReady(true);
+        if (current) boundariesIn();
       },
       () => {
         if (current) setMapFailed(true);
@@ -186,7 +189,7 @@ export function ChartCanvas({
     return () => {
       current = false;
     };
-  }, [isMap, mapReady]);
+  }, [isMap, mapReady, spec]);
   /** The latest, read by a click without rebinding the handlers each render. */
   const clicked = useRef(onItemClick);
   /**

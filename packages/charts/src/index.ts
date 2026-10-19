@@ -21,6 +21,14 @@ export {
 } from './series/mapPoints';
 export { countryMap, loadCountryMap, type CountryMap } from './geo/countryMap';
 export {
+  admin1CountryOf,
+  admin1Index,
+  admin1RegionsOf,
+  loadAdmin1Index,
+  type Admin1Index,
+} from './geo/admin1';
+export { loadMapBoundaries, mapBoundariesReady } from './geo/boundaries';
+export {
   onRegionSets,
   regionSetOf,
   registerRegionSet,

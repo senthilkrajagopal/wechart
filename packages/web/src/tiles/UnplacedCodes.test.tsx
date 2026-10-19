@@ -48,6 +48,7 @@ describe('the codes a map can’t place', () => {
     act(() => {
       registerRegionSet('custom:territories', {
         map: 'wechart-custom-territories',
+        nameProperty: 'territory_id',
         index: regionIndexOf([
           { key: 'ATL', names: ['Atlantic'] },
           { key: 'GLF', names: ['Gulf'] },

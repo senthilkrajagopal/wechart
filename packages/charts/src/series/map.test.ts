@@ -2,6 +2,8 @@ import { EMPTY_PREDICATE, formatValue, withItem, type RenderSpec } from '@wechar
 import { COLORS } from '@wechart/ui';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { registerAdmin1Index, type Admin1Index } from '../geo/admin1';
+import admin1Index from '../geo/admin1/index.json';
 import countries from '../geo/countries-50m.geo.json';
 import { registerCountries } from '../geo/countryMap';
 import { OTHER_COLOUR } from '../colorAssignment';
@@ -225,9 +227,12 @@ describe('the Map', () => {
     expect(drawing(layered)).toEqual(drawing(before));
   });
 
-  it('says a boundary set not drawn yet isn’t, and colours no country from the ramp', () => {
+  // Admin-1 is drawn since T975: ISO-3 codes name none of its regions, which
+  // it says, as design 23's empty state does.
+  it('says a boundary set not drawn yet isn’t, or one no value matches, and colours no country from the ramp', () => {
+    registerAdmin1Index(admin1Index as unknown as Admin1Index);
     for (const [boundarySet, said] of [
-      ['admin1', 'Admin-1 boundaries are not drawn yet.'],
+      ['admin1', 'None of customers.country_iso3’s values match Admin-1.'],
       ['custom:territories', 'Custom boundary sets are not drawn yet.'],
     ] as const) {
       const svg = renderToSvg(optionFor({ ...spec(ROWS), options: { map: { boundarySet } } }));

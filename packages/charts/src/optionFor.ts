@@ -200,10 +200,9 @@ export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): E
     );
   if (isBoxplotType(spec.chartType)) return drawn(onGrid(boxplotOption(spec, canvas)));
   // Its own legend and tooltip, and no axes (T398). Drawn only once its
-  // boundaries are registered: the tile loads them first (`loadCountryMap`).
+  // boundaries are registered: the tile loads them first (`loadMapBoundaries`).
   if (isMapType(spec.chartType)) {
     const map = countryMap();
-    if (map === undefined) throw new Error('The country map’s boundaries are not loaded yet.');
     // Marked, highlighted and focused as every chart is (T398's review), in
     // outline and fade only: a region's fill is the scale's, and a colour
     // of the item's own would stand in for it (direction.md, "Country map").

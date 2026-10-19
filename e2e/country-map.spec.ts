@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
 import { newChartOnCountries } from './countries';
+import { newChartOnStates } from './regions';
 import { wellPicker } from './wells';
 
 /**
@@ -101,10 +102,11 @@ test('the Map’s wells offer its boundary sets and three layers, Regions drawn 
   await expect(page.getByTestId('map-layer-regions')).toContainText(/ coloured by /);
   await expect(result.getByTestId('unplaced-codes')).toHaveText('Not on the map: GUF');
 
-  // On Admin-1, not drawn yet, and saying so; no country checked against it.
+  // On Admin-1 (drawn since T975), ISO-3 codes name no country's regions,
+  // which it says; no country checked against it.
   await set.selectOption('admin1');
   await expect(result.locator('svg').first()).toContainText(
-    'Admin-1 boundaries are not drawn yet.',
+    /None of .*Iso3’s values match Admin-1\./,
   );
   await expect(result.getByTestId('unplaced-codes')).toHaveCount(0);
 
@@ -218,5 +220,47 @@ test('a Points layer draws each place from a geo dimension over the regions, siz
   await expect(points).toHaveCount(4);
   await expect(result.getByTestId('map-unlocated')).toHaveText(
     /^1 of the country sales \S+ has no location\.$/,
+  );
+});
+
+/**
+ * T975 / AC-624: a Regions layer on §5's sequential ramp with a legend and
+ * the "No data" swatch, a region with no row in the null neutral, and 0.5 px
+ * surface boundaries, on every boundary set. AC-622 (R83): Admin-1 is each
+ * country's ISO 3166-2 top tier. AC-623 (R83): placed by ISO 3166-2 code or
+ * English name; what it can't place named under the map.
+ *
+ * On the real Cube, with a cube of German states of this browser's own
+ * (`regions.ts`), Bavaria and Berlin by name, Bremen with no row.
+ */
+test('a Regions layer on Admin-1 colours German states by code or name, Bremen as no data, naming what it can’t place', async ({
+  page,
+  request,
+}, testInfo) => {
+  await newChartOnStates(page, request, testInfo.project.name);
+  const result = page.getByTestId('editor-result');
+  await chooseChartType(page, 'map');
+  await expectChartType(page, 'map');
+  await page.getByRole('combobox', { name: 'Boundary set' }).selectOption('admin1');
+
+  const map = result.locator('svg').first();
+  // The 15 states with a row, each its own ramp colour: the larger, darker.
+  await expect
+    .poll(() =>
+      map
+        .locator('path[fill^="rgb"]')
+        .evaluateAll((paths) => new Set(paths.map((path) => path.getAttribute('fill'))).size),
+    )
+    .toBeGreaterThanOrEqual(12);
+  // Bremen, with no row, in the null neutral; the legend's ends and "No data".
+  await expect(map.locator('path[fill="#b3b1ab"]').first()).toBeAttached();
+  await expect(map).toContainText('No data');
+  await expect(map).toContainText('1,400');
+  await expect(map).toContainText('60');
+  // Boundaries 0.5 px in the surface colour.
+  await expect(map.locator('path[stroke-width="0.5"]').first()).toBeAttached();
+  // And "Online", no state, named under the map.
+  await expect(result.getByTestId('unplaced-codes')).toHaveText(
+    'Not on the map: "Online" (no region)',
   );
 });

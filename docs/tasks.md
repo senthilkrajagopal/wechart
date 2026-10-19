@@ -2254,11 +2254,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T974 (AC-623) A region key for every boundary set, from its values or the model's mark, and every unplaced value named in the page's text
 
-- [ ] T975 (AC-624) Draw a Regions layer on the Admin-1 boundary set with the sequential ramp, the "No data" swatch and 0.5 px surface boundaries
-  - Files: `packages/charts/src/geo/admin1.ts`, `packages/charts/src/geo/` (the dataset), `packages/charts/src/series/map.ts`, `packages/charts/src/series/mapRegions.test.ts`.
-  - Failing test: `mapRegions.test.ts`: German states by Revenue draw on the ramp with a legend; a state with no row takes the null neutral and the "No data" swatch shows; boundaries are 0.5 px `bg-surface`; a Countries map still draws as before (AC-624). Since R83: France draws its régions and the UK its four nations, dissolved from Natural Earth's `region_cod`/`geonunit` (AC-622).
-  - Depends on: T974
-  - Waits on: research: an admin-1 boundary dataset (source, licence, detail, key format) in `docs/research/`.
+- [x] T975 (AC-624) Draw a Regions layer on the Admin-1 boundary set with the sequential ramp, the "No data" swatch and 0.5 px surface boundaries
 
 - [x] T976 (AC-625) A Points layer from a geo dimension: area-proportional circles of 8–24 px, slot 2 over regions, rows with no location counted, and a cut result said
 

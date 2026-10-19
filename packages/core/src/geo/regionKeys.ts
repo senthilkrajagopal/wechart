@@ -46,7 +46,11 @@ export interface IndexedRegion {
   readonly names: readonly string[];
 }
 
-/** An index of regions by their keys and names; `~` keys are never named. */
+/**
+ * An index of regions by their keys and names. A `~` key is no value's: its
+ * region is named only by its names (T975: an Admin-1 unit with no ISO code
+ * of its own, placed by its English name).
+ */
 export function regionIndexOf(regions: readonly IndexedRegion[]): RegionIndex {
   const named = new Map<string, Set<string>>();
   const add = (value: string, key: string) => {
@@ -56,8 +60,7 @@ export function regionIndexOf(regions: readonly IndexedRegion[]): RegionIndex {
     named.set(value, keys);
   };
   for (const { key, names } of regions) {
-    if (key.startsWith('~')) continue;
-    add(key, key);
+    if (!key.startsWith('~')) add(key, key);
     for (const name of names) add(name, key);
   }
   return { regionsOf: (value) => [...(named.get(value) ?? [])] };

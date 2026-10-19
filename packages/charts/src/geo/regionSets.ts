@@ -12,6 +12,8 @@ import type { RegionIndex } from '@wechart/core';
 export interface RegionSet {
   /** The ECharts map its regions are registered as. */
   readonly map: string;
+  /** The feature property its regions are keyed by. */
+  readonly nameProperty: string;
   /** Its regions by their keys and names. */
   readonly index: RegionIndex;
   /** What one region is called in the note under the map: "region", "territory". */

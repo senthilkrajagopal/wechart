@@ -117,6 +117,8 @@ describe('placing values on a set’s regions (AC-623)', () => {
     expect(placeValues(['~DEU-1234'], GERMANY).unplaced).toEqual([
       { value: '~DEU-1234', reason: 'none' },
     ]);
+    // A `~` region is placed by its name alone (T975).
+    expect([...placeValues(['Somewhere'], GERMANY).placed]).toEqual([['Somewhere', '~DEU-1234']]);
   });
 
   it('names each value once, in the rows’ order', () => {

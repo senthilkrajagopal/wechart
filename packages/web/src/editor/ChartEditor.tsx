@@ -608,8 +608,13 @@ function EditorBody({
     dimensions: spec.dimensions.length,
     timeDimensions: spec.timeDimensions.length,
     // The first dimension's alone: it is the one a map draws by (T398's review).
+    // On Admin-1 or a custom set, the first dimension is the set's region key,
+    // what it can't place named under the map (T975, AC-623).
     countryCodes:
-      signature.fields.find((field) => field.kind === 'dimension')?.countryCodes === true ? 1 : 0,
+      signature.fields.find((field) => field.kind === 'dimension')?.countryCodes === true ||
+      (mapSettingsOf(options).boundarySet !== 'countries' && spec.dimensions.length > 0)
+        ? 1
+        : 0,
     // What R81's histogram can bin (T934): a dimension of numbers, or a
     // measure with Each point is.
     numericDimensions: spec.dimensions.filter(

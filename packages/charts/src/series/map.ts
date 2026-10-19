@@ -20,7 +20,6 @@ import {
   memberOn,
   placeValues,
   unplacedSentence,
-  type BoundarySet,
   type RenderSpec,
 } from '@wechart/core';
 import { COLORS } from '@wechart/ui';
@@ -28,6 +27,7 @@ import { geoEqualEarth } from 'd3-geo';
 
 import { OTHER_COLOUR } from '../colorAssignment';
 import { COUNTRY_KEY, COUNTRY_MAP, countryMap, type CountryMap } from '../geo/countryMap';
+import { admin1CountryOf, admin1Index, admin1SetId } from '../geo/admin1';
 import { regionSetOf } from '../geo/regionSets';
 import { DEFAULT_SURFACE, SEQUENTIAL, type EChartsOption } from '../theme';
 
@@ -90,7 +90,15 @@ export function unplacedCodes(
  */
 export function regionSetIdOf(spec: RenderSpec): string | undefined {
   const { boundarySet } = mapSettingsOf(spec.options);
-  return boundarySet.startsWith('custom:') ? boundarySet : undefined;
+  if (boundarySet.startsWith('custom:')) return boundarySet;
+  if (boundarySet !== 'admin1') return undefined;
+  // Admin-1, by the country its values name most (T975).
+  const dimension = memberOn(spec.encoding, 'x');
+  const country =
+    dimension === undefined
+      ? undefined
+      : admin1CountryOf(spec.rows.map((row) => row[dimension]));
+  return country === undefined ? undefined : admin1SetId(country);
 }
 
 /**
@@ -119,10 +127,10 @@ export function unplacedNote(
 }
 
 /**
- * What a Map on a boundary set not drawn yet says, in place of any region
- * (T973): Admin-1 is drawn from T975, custom sets from T979.
+ * What a Map says in place of any region: a custom set not drawn yet (T979),
+ * or values that name no region of the set (design 23 sheet 6's empty state).
  */
-function notDrawnYet(boundarySet: BoundarySet): EChartsOption {
+function sayInstead(text: string): EChartsOption {
   return {
     animation: false,
     series: [],
@@ -131,35 +139,85 @@ function notDrawnYet(boundarySet: BoundarySet): EChartsOption {
         type: 'text',
         left: 'center',
         top: 'middle',
-        style: {
-          text:
-            boundarySet === 'admin1'
-              ? 'Admin-1 boundaries are not drawn yet.'
-              : 'Custom boundary sets are not drawn yet.',
-          fill: COLORS.light['text-secondary'],
-          fontSize: 12,
-        },
+        style: { text, fill: COLORS.light['text-secondary'], fontSize: 12 },
       },
     ],
   };
 }
 
-export function mapOption(spec: RenderSpec, map: CountryMap): EChartsOption {
+const valueOf = (raw: unknown) => {
+  const value = raw === null || raw === undefined || raw === '' ? Number.NaN : Number(raw);
+  return Number.isFinite(value) ? value : Number.NaN;
+};
+
+/**
+ * The regions a map draws, on its boundary set: on Countries, each placed
+ * code (T398); on any other set, each value its regions are named by, on its
+ * region's key, the first row a region's values name being its value (T975).
+ * None where the set's boundaries aren't in, or no country is named.
+ */
+function regionsOf(
+  spec: RenderSpec,
+  map: CountryMap | undefined,
+):
+  | {
+      readonly mapName: string;
+      readonly nameProperty: string;
+      readonly placed: { name: string; value: number; member: unknown }[];
+      readonly names: ReadonlyMap<string, string>;
+    }
+  | { readonly instead: string }
+  | undefined {
+  const { boundarySet } = mapSettingsOf(spec.options);
+  if (boundarySet === 'countries') {
+    if (map === undefined) return undefined;
+    return {
+      mapName: COUNTRY_MAP,
+      nameProperty: COUNTRY_KEY,
+      placed: codesOf(spec)
+        .filter(({ code }) => map.keys.has(code))
+        .map(({ code, raw }) => ({ name: code, value: valueOf(raw), member: code })),
+      names: map.names,
+    };
+  }
+  if (boundarySet.startsWith('custom:') && regionSetOf(boundarySet) === undefined)
+    return { instead: 'Custom boundary sets are not drawn yet.' };
+  const id = regionSetIdOf(spec);
+  const dimension = memberOn(spec.encoding, 'x');
+  if (id === undefined) {
+    if (admin1Index() === undefined || dimension === undefined) return undefined;
+    return {
+      instead: `None of ${spec.titles?.[dimension] ?? dimension}’s values match Admin-1.`,
+    };
+  }
+  const set = regionSetOf(id);
+  const measure = memberOn(spec.encoding, 'y');
+  if (set === undefined || dimension === undefined || measure === undefined) return undefined;
+  const seen = new Set<string>();
+  const placed = spec.rows.flatMap((row) => {
+    const raw = row[dimension];
+    if (raw === null || raw === undefined || raw === '') return [];
+    const keys = set.index.regionsOf(String(raw));
+    const key = keys.length === 1 ? keys[0]! : undefined;
+    if (key === undefined || seen.has(key)) return [];
+    seen.add(key);
+    return [{ name: key, value: valueOf(row[measure]), member: raw }];
+  });
+  return { mapName: set.map, nameProperty: set.nameProperty, placed, names: set.names };
+}
+
+export function mapOption(spec: RenderSpec, map: CountryMap | undefined): EChartsOption {
   if (!isMapType(spec.chartType)) throw new Error(`${spec.chartType} is not a map`);
   // The Map's Regions on its boundary set (T973, AC-622): Countries draws as
   // the country map did; a country map saved before R81 has no settings and
-  // reads as Countries.
-  const { boundarySet } = mapSettingsOf(spec.options);
-  if (boundarySet !== 'countries') return notDrawnYet(boundarySet);
+  // reads as Countries. Every set draws as Countries does (T975, AC-624).
+  const regions = regionsOf(spec, map);
+  if (regions === undefined) throw new Error('The map’s boundaries are not loaded yet.');
+  if ('instead' in regions) return sayInstead(regions.instead);
   const measure = memberOn(spec.encoding, 'y') ?? '';
   const format = formatterFor(measure, spec.formats ?? {});
 
-  const placed = codesOf(spec)
-    .filter(({ code }) => map.keys.has(code))
-    .map(({ code, raw }) => {
-      const value = raw === null || raw === undefined || raw === '' ? Number.NaN : Number(raw);
-      return { name: code, value: Number.isFinite(value) ? value : Number.NaN };
-    });
+  const { placed } = regions;
   const values = placed.map((each) => each.value).filter((value) => Number.isFinite(value));
   const [min, max] = values.length === 0 ? [0, 1] : [Math.min(...values), Math.max(...values)];
 
@@ -168,9 +226,9 @@ export function mapOption(spec: RenderSpec, map: CountryMap): EChartsOption {
     series: [
       {
         type: 'map' as const,
-        map: COUNTRY_MAP,
-        nameProperty: COUNTRY_KEY,
-        data: placed,
+        map: regions.mapName,
+        nameProperty: regions.nameProperty,
+        data: placed.map(({ name, value }) => ({ name, value })),
         projection: {
           project: (point: [number, number]) => projection(point),
           unproject: (point: [number, number]) => projection.invert?.(point),
@@ -237,7 +295,7 @@ export function mapOption(spec: RenderSpec, map: CountryMap): EChartsOption {
         const value = typeof params.value === 'number' ? params.value : Number.NaN;
         const marked = (params.data as { share?: { marked?: number } } | null | undefined)?.share
           ?.marked;
-        return `${escapeHtml(map.names.get(code) ?? code)}<br/>${
+        return `${escapeHtml(regions.names.get(code) ?? code)}<br/>${
           Number.isFinite(value)
             ? escapeHtml(
                 format(value) + (marked === undefined ? '' : ` · Marked: ${format(marked)}`),

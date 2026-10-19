@@ -48,6 +48,8 @@ Source: [contents API at v5.1.2](https://api.github.com/repos/nvkelso/natural-ea
 
 Germany's 16 codes, complete: DE-BW, DE-BY, DE-BE, DE-BB, DE-HB, DE-HH, DE-HE, DE-MV, DE-NI, DE-NW, DE-RP, DE-SL, DE-SN, DE-ST, DE-SH, DE-TH (Mirror). Feature counts (Mirror): 4,596 over 249 `adm0_a3`; USA 51 (50 states and `US-DC`), IND 36, BRA 27, CHN 32, POL 16, FRA 101, ITA 110, ESP 52, GBR 232, JPN 47, MEX 33, CAN 13, AUS 11.
 
+**Re-asserted against the pinned v5.1.2 GeoJSON (T975, 2026-10-18):** 4,596 features, but over **251** `adm0_a3` values, not 249; every per-country count above, Germany's 16 codes, 60 codes shared by more than one unit in a country, and UA-43/UA-40 under `adm0_a3 = RUS` all hold.
+
 ## Keying rules for the derived files
 
 1. Key = `iso_3166_2` where it matches `^[A-Z]{2}-[A-Z0-9]{1,3}$` and is unique in its country's file; otherwise `~` + `adm1_code`, drawn but never placed (the Countries set's `~KOS` rule).
@@ -67,6 +69,33 @@ Germany's 16 codes, complete: DE-BW, DE-BY, DE-BE, DE-BB, DE-HB, DE-HH, DE-HE, D
 ## Attribution
 
 None required: "All versions of Natural Earth raster + vector map data found on this website are in the public domain." The optional credit is "Made with Natural Earth." ([terms of use](https://www.naturalearthdata.com/about/terms-of-use/)).
+
+## ISO top tier: where Natural Earth's units dissolve (for R83, researched 2026-10-18)
+
+ISO structure is from each country's `https://en.wikipedia.org/wiki/ISO_3166-2:XX` page (raw wikitext, fetched 2026-10-18; it carries the ISO OBP change log); ISO's own OBP is script-only. NE values are from the pinned GeoJSON (blob `4a8438f9…`), read with node. The only padded value in `region_cod`/`region`/`geonunit`/`iso_3166_2`/`gu_a3` is `"FR-IDF\t"` (8 features): trim all. English names are Wikipedia's.
+
+**Dissolved, by NE field → ISO top-tier code (English name):**
+
+- **FRA** by `region_cod` (12 metropolitan regions plus Corse; OBP 2020-11-24 FR-COR→FR-20R; OBP 2021-11-25 moved the overseas units to FR-971…976, top tier): FR-ARA Auvergne-Rhône-Alpes, FR-BFC Bourgogne-Franche-Comté, FR-BRE Brittany, FR-CVL Centre-Val de Loire, FR-COR→**FR-20R** Corsica, FR-GES Grand Est, FR-HDF Hauts-de-France, FR-IDF Île-de-France, FR-NOR Normandy, FR-NAQ Nouvelle-Aquitaine, FR-OCC Occitania, FR-PDL Pays de la Loire, FR-PAC Provence-Alpes-Côte d'Azur, FR-GUA→**FR-971** Guadeloupe, FR-MTQ→**FR-972** Martinique, FR-GUF→**FR-973** French Guiana, FR-LRE→**FR-974** Réunion, FR-MAY→**FR-976** Mayotte ([FR](https://en.wikipedia.org/wiki/ISO_3166-2:FR)).
+- **ITA** by `region_cod`, already ISO (15 regions, 5 autonomous): IT-21 Piedmont, IT-23 Aosta Valley, IT-25 Lombardy, IT-32 Trentino-South Tyrol, IT-34 Veneto, IT-36 Friuli Venezia Giulia, IT-42 Liguria, IT-45 Emilia-Romagna, IT-52 Tuscany, IT-55 Umbria, IT-57 Marche, IT-62 Lazio, IT-65 Abruzzo, IT-67 Molise, IT-72 Campania, IT-75 Apulia, IT-77 Basilicata, IT-78 Calabria, IT-82 Sicily, IT-88 Sardinia ([IT](https://en.wikipedia.org/wiki/ISO_3166-2:IT)).
+- **ESP** by `region_cod` (HASC; 17 autonomous communities, 2 cities): ES.AN→ES-AN Andalusia, ES.AR→ES-AR Aragon, ES.AS→ES-AS Asturias, ES.CB→ES-CB Cantabria, ES.CL→ES-CL Castile and León, ES.CM→ES-CM Castilla–La Mancha, ES.CN→ES-CN Canary Islands, ES.CT→ES-CT Catalonia, ES.EX→ES-EX Extremadura, ES.GA→ES-GA Galicia, ES.LO→**ES-RI** La Rioja, ES.MD→ES-MD Community of Madrid, ES.MU→**ES-MC** Region of Murcia, ES.NA→**ES-NC** Navarre, ES.PM→**ES-IB** Balearic Islands, ES.PV→ES-PV Basque Country, ES.VC→ES-VC Valencian Community; ES.CE splits by `region`: "Ceuta"→ES-CE Ceuta, "Melilla"→ES-ML Melilla ([ES](https://en.wikipedia.org/wiki/ISO_3166-2:ES)).
+- **GBR** by `gu_a3` (3 countries, 1 province; GB-EAW/GBN/UKM are "for completeness" only): ENG→GB-ENG England, SCT→GB-SCT Scotland, WLS→GB-WLS Wales, NIR→GB-NIR Northern Ireland ([GB](https://en.wikipedia.org/wiki/ISO_3166-2:GB)).
+- **BEL** by `geonunit` (3 regions over 10 provinces, OBP 2015-11-27): Flemish Region→BE-VLG Flanders, Walloon Region→BE-WAL Wallonia, Brussels Capital Region→BE-BRU Brussels ([BE](https://en.wikipedia.org/wiki/ISO_3166-2:BE)).
+- **PHL** by `region_cod`, already ISO (17 regions): PH-00 National Capital Region, PH-01 Ilocos, PH-02 Cagayan Valley, PH-03 Central Luzon, PH-05 Bicol, PH-06 Western Visayas, PH-07 Central Visayas, PH-08 Eastern Visayas, PH-09 Zamboanga Peninsula, PH-10 Northern Mindanao, PH-11 Davao, PH-12 Soccsksargen, PH-13 Caraga, PH-14 Autonomous Region in Muslim Mindanao, PH-15 Cordillera Administrative Region, PH-40 Calabarzon, PH-41 Mimaropa. ISO's parents differ from NE's on 4 provinces (Lanao del Norte, Sarangani, South Cotabato, Basilan); `region_cod` is followed ([PH](https://en.wikipedia.org/wiki/ISO_3166-2:PH)).
+- **LKA** by `region_cod`, already ISO (9 provinces): LK-1 Western, LK-2 Central, LK-3 Southern, LK-4 Northern, LK-5 Eastern, LK-6 North Western, LK-7 North Central, LK-8 Uva, LK-9 Sabaragamuwa ([LK](https://en.wikipedia.org/wiki/ISO_3166-2:LK)).
+- **GNB** by `region_cod` (3 provinces, Bissau autonomous): GW-L East, GW-N North, GW-S South, GW-B→**GW-BS** Bissau ([GW](https://en.wikipedia.org/wiki/ISO_3166-2:GW)).
+- **KNA** by `region_cod` (2 states): KN-K Saint Kitts, KN-N Nevis ([KN](https://en.wikipedia.org/wiki/ISO_3166-2:KN)).
+- **GIN** by `region_cod`, `.`→`-` (7 regions, Conakry): GN-B Boké, GN-C Conakry, GN-D Kindia, GN-F Faranah, GN-K Kankan, GN-L Labé, GN-M Mamou, GN-N Nzérékoré ([GN](https://en.wikipedia.org/wiki/ISO_3166-2:GN)).
+- **BFA** by `region` (13 regions): Boucle du Mouhoun BF-01, Cascades BF-02, Centre BF-03, Centre-Est BF-04, Centre-Nord BF-05, Centre-Ouest BF-06, Centre-Sud BF-07, Est BF-08, Hauts-Bassins BF-09, Nord BF-10, Plateau-Central BF-11, Sahel BF-12, Sud-Ouest BF-13; names as ISO's ([BF](https://en.wikipedia.org/wiki/ISO_3166-2:BF)).
+- **MWI** by `iso_3166_2` (3 regions; NE's `region_cod` is wrong for Mangochi and Balaka): MW-C Central Region ← DE, DO, KS, LI, MC, NI, NK, NU, SA; MW-N Northern Region ← CT, LK, MZ, NB, RU; MW-S Southern Region ← BA, BL, CK, CR, MG, MH, MU, MW, NE, NS, PH, TH, ZO ([MW](https://en.wikipedia.org/wiki/ISO_3166-2:MW)).
+- **BIH** by `geonunit`, Brčko by `iso_3166_2` (2 entities, 1 district; cantons deleted OBP 2015-11-27): "Bosnia and Herzegovina"→BA-BIH Federation of Bosnia and Herzegovina, "Republic Srpska"→BA-SRP Republika Srpska, iso BA-BRC→BA-BRC Brčko District ([BA](https://en.wikipedia.org/wiki/ISO_3166-2:BA)).
+- **Partly** (an ISO autonomous region over some units, the rest top tier themselves): AZE `region_cod` AZ-10 → AZ-NX Nakhchivan ([AZ](https://en.wikipedia.org/wiki/ISO_3166-2:AZ)); IRQ `geonunit` "Iraqi Kurdistan" → IQ-KR Kurdistan (OBP 2022-03-03, [IQ](https://en.wikipedia.org/wiki/ISO_3166-2:IQ)); SRB `geonunit` "Vojvodina" → RS-VO Vojvodina ([RS](https://en.wikipedia.org/wiki/ISO_3166-2:RS)).
+
+**ISO's top tier differs, and NE's units are kept** (lane CHARTS-B's call T975-1):
+- Not a government tier: UGA (4 *geographical* regions), CPV (2 *geographical* regions), IDN (7 *geographical units*), DOM (10 planning regions, OBP 2014-10-29), IRL (4 provinces with no administrative role), MDG (6 provinces abolished in 2009) ([UG](https://en.wikipedia.org/wiki/ISO_3166-2:UG), [CV](https://en.wikipedia.org/wiki/ISO_3166-2:CV), [ID](https://en.wikipedia.org/wiki/ISO_3166-2:ID), [DO](https://en.wikipedia.org/wiki/ISO_3166-2:DO), [IE](https://en.wikipedia.org/wiki/ISO_3166-2:IE), [MG](https://en.wikipedia.org/wiki/ISO_3166-2:MG)).
+- No NE field to dissolve by, or NE's units cross or are coarser than ISO's: NPL, MAR, CIV, LUX, KEN, STP, KIR.
+- NE groupings that aren't ISO tiers and are never dissolved: AZE AZ-01…09 (economic regions), NZL NZ-N/NZ-S (deleted 2015), MDV provinces (removed by 2018), TZA Zanzibar, PRT NUTS-II, SOM Puntland, and the statistical `region` values of IND, USA, RUS, CHN, JPN and others.
+- Stale codes in a same-tier country (Norway's pre-2020 counties, Mauritius's cities, Iceland's `IS-0`) stay as NE has them: no alias table (R83).
 
 ## Questions, closed (the user, 2026-10-18, round R83 in `docs/requirements-log.md`)
 
