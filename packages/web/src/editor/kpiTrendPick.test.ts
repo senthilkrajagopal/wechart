@@ -30,6 +30,22 @@ describe('picking "KPI with trend" (T968, AC-560)', () => {
     });
   });
 
+  it('tiles a KPI tiled by its dimension, each tile with its trend (T969)', () => {
+    const byRegion = recommend({
+      fields: [
+        { name: 'orders.revenue', kind: 'measure' },
+        { name: 'orders.ordered_at', kind: 'timeDimension' },
+        { name: 'customers.region', kind: 'dimension', cardinality: 4 },
+      ],
+    });
+    expect(optionsOnPick('kpi', byRegion, {}, {})).toEqual({
+      kpi: {
+        time: { member: 'orders.ordered_at', granularity: 'month' },
+        tileBy: 'customers.region',
+      },
+    });
+  });
+
   it('keeps a Time the KPI already has, and sets nothing for any other pick', () => {
     const own = { kpi: { time: { member: 'orders.shipped_at', granularity: 'day' } } };
     expect(optionsOnPick('kpi', revenueByMonth, own, {})).toBeUndefined();

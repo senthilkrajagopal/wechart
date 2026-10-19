@@ -75,6 +75,8 @@ const colorCapacity: Rule = (candidate) => {
 };
 
 const trellisCapacity: Rule = (candidate) => {
+  // A KPI's tiles are its own rule's (T969): one reason, not two.
+  if (candidate.chartType === 'kpi') return pass('high_cardinality_facet');
   const panels = countFor(candidate.facetField);
   return panels !== null && panels > CAPS.trellisPanels
     ? fail(

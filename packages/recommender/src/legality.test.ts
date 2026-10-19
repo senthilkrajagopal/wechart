@@ -211,6 +211,8 @@ describe('a KPI’s tiles (T968, AC-031)', () => {
     expect(outcome?.passed).toBe(false);
     expect(outcome?.reason).toBe('A KPI shows 20 tiles at most; this needs 21.');
     expect(isLegal(tiled(21))).toBe(false);
+    // Said once, as a KPI's tiles, never as a trellis's panels.
+    expect(reasonFor(tiled(21), 'high_cardinality_facet')?.passed).toBe(true);
   });
 
   it('leaves a KPI of one number alone', () => {

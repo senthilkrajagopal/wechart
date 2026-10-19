@@ -22,8 +22,11 @@ export function optionsOnPick(
   if (time?.kind !== 'timeDimension') return undefined;
   const kpi = kpiOptionsOf(options);
   if (kpi.time !== undefined) return undefined;
+  // A KPI tiled (T969, AC-561): a tile per member of its dimension too.
+  const tileBy = offered?.candidate.facetField?.name;
   return withKpiOptions(options, {
     ...kpi,
     time: { member: time.name, granularity: granularities?.[time.name] ?? 'month' },
+    ...(tileBy === undefined || kpi.tileBy !== undefined ? {} : { tileBy }),
   });
 }

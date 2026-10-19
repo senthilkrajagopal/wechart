@@ -1787,6 +1787,8 @@ test('one measure over time is drawn as a Line in Auto, "KPI with trend" next, a
 test('the editor offers 100 % stacked bar, Graphical table and KPI tiled as runners-up with their reasons, and picks them', async ({
   page,
 }) => {
+  // As the sample orders end in August: the KPI's month has its orders.
+  await page.clock.setFixedTime(new Date('2026-08-20T12:00:00Z'));
   await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
   await cubePicker(page).selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.total_amount')).toBeVisible();
@@ -1825,6 +1827,13 @@ test('the editor offers 100 % stacked bar, Graphical table and KPI tiled as runn
   await expect(page.getByTestId('runner-up-kpi')).toHaveText(
     'KPI — A KPI per Customers Country: 4 tiles, each this period’s number and its trend.',
   );
+  // Picked, a tile per country.
+  await picks.getByRole('button', { name: 'KPI', exact: true }).click();
+  await expectChartType(page, 'kpi');
+  await expect(
+    page.getByTestId('editor-result').getByTestId('kpi-tiles').getByRole('listitem'),
+  ).toHaveCount(4);
+  await page.getByRole('button', { name: 'Auto', exact: true }).click();
   await page.getByRole('button', { name: /^Remove (Customers )?Country from / }).click();
   await wellPicker(page, 'dimensions').selectOption('orders.id');
   await expect(page.getByTestId('runner-up-graphicalTable')).toHaveText(
