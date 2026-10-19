@@ -1150,6 +1150,144 @@ test('an element’s loading, failed and removed states, Retry, and an empty til
 });
 
 /**
+ * AC-520 / AC-116, on the real surface: with nothing marked, a Value limited
+ * by the marking reads all data, as one that isn't; marking a bar limits it
+ * to the marked rows, the unlimited one keeping all data, and a Value whose
+ * own filter is the same status reads the same; the Marking element counts
+ * what's marked.
+ */
+test('a Value limited by a marking follows the marked rows, and its own filter is applied', async ({
+  page,
+  request,
+}) => {
+  const title = `Text marked ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const chart = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'chart', title: 'By status', ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  await request.put(`${API}/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: 'By status',
+        owner: 'admin',
+        localToDashboardId: dashboard.id,
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+          chartType: 'bar',
+        },
+      },
+    },
+  });
+  const value = (attrs: Record<string, unknown>) => ({
+    type: 'value',
+    attrs: { measure: 'orders.count', ...attrs },
+  });
+  const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed', interactions: { mode: 'markings' } },
+        markings: [{ id: 'm1', name: 'Picks', slot: 'mk1', isDefault: true }],
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [
+              { id: 'tile-status', kind: 'chart', w: 6, h: 40, chartId: chart.id },
+              {
+                id: 'tile-text',
+                kind: 'text',
+                w: 6,
+                h: 12,
+                document: {
+                  version: 1,
+                  doc: {
+                    type: 'doc',
+                    content: [
+                      {
+                        type: 'paragraph',
+                        content: [
+                          value({ marking: 'Picks' }),
+                          { type: 'text', text: ' / ' },
+                          value({}),
+                          { type: 'text', text: ' / ' },
+                          value({
+                            filters: [
+                              { member: 'orders.status', operator: 'equals', values: ['shipped'] },
+                            ],
+                          }),
+                          { type: 'text', text: ' / ' },
+                          { type: 'marking', attrs: { marking: 'Picks', show: 'count' } },
+                          { type: 'text', text: ' / ' },
+                          { type: 'marking', attrs: { marking: 'Picks', show: 'summary' } },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+
+  await page.goto(`/explore/dashboards/${dashboard.id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const slot = (at: number) => page.locator('[data-tile="tile-text"] .text-tile p > *').nth(at);
+  // Nothing marked: the limited Value reads all data (AC-116).
+  await expect(slot(0)).toHaveText('240');
+  await expect(slot(1)).toHaveText('240');
+  const shipped = await slot(2).textContent();
+  expect(Number(shipped)).toBeGreaterThan(0);
+  expect(Number(shipped)).toBeLessThan(240);
+  await expect(slot(3)).toHaveText('0');
+  await expect(slot(4)).toHaveText('nothing marked');
+
+  // Mark the shipped bar.
+  const label = page.locator('[data-tile="tile-status"] svg text', { hasText: 'shipped' }).first();
+  await expect(label).toBeVisible();
+  let last = '';
+  let box = { x: 0, y: 0, width: 0 };
+  await expect
+    .poll(async () => {
+      box = await label.evaluate((text) => {
+        const rect = text.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width };
+      });
+      const now = JSON.stringify(box);
+      const settled = box.width > 0 && now === last;
+      last = now;
+      return settled;
+    })
+    .toBe(true);
+  await page.mouse.click(box.x + box.width / 2, box.y - 10);
+  await expect(page.getByTestId('mark-chip')).toContainText('shipped');
+
+  // Over the marked rows: the shipped orders, as the own filter reads them.
+  await expect(slot(0)).toHaveText(shipped ?? '');
+  await expect(slot(1)).toHaveText('240');
+  await expect(slot(3)).toHaveText('1');
+  // Its summary names what's marked.
+  await expect(slot(4)).toContainText('shipped');
+});
+
+/**
  * T877 / AC-514: a dashboard of two Text tiles opened in view mode requests
  * no script of the editor's chunk (`text-editor-…`, named in
  * `vite.config.ts`), and none of the scripts it loads holds ProseMirror's
