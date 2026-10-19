@@ -2,6 +2,7 @@ import { formatValue, type RenderSpec } from '@wechart/core';
 import { describe, expect, it } from 'vitest';
 
 import { optionFor } from '../optionFor';
+import { withShares } from './stack100';
 
 /**
  * T957 / AC-584: … at 100 %, the value axis SHALL be fixed at 0–100 % with
@@ -39,6 +40,7 @@ const spec = (
     rows: rowsOf(channels),
     options,
     formats: FORMATS,
+    measureTypes: { [REVENUE]: 'sum' },
   }) as unknown as RenderSpec;
 
 type Series = { name: string; data: unknown[]; label?: { show?: boolean } };
@@ -105,6 +107,45 @@ describe('a stack drawn at 100 % (AC-584)', () => {
       );
       expect(shown).toEqual([2]);
     }
+  });
+
+  it('keeps a bar split by a marked share at 100 %: both parts scaled, adding to the segment (T957’s review)', () => {
+    const at100 = spec('stackedBar', { stack: 'percent' });
+    // Web split into its marked part and its rest, as `withPartialMarks` draws it.
+    const option = withShares(
+      {
+        yAxis: { type: 'value' },
+        series: [
+          { name: 'Web', stack: 'total', data: [{ value: 60000 }, { value: 1000 }, null] },
+          { name: 'Web', stack: 'total', data: [{ value: 150000 }, { value: 50000 }, null] },
+          { name: 'Store', stack: 'total', data: [{ value: 100000 }, { value: 101000 }, null] },
+          { name: 'Phone', stack: 'total', data: [{ value: 150000 }, { value: 151000 }, null] },
+        ],
+      },
+      at100,
+    );
+    const total = seriesOf(option).reduce((sum, one) => sum + Number(valueOf(one.data[0]) ?? 0), 0);
+    expect(Math.abs(total - 100)).toBeLessThan(1e-9);
+    // The marked part is its own fraction of the whole: 60,000 of 460,000.
+    expect(valueOf(seriesOf(option)[0]?.data[0])).toBeCloseTo((60000 / 460000) * 100, 9);
+    // A gap stays a gap.
+    expect(valueOf(seriesOf(option)[0]?.data[2])).toBeNull();
+  });
+
+  it('writes Customize’s data labels as shares, not in the measure’s format', () => {
+    const option = optionFor(spec('stackedBar', { stack: 'percent', dataLabels: true }));
+    const label = (seriesOf(option)[0] as { label?: { formatter?: (p: unknown) => string } }).label;
+    expect(label?.formatter?.({ value: 45.65 })).toBe('46 %');
+  });
+
+  it('draws at Sum a measure whose aggregation isn’t known', () => {
+    const untyped = Object.fromEntries(
+      Object.entries(spec('stackedBar', { stack: 'percent' })).filter(
+        ([key]) => key !== 'measureTypes',
+      ),
+    ) as unknown as RenderSpec;
+    const option = optionFor(untyped);
+    expect(valueOf(seriesOf(option)[0]?.data[0])).toBe(210000);
   });
 
   it('draws a stack at Sum as it always has', () => {

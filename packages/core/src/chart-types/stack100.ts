@@ -46,8 +46,10 @@ const SUMMED = new Set(['sum', 'count']);
 
 /**
  * Whether a spec draws its stack at 100 %: a stacked bar or area with 100 %
- * stored, whose measure isn't known to be other than summed — a measure
- * changed to an average after 100 % was chosen draws at Sum (AC-584).
+ * stored, whose measure the model says is summed. Any other — changed to an
+ * average after 100 % was chosen, or one nothing is known of, as a quick
+ * calculation's — draws at Sum, as Customize then shows (AC-584; T957's
+ * review: the editor and the drawing by one rule, `percentRefusal`'s).
  */
 export function isPercentStack(
   spec: Pick<RenderSpec, 'chartType' | 'options' | 'encoding' | 'measureTypes'>,
@@ -56,7 +58,7 @@ export function isPercentStack(
   if (stackOf(spec.options) !== 'percent') return false;
   const measure = memberOn(spec.encoding, 'y');
   const aggType = measure === undefined ? undefined : spec.measureTypes?.[measure];
-  return aggType === undefined || SUMMED.has(aggType);
+  return aggType !== undefined && SUMMED.has(aggType);
 }
 
 /** Why 100 % can't be chosen for this measure (AC-584); nothing when it can. */

@@ -42,6 +42,7 @@ const spec = (options: Record<string, unknown>): RenderSpec =>
     encoding: { x: ['orders.region'], color: ['orders.channel'], y: ['orders.revenue'] },
     rows,
     options,
+    measureTypes: { 'orders.revenue': 'sum' },
   }) as unknown as RenderSpec;
 
 describe('100 % stacking (AC-584, AC-037)', () => {
@@ -60,11 +61,18 @@ describe('100 % stacking (AC-584, AC-037)', () => {
     expect(isPercentStack(spec({}))).toBe(false);
   });
 
-  it('draws at Sum a measure the model says isn’t summed, though 100 % was stored', () => {
+  it('draws at Sum a measure not known to be summed, though 100 % was stored', () => {
     const averaged = { ...spec({ stack: 'percent' }), measureTypes: { 'orders.revenue': 'avg' } };
     expect(isPercentStack(averaged)).toBe(false);
     const summed = { ...spec({ stack: 'percent' }), measureTypes: { 'orders.revenue': 'sum' } };
     expect(isPercentStack(summed)).toBe(true);
+    // Nothing known of it, as the editor refuses it: at Sum, the two agreeing (T957's review).
+    const unknown = { ...spec({ stack: 'percent' }), measureTypes: {} };
+    expect(isPercentStack(unknown)).toBe(false);
+    const untyped = Object.fromEntries(
+      Object.entries(spec({ stack: 'percent' })).filter(([key]) => key !== 'measureTypes'),
+    ) as unknown as RenderSpec;
+    expect(isPercentStack(untyped)).toBe(false);
   });
 
   it('refuses 100 % for a measure that isn’t summed, saying why', () => {

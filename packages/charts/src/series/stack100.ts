@@ -56,18 +56,38 @@ export function withShares(option: EChartsOption, spec: RenderSpec): EChartsOpti
   const byName = new Map(
     raw.map((one, at) => [one.name, { raw: one.values, share: shares[at]?.values ?? [] }]),
   );
+  /** Each category's total, which every drawn value is a share of. */
+  const totals = (raw[0]?.values ?? []).map((_, at) =>
+    raw.reduce((sum, one) => sum + (one.values[at] ?? 0), 0),
+  );
+  /**
+   * A drawn value as its share of its category, scaled rather than looked up
+   * by its series' name: a bar split by a marked share draws two parts under
+   * one name, each its own fraction of the whole (T957's review).
+   */
+  const scaled = (value: unknown, at: number) => {
+    const number = typeof value === 'number' ? value : null;
+    const total = totals[at] ?? 0;
+    return number === null || total === 0 ? null : (number / total) * 100;
+  };
+  // As Customize writes data labels: the share, never the measure's format.
+  const shareLabel = (params: { value?: unknown }) =>
+    percent(Math.round(Number(Array.isArray(params.value) ? params.value[1] : params.value)));
 
   const series = ((option['series'] as Series[] | undefined) ?? []).map((one) => {
-    const own = byName.get(String(one.name ?? ''));
-    if (own === undefined || !Array.isArray(one.data)) return one;
+    if (!Array.isArray(one.data)) return one;
+    const label = record(one['label']);
     return {
       ...one,
-      data: (one.data as unknown[]).map((item, at) => {
-        const share = own.share[at] ?? null;
-        return typeof item === 'object' && item !== null && !Array.isArray(item)
-          ? { ...(item as Record<string, unknown>), value: share }
-          : share;
-      }),
+      ...(label['show'] === true ? { label: { ...label, formatter: shareLabel } } : {}),
+      data: (one.data as unknown[]).map((item, at) =>
+        typeof item === 'object' && item !== null && !Array.isArray(item)
+          ? {
+              ...(item as Record<string, unknown>),
+              value: scaled((item as Record<string, unknown>)['value'], at),
+            }
+          : scaled(item, at),
+      ),
     };
   });
 
