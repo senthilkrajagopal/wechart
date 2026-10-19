@@ -22,7 +22,10 @@ export function KpiTarget({
   member,
   formats,
   width,
+  shown = true,
 }: {
+  /** Whether the tile has room for it (T938-2); its words are said either way. */
+  readonly shown?: boolean;
   readonly value: number;
   readonly target: number;
   readonly title: string;
@@ -33,6 +36,16 @@ export function KpiTarget({
 }) {
   const ranges = DEFAULT_BANDS.map((percent) => (percent / 100) * target);
   const share = target === 0 ? undefined : Math.round((value / target) * 100);
+  const words =
+    share === undefined
+      ? `Target ${kpiShort(target, member, formats)}`
+      : `${String(share)}% of ${kpiShort(target, member, formats)}`;
+  if (!shown)
+    return (
+      <p className="visually-hidden" data-testid="kpi-target-hidden">
+        {`Not shown at this size: ${words} target.`}
+      </p>
+    );
   return (
     <div className="kpi__target" data-testid="kpi-target">
       {width <= 0 || target <= 0 ? null : (
@@ -48,11 +61,7 @@ export function KpiTarget({
           height={KPI_TARGET_HEIGHT}
         />
       )}
-      <span className="kpi__target-of">
-        {share === undefined
-          ? `Target ${kpiShort(target, member, formats)}`
-          : `${String(share)}% of ${kpiShort(target, member, formats)}`}
-      </span>
+      <span className="kpi__target-of">{words}</span>
     </div>
   );
 }

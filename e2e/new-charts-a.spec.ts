@@ -954,6 +954,7 @@ async function kpiDashboard(
     readonly w: number;
     readonly measure: string;
     readonly kpi: Record<string, unknown>;
+    readonly h?: number;
   }[],
 ) {
   const title = `KPIs ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
@@ -963,7 +964,7 @@ async function kpiDashboard(
     })
   ).json()) as { id: string };
   const items = [];
-  for (const { tile, w, measure, kpi } of kpis) {
+  for (const { tile, w, measure, kpi, h = 32 } of kpis) {
     const chart = (await (
       await request.post(`${API}/documents`, {
         data: { kind: 'chart', title: tile, ...IN_MY_WORKSPACE },
@@ -987,8 +988,8 @@ async function kpiDashboard(
       },
     });
     expect(saved.ok(), await saved.text()).toBe(true);
-    // Tall enough for value, change, trend and target together.
-    items.push({ id: tile, kind: 'chart', w, h: 32, chartId: chart.id });
+    // 32 rows by default: tall enough for value, change, trend and target.
+    items.push({ id: tile, kind: 'chart', w, h, chartId: chart.id });
   }
   const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
     data: {
@@ -1167,6 +1168,54 @@ test('KPIs on 4- to 6-column tiles draw their trend at the content width × 32 a
     granularity: 'month',
     dateRange: ['2025-09-01', '2026-08-31'],
   });
+});
+
+/**
+ * T938 follow-up (the coordinator, 2026-10-18; decision T938-2): a KPI on a
+ * tile too short for all its parts clips none. At its usual 24 rows the
+ * target gives way; at 16 the trend too; each still said, visually hidden.
+ */
+test('a KPI on a 24-row tile drops its target, and on a 16-row tile its trend too, clipping nothing', async ({
+  page,
+  request,
+}) => {
+  const time = { member: 'orders.ordered_at', granularity: 'month' };
+  const kpi = { compareTo: { kind: 'previousPeriod' }, time, target: { kind: 'value', value: 30 } };
+  const { id, title } = await kpiDashboard(request, [
+    { tile: 'kpi-24', w: 4, h: 24, measure: 'orders.count', kpi },
+    { tile: 'kpi-16', w: 4, h: 16, measure: 'orders.count', kpi },
+  ]);
+  await page.clock.setFixedTime(new Date('2026-08-20T12:00:00Z'));
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  /** Whether every part of the KPI drawn ends inside its tile. */
+  const unclipped = (tile: string) =>
+    page.locator(`[data-tile="${tile}"]`).evaluate((element) => {
+      const bottom = element.getBoundingClientRect().bottom;
+      return [
+        ...element.querySelectorAll('.kpi__core, .kpi__trend, .kpi__target, .kpi__change'),
+      ].every((part) => part.getBoundingClientRect().bottom <= bottom + 0.5);
+    });
+
+  const at24 = page.locator('[data-tile="kpi-24"]');
+  await expect(at24.getByTestId('kpi-change')).toHaveText('▼ −6.5% vs Jul 2026 (31)');
+  await expect(at24.getByTestId('kpi-trend').locator('svg')).toHaveAttribute('height', '32');
+  await expect(at24.getByTestId('kpi-target')).toHaveCount(0);
+  await expect(at24.getByTestId('kpi-target-hidden')).toHaveText(
+    'Not shown at this size: 97% of 30 target.',
+  );
+  expect(await unclipped('kpi-24')).toBe(true);
+
+  const at16 = page.locator('[data-tile="kpi-16"]');
+  await expect(at16.getByTestId('kpi-value')).toHaveText('29');
+  await expect(at16.getByTestId('kpi-trend')).toHaveCount(0);
+  await expect(at16.getByTestId('kpi-target')).toHaveCount(0);
+  await expect(at16.getByTestId('kpi-trend-hidden').locator('svg[role="img"]')).toHaveAttribute(
+    'aria-label',
+    /^Count by month, last 12 months: /,
+  );
+  expect(await unclipped('kpi-16')).toBe(true);
 });
 
 /**

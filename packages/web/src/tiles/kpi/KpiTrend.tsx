@@ -18,7 +18,13 @@ export function KpiTrend({
   granularity,
   colour,
   width,
+  shown = true,
 }: {
+  /**
+   * Whether the tile has room for it (T938-2). Where it hasn't, its words
+   * are still said, visually hidden.
+   */
+  readonly shown?: boolean;
   /** Oldest first. */
   readonly values: readonly number[];
   readonly title: string;
@@ -30,19 +36,28 @@ export function KpiTrend({
   readonly width: number;
 }) {
   if (width <= 0 || values.length === 0) return null;
+  const sparkline = (
+    <SparklineSvg
+      values={values}
+      title={title}
+      member={member}
+      formats={formats}
+      granularity={granularity}
+      last={KPI_TREND_PERIODS}
+      colour={colour}
+      width={Math.round(width)}
+      height={KPI_TREND_HEIGHT}
+    />
+  );
+  if (!shown)
+    return (
+      <div className="visually-hidden" data-testid="kpi-trend-hidden">
+        Not shown at this size: {sparkline}
+      </div>
+    );
   return (
     <div className="kpi__trend" data-testid="kpi-trend">
-      <SparklineSvg
-        values={values}
-        title={title}
-        member={member}
-        formats={formats}
-        granularity={granularity}
-        last={KPI_TREND_PERIODS}
-        colour={colour}
-        width={Math.round(width)}
-        height={KPI_TREND_HEIGHT}
-      />
+      {sparkline}
     </div>
   );
 }

@@ -14,6 +14,10 @@ export const KPI_CSS = `
   color: var(--wc-text-muted);
   white-space: nowrap;
 }
+/* Its parts kept within the tile: the trend and target give way where they
+   would not fit (T938-2), so nothing is clipped. */
+.kpi--detailed { overflow: hidden; }
+.kpi__core { flex: none; }
 .kpi--detailed .kpi__value,
 .grid-tile .kpi--detailed .kpi__value { font-size: 40px; line-height: 52px; }
 .kpi__change {

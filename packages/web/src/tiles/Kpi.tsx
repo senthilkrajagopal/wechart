@@ -14,6 +14,7 @@ import { useContext, useLayoutEffect, useState } from 'react';
 import { colourOfMember } from '../dashboard/colours';
 import { SecurityPreview } from '../query/securityPreview';
 import { KpiChange, type KpiCompared } from './kpi/KpiChange';
+import { kpiPartsShown } from './kpi/kpiFit';
 import { KpiTarget } from './kpi/KpiTarget';
 import { KpiTrend } from './kpi/KpiTrend';
 import { useElementAnswer } from './text/elements/useElementAnswer';
@@ -145,24 +146,28 @@ function needsTimeOf(kpi: KpiOptions): string | undefined {
 }
 
 /**
- * The KPI's content width, for its trend and target (AC-565): the element's
- * own, kept as the tile is resized; 0 until it is laid out.
+ * An element's size as laid out, kept as it changes: the KPI's content box,
+ * for its trend's and target's width and the room under its value (AC-565,
+ * T938-2); 0 × 0 until it is laid out.
  */
-function useContentWidth(): [(element: HTMLDivElement | null) => void, number] {
+function useBox(): [
+  (element: HTMLDivElement | null) => void,
+  { readonly width: number; readonly height: number },
+] {
   const [element, setElement] = useState<HTMLDivElement | null>(null);
-  const [width, setWidth] = useState(0);
+  const [box, setBox] = useState({ width: 0, height: 0 });
   useLayoutEffect(() => {
     if (element === null || typeof ResizeObserver === 'undefined') return undefined;
     // Called once on observing, then on every resize.
     const observer = new ResizeObserver(() => {
-      setWidth(element.clientWidth);
+      setBox({ width: element.clientWidth, height: element.clientHeight });
     });
     observer.observe(element);
     return () => {
       observer.disconnect();
     };
   }, [element]);
-  return [setElement, width];
+  return [setElement, box];
 }
 
 /** A KPI's trend asked of Cube (T938): its value's own query by Time's grain. */
@@ -172,12 +177,14 @@ function KpiTrendLoaded({
   measure,
   time,
   width,
+  shown,
 }: {
   readonly query: Readonly<Record<string, unknown>>;
   readonly spec: RenderSpec;
   readonly measure: string;
   readonly time: KpiTime;
   readonly width: number;
+  readonly shown: boolean;
 }) {
   // Asked as the tile's own query is: its dashboard, and a previewed context.
   const context = useContext(SecurityPreview);
@@ -193,6 +200,7 @@ function KpiTrendLoaded({
       // The measure's dashboard colour (AC-039), as R80's sparkline takes it.
       colour={spec.colours?.[measure] ?? spec.palette?.[0] ?? colourOfMember({}, measure)}
       width={width}
+      shown={shown}
     />
   );
 }
@@ -205,7 +213,8 @@ function targetOf(spec: RenderSpec, kpi: KpiOptions): number | undefined {
 }
 
 export function Kpi({ spec, solo = false, onAddTime, query }: KpiProps) {
-  const [measured, width] = useContentWidth();
+  const [measured, box] = useBox();
+  const [measuredCore, core] = useBox();
   const kpi = kpiOptionsOf(spec.options);
   // With any of R81's settings, standing alone, its value in text-kpi-solo (AC-565).
   const detailed =
@@ -255,10 +264,18 @@ export function Kpi({ spec, solo = false, onAddTime, query }: KpiProps) {
       ? undefined
       : kpiTrendQuery(query, measure, kpi.time, new Date());
 
+  /**
+   * The trend and target the tile has room for under the rest (T938-2):
+   * never one clipped, the target giving way first, then the trend; what
+   * gives way is still said, visually hidden.
+   */
+  const room = box.height > 0 && core.height > 0 ? box.height - core.height : undefined;
+  const shown = kpiPartsShown(room, { trend: trend !== undefined, target: goal !== undefined });
+
   // Its name above its value, as the prototype's kpiHtml has them (T300),
   // and under it the marked share, as its renderMarked has it (T453).
-  return (
-    <div className={className} data-testid="kpi" ref={measured}>
+  const top = (
+    <>
       {period === undefined ? (
         name
       ) : (
@@ -283,19 +300,6 @@ export function Kpi({ spec, solo = false, onAddTime, query }: KpiProps) {
           member={measure}
           formats={spec.formats}
           direction={kpi.direction}
-        />
-      )}
-      {trend === undefined || measure === undefined || kpi.time === undefined ? null : (
-        <KpiTrendLoaded query={trend} spec={spec} measure={measure} time={kpi.time} width={width} />
-      )}
-      {goal === undefined || measure === undefined ? null : (
-        <KpiTarget
-          value={value}
-          target={goal}
-          title={labelOf(spec, measure)}
-          member={measure}
-          formats={spec.formats}
-          width={width}
         />
       )}
       {needsTime === undefined ? null : (
@@ -324,6 +328,40 @@ export function Kpi({ spec, solo = false, onAddTime, query }: KpiProps) {
             {marked.text}
           </span>
         </p>
+      )}
+    </>
+  );
+  if (!detailed)
+    return (
+      <div className={className} data-testid="kpi" ref={measured}>
+        {top}
+      </div>
+    );
+  return (
+    <div className={className} data-testid="kpi" ref={measured}>
+      <div className="kpi__core" ref={measuredCore}>
+        {top}
+      </div>
+      {trend === undefined || measure === undefined || kpi.time === undefined ? null : (
+        <KpiTrendLoaded
+          query={trend}
+          spec={spec}
+          measure={measure}
+          time={kpi.time}
+          width={box.width}
+          shown={shown.trend}
+        />
+      )}
+      {goal === undefined || measure === undefined ? null : (
+        <KpiTarget
+          value={value}
+          target={goal}
+          title={labelOf(spec, measure)}
+          member={measure}
+          formats={spec.formats}
+          width={box.width}
+          shown={shown.target}
+        />
       )}
     </div>
   );

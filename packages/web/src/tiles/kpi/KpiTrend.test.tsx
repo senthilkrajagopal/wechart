@@ -47,6 +47,28 @@ describe('a KPI’s trend (T938, AC-565)', () => {
     );
   });
 
+  // T938-2: where the tile has no room for it, its image is still named.
+  it('keeps its named image, visually hidden, where the tile has no room for it', () => {
+    const { container } = render(
+      <KpiTrend
+        values={MONTHS}
+        title="Revenue"
+        member="orders.revenue"
+        formats={{ 'orders.revenue': 'currency' }}
+        granularity="month"
+        colour="#2a6fdb"
+        width={256}
+        shown={false}
+      />,
+    );
+    expect(container.querySelector('[data-testid="kpi-trend"]')).toBeNull();
+    const hidden = container.querySelector('[data-testid="kpi-trend-hidden"]');
+    expect(hidden?.className).toBe('visually-hidden');
+    expect(hidden?.querySelector('svg')?.getAttribute('aria-label')).toMatch(
+      /^Revenue by month, last 12 months: /,
+    );
+  });
+
   it('draws nothing until its width is known, rather than a word-sized line', () => {
     const { container } = render(
       <KpiTrend

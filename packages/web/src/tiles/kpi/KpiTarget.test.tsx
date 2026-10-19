@@ -45,6 +45,25 @@ describe('a KPI’s target (T938, AC-565)', () => {
     expect(target?.querySelector('.kpi__target-of')?.textContent).toBe('97% of $1.40M');
   });
 
+  // T938-2: where the tile has no room for it, its words are still said.
+  it('says its words, visually hidden, where the tile has no room for it', () => {
+    const { container } = render(
+      <KpiTarget
+        value={1_352_000}
+        target={1_400_000}
+        title="Revenue"
+        member="orders.revenue"
+        formats={{ 'orders.revenue': 'currency' }}
+        width={548}
+        shown={false}
+      />,
+    );
+    expect(container.querySelector('[data-testid="kpi-target"]')).toBeNull();
+    const hidden = container.querySelector('[data-testid="kpi-target-hidden"]');
+    expect(hidden?.className).toBe('visually-hidden');
+    expect(hidden?.textContent).toBe('Not shown at this size: 97% of $1.40M target.');
+  });
+
   it('sets its words in text-xs, text-secondary', () => {
     expect(KPI_CSS).toMatch(
       /\.kpi__target-of \{[^}]*font-size: var\(--wc-text-xs-size\);[^}]*color: var\(--wc-text-secondary\);[^}]*\}/,
