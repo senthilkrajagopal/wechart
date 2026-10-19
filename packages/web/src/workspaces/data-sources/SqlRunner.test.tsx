@@ -225,6 +225,22 @@ describe('a data source page’s “SQL runner” tab, on (T823, AC-464, AC-373;
     );
   });
 
+  it('names its owner alone as who may run, on a copy in My workspace pointed elsewhere that a Super-Admin switched on (AC-383; T823’s review)', () => {
+    serve();
+    const { container } = open({
+      ...SOURCE,
+      inWorkspace: true,
+      sqlRunner: { ...ON, needsSwitch: true },
+    });
+    expect(screen.getByTestId('sql-switch').textContent).toContain('SQL runner on · turned on by Ada Admin');
+    expect(
+      [...container.querySelectorAll('dl.sql-off__who dd')].map((each) => each.textContent),
+    ).toEqual([
+      'You, its owner: nobody else sees your workspace',
+      'cube_reader on sales at pg-replica-1:5432',
+    ]);
+  });
+
   it('opens a source in My workspace with no switch, saying it is the owner’s, with “Open in SQL runner” (AC-383; design 17’s N3)', () => {
     serve();
     open({ ...SOURCE, inWorkspace: true, sqlRunner: { on: false, tab: true, runs: true } });

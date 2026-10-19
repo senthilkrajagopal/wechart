@@ -210,7 +210,12 @@ function SwitchRecord({
         <dl className="sql-off__who">
           <dt>Who may run SQL</dt>
           <dd>
-            <WhoRuns source={source} groups={groups} />
+            {source.inWorkspace ? (
+              // A copy pointed elsewhere, switched on: still its owner's alone (AC-383).
+              'You, its owner: nobody else sees your workspace'
+            ) : (
+              <WhoRuns source={source} groups={groups} />
+            )}
           </dd>
           <dt>Runs as</dt>
           <dd>
