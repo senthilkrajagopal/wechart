@@ -241,7 +241,8 @@ describe('a graphical table drawn (T944, AC-571)', () => {
     expect(within(change('Seafood')!).getByRole('img').getAttribute('aria-label')).toBe(
       'No data for Oct 2026',
     );
-    expect(change('Dairy')?.textContent).toBe('▲ 10.0%');
+    // Signed since checkpoint 3's AC-520 call (b55665ce): "▲ +x%".
+    expect(change('Dairy')?.textContent).toBe('▲ +10.0%');
   });
 
   it('says "No rule matched" for an icon no rule applies to', () => {

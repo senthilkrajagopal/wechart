@@ -2030,6 +2030,103 @@ test('a graphical table on a 6-column tile marks its rows by click, Ctrl and Shi
 });
 
 /**
+ * T947 / AC-574: THE SYSTEM SHALL give a graphical table a "View as table"
+ * holding the numbers behind every cell: a Sparkline column as its first and
+ * last values ("$84K → $112K"), a Bullet column as value and target ("23.1% /
+ * 25%"), and an Icon column as its word.
+ * `Fails when: a column's numbers are missing, or differ from what its cell
+ * draws.`
+ *
+ * On a fixed clock of 20 August 2026, as the sample orders end in August.
+ */
+test('a graphical table’s table view lists the numbers behind every cell, each as its cell draws it', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await graphicalTableDashboard(request, [
+    {
+      tile: 'gt-status',
+      dimensions: ['orders.status'],
+      columns: [
+        { kind: 'value', measure: 'orders.total_amount' },
+        { kind: 'sparkline', measure: 'orders.count', granularity: 'month', last: 6 },
+        {
+          kind: 'bulletGraph',
+          measure: 'orders.total_amount',
+          target: { kind: 'fixed', value: 40000 },
+          ranges: [32000, 40000, 48000],
+        },
+        {
+          kind: 'icon',
+          measure: 'orders.total_amount',
+          rules: [
+            { op: '>=', value: 40000, state: 'success', label: 'On track' },
+            { op: 'otherwise', state: 'error', label: 'Off track' },
+          ],
+        },
+        { kind: 'change', measure: 'orders.count', period: 'month' },
+      ],
+    },
+  ]);
+  await page.clock.setFixedTime(new Date('2026-08-20T12:00:00Z'));
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  const tile = page.locator('[data-tile="gt-status"]');
+  await expect(tile.locator('tbody tr')).toHaveCount(3);
+  // Its trends in: no longer busy, the first sparkline drawn.
+  await expect(tile.locator('tbody tr').first().locator('td').nth(1).locator('svg')).toBeVisible();
+  await expect(tile.getByRole('region', { name: /at a glance$/ })).not.toHaveAttribute(
+    'aria-busy',
+    'true',
+  );
+  // What each status's cells draw, and say.
+  const drawn = await tile.locator('tbody tr').evaluateAll((rows) =>
+    rows.map((row) => {
+      const cells = [...row.querySelectorAll('td')];
+      return {
+        status: row.querySelector('th')?.textContent ?? '',
+        value: cells[0]?.textContent ?? '',
+        spark: cells[1]?.querySelector('svg')?.getAttribute('aria-label') ?? '',
+        bullet: cells[2]?.querySelector('svg')?.getAttribute('aria-label') ?? '',
+        icon: cells[3]?.textContent ?? '',
+        change: cells[4]?.textContent ?? '',
+        missing: cells[4]?.querySelector('[role="img"]')?.getAttribute('aria-label') ?? undefined,
+      };
+    }),
+  );
+
+  await viewAs(tile, 'table');
+  const table = tile.getByTestId('data-table');
+  await expect(table.getByRole('columnheader')).toHaveText([
+    'Orders Status',
+    'Orders Total Amount',
+    'Trend, 6 months',
+    'Orders Total Amount vs target',
+    'Orders Total Amount status',
+    'Orders Count vs last month',
+  ]);
+  const listed = await table
+    .getByTestId('table-row')
+    .evaluateAll((rows) =>
+      rows.map((row) => [...row.querySelectorAll('td')].map((cell) => cell.textContent ?? '')),
+    );
+  expect(listed).toHaveLength(3);
+  for (const [at, cells] of drawn.entries()) {
+    const row = listed[at] ?? [];
+    expect(row[0]).toBe(cells.status);
+    expect(row[1]).toBe(cells.value);
+    const [, first, last] = /: from (\S+) to (\S+),/.exec(cells.spark) ?? [];
+    expect(row[2]).toBe(`${first ?? ''} → ${last ?? ''}`);
+    const [, value, target] = /^(\S+) of (\S+),/.exec(cells.bullet) ?? [];
+    expect(row[3]).toBe(`${value ?? ''} / ${target ?? ''}`);
+    expect(row[4]).toBe(cells.icon);
+    if (cells.missing === undefined) expect(row[5]).toMatch(new RegExp(` · ${cells.change}$`));
+    else expect(row[5]).toBe(cells.missing);
+  }
+});
+
+/**
  * T939 / AC-566: IF a KPI's Compare to is Previous period or Same period last
  * year and Time is empty, THEN THE SYSTEM SHALL say "Compare to: ‹choice›
  * needs a time dimension in Time." with the Time well as its action; and IF

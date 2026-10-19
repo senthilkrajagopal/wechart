@@ -30,5 +30,4 @@ export const AWAITING_TABLE_VIEW: ReadonlySet<string> = new Set([
   'timeline',
   'calendar',
   'icicle',
-  'graphicalTable',
 ]);

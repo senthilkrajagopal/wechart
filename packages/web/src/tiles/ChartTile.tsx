@@ -17,6 +17,7 @@ import { badgesIn, badgesNeeded, nextPlace, roomIn, type BadgePlace } from './ba
 import { FreshnessBadge } from './FreshnessBadge';
 import { DataTable, type DataTableProps } from './DataTable';
 import { GraphicalTable } from './GraphicalTable';
+import { GraphicalTableAsTable } from './GraphicalTableAsTable';
 import { MapNotes } from './MapNotes';
 import { Kpi } from './Kpi';
 import { PivotTable } from './PivotTable';
@@ -325,7 +326,8 @@ function ChartBody({
 export function ChartTile(props: ChartTileProps) {
   // A Map with a Points layer asks it of Cube apart (T976); no other tile
   // asks anything here, nor needs a query client to be drawn.
-  return props.spec.chartType === 'map' && mapSettingsOf(props.spec.options).points !== undefined ? (
+  return props.spec.chartType === 'map' &&
+    mapSettingsOf(props.spec.options).points !== undefined ? (
     <MapPointsTile {...props} />
   ) : (
     <Tile {...props} />
@@ -559,7 +561,15 @@ function Tile({
         </StateLine>
       ) : null}
 
-      {showingTable ? (
+      {showingTable && spec.chartType === 'graphicalTable' ? (
+        // The numbers behind every cell, its trends as the table asked them (T947).
+        <GraphicalTableAsTable
+          spec={spec}
+          label={title}
+          {...(query === undefined ? {} : { query })}
+          {...(height === undefined ? {} : { height })}
+        />
+      ) : showingTable ? (
         // The same rows the chart drew, not a second query — the drawer at
         // AC-036 is built on the same rule, and for the same reason.
         <DataTable spec={spec} label={title} {...(height === undefined ? {} : { height })} />

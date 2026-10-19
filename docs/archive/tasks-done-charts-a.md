@@ -117,6 +117,17 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - **AC-573** is ticked on `e2e/new-charts-a.spec.ts`, "a graphical table on a 6-column tile marks its rows by click, Ctrl and Shift…", on headless Chromium, with the unit tests named seen red, then green.
     - **Also here:** an `eslint-disable` for the T944-1 region's `tabIndex`, as `DataTable`'s region has one.
 
+- [x] T947 (AC-574) "View as table" for a graphical table: the numbers behind every cell
+  - Files: `packages/web/src/tiles/tableView/graphicalTable.ts` (+ test).
+  - Failing test: `graphicalTable.test.ts` (table view): Beverages reads "$1,210,000 · $84K → $112K · 23.1% / 25% · At risk", each matching its drawn cell (AC-574).
+  - Depends on: T944
+  - Done (2026-10-19), decision T947-1:
+    - **The view:** `tableView/graphicalTable.ts`, `graphicalTableTableView(spec, trends, now)`. It is built from the same helpers the cells use, now exported from `GraphicalTable.tsx`: `trendFor`, `valuesAlong`, `headingOf`, `targetOf`, `iconValueOf`, `rulesOf`, `matcherFor` and the new `changeReadingOf`. `ChangeElement`'s `changeWordsOf` is exported.
+    - **Its trends:** they are needed alongside the rows, so the view isn't a `TABLE_VIEWS` line. `ChartTile` draws `GraphicalTableAsTable` in table view instead. It asks the trends with `useGraphicalTableTrends(spec, query, 'every')`: at 50 rows or fewer these are the first page's queries, already cached, and past 50 there is one unfiltered query per time and grain. It passes the view to `DataTable`'s new `view` prop.
+    - **Test file:** the test is `graphicalTable.test.tsx`, not `.ts`, because it renders the table to compare every cell. The sparkline is written as its text alternative writes it (`shortValues`), so "$84K" may read "$84.0K"; the test pins it to the cell's.
+    - `graphicalTable` came out of `AWAITING_TABLE_VIEW`.
+    - **AC-574** is ticked on `e2e/new-charts-a.spec.ts`, "a graphical table's table view lists the numbers behind every cell…" (fixed clock), and `table-view.spec.ts`'s graphicalTable walk, both on headless Chromium. Unit tests seen red, then green.
+
 - [x] T953 (AC-580, AC-037) The bullet chart's spec and wells: Target, 2–3 bands at 80, 100 and 120 % by default, and its empty state
   - Files: `packages/core/src/chart-types/bullet.ts` (+ test), `packages/web/src/editor/wells/bullet.tsx` (+ test).
   - Failing test: `bullet.test.ts`: bands default to [80, 100, 120]; a fourth band is refused with "At most 3 bands: R80's three greys, and no fourth without a new colour."; one band is refused; `bullet.test.tsx` (wells): with Target emptied the tile says "A bullet chart compares each member with a target. Put a measure or a value in Target." with Target as its action (AC-580, AC-037).

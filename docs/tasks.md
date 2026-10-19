@@ -2196,10 +2196,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T946 (AC-573) Mark a graphical table's rows as table tiles do, never by sorting, with "· $X marked" in partly marked additive cells, and cross-filter by row
 
-- [ ] T947 (AC-574) "View as table" for a graphical table: the numbers behind every cell
-  - Files: `packages/web/src/tiles/tableView/graphicalTable.ts` (+ test).
-  - Failing test: `graphicalTable.test.ts` (table view): Beverages reads "$1,210,000 · $84K → $112K · 23.1% / 25% · At risk", each matching its drawn cell (AC-574).
-  - Depends on: T944
+- [x] T947 (AC-574) "View as table" for a graphical table: the numbers behind every cell
 
 ### Lane CHARTS-A: the bullet chart
 

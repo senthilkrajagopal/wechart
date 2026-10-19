@@ -3,8 +3,10 @@ import {
   bulletBandOf,
   columnsOf,
   formatValue,
+  GRAPHICAL_TABLE_PAGE_ROWS,
   graphicalTableMeasures,
   graphicalTablePage,
+  graphicalTableTrends,
   kpiTrendPeriods,
   kpiTrendValues,
   memberOn,
@@ -12,6 +14,7 @@ import {
   pageQueries,
   type GraphicalTableColumn,
   type IconRule,
+  type MemberFormats,
   type RenderSpec,
   type TimeGranularity,
 } from '@wechart/core';
@@ -62,7 +65,7 @@ function pluralOf(title: string): string {
 }
 
 /** The trend a column reads: its time at its grain. */
-function trendFor(
+export function trendFor(
   column: GraphicalTableColumn,
   trends: readonly LoadedTrend[],
   chartTime: string | undefined,
@@ -78,7 +81,7 @@ function trendFor(
 }
 
 /** A member's values along a trend, oldest first, a period with none a gap. */
-function valuesAlong(
+export function valuesAlong(
   trend: LoadedTrend,
   measure: string,
   matches: (row: Row) => boolean,
@@ -88,7 +91,7 @@ function valuesAlong(
 }
 
 /** A column's heading (decision T944-1). */
-function headingOf(column: GraphicalTableColumn, spec: RenderSpec): string {
+export function headingOf(column: GraphicalTableColumn, spec: RenderSpec): string {
   const title = labelOf(spec, column.settings.measure);
   switch (column.kind) {
     case 'sparkline': {
@@ -111,13 +114,13 @@ function headingOf(column: GraphicalTableColumn, spec: RenderSpec): string {
 const isRule = (rule: unknown): rule is IconRule =>
   typeof rule === 'object' && rule !== null && 'op' in rule && 'state' in rule && 'label' in rule;
 
-const rulesOf = (column: GraphicalTableColumn): IconRule[] =>
+export const rulesOf = (column: GraphicalTableColumn): IconRule[] =>
   Array.isArray(column.settings['rules'])
     ? (column.settings['rules'] as unknown[]).filter(isRule)
     : [];
 
 /** An Icon's value: its measure, or its measure as a share of another (R80, AC-522). */
-function iconValueOf(column: GraphicalTableColumn, row: Row): number | undefined {
+export function iconValueOf(column: GraphicalTableColumn, row: Row): number | undefined {
   const value = numberOf(row[column.settings.measure]);
   const ofMember = text(column.settings['of']);
   if (ofMember === undefined) return value;
@@ -126,7 +129,7 @@ function iconValueOf(column: GraphicalTableColumn, row: Row): number | undefined
 }
 
 /** A Bullet's target: a fixed value, or a measure on the row (R80, AC-521). */
-function targetOf(column: GraphicalTableColumn, row: Row): number | undefined {
+export function targetOf(column: GraphicalTableColumn, row: Row): number | undefined {
   const target = column.settings['target'] as {
     kind?: unknown;
     value?: unknown;
@@ -287,43 +290,22 @@ function Cell({
             <ElementUnavailable measure={labelOf(spec, measure)} error={trend.error} />
           </td>
         );
-      /**
-       * The periods its heading names (checkpoint 3's review): this one and
-       * the one before, never the latest two that happen to have data. A
-       * missing one gives no change, "—", saying which period has none, as
-       * the KPI does (T939).
-       */
-      const along = trend === undefined ? [] : valuesAlong(trend, measure, matches, now);
-      const [previous, current] = along.slice(-2);
-      if (trend !== undefined && (previous === null || current === null)) {
-        const starts = kpiTrendPeriods(trend.time, now, trend.periods);
-        const missing = starts[current === null ? starts.length - 1 : starts.length - 2] ?? '';
-        const said = `No data for ${formatValue(missing, trend.time.member, formats, {
-          [trend.time.member]: trend.time.granularity,
-        })}`;
+      const reading = changeReadingOf(measure, trend, matches, now, formats);
+      if (reading.kind === 'missing')
         return (
           <td className="gt__change">
             <span
               className="text-change"
               data-tone="neutral"
               role="img"
-              aria-label={said}
-              title={said}
+              aria-label={reading.said}
+              title={reading.said}
             >
               —
             </span>
           </td>
         );
-      }
-      const change: Change | undefined =
-        previous === undefined || current === undefined || previous === null || current === null
-          ? undefined
-          : {
-              current,
-              previous,
-              delta: current - previous,
-              ratio: previous === 0 ? undefined : (current - previous) / previous,
-            };
+      const { change } = reading;
       const direction = (['higher', 'lower', 'neutral'] as const).find(
         (one) => one === column.settings['direction'],
       );
@@ -340,6 +322,60 @@ function Cell({
       );
     }
   }
+}
+
+/**
+ * What a Change cell reads (AC-571): the periods its heading names, this one
+ * and the one before, never the latest two that happen to have data
+ * (checkpoint 3's review); a missing one gives no change, "No data for
+ * ‹period›", as the KPI does (T939). No trend, no change.
+ */
+export function changeReadingOf(
+  measure: string,
+  trend: LoadedTrend | undefined,
+  matches: (one: Row) => boolean,
+  now: Date,
+  formats: MemberFormats,
+):
+  | { readonly kind: 'missing'; readonly said: string }
+  | { readonly kind: 'change'; readonly change: Change | undefined } {
+  if (trend === undefined) return { kind: 'change', change: undefined };
+  const [previous, current] = valuesAlong(trend, measure, matches, now).slice(-2);
+  if (previous === null || current === null) {
+    const starts = kpiTrendPeriods(trend.time, now, trend.periods);
+    const missing = starts[current === null ? starts.length - 1 : starts.length - 2] ?? '';
+    return {
+      kind: 'missing',
+      said: `No data for ${formatValue(missing, trend.time.member, formats, {
+        [trend.time.member]: trend.time.granularity,
+      })}`,
+    };
+  }
+  return {
+    kind: 'change',
+    change:
+      previous === undefined || current === undefined
+        ? undefined
+        : {
+            current,
+            previous,
+            delta: current - previous,
+            ratio: previous === 0 ? undefined : (current - previous) / previous,
+          },
+  };
+}
+
+/** The rows of a trend that are one drawn row's: its member, and its section's. */
+export function matcherFor(
+  row: Row,
+  rowsMember: string,
+  groupBy: string | undefined,
+): (one: Row) => boolean {
+  const member = String(row[rowsMember] ?? '');
+  const group = groupBy === undefined ? undefined : String(row[groupBy] ?? '');
+  return (one) =>
+    String(one[rowsMember] ?? '') === member &&
+    (groupBy === undefined || String(one[groupBy] ?? '') === group);
 }
 
 /** "‹Rows›s at a glance: 6 rows; 2 on track, 2 at risk, 2 off track." (AC-571). */
@@ -552,9 +588,7 @@ export function GraphicalTableView({
               {group.rows.map((row, at) => {
                 const member = String(row[rowsMember] ?? '');
                 // This row's trend rows: its member, and its section's.
-                const matches = (one: Row) =>
-                  String(one[rowsMember] ?? '') === member &&
-                  (groupBy === undefined || String(one[groupBy] ?? '') === group.name);
+                const matches = matcherFor(row, rowsMember, groupBy);
                 const mark = marksOf(row);
                 const place = drawnAt;
                 drawnAt += 1;
@@ -598,6 +632,55 @@ export function GraphicalTableView({
 }
 
 /**
+ * A graphical table's trends as answered (T944, T945): a page's, its own
+ * members' only; or, for its table view (T947), every row's — the first
+ * page's own queries where every row is on it, so the view asks nothing the
+ * table didn't, else one query per time and grain for all of them.
+ */
+export function useGraphicalTableTrends(
+  spec: RenderSpec,
+  query: Readonly<Record<string, unknown>> | undefined,
+  page: number | 'every',
+  now: Date,
+): LoadedTrend[] {
+  const item = useQueryItem();
+  const context = useContext(SecurityPreview);
+  const table = {
+    rows: memberOn(spec.encoding, 'x'),
+    columns: columnsOf(spec.options),
+    chartTime: Object.keys(spec.granularities ?? {})[0],
+    now,
+  };
+  const asked =
+    query === undefined
+      ? []
+      : page === 'every' && spec.rows.length > GRAPHICAL_TABLE_PAGE_ROWS
+        ? graphicalTableTrends(query, table.columns, table.chartTime, now)
+        : pageQueries(query, spec.rows, page === 'every' ? 0 : page, table).trends;
+  const answers = useQueries({
+    queries: asked.map((trend) => ({
+      queryKey: ['graphical-table-trend', trend.query, context ?? null, item ?? null],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        loadTile({
+          query: { ...trend.query },
+          signal,
+          ...(context === undefined ? {} : { context }),
+          item,
+        }),
+    })),
+  });
+  return asked.map((trend, at) => ({
+    time: trend.time,
+    periods: trend.periods,
+    rows:
+      (answers[at]?.data as { data?: readonly Record<string, unknown>[] } | undefined)?.data ?? [],
+    // Its own states, loading or failed, never read as no data (checkpoint 3).
+    pending: answers[at]?.isPending === true,
+    ...(answers[at]?.isError === true ? { error: answers[at]?.error } : {}),
+  }));
+}
+
+/**
  * The graphical table with its trends asked of Cube (T944): one query per
  * time and grain its columns draw, as the tile's own query is asked — its
  * filters and limits kept, its dashboard and previewed context — by Rows,
@@ -616,40 +699,9 @@ export function GraphicalTable({
   readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
   readonly onShapeMark?: ((items: readonly ClickedItem[], toggle: boolean) => void) | undefined;
 }) {
-  const item = useQueryItem();
-  const context = useContext(SecurityPreview);
   const now = new Date();
   const [page, setPage] = useState(0);
-  const asked =
-    query === undefined
-      ? []
-      : pageQueries(query, spec.rows, page, {
-          rows: memberOn(spec.encoding, 'x'),
-          columns: columnsOf(spec.options),
-          chartTime: Object.keys(spec.granularities ?? {})[0],
-          now,
-        }).trends;
-  const answers = useQueries({
-    queries: asked.map((trend) => ({
-      queryKey: ['graphical-table-trend', trend.query, context ?? null, item ?? null],
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        loadTile({
-          query: { ...trend.query },
-          signal,
-          ...(context === undefined ? {} : { context }),
-          item,
-        }),
-    })),
-  });
-  const trends: LoadedTrend[] = asked.map((trend, at) => ({
-    time: trend.time,
-    periods: trend.periods,
-    rows:
-      (answers[at]?.data as { data?: readonly Record<string, unknown>[] } | undefined)?.data ?? [],
-    // Its own states, loading or failed, never read as no data (checkpoint 3).
-    pending: answers[at]?.isPending === true,
-    ...(answers[at]?.isError === true ? { error: answers[at]?.error } : {}),
-  }));
+  const trends = useGraphicalTableTrends(spec, query, page, now);
   return (
     <GraphicalTableView
       spec={spec}

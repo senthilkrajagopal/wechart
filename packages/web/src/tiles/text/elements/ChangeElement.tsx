@@ -63,7 +63,7 @@ export function ChangeText({
 }
 
 /** A change in words, "▲ +4.2%" or "▼ −$50K", or undefined with nothing to compare. */
-function changeWordsOf(
+export function changeWordsOf(
   change: Change | undefined,
   member: string,
   formats: MemberFormats | undefined,

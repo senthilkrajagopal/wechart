@@ -13,7 +13,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
 
-import { addedColumnsOf, pointRowsOf, tableViewOf } from './tableView';
+import { addedColumnsOf, pointRowsOf, tableViewOf, type TableView } from './tableView';
 
 /**
  * The table (AC-037), and the table view every chart can switch to (AC-178).
@@ -39,6 +39,11 @@ export interface DataTableProps {
   readonly height?: number;
   /** The chart's title, naming the table's scrolling region (T182). */
   readonly label?: string | undefined;
+  /**
+   * A type's own table view built from more than its rows — a graphical
+   * table's, with its trends (T947) — in place of `tableViewOf(spec)`.
+   */
+  readonly view?: TableView | undefined;
   /**
    * Row marking (AC-092). Absent, or present without a primary key, and rows
    * are not markable at all: `references-markings.md` quotes Spotfire — "A
@@ -73,8 +78,8 @@ const VIEWS_BAR_PX = 32;
  * back. The rows as queried otherwise.
  */
 export function DataTable(props: DataTableProps) {
-  const { spec, height = DEFAULT_HEIGHT, label } = props;
-  const own = useMemo(() => tableViewOf(spec), [spec]);
+  const { spec, height = DEFAULT_HEIGHT, label, view } = props;
+  const own = useMemo(() => view ?? tableViewOf(spec), [spec, view]);
   const points = useMemo(() => pointRowsOf(spec), [spec]);
   const [viewing, setViewing] = useState<'own' | 'points'>('own');
   if (own === undefined) return <RowsTable {...props} />;
