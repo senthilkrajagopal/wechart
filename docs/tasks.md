@@ -1917,10 +1917,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T895 [P] (AC-531) The dashboard parameter in the dashboard's document: a name, a role, ordered labelled choices of at most 1,000 and a default among them
 
-- [ ] T896 (AC-531) Dashboard settings › Parameters: the section and its list, and New parameter in the section or a 520 px dialog from the insert menu and a well's picker
-  - Files: `packages/web/src/dashboard/settings/ParametersSettings.tsx` (+ test), `packages/web/src/dashboard/settings/ParameterForm.tsx` (+ test), `packages/web/src/dashboard/settings/SettingsPage.tsx`.
-  - Failing test: `ParametersSettings.test.tsx`: Parameters sits after Cross-filtering and before Layout with its count; rows show name, "Field switch", Measure, 3, Revenue and "3 · 1 chart, 2 Text tiles"; `ParameterForm.test.tsx`: choices are picked with the field picker and can't be typed; Move up reorders; switching to Dimension with choices set asks first; opened from the insert menu it is a 520 px dialog that returns focus there; one Undo reverses the saved settings (AC-531).
-  - Depends on: T895
+- [x] T896 (AC-531) Dashboard settings › Parameters: the section and its list, and New parameter in the section or a 520 px dialog from the insert menu and a well's picker
 
 - [ ] T897 (AC-532) A parameter's uses as links, Save held for a choice a bound chart can't query, and deleting a used parameter
   - Files: `packages/web/src/dashboard/settings/ParametersSettings.tsx`, `packages/web/src/dashboard/settings/parameterUses.ts` (+ test).

@@ -132,3 +132,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/core/src/text-document.ts` (the four action kinds), `packages/web/src/tiles/text/elements/ActionButton.tsx` (+ test), `packages/web/src/tiles/text/ActionList.tsx` (+ test).
   - Failing test: `ActionList.test.tsx`: + action offers Go to page tab, Apply bookmark, Reset filters and Export only; Move up reorders; `ActionButton.test.tsx`: Reset filters then Go to page tab Detail runs in that order; Reset filters leaves a parameter's value; Export of two tiles downloads two CSVs, each as AC-171 makes it; a stored button with `{"kind":"script"}` is refused by `textDocumentProblems` and runs nothing (AC-530).
   - Depends on: T882
+
+- [x] T896 (AC-531) Dashboard settings › Parameters: the section and its list, and New parameter in the section or a 520 px dialog from the insert menu and a well's picker
+  - Files: `packages/web/src/dashboard/settings/ParametersSettings.tsx` (+ test), `packages/web/src/dashboard/settings/ParameterForm.tsx` (+ test), `packages/web/src/dashboard/settings/SettingsPage.tsx`.
+  - Failing test: `ParametersSettings.test.tsx`: Parameters sits after Cross-filtering and before Layout with its count; rows show name, "Field switch", Measure, 3, Revenue and "3 · 1 chart, 2 Text tiles"; `ParameterForm.test.tsx`: choices are picked with the field picker and can't be typed; Move up reorders; switching to Dimension with choices set asks first; opened from the insert menu it is a 520 px dialog that returns focus there; one Undo reverses the saved settings (AC-531).
+  - Depends on: T895
