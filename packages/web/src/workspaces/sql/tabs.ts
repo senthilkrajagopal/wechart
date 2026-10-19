@@ -275,8 +275,10 @@ export function tabsReducer(
     }
     case 'duplicate': {
       if (target === undefined) return state;
-      // A copy is a new query: Save on it never updates the saved one (T812).
-      const { saved: _saved, ...unsaved } = target;
+      // A copy is a new query: Save on it never updates the saved one (T812);
+      // nor was its Run refused (T824's review).
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { saved: _saved, turnedOff, accessLost, ...unsaved } = target;
       const copy: SqlTab = {
         ...unsaved,
         id: makeId(),
@@ -326,13 +328,18 @@ export function tabsReducer(
     case 'open-saved': {
       const { query } = action;
       const holding = state.tabs.find((tab) => tab.saved?.id === query.id);
-      if (holding !== undefined)
-        return action.lose === true
-          ? {
-              ...change(state, holding, { sourceId: '', sourceLost: true, run: null }),
-              active: holding.id,
-            }
-          : { ...state, active: holding.id };
+      if (holding !== undefined) {
+        if (action.lose !== true) return { ...state, active: holding.id };
+        // Lost as a saved query's, said as one (T824's review): no other mark.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { turnedOff, accessLost, ...rest } = holding;
+        return {
+          tabs: state.tabs.map((tab) =>
+            tab === holding ? { ...rest, sourceId: '', sourceLost: true as const, run: null } : tab,
+          ),
+          active: holding.id,
+        };
+      }
       const id = makeId();
       const types = query.parameters.filter((each) => each.type !== 'text');
       const opened: SqlTab = {

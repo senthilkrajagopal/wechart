@@ -1730,7 +1730,8 @@ describe('a tab whose source is turned off, or whose access is lost, mid-session
 
   it('says “The SQL runner was turned off for ‹source›” on Run, which can’t start, the tab keeping its text and result', async () => {
     const server = api();
-    const view = await ranOnce();
+    await ranOnce();
+    const editor = document.querySelector('.sql-editor .cm-content');
     server.lose('off');
 
     await userEvent.click(screen.getByRole('button', { name: 'Run' }));
@@ -1738,12 +1739,58 @@ describe('a tab whose source is turned off, or whose access is lost, mid-session
     const held = await screen.findByRole('button', { name: 'The SQL runner was turned off for emea_replica.' });
     expect(held.hasAttribute('disabled')).toBe(true);
     expect(screen.getByText('The tab keeps its text and its last result. Choosing another source from the picker lets it run again.').tagName).toBe('P');
-    // Its text and its last result kept; nothing more sent.
-    expect(view.state.doc.toString()).toBe('SELECT 1 AS one');
+    // Its text and its last result kept, in the same editor, never drawn
+    // afresh; said to a screen reader (T824's review); nothing more sent.
+    expect(document.querySelector('.sql-editor .cm-content')).toBe(editor);
+    expect(editor?.textContent).toBe('SELECT 1 AS one');
+    expect(
+      [...document.querySelectorAll('[role="status"][aria-live="polite"]')].map((each) => each.textContent),
+    ).toContain('The SQL runner was turned off for emea_replica.');
     expect(screen.getAllByRole('table', { name: 'Result: 1 row, 1 column' })).toHaveLength(1);
     expect(server.posts).toHaveLength(2);
     // The run line says it's off.
     expect(screen.getByTestId('sql-runner-off').textContent).toBe('Off');
+  });
+
+  it('says Cube Store was turned off, not that it isn’t available, though the list then leaves it out (T824’s review)', async () => {
+    let on = true;
+    const json = (body: unknown, status = 200) =>
+      Promise.resolve(new Response(JSON.stringify(body), { status }));
+    const cubeStoreRow = { ...row('on'), id: 'cubestore', name: 'Cube Store', driver: null, cubeStore: true, folderId: 'root', folderPath: [] };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url === '/api/sql/sources') return json(on ? [cubeStoreRow] : []);
+        if (url === '/api/cube-store') return on ? json({ on: true, runs: true, tab: true }) : json({ error: 'Not found' }, 404);
+        if (url === '/api/cube-store/sql' && init?.method === 'POST')
+          return on ? json(finished) : json({ error: 'Not found' }, 404);
+        if (url === '/api/sql-runs/going') return json({ going: null });
+        return json([], 404);
+      }),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(ME_QUERY.queryKey, writer);
+    render(
+      <QueryClientProvider client={client}>
+        <SqlWorkspace />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: /Cube Store/ }));
+    await screen.findByTestId('sql-warning');
+    const view = EditorView.findFromDOM(document.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+    act(() => {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'SELECT 1 AS one' } });
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await screen.findByRole('table', { name: 'Result: 1 row, 1 column' });
+    on = false;
+
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    const held = await screen.findByRole('button', { name: 'The SQL runner was turned off for Cube Store.' });
+    expect(held.hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByTestId('sql-access-lost')).toBeNull();
   });
 
   it('says the source “isn’t available to you” on Run, never naming it again, once access is lost', async () => {

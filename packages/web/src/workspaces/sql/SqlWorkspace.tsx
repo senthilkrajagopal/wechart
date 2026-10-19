@@ -110,6 +110,18 @@ export function SqlWorkspace({
 /** Make a cube's docked pane, as Generate cubes' is: 480 px (design 17 §6). */
 const MAKE_PANE = 480;
 
+/** Cube Store's row, off: for a tab whose Run found it turned off, which the list then leaves out (T824). */
+const CUBE_STORE_OFF_ROW: SqlSourceRow = {
+  id: CUBE_STORE_ID,
+  name: 'Cube Store',
+  driver: null,
+  cubeStore: true,
+  folderId: 'root',
+  folderPath: [],
+  inWorkspace: false,
+  runner: 'off',
+};
+
 /** The browser's storage, where it has one it lets the page use. */
 const browserStorage = (): Storage | undefined => {
   try {
@@ -198,9 +210,21 @@ function ChosenOn({
   };
 }) {
   const page = useQuery({ ...sourceQuery(row.id), retry: false, enabled: !row.cubeStore });
-  const store = useQuery({ ...CUBE_STORE_QUERY, retry: false, enabled: row.cubeStore });
-  const failed = row.cubeStore ? store.error : page.error;
-  const source: SqlSource | undefined = row.cubeStore
+  // Found turned off by the tab's Run (T824): held, whatever its page now answers.
+  const cubeStoreOff = row.cubeStore && row.runner === 'off';
+  const store = useQuery({ ...CUBE_STORE_QUERY, retry: false, enabled: row.cubeStore && !cubeStoreOff });
+  const failed = row.cubeStore ? (cubeStoreOff ? null : store.error) : page.error;
+  const source: SqlSource | undefined = cubeStoreOff
+    ? {
+        cubeStore: true,
+        id: CUBE_STORE_ID,
+        version: 0,
+        name: 'Cube Store',
+        folderPath: [],
+        inWorkspace: false,
+        sqlRunner: { on: false, tab: true, runs: false },
+      }
+    : row.cubeStore
     ? store.data == null
       ? undefined
       : {
@@ -403,7 +427,10 @@ function Workbench({
   const openTab = tabs.tabs.find((tab) => tab.id === tabs.active) ?? tabs.tabs[0];
   /** The open tab's data source, which the picker shows and chooses. */
   const chosen = openTab?.sourceId ?? '';
-  const chosenRow = sources.data?.find((row) => row.id === chosen);
+  const chosenRow =
+    sources.data?.find((row) => row.id === chosen) ??
+    // Cube Store is listed only while on: a tab found it turned off keeps it (T824's review).
+    (openTab?.turnedOff === true && chosen === CUBE_STORE_ID ? CUBE_STORE_OFF_ROW : undefined);
   /**
    * What holds the open tab's Run (AC-452, AC-379): another tab's run; else
    * one wechart's server says goes outside the tabs, or still finishes in

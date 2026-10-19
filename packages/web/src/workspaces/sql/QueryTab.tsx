@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useId, useRef, useState, type Dispatch, type ReactNode } from 'react';
 
 import { clockOf } from '../../shell/formatTime';
@@ -23,7 +23,7 @@ import { MakeFromButtons, type MakeKind } from './ResultHead';
 import { RunLine } from './RunLine';
 import { runState, type RunState } from './runState';
 import { dialectFor, statementAt } from './statementAt';
-import { SQL_SOURCES_QUERY } from './sources';
+import { SQL_SOURCES_QUERY, type SqlSourceRow } from './sources';
 import { pageKeyOf, routeOf, type SqlSource } from './sqlSource';
 import { SaveDialog } from './SaveDialog';
 import { SAVED_QUERIES } from './SavedList';
@@ -79,19 +79,19 @@ const refusedBefore = (status: number, body: unknown): boolean =>
  * the API's own rule lists it, and the source's page read again. None where
  * the list still has it on, or can't be read.
  */
-async function lostSince(
-  queryClient: QueryClient,
-  source: SqlSource,
-): Promise<'off' | 'access' | null> {
-  const rows = await queryClient
-    .fetchQuery({ ...SQL_SOURCES_QUERY, staleTime: 0 })
-    .catch(() => undefined);
-  if (rows === undefined) return null;
+async function lostSince(source: SqlSource): Promise<{
+  readonly lost: 'off' | 'access' | null;
+  readonly rows: SqlSourceRow[] | undefined;
+}> {
+  // Read here, not into the workspace's list yet: the tab is marked first,
+  // so it stays drawn while the list catches up (T824's review).
+  const rows = await SQL_SOURCES_QUERY.queryFn({}).catch(() => undefined);
+  if (rows === undefined) return { lost: null, rows };
   const row = rows.find((each) => each.id === source.id);
-  const lost = row === undefined ? 'access' : row.runner === 'off' ? 'off' : null;
-  // Its page says so too, for the tab drawn from it.
-  if (lost !== null) await queryClient.invalidateQueries({ queryKey: pageKeyOf(source) });
-  return lost;
+  // Cube Store is listed only while it is on, for everyone: gone is off (T824's review).
+  const lost =
+    row === undefined ? (source.cubeStore === true ? 'off' : 'access') : row.runner === 'off' ? 'off' : null;
+  return { lost, rows };
 }
 
 /** A finished run's rows, or a stopped one's read before its stop (T545); none otherwise. */
@@ -344,15 +344,18 @@ export function QueryTab({
       // Refused before a run: has the source been turned off, or taken from
       // the user, since the tab opened? The picker's list says (T824, AC-466).
       if (refusedBefore(response.status, body)) {
-        const lost = await lostSince(queryClient, source);
+        const { lost, rows } = await lostSince(source);
         if (lost !== null) {
           sending.current = false;
-          dispatch({ kind: 'lost', id: tab.id, sourceId: source.id, at, why: lost, run: before });
           setSaid(
             lost === 'off'
               ? `The SQL runner was turned off for ${source.name}.`
               : 'This tab’s data source isn’t available to you.',
           );
+          dispatch({ kind: 'lost', id: tab.id, sourceId: source.id, at, why: lost, run: before });
+          // Then the list and the source's page, as they now are.
+          if (rows !== undefined) queryClient.setQueryData(SQL_SOURCES_QUERY.queryKey, rows);
+          void queryClient.invalidateQueries({ queryKey: pageKeyOf(source) });
           return;
         }
       }
