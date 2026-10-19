@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 import { headerToggle, openHeaderSheet } from './dashboardHeader';
@@ -1428,4 +1430,146 @@ test('a Filter control is the bar’s filter: one value in both places, and a de
     .click();
   await expect(tile.getByTestId('text-needs-fixing')).toHaveText('1 element needs fixing');
   await expect(tile.getByTestId('filter-control-f-country')).toHaveCount(0);
+});
+
+/**
+ * T894 / AC-530: an Action button runs its declared actions in order and
+ * nothing else — Export downloads the chosen tile's CSV as its ⋯ does
+ * (AC-171), under the filters in effect; Reset filters then Go to page tab
+ * Detail clears the filter and opens Detail.
+ */
+test('an Action button runs its declared actions in order: Export a tile’s CSV, Reset filters, Go to page tab', async ({
+  page,
+  request,
+}) => {
+  const title = `Text ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const chart = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'chart', title: 'Orders by status', ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const wrote = await request.put(`${API}/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: 'Orders by status',
+        owner: 'admin',
+        localToDashboardId: dashboard.id,
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+          chartType: 'bar',
+        },
+      },
+    },
+  });
+  expect(wrote.ok(), await wrote.text()).toBe(true);
+  const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed', interactions: { mode: 'markings' } },
+        markings: [{ id: 'm1', name: 'Picks', slot: 'mk1', isDefault: true }],
+        filters: [{ id: 'f-status', widget: 'list', member: 'orders.status' }],
+        pages: [
+          {
+            id: 'only',
+            title: 'Overview',
+            items: [
+              {
+                id: 'tile-text',
+                kind: 'text',
+                w: 6,
+                h: 24,
+                document: {
+                  version: 1,
+                  doc: {
+                    type: 'doc',
+                    content: [
+                      {
+                        type: 'paragraph',
+                        content: [
+                          { type: 'text', text: 'Orders ' },
+                          { type: 'value', attrs: { measure: 'orders.count' } },
+                          { type: 'text', text: ' ' },
+                          {
+                            type: 'actionButton',
+                            attrs: {
+                              label: 'Export data',
+                              actions: [{ kind: 'export', tiles: ['tile-chart'] }],
+                            },
+                          },
+                          { type: 'text', text: ' ' },
+                          {
+                            type: 'actionButton',
+                            attrs: {
+                              label: 'Go to Detail',
+                              style: 'primary',
+                              actions: [{ kind: 'resetFilters' }, { kind: 'page', page: 'detail' }],
+                            },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+              { id: 'tile-chart', kind: 'chart', w: 6, h: 40, chartId: chart.id },
+            ],
+          },
+          { id: 'detail', title: 'Detail', items: [] },
+        ],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+
+  await page.goto(`/explore/dashboards/${dashboard.id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-text"]');
+  await expect(tile.locator('.text-value')).toHaveText('240');
+  const go = tile.getByRole('button', { name: 'Go to Detail' });
+  // The Link/button tile's Primary, at 32 px.
+  expect((await go.boundingBox())?.height).toBe(32);
+
+  // Shipped only: 80 orders.
+  await openHeaderSheet(page);
+  const pill = page.getByTestId('filter-f-status');
+  await pill.getByRole('button', { expanded: false }).click();
+  await pill.getByRole('button', { name: 'shipped', exact: true }).click();
+  await expect(tile.locator('.text-value')).toHaveText('80');
+  await page.keyboard.press('Escape');
+
+  // Export: the chart tile's CSV, as its ⋯ writes it, under the filter.
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    tile.getByRole('button', { name: 'Export data' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('Orders by status.csv');
+  const file = await readFile(await download.path(), 'utf8');
+  expect(file.startsWith('﻿')).toBe(true);
+  expect(file).toContain('shipped');
+  expect(file).not.toContain('completed');
+
+  // Reset filters, then Go to page tab Detail.
+  await go.click();
+  await expect(
+    page.locator('.dashboard__header').getByRole('tab', { name: 'Detail', exact: true }),
+  ).toHaveAttribute('aria-selected', 'true');
+  await expect(headerToggle(page).locator('.header-toggle__count')).toHaveCount(0);
+  await page
+    .locator('.dashboard__header')
+    .getByRole('tab', { name: 'Overview', exact: true })
+    .click();
+  await expect(tile.locator('.text-value')).toHaveText('240');
 });

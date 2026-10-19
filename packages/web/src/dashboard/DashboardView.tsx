@@ -170,7 +170,7 @@ import { ME_QUERY } from '../shell/me';
 import { MarkingToken, MeasureToken, UnknownMarkingToken } from './tiles/LiveToken';
 import { measureQueryOf } from './tiles/TextTokens';
 import { coverageOf, type Reach } from '../filters/coverage';
-import { chartTilesOf, scopeLabel, scopeOf, textTilesOf } from '../filters/scope';
+import { chartTilesOf, scopeLabel, scopeOf, textTilesOf, tileName } from '../filters/scope';
 import {
   crossChipWords,
   effectsOn,
@@ -220,6 +220,13 @@ import { ImageTile } from './tiles/ImageTile';
 import { LinkTile } from './tiles/LinkTile';
 import { allMembers, FilterBar, filterNameOf } from '../filters/FilterBar';
 import { FilterControl } from '../tiles/text/elements/FilterControl';
+import {
+  ActionButton,
+  exportTilesAsCsv,
+  viewAfterReset,
+  type ActionRunner,
+} from '../tiles/text/elements/ActionButton';
+import { readBookmarks } from '../tiles/text/dashboardBookmarks';
 import { FilterSettings } from '../filters/FilterSettings';
 import {
   FilteredCharts,
@@ -331,7 +338,7 @@ import { duplicateChartTile, duplicatePlainTile } from './model/duplicate';
 import { withLocalCharts } from './model/localCharts';
 import { viewFor } from './bookmarks/applyBookmark';
 import { Bookmarks } from './bookmarks/Bookmarks';
-import type { ViewState } from './bookmarks/viewState';
+import { viewStateFrom, type ViewState } from './bookmarks/viewState';
 import { HistoryIcon } from '../workspaces/history/HistoryPanel';
 
 /**
@@ -5264,6 +5271,9 @@ export function DashboardView({
           />
         );
       }
+      // An Action button (T894, AC-530): its declared actions, in order, nothing else.
+      if (node.type === 'actionButton')
+        return <ActionButton key={key} element={node} run={buttonRunner} />;
       if (measure === undefined) return undefined;
       // An As of (T886, AC-522): when its measure's answer was refreshed, and by what.
       if (node.type === 'asOf') {
@@ -6025,6 +6035,42 @@ export function DashboardView({
     markFilterSeq.current = numberedPast(markFilterSeq.current, view.markFilters);
   };
   /**
+   * What a Text tile's Action button can do (T894, AC-530; rule 136): open
+   * a page tab, apply a bookmark as Bookmarks applies one, reset the
+   * filters (`viewAfterReset`: parameters and marks stay), and export
+   * tiles' CSVs as their ⋯ does.
+   */
+  const buttonRunner: ActionRunner = {
+    goToPage: (page) => {
+      if (live.pages.some((each) => each.id === page)) setOpenPage(page);
+    },
+    applyBookmark: async (bookmark) => {
+      const found = (await readBookmarks(dashboardId)).find((each) => each.id === bookmark);
+      const state = found === undefined ? undefined : viewStateFrom(found.state);
+      if (found !== undefined && state !== undefined) applyView(state, found.name);
+    },
+    resetFilters: () => {
+      const reset = viewAfterReset({
+        filters: filterValues,
+        markFilters,
+        crossFilters: crossSelections,
+      });
+      setFilterValues(reset.filters);
+      setMarkFilters(reset.markFilters);
+      setCrossSelections([...reset.crossFilters]);
+    },
+    exportTiles: (tiles) => {
+      exportTilesAsCsv(tiles, (tileId) => {
+        const tile = elementAt(live, tileId);
+        if (tile === null || !isTile(tile) || tile.chartId === undefined) return undefined;
+        const spec = withWholes[tile.chartId];
+        return spec === undefined
+          ? undefined
+          : { title: chartTitleOf(tile.chartId) ?? tile.text ?? 'chart', spec };
+      });
+    },
+  };
+  /**
    * Copy link with marks (T129, AC-123), from a marking's chip: this
    * dashboard's URL with its filters, page tab and marks (`linkWithMarks`),
    * on the clipboard, said beside the chips for a few seconds and to a
@@ -6655,6 +6701,15 @@ export function DashboardView({
                       names={namesFrom(textSources)}
                       sources={textSources}
                       broken={brokenElement}
+                      // An Action button's targets (T894, AC-530).
+                      buttonTargets={{
+                        dashboardId,
+                        pages: session.document.pages.map(({ id, title }) => ({ id, title })),
+                        tiles: chartTilesOf(session.document).map((each) => ({
+                          id: each.tileId,
+                          name: tileName(each, chartTitleOf),
+                        })),
+                      }}
                       onSelect={(index) => {
                         if (session.saving) return;
                         if (editingText !== tile.id) {

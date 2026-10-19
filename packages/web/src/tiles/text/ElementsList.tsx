@@ -3,9 +3,41 @@ import { useId, useState } from 'react';
 import { TEXT_ELEMENT_LIMIT, type TextNode } from '@wechart/core';
 
 import { StatusIcon } from '../../shell/StatusIcon';
+import { ActionList, type ActionListProps } from './ActionList';
+import { useDashboardBookmarks } from './dashboardBookmarks';
 import { elementName, elementParts, type ElementNames } from './elementName';
 import { rangesProblem } from './elements/BulletGraph';
 import type { InsertSources } from './InsertMenu';
+
+/**
+ * What an Action button's actions may name (T894, AC-530): the dashboard's
+ * page tabs and tiles, and — read from the dashboard — its bookmarks.
+ */
+export type ButtonTargets = Pick<ActionListProps, 'pages' | 'tiles'> & {
+  readonly dashboardId: string;
+};
+
+/** An Action button's settings, with the dashboard's bookmarks read for them. */
+function ButtonSettings({
+  attrs,
+  targets,
+  onChange,
+}: {
+  attrs: Readonly<Record<string, unknown>>;
+  targets: ButtonTargets;
+  onChange: (settings: Record<string, unknown>) => void;
+}) {
+  const bookmarks = useDashboardBookmarks(targets.dashboardId, true);
+  return (
+    <ActionList
+      attrs={attrs}
+      pages={targets.pages}
+      bookmarks={bookmarks}
+      tiles={targets.tiles}
+      onChange={onChange}
+    />
+  );
+}
 
 /**
  * A Text tile's Elements in Properties (T882, AC-519; design 21 pin 13,
@@ -19,9 +51,12 @@ export function ElementsList({
   markings = [],
   sources,
   broken,
+  buttonTargets,
   onSelect,
   onChange,
 }: {
+  /** What an Action button's actions may name: page tabs, bookmarks, tiles (AC-530). */
+  readonly buttonTargets?: ButtonTargets | undefined;
   /** In text order. */
   readonly elements: readonly TextNode[];
   /** The selected element's place among them, or null. */
@@ -93,6 +128,7 @@ export function ElementsList({
           names={names}
           markings={markings}
           cubes={sources?.cubes ?? []}
+          buttonTargets={buttonTargets}
           onChange={change}
         />
       )}
@@ -110,12 +146,14 @@ function ElementSettings({
   names,
   markings,
   cubes,
+  buttonTargets,
   onChange,
 }: {
   element: TextNode;
   names: ElementNames;
   markings: readonly { readonly name: string }[];
   cubes: InsertSources['cubes'];
+  buttonTargets: ButtonTargets | undefined;
   onChange: (settings: Record<string, unknown>) => void;
 }) {
   const attrs = element.attrs ?? {};
@@ -128,7 +166,8 @@ function ElementSettings({
           ...(element.type === 'value' ? [['Format', "The model's"] as [string, string]] : []),
         ]
       : element.type === 'actionButton'
-        ? [['Label', source]]
+        ? // Its label is set in its own field below (T894).
+          []
         : element.type === 'marking'
           ? [['Marking', source]]
           : element.type === 'parameterControl'
@@ -168,6 +207,13 @@ function ElementSettings({
           />
           <IconSettings attrs={attrs} onChange={onChange} />
         </>
+      ) : element.type === 'actionButton' ? (
+        // Its label, style and ordered actions (T894, AC-530; design 21 E).
+        buttonTargets === undefined ? (
+          <ActionList attrs={attrs} pages={[]} bookmarks={[]} tiles={[]} onChange={onChange} />
+        ) : (
+          <ButtonSettings attrs={attrs} targets={buttonTargets} onChange={onChange} />
+        )
       ) : element.type === 'marking' ? (
         <Choices
           label="Show"

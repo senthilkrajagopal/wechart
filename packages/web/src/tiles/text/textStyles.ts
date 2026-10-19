@@ -397,4 +397,44 @@ export const TEXT_CSS = `
 .text-filter-control { display: inline-flex; vertical-align: middle; max-width: 100%; }
 .filter-pill--compact { height: 28px; line-height: normal; }
 .filter-pill--compact button.filter-pill__summary { height: 24px; }
+/* An Action button (T894, AC-530; rule 136): the Link/button tile's styles
+   at 32 px (.link-tile--button, --primary, --text). */
+button.text-action {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  max-width: 100%;
+  padding: 0 12px;
+  border-radius: 4px;
+  border: 1px solid var(--wc-border-strong);
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font: inherit;
+  font-size: var(--wc-text-sm-size);
+  line-height: normal;
+  vertical-align: middle;
+  cursor: pointer;
+}
+button.text-action--primary {
+  background: var(--wc-accent);
+  border-color: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+  font-weight: 600;
+}
+button.text-action--text {
+  padding: 0;
+  border-color: transparent;
+  background: none;
+  color: var(--wc-accent);
+  text-decoration: underline;
+  font-weight: 600;
+}
+/* Its settings in Properties (design 21 E). */
+.text-actions { display: grid; gap: 8px; margin-top: 8px; }
+.text-actions__label { display: grid; gap: 4px; }
+.text-actions__head { margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.text-actions__list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.text-actions__row { display: flex; align-items: flex-start; gap: 6px; }
+.text-actions__grip,
+.text-actions__add { position: relative; }
 `;
