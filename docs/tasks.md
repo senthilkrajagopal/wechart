@@ -1823,10 +1823,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `combo.test.ts`: 2 measures × 21 countries fold to top 3 + Other (8 series); 3 measures × 4 regions with nothing chosen fold to top 1 + Other (6); the same with "All" chosen draws 2 measures × 4 and leaves the third, last added, "not drawn · over 8 series"; 5 measures × 4 regions with nothing chosen draw 4 measures × (top 1 + Other); 9 unsplit measures draw 8; a hidden member and a member with no data each count (AC-505).
   - Depends on: T852
 
-- [ ] T854 (AC-506) Inside a combo, offer "Draw on a right axis" first for a measure on another scale, putting it there
-  - Files: `packages/core/src/undrawn.ts` (the offers per chart type; + test), `packages/web/src/editor/Wells.tsx` (the offers row), `packages/web/src/editor/Wells.test.tsx`.
-  - Failing test: `undrawn.test.ts`: a combo of Revenue and Margin %, both on Auto, gives Margin % "not drawn · on another scale" with offers right axis, small multiples, table in that order; a line chart of the same gives small multiples and table only; `Wells.test.tsx`: pressing "Draw on a right axis" sets Margin %'s axis to right and its pill to its R tag (AC-506).
-  - Depends on: T845
+- [x] T854 (AC-506) Inside a combo, offer "Draw on a right axis" first for a measure on another scale, putting it there
 
 - [x] T855 (AC-497, AC-498, AC-504, AC-219) Customize › Series: a 28 px row per series with its Mark and Axis radio groups and Back to Auto, grouped by measure while split
 

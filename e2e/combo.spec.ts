@@ -214,9 +214,13 @@ test.describe('a combo of revenue and a count, by month (T855 follow-up)', () =>
       'Table',
       'Remove Count',
     ]);
+    // Its pill says left until the offer puts it on the right (T854, AC-506).
+    const pill = page.getByTestId('in-measures-orders.count');
+    await expect(pill.getByTestId('pill-axis')).toHaveText('L');
     await line.getByRole('button', { name: 'Draw on a right axis' }).click();
     await expect(line).toHaveCount(0);
-    await expect(page.getByTestId('in-measures-orders.count')).not.toContainText('not drawn');
+    await expect(pill).not.toContainText('not drawn');
+    await expect(pill.getByTestId('pill-axis')).toHaveText('R');
     await expect.poll(() => axesOnCanvas(page)).toBeGreaterThan(0);
   });
 

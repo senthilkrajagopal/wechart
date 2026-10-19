@@ -1,7 +1,8 @@
-import { emptySpec } from '@wechart/core';
+import { comboSeriesOf, emptySpec, withComboSeries } from '@wechart/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { WELLS, Wells, rejectionReason } from './Wells';
@@ -1229,6 +1230,54 @@ describe('a metric the form doesn’t draw (T510)', () => {
     ).toEqual(['Draw on a right axis', 'Small multiples', 'Table', 'Remove Count']);
     await userEvent.click(within(line).getByRole('button', { name: 'Draw on a right axis' }));
     expect(onRightAxis).toHaveBeenCalledWith('orders.count');
+  });
+
+  it('puts the metric on the right axis from that offer, its pill then ending in R (T854, AC-506)', async () => {
+    /** The wells over options held as the editor holds them; the count is undrawn while left. */
+    function Combo() {
+      const [options, setOptions] = useState<Record<string, unknown>>({});
+      const onOptions = (patch: Readonly<Record<string, unknown>>) =>
+        setOptions((current) => ({ ...current, ...patch }));
+      const onRight =
+        comboSeriesOf(spec.measures, options).find((one) => one.measure === 'orders.count')
+          ?.axis === 'right';
+      return (
+        <Wells
+          spec={spec}
+          available={[amount, measure]}
+          onAdd={vi.fn()}
+          onRemove={vi.fn()}
+          combo={{ options, onOptions, onFormat: vi.fn() }}
+          undrawn={
+            onRight
+              ? undefined
+              : {
+                  metrics: [{ member: 'orders.count', reason: 'scale' }],
+                  drawnAs: 'Combo',
+                  onTable: vi.fn(),
+                  onRightAxis: (member) =>
+                    onOptions({
+                      series: withComboSeries(options, member, { axis: 'right' })['series'],
+                    }),
+                }
+          }
+        />
+      );
+    }
+    render(<Combo />);
+    const pill = screen.getByTestId('in-measures-orders.count');
+    expect(within(pill).getByTestId('pill-axis').textContent).toBe('L');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Draw on a right axis' }));
+
+    expect(within(pill).getByTestId('pill-axis').textContent).toBe('R');
+    expect(pill.textContent).not.toContain('not drawn');
+    expect(
+      within(pill)
+        .getByRole('button', { name: /Change mark or axis$/ })
+        .getAttribute('aria-label'),
+    ).toBe('Count: line, right axis. Change mark or axis');
+    expect(screen.queryByTestId('undrawn-metrics')).toBeNull();
   });
 
   it('says nothing where every metric is drawn', () => {
