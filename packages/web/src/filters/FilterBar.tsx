@@ -172,7 +172,8 @@ function FilterWidgetFor({
     options: options.data?.values ?? [],
     cutShort: options.data?.cutShort ?? false,
     total: all.data?.total,
-    matches: options.data !== undefined && options.data.asked !== '' ? options.data.total : undefined,
+    matches:
+      options.data !== undefined && options.data.asked !== '' ? options.data.total : undefined,
     noun: pluralOf(member.shortTitle),
   };
 

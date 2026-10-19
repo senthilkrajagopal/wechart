@@ -142,7 +142,10 @@ describe('a Filter control (T892, AC-528)', () => {
         // Cube's answer: the rows under the limit, and with `total` every row there is.
         const names = searched
           ? ['Acme Foods GmbH', 'Acme Retail SARL', 'Acmeco Trading']
-          : Array.from({ length: 1000 }, (_, index) => `Customer ${String(index).padStart(4, '0')}`);
+          : Array.from(
+              { length: 1000 },
+              (_, index) => `Customer ${String(index).padStart(4, '0')}`,
+            );
         return new Response(
           JSON.stringify({
             data: names.map((name) => ({ 'customers.name': name })),
