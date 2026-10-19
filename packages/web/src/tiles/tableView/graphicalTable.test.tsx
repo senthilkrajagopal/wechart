@@ -127,8 +127,8 @@ describe('a graphical table’s table view (T947, AC-574)', () => {
     expect(beverages[2]).toMatch(/^\$84(\.0)?K → \$112(\.0)?K$/);
     expect(beverages[3]).toBe('23.1% / 25%');
     expect(beverages[4]).toBe('At risk');
-    // A Change as its two periods and the change its cell draws.
-    expect(beverages[5]).toMatch(/^\$320(\.0)?K → \$337(\.0)?K · ▲ 5\.3%$/);
+    // A Change as its two periods and the change its cell draws, signed (AC-520).
+    expect(beverages[5]).toMatch(/^\$320(\.0)?K → \$337(\.0)?K · ▲ \+5\.3%$/);
     // A row with no trend: "—", as its cell.
     expect(view.rows[2]?.[2]).toBe('—');
   });

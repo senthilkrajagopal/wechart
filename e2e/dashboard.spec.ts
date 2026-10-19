@@ -938,7 +938,7 @@ test('General settings move a dashboard and describe it, and Explore shows both'
  * that a full-viewport page really does take the dashboard's place rather than
  * leaving it visible behind.
  */
-test('the gear opens a settings page with its five sections and a way back', async ({ page }) => {
+test('the gear opens a settings page with its six sections and a way back', async ({ page }) => {
   await open(page);
 
   await page.getByRole('button', { name: 'Dashboard settings' }).click();
@@ -956,6 +956,8 @@ test('the gear opens a settings page with its five sections and a way back', asy
     /^Interactions/,
     /^Markings/,
     /^Cross-filtering/,
+    // Parameters, after Cross-filtering and before Layout (T896, AC-531).
+    /^Parameters/,
     /^Layout/,
   ]);
 
@@ -2128,7 +2130,9 @@ test.describe('the dashboard view as design 04 draws it (T683)', () => {
   const styleOf = (locator: Locator, ...properties: string[]) =>
     locator.evaluate(
       (node, names) =>
-        Object.fromEntries(names.map((name) => [name, getComputedStyle(node).getPropertyValue(name)])),
+        Object.fromEntries(
+          names.map((name) => [name, getComputedStyle(node).getPropertyValue(name)]),
+        ),
       properties,
     );
 
@@ -2139,7 +2143,9 @@ test.describe('the dashboard view as design 04 draws it (T683)', () => {
     const made = async (kind: string, name: string) =>
       (
         (await (
-          await request.post(`${API}/documents`, { data: { kind, title: name, ...IN_MY_WORKSPACE } })
+          await request.post(`${API}/documents`, {
+            data: { kind, title: name, ...IN_MY_WORKSPACE },
+          })
         ).json()) as { id: string }
       ).id;
     const dashboard = await made('dashboard', title);
@@ -2233,7 +2239,8 @@ test.describe('the dashboard view as design 04 draws it (T683)', () => {
       .locator('.tile-head')
       .evaluate(
         (node) =>
-          node.getBoundingClientRect().right - Number.parseFloat(getComputedStyle(node).paddingRight),
+          node.getBoundingClientRect().right -
+          Number.parseFloat(getComputedStyle(node).paddingRight),
       );
     const own = (await count.boundingBox())!;
     expect(Math.abs(end - (own.x + own.width))).toBeLessThanOrEqual(1);
@@ -2278,9 +2285,7 @@ test.describe('the dashboard view as design 04 draws it (T683)', () => {
     await page.goto(`/explore/charts/${kpi}`);
     const value = page.locator('.chart-page__tile').getByTestId('kpi-value');
     await expect(value).toBeVisible();
-    expect(
-      await styleOf(value, 'font-size', 'line-height', 'font-weight', 'text-align'),
-    ).toEqual({
+    expect(await styleOf(value, 'font-size', 'line-height', 'font-weight', 'text-align')).toEqual({
       'font-size': '40px',
       'line-height': '52px',
       'font-weight': '600',
@@ -2342,7 +2347,9 @@ test.describe('the dashboard view as design 04 draws it (T683)', () => {
     const made = async (kind: string, name: string) =>
       (
         (await (
-          await request.post(`${API}/documents`, { data: { kind, title: name, ...IN_MY_WORKSPACE } })
+          await request.post(`${API}/documents`, {
+            data: { kind, title: name, ...IN_MY_WORKSPACE },
+          })
         ).json()) as { id: string }
       ).id;
     const dashboard = await made('dashboard', title);
@@ -2395,6 +2402,9 @@ test.describe('the dashboard view as design 04 draws it (T683)', () => {
     await expect.poll(numbers).toContain('1');
     const written = await numbers();
     expect(written).toContain('0');
-    expect(written.filter((text) => text.includes('.')), written.join(' ')).toEqual([]);
+    expect(
+      written.filter((text) => text.includes('.')),
+      written.join(' '),
+    ).toEqual([]);
   });
 });
