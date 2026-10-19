@@ -464,14 +464,15 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
 
       // Its connection as a definition list: no field to type in, the secret said stored.
       const tabs = main.getByRole('tablist', { name: 'Data source' });
-      // SQL is the sixth, for its folder's read-write members (T535; design 15, P1).
+      // "SQL runner" is the sixth, for its folder's read-write members (T535;
+      // design 15, P1), renamed from "SQL" by T823 (AC-464; design 17, N).
       await expect(tabs.getByRole('tab')).toHaveText([
         'General',
         'Connection',
         'Test history',
         'Usage',
         'In Cube',
-        'SQL',
+        'SQL runner',
       ]);
       await expect(tabs.getByRole('tab', { name: 'Connection' })).toHaveAttribute(
         'aria-selected',
