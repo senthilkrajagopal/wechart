@@ -112,21 +112,40 @@ export const COLORS = {
 } as const satisfies Palette;
 
 /**
- * The categorical series ramp, eight slots in fixed order, both themes
- * (direction.md §5, "Categorical, 8 slots, in fixed order (light / dark)").
+ * The categorical series ramp, sixteen slots in fixed order, both themes
+ * (direction.md §5, "Categorical, 16 slots, in fixed order (light / dark)").
  *
  * Here rather than in `@wechart/charts` because AC-099 audits it against the
  * marking tokens above, in both themes, and those live here — a second copy
- * of eight hex values is eight chances to disagree. `DEFAULT_PALETTE` in
+ * of these hex values is that many chances to disagree. `DEFAULT_PALETTE` in
  * charts is the light ramp, and re-exports this.
  *
- * Eight and no more: past eight the recommender facets or folds the tail into
- * "Other" rather than inventing a ninth hue, because this is the number of
- * slots that have been validated pairwise.
+ * Sixteen from 2026-10-19 (the user: "expand to more colors then.. use 16 or
+ * 32 whatever makes sense.."; COLOUR-1). Slots 1–8 are the original eight,
+ * unchanged, so nothing already drawn changes colour; 9–16 follow them,
+ * validated as a set with them (docs/research/palette-validation.md). Past
+ * sixteen a member is drawn in the neutral rather than in a repeated hue. The
+ * recommender still caps a chart at 8 colour categories (AC-031).
  */
-export const CATEGORICAL = {
+const ORIGINAL_EIGHT = {
   light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'],
   dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'],
+} as const;
+/**
+ * Slots 9–16 (COLOUR-1), in order: cyan, ochre, cobalt, wine, lavender (an
+ * indigo in dark), raspberry, olive, purple. Chosen from a survey of
+ * published 16–20-colour palettes and checked with the dataviz validator in
+ * both themes (docs/research/palette-validation.md, 2026-10-19): each new
+ * slot clears 3:1 on the light surface, and slot 12 (wine) is the tightest
+ * against the markings (AC-099: ΔE 15.5 normal, 8.1 under protan/deutan).
+ */
+const SLOTS_9_TO_16 = {
+  light: ['#00a1c4', '#a85d00', '#0953cd', '#9b2843', '#927efc', '#c83994', '#9b9118', '#8b5db6'],
+  dark: ['#24a4be', '#aa5f04', '#096cb5', '#b14555', '#5b55dd', '#be1d8c', '#818606', '#9b54bf'],
+} as const;
+export const CATEGORICAL = {
+  light: [...ORIGINAL_EIGHT.light, ...SLOTS_9_TO_16.light],
+  dark: [...ORIGINAL_EIGHT.dark, ...SLOTS_9_TO_16.dark],
 } as const;
 
 /** The four marking slots, in order, per theme (direction.md §5). */

@@ -1,7 +1,8 @@
 /**
  * Folding a long tail into "Other" (AC-041).
  *
- * direction.md caps categorical colour at eight validated slots and says that
+ * direction.md caps categorical colour at its validated slots (sixteen from
+ * 2026-10-19, COLOUR-1; the recommender's cap stays eight) and says that
  * past it a chart facets or keeps the top members plus a neutral "Other". This
  * is the second of those.
  *

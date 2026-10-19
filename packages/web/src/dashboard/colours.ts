@@ -112,6 +112,8 @@ export function dashboardColours(
   const coloured: Record<string, RenderSpec> = {};
   /** The colour a single-series chart draws its measure in, the first such chart deciding. */
   const drawnAlone: Record<string, string> = {};
+  /** The colour a member is drawn in as one of several, the first tile drawing it deciding. */
+  const drawnIn: Record<string, string> = {};
   for (const chartId of chartIds) {
     const spec = specs[chartId];
     if (spec === undefined) continue;
@@ -119,8 +121,26 @@ export function dashboardColours(
     // What the tile colours: a pie's slices by their categories, and nothing
     // for a tile that colours no member (T301).
     const colours: Record<string, string> = {};
-    for (const member of colouredMembersOf(spec))
-      colours[member] = chosen[member] ?? assignment.colourFor(member);
+    const members = colouredMembersOf(spec);
+    for (const member of members) colours[member] = chosen[member] ?? assignment.colourFor(member);
+    // A tile that colours no more members than the palette has slots never
+    // draws one in the neutral (COLOUR-1; the user, 2026-10-19, of a combo
+    // whose Revenue and Orders were both grey once earlier tiles had taken
+    // every slot). Such a member takes, on this tile only, the first slot no
+    // other member of the tile has; the dashboard's assignment is untouched,
+    // so the member keeps its place wherever a slot frees up. A colour the
+    // tile chose stays, whatever it is; "Other (n)" is no member here.
+    if (members.length <= DEFAULT_PALETTE.length) {
+      const used = new Set(Object.values(colours));
+      for (const member of members) {
+        if (colours[member] !== OTHER_COLOUR || chosen[member] !== undefined) continue;
+        const free = DEFAULT_PALETTE.find((colour) => !used.has(colour));
+        if (free === undefined) continue;
+        colours[member] = free;
+        used.add(free);
+      }
+    }
+    for (const member of members) if (!(member in drawnIn)) drawnIn[member] = colours[member]!;
     // A single series claims nothing: its measure's colour where another tile
     // gives it one, else the palette's first — never the neutral (T465).
     const alone = singleSeriesOf(spec);
@@ -135,11 +155,18 @@ export function dashboardColours(
   // A sparkline's measure: the colour a tile chose for it, or a chart gives it
   // as a series or draws it alone in; else it claims a slot of its own, after
   // every chart's, so no chart's colours move and two measures never share one.
+  // Never the neutral (COLOUR-1): as a chart draws it, else past the last
+  // slot the first one no other sparkline has.
   const members: Record<string, string> = {};
   for (const measure of sparklineMeasures) {
     if (measure in members) continue;
+    const colour =
+      chosen[measure] ?? drawnIn[measure] ?? drawnAlone[measure] ?? assignment.colourFor(measure);
+    const taken = new Set(Object.values(members));
     members[measure] =
-      chosen[measure] ?? claimed[measure] ?? drawnAlone[measure] ?? assignment.colourFor(measure);
+      colour === OTHER_COLOUR && chosen[measure] === undefined
+        ? (DEFAULT_PALETTE.find((slot) => !taken.has(slot)) ?? colour)
+        : colour;
   }
   return { specs: coloured, assigned: assignment.assigned(), members };
 }

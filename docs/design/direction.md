@@ -221,7 +221,7 @@ Two further changes made at the same time, neither of them a contrast failure:
 
 **Data-viz palettes.** These are validated with `dataviz/scripts/validate_palette.js`.
 
-- **Categorical, 8 slots, in fixed order** (light / dark):
+- **Categorical, 16 slots, in fixed order** (light / dark). *Amended 2026-10-19 by the user* (R86: "all these have to be fixed.. with the coloring", then "expand to more colors then.. use 16 or 32 whatever makes sense.."; COLOUR-1, `decisions-colour.md`). It was 8 slots; slots 1–8 are unchanged, so nothing already drawn changes colour.
   1. blue `#2a78d6` / `#3987e5`
   2. orange `#eb6834` / `#d95926`
   3. aqua `#1baf7a` / `#199e70`
@@ -230,11 +230,24 @@ Two further changes made at the same time, neither of them a contrast failure:
   6. green `#008300` / `#008300`
   7. violet `#4a3aa7` / `#9085e9`
   8. red `#e34948` / `#e66767`
-- **Validator results:**
-  - Light, on `#ffffff`: every check passes. The worst adjacent-pair CVD ΔE is 9.1, and the worst normal-vision ΔE is 19.6. Contrast is a **WARN**: aqua, yellow and magenta fall below 3:1, so the relief rule below applies.
-  - Dark, on `#1c1c1b`: every check passes. The worst CVD ΔE is 8.4, and all 8 slots reach at least 3:1.
+  9. cyan `#00a1c4` / `#24a4be`
+  10. ochre `#a85d00` / `#aa5f04`
+  11. cobalt `#0953cd` / `#096cb5`
+  12. wine `#9b2843` / `#b14555`
+  13. lavender `#927efc` / indigo `#5b55dd`
+  14. raspberry `#c83994` / `#be1d8c`
+  15. olive `#9b9118` / `#818606`
+  16. purple `#8b5db6` / `#9b54bf`
+- Slots 9–16 come from a survey of published 16–20-colour palettes and were checked with the validator (`docs/research/palette-validation.md`, 2026-10-19).
+- **Validator results** (the 16 slots, 2026-10-19, adjacent pairs; full output in `docs/research/palette-validation.md`):
+  - Light, on `#ffffff`: every check passes. The worst adjacent-pair CVD ΔE is 9.1, and the worst normal-vision ΔE is 19.6, both among slots 1–8. Across slots 8–16 the worst is 15.8 CVD and 20.4 normal. Contrast is a **WARN** on aqua, yellow and magenta (slots 3–5), as before, so the relief rule below still applies. Every new slot reaches 3:1.
+  - Dark, on `#1c1c1b`: every check passes. The worst CVD ΔE is 8.4 (slots 1–8). Across slots 8–16 the worst is 13.6 CVD and 22.6 normal. All 16 slots reach at least 3:1.
+  - AC-099, against the markings: light worst ΔE 15.5 normal and 8.1 protan/deutan (slot 12, wine); dark 16.6 and 9.9.
+  - All pairs (`--pairs all`) fail with 16 slots, as they already did with 8. Forms that need every pair told apart (scatter, bubble, map, small multiples) keep their 3-series cap (below).
+- **With 9 to 16 series**, the legend is always shown, and every series can be told apart without its colour: by its tooltip, by highlighting its legend entry, and in the table view. Slots 3–5's light contrast WARN still calls for labels or the table view, as before.
+- **Past the last slot.** A member past slot 16 is drawn in the neutral below, never in a repeated hue. But a tile that colours 16 or fewer members never draws one of them in the neutral: a member whose dashboard colour is the neutral takes, on that tile only, the first slot no other member of the tile has (COLOUR-1).
 - **Channel capacity** (hard constraints on the recommender). Provenance, checked in `docs/research/recommender-algorithms.md` §5: these are **product decisions**, not figures from the literature. The claims in IN-3 that they come from graphical-perception research do not hold — no retrievable source gives a maximum number of distinguishable colours or trellis panels, and in Draco the colour and shape limits are _soft_ penalties, not hard constraints.
-  - At most **8** categorical colours. Past 8, the recommender facets the chart or uses the top 7 plus a neutral "Other". Grounded in our own palette, which has exactly 8 validated slots (above); Draco penalises past 10 and Vega's default `tableau10` carries 10.
+  - At most **8** categorical colours. Past 8, the recommender facets the chart or uses the top 7 plus a neutral "Other". Grounded in our own palette, which had exactly 8 validated slots when this was set; Draco penalises past 10 and Vega's default `tableau10` carries 10. *(2026-10-19, R86: the palette now has 16 slots for drawing, but this cap on what the recommender proposes stays 8, AC-031.)*
   - All-pairs forms (scatter, bubble, map, small multiples) take at most **3** colour series.
   - At most **6** shapes. The only _published_ hard number is 8 — "Vega-Lite only implements 8 shape types", matching Vega's 8-entry default symbol range — so 6 is a deliberately conservative choice, not the cited limit.
   - At most **20** trellis panels before paging. No published basis; Draco's nearest rule penalises past 5 columns.
@@ -705,8 +718,8 @@ Nothing in §2–§7h changes except as design 23's criteria table says: §6's b
 3. Every status, validation, or job state shows an icon and a text label, never colour alone.
 4. A legend appears when a chart has 2 or more series. A single-series chart has no legend box.
 5. A chart with 4 or fewer series also has direct labels, or a table view is one click away.
-6. No chart uses more than 8 categorical colours. Past 8, it folds to "Other" or facets.
-7. A member keeps the same colour in every tile on a dashboard and after any filter.
+6. ~~No chart uses more than 8 categorical colours. Past 8, it folds to "Other" or facets.~~ No chart uses more than 16 categorical colours; past 16, a member is drawn in the neutral, or the chart folds to "Other" or facets. The recommender still proposes no chart of more than 8 (AC-031). *(Amended 2026-10-19 by the user, R86: "expand to more colors then.. use 16 or 32 whatever makes sense..")*
+7. A member keeps the same colour in every tile on a dashboard and after any filter, except that a tile of 16 or fewer coloured members never draws one in the neutral: there, a member the dashboard has no slot left for takes the tile's first free slot. *(Amended 2026-10-19 by the user, R86: "all these have to be fixed.. with the coloring"; COLOUR-1)*
 8. The recommender never proposes a dual y-axis.
 9. The recommendation panel shows the top pick and at least one runner-up, each with a reason of 80 characters or fewer.
 10. After the user picks a chart type manually, the choice stays pinned through later field changes ~~until "Back to recommended" is clicked~~ until the user chooses Auto, or Use on the Recommended card (R76, 2026-10-08; AC-032).

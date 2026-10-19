@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
+import { CATEGORICAL } from '@wechart/ui';
 
 import { IN_MY_WORKSPACE } from './workspace';
 
@@ -24,11 +25,13 @@ interface Tile {
   readonly id: string;
   readonly chartType: string;
   readonly dimensions: readonly string[];
+  /** Its measures: orders.count unless given. */
+  readonly measures?: readonly string[];
   readonly options?: Record<string, unknown>;
   readonly w?: number;
 }
 
-/** A dashboard of these tiles, each with a chart of its own on orders.count. */
+/** A dashboard of these tiles, each with a chart of its own, on orders.count unless given. */
 async function dashboardOf(request: APIRequestContext, tiles: readonly Tile[]): Promise<string> {
   const stamp = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const created = async (kind: string, title: string) =>
@@ -53,7 +56,7 @@ async function dashboardOf(request: APIRequestContext, tiles: readonly Tile[]): 
           chart: {
             source: { cube: 'orders' },
             wells: {
-              measures: ['orders.count'],
+              measures: [...(tile.measures ?? ['orders.count'])],
               dimensions: [x, color].filter((member) => member !== undefined),
               timeDimensions: [],
             },
@@ -138,6 +141,79 @@ test('a single-series bar is drawn in the palette’s first colour after other t
   const fills = await markFills(single);
   expect(fills).not.toContain(OTHER);
   expect(new Set(fills)).toEqual(new Set([FIRST]));
+});
+
+/** Every fill and stroke a tile's chart draws, lower-cased. */
+const inksOf = (tile: Locator) =>
+  tile.evaluate((element) =>
+    [...element.querySelectorAll('svg [fill], svg [stroke]')].flatMap((mark) =>
+      [mark.getAttribute('fill'), mark.getAttribute('stroke')]
+        .filter((ink): ink is string => ink !== null)
+        .map((ink) => ink.toLowerCase()),
+    ),
+  );
+
+/** The stroke of each line a tile draws at this width, lower-cased. */
+const lineStrokes = (tile: Locator, width: string) =>
+  tile
+    .locator(`svg path[stroke-width="${width}"][fill="none"]`)
+    .evaluateAll((all) => all.map((line) => (line.getAttribute('stroke') ?? '').toLowerCase()));
+
+/**
+ * COLOUR-1 (AC-039, AC-598; the user, of the Sales dashboard's "Revenue and
+ * orders by month" and "Category profile": "all these have to be fixed.. with
+ * the coloring"). The first tile takes every palette slot; the combo's two
+ * measures and the parallel coordinates' lines still each draw in a palette
+ * colour of their own, never the neutral.
+ */
+test('a combo’s measures and parallel lines are never grey after another tile took every slot', async ({
+  page,
+  request,
+}) => {
+  const id = await dashboardOf(request, [
+    // A slice an order: 240 of them, more than the palette's slots.
+    { id: 'every', chartType: 'donut', dimensions: ['orders.id'] },
+    {
+      id: 'combo',
+      chartType: 'combo',
+      dimensions: ['orders.status'],
+      measures: ['orders.total_amount', 'orders.count'],
+      // Orders on the right, as on the Sales dashboard: a count beside money.
+      options: { series: { 'orders.count': { axis: 'right' } } },
+      w: 6,
+    },
+    {
+      id: 'parallel',
+      chartType: 'parallel',
+      dimensions: ['customers.name'],
+      measures: ['orders.count', 'orders.total_amount', 'orders.average_amount'],
+      w: 6,
+    },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  const combo = page.locator('[data-tile="combo"]');
+  const parallel = page.locator('[data-tile="parallel"]');
+  await expect(combo.getByTestId('chart-canvas')).toHaveAttribute('data-chart-type', 'combo');
+  await expect(parallel.getByTestId('chart-canvas')).toHaveAttribute('data-chart-type', 'parallel');
+
+  // The combo: its bars in one palette colour, its line in another.
+  await expect.poll(async () => (await markFills(combo)).length).toBeGreaterThan(2);
+  // Coloured fills only: the line's hover band is an unpainted rgb(0,0,0).
+  const bars = new Set((await markFills(combo)).filter((fill) => fill.startsWith('#')));
+  expect(bars.size, JSON.stringify([...bars])).toBe(1);
+  const [bar] = [...bars];
+  expect(bar).not.toBe(OTHER);
+  const palette = CATEGORICAL.light.map((colour) => colour.toLowerCase());
+  const drawn = new Set((await inksOf(combo)).filter((ink) => palette.includes(ink)));
+  expect(drawn).toContain(bar);
+  expect(drawn.size, JSON.stringify([...new Set(await inksOf(combo))])).toBe(2);
+  expect(await inksOf(combo)).not.toContain(OTHER);
+
+  // The parallel coordinates: four customers, four lines, four colours.
+  await expect.poll(async () => (await lineStrokes(parallel, '1.5')).length).toBe(4);
+  const lines = await lineStrokes(parallel, '1.5');
+  expect(lines).not.toContain(OTHER);
+  expect(new Set(lines).size).toBe(4);
 });
 
 test('a colour one tile chose for a category is that category’s on every tile', async ({

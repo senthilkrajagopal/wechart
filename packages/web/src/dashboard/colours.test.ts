@@ -307,6 +307,9 @@ describe('a single series, and a colour chosen in one tile (T465)', () => {
     'Meat/Poultry',
     'Produce',
     'Seafood',
+    // As many as the palette has slots (16 from 2026-10-19, COLOUR-1), so
+    // the donut takes every one of them.
+    ...Array.from({ length: DEFAULT_PALETTE.length - 8 }, (_, at) => `Category ${String(at + 9)}`),
   ];
   const donut: RenderSpec = {
     chartType: 'donut',
@@ -551,6 +554,284 @@ describe('a single series, and a colour chosen in one tile (T465)', () => {
         several,
       });
       expect(members[REVENUE]).toBe(coloured['several']?.colours?.[REVENUE]);
+    });
+  });
+});
+
+/**
+ * COLOUR-1 (AC-039, AC-598; the user, on the Sales dashboard: "all these have
+ * to be fixed.. with the coloring"). Earlier tiles took every palette slot,
+ * so a combo's Revenue bars and Orders line were both drawn in the neutral,
+ * and so was every line of a parallel-coordinates tile.
+ *
+ * A tile that colours no more members than the palette has slots never draws
+ * one in the neutral: a member whose dashboard colour is the neutral takes,
+ * on that tile only, the first slot no other member of the tile has. The
+ * dashboard's own assignment is left as it was.
+ */
+describe('a tile within the palette never draws a member grey (COLOUR-1)', () => {
+  const CATEGORY = 'sales.category';
+  const MONTH = 'sales.month';
+  const PRODUCT = 'sales.product';
+  const REVENUE = 'sales.revenue';
+  const ORDERS = 'sales.orders';
+  const MARGIN = 'sales.margin';
+  const SLOTS = DEFAULT_PALETTE.length;
+
+  const everySlot: RenderSpec = {
+    chartType: 'donut',
+    encoding: { x: [CATEGORY], y: [REVENUE] },
+    rows: Array.from({ length: SLOTS }, (_, at) => ({
+      [CATEGORY]: `Category ${String(at + 1)}`,
+      [REVENUE]: at + 1,
+    })),
+  };
+  const combo: RenderSpec = {
+    chartType: 'combo',
+    encoding: { x: [MONTH], y: [REVENUE, ORDERS] },
+    rows: [
+      { [MONTH]: '2026-01', [REVENUE]: 10, [ORDERS]: 3 },
+      { [MONTH]: '2026-02', [REVENUE]: 12, [ORDERS]: 4 },
+    ],
+  };
+  const page = (charts: readonly string[]): DashboardDocument => ({
+    ...DOC,
+    pages: [
+      {
+        id: 'p1',
+        title: 'Overview',
+        items: charts.map((chartId, index) => ({
+          id: `t${String(index)}`,
+          kind: 'chart' as const,
+          w: 6,
+          h: 40,
+          chartId,
+        })),
+      },
+    ],
+  });
+
+  it('draws a combo’s two measures in two different palette colours after another tile took every slot', () => {
+    const { specs: coloured, assigned } = dashboardColours(page(['every', 'combo']), {
+      every: everySlot,
+      combo,
+    });
+    const colours = coloured['combo']?.colours ?? {};
+    const drawn = [colours[REVENUE], colours[ORDERS]];
+
+    expect(drawn).not.toContain(OTHER_COLOUR);
+    expect(new Set(drawn).size).toBe(2);
+    for (const colour of drawn) expect(DEFAULT_PALETTE).toContain(colour);
+    // The first tile keeps every one of its slots.
+    const alone = dashboardColours(page(['every']), { every: everySlot });
+    expect(coloured['every']?.colours).toEqual(alone.specs['every']?.colours);
+    expect(new Set(Object.values(coloured['every']?.colours ?? {})).size).toBe(SLOTS);
+    // The dashboard's assignment is as it was: the measures past the last slot.
+    expect(assigned[REVENUE]).toBe(OTHER_COLOUR);
+    expect(assigned[ORDERS]).toBe(OTHER_COLOUR);
+  });
+
+  it('draws them in the bars and line it renders, not only in its colour map', () => {
+    const { specs: coloured } = dashboardColours(page(['every', 'combo']), {
+      every: everySlot,
+      combo,
+    });
+    const drawn = coloured['combo'];
+    if (drawn === undefined) throw new Error('No combo');
+    const series = optionFor(drawn).series as {
+      itemStyle?: { color?: string };
+      lineStyle?: { color?: string };
+    }[];
+    const colours = series.map((one) => one.itemStyle?.color ?? one.lineStyle?.color);
+    expect(colours).not.toContain(OTHER_COLOUR);
+  });
+
+  it('takes a slot no other member of the same tile has', () => {
+    // Revenue keeps the slot an earlier tile gave it; Orders, past the last
+    // slot, takes one that isn't Revenue's.
+    const revenueFirst: RenderSpec = {
+      chartType: 'line',
+      encoding: { x: [MONTH], y: [MARGIN, REVENUE] },
+      rows: combo.rows,
+    };
+    const { specs: coloured, assigned } = dashboardColours(page(['first', 'every', 'combo']), {
+      first: revenueFirst,
+      every: everySlot,
+      combo,
+    });
+    const colours = coloured['combo']?.colours ?? {};
+    expect(colours[REVENUE]).toBe(assigned[REVENUE]);
+    expect(colours[REVENUE]).not.toBe(OTHER_COLOUR);
+    expect(colours[ORDERS]).not.toBe(OTHER_COLOUR);
+    expect(colours[ORDERS]).not.toBe(colours[REVENUE]);
+  });
+
+  it('keeps the neutral past the last slot on a tile of more members than the palette has', () => {
+    const tooMany: RenderSpec = {
+      ...everySlot,
+      rows: Array.from({ length: SLOTS + 2 }, (_, at) => ({
+        [CATEGORY]: `Category ${String(at + 1)}`,
+        [REVENUE]: at + 1,
+      })),
+    };
+    const { specs: coloured } = dashboardColours(page(['tooMany']), { tooMany });
+    const colours = Object.values(coloured['tooMany']?.colours ?? {});
+    expect(colours.filter((colour) => colour === OTHER_COLOUR)).toHaveLength(2);
+    expect(new Set(colours.filter((colour) => colour !== OTHER_COLOUR)).size).toBe(SLOTS);
+  });
+
+  it('leaves a folded "Other (n)" in the neutral', () => {
+    const withOther: RenderSpec = {
+      chartType: 'donut',
+      encoding: { x: [PRODUCT], y: [REVENUE] },
+      rows: [
+        { [PRODUCT]: 'Tea', [REVENUE]: 5 },
+        { [PRODUCT]: 'Other (4)', [REVENUE]: 3 },
+      ],
+    };
+    const { specs: coloured } = dashboardColours(page(['every', 'withOther']), {
+      every: everySlot,
+      withOther,
+    });
+    const drawn = coloured['withOther'];
+    if (drawn === undefined) throw new Error('No donut');
+    expect(drawn.colours?.['Tea']).not.toBe(OTHER_COLOUR);
+    expect(drawn.colours?.['Other (4)']).toBeUndefined();
+    const slices = (
+      optionFor(drawn).series as { data: { name: string; itemStyle?: { color?: string } }[] }[]
+    )[0]?.data;
+    expect(slices?.find((slice) => slice.name.startsWith('Other'))?.itemStyle?.color).toBe(
+      OTHER_COLOUR,
+    );
+  });
+
+  it('keeps a colour the tile’s Customize tab chose, even the neutral’s hex', () => {
+    const chose: RenderSpec = {
+      ...combo,
+      options: { series: { [ORDERS]: { colour: OTHER_COLOUR } } },
+    };
+    const { specs: coloured } = dashboardColours(page(['every', 'chose']), {
+      every: everySlot,
+      chose,
+    });
+    expect(coloured['chose']?.colours?.[ORDERS]).toBe(OTHER_COLOUR);
+    expect(coloured['chose']?.colours?.[REVENUE]).not.toBe(OTHER_COLOUR);
+  });
+
+  it('draws a Text tile’s sparkline in its measure’s colour on that combo, not the neutral', () => {
+    const base = page(['every', 'combo']);
+    const first = base.pages[0];
+    if (first === undefined) throw new Error('No page');
+    const text = {
+      id: 'text',
+      kind: 'text' as const,
+      w: 6,
+      h: 12,
+      document: {
+        version: 1 as const,
+        doc: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'sparkline', attrs: { measure: ORDERS } }],
+            },
+          ],
+        },
+      },
+    };
+    const { specs: coloured, members } = dashboardColours(
+      { ...base, pages: [{ ...first, items: [...first.items, text] }] },
+      { every: everySlot, combo },
+    );
+    expect(members[ORDERS]).not.toBe(OTHER_COLOUR);
+    expect(members[ORDERS]).toBe(coloured['combo']?.colours?.[ORDERS]);
+  });
+
+  describe('parallel coordinates', () => {
+    const parallel: RenderSpec = {
+      chartType: 'parallel',
+      encoding: { x: [CATEGORY], y: [REVENUE, ORDERS, MARGIN] },
+      rows: ['Beverages', 'Produce', 'Seafood'].map((category, at) => ({
+        [CATEGORY]: category,
+        [REVENUE]: 10 + at,
+        [ORDERS]: 3 + at,
+        [MARGIN]: 0.1 + at / 100,
+      })),
+    };
+    /** Each line's colour as drawn: its own, else its series'. */
+    const lineColours = (drawn: RenderSpec | undefined): (string | undefined)[] => {
+      if (drawn === undefined) throw new Error('No parallel');
+      const series = optionFor(drawn).series as {
+        lineStyle?: { color?: string };
+        data: { lineStyle?: { color?: string } }[];
+      }[];
+      return series.flatMap((one) =>
+        one.data.map((line) => line.lineStyle?.color ?? one.lineStyle?.color),
+      );
+    };
+
+    it('colours each line by its member, as the dashboard colours that member', () => {
+      const { specs: coloured } = dashboardColours(page(['parallel']), { parallel });
+      const colours = coloured['parallel']?.colours ?? {};
+      expect(lineColours(coloured['parallel'])).toEqual([
+        colours['Beverages'],
+        colours['Produce'],
+        colours['Seafood'],
+      ]);
+      expect(new Set(lineColours(coloured['parallel'])).size).toBe(3);
+    });
+
+    it('gives a line the colour its member has on another tile', () => {
+      const byCategory: RenderSpec = {
+        chartType: 'bar',
+        encoding: { x: [MONTH], y: [REVENUE], color: [CATEGORY] },
+        rows: ['Seafood', 'Produce'].map((category) => ({
+          [MONTH]: '2026-01',
+          [CATEGORY]: category,
+          [REVENUE]: 4,
+        })),
+      };
+      const { specs: coloured } = dashboardColours(page(['bars', 'parallel']), {
+        bars: byCategory,
+        parallel,
+      });
+      const [, produce, seafood] = lineColours(coloured['parallel']);
+      expect(produce).toBe(coloured['bars']?.colours?.['Produce']);
+      expect(seafood).toBe(coloured['bars']?.colours?.['Seafood']);
+    });
+
+    it('draws no line grey after another tile took every slot', () => {
+      const { specs: coloured } = dashboardColours(page(['every', 'parallel']), {
+        every: everySlot,
+        parallel,
+      });
+      const colours = lineColours(coloured['parallel']);
+      expect(colours).not.toContain(OTHER_COLOUR);
+      expect(new Set(colours).size).toBe(3);
+    });
+
+    it('claims its lines’ members, not its measures, which are axes', () => {
+      const { assigned } = dashboardColours(page(['parallel']), { parallel });
+      expect(Object.keys(assigned).sort()).toEqual(['Beverages', 'Produce', 'Seafood']);
+    });
+
+    it('claims nothing past the palette’s slots, drawing every line in its first colour', () => {
+      const many: RenderSpec = {
+        ...parallel,
+        rows: Array.from({ length: SLOTS + 1 }, (_, at) => ({
+          [CATEGORY]: `Line ${String(at + 1)}`,
+          [REVENUE]: at,
+          [ORDERS]: at,
+          [MARGIN]: at,
+        })),
+      };
+      const { specs: coloured, assigned } = dashboardColours(page(['every', 'many']), {
+        every: everySlot,
+        many,
+      });
+      expect(new Set(lineColours(coloured['many']))).toEqual(new Set([DEFAULT_PALETTE[0]]));
+      expect(Object.keys(assigned)).toHaveLength(SLOTS);
     });
   });
 });

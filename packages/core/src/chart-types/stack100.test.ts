@@ -25,9 +25,9 @@ import {
  * the value or the share.`
  */
 const REGIONS = ['EMEA', 'APAC', 'Americas', 'LATAM'];
-const CHANNELS = Array.from({ length: 12 }, (_, at) => `Channel ${String(at + 1)}`);
+const CHANNELS = Array.from({ length: 20 }, (_, at) => `Channel ${String(at + 1)}`);
 
-/** Revenue by Region and Channel: channel n's revenue grows with n, so 12 … 6 are the largest. */
+/** Revenue by Region and Channel: channel n's revenue grows with n, so 20 … 6 are the largest. */
 const rows = REGIONS.flatMap((region, r) =>
   CHANNELS.map((channel, c) => ({
     'orders.region': region,
@@ -90,11 +90,12 @@ describe('100 % stacking (AC-584, AC-037)', () => {
     );
   });
 
-  it('folds 12 channels to 7 and "Other (5)" before shares are taken, the 5 smallest by total', () => {
-    expect(SHARE_SERIES_CAP).toBe(8);
+  it('folds 20 channels to 15 and "Other (5)" before shares are taken, the 5 smallest by total', () => {
+    // The palette's 16 slots from 2026-10-19 (COLOUR-1).
+    expect(SHARE_SERIES_CAP).toBe(16);
     const folded = foldForShares(spec({ stack: 'percent' }));
     const channels = [...new Set(folded.rows.map((row) => String(row['orders.channel'])))];
-    expect(channels).toHaveLength(8);
+    expect(channels).toHaveLength(16);
     expect(channels).toContain('Other (5)');
     for (const kept of CHANNELS.slice(5)) expect(channels).toContain(kept);
     // EMEA's Other is the sum of its five smallest channels.
@@ -104,13 +105,13 @@ describe('100 % stacking (AC-584, AC-037)', () => {
     expect(Number(other?.['orders.revenue'])).toBeCloseTo(1000 + 2000 + 3000 + 4000 + 5000, 9);
   });
 
-  it('leaves a chart of 8 channels or fewer, or at Sum, as it is', () => {
+  it('leaves a chart of 16 channels or fewer, or at Sum, as it is', () => {
     const sum = spec({});
     expect(foldForShares(sum)).toBe(sum);
-    const eight = CHANNELS.slice(0, 8);
+    const sixteen = CHANNELS.slice(0, 16);
     const few = {
       ...spec({ stack: 'percent' }),
-      rows: rows.filter((row) => eight.includes(String(row['orders.channel']))),
+      rows: rows.filter((row) => sixteen.includes(String(row['orders.channel']))),
     };
     expect(foldForShares(few)).toBe(few);
   });

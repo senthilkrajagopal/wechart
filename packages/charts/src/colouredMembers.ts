@@ -13,6 +13,8 @@
  *   spend a slot that a later tile's real member then goes without, and past
  *   the last slot that member falls to the neutral direction.md §5 keeps for
  *   "Other" and null;
+ * - parallel coordinates colour their lines by Colour, or without it by
+ *   their members while the lines fit the palette (COLOUR-1);
  * - every other chart colours its series.
  */
 import {
@@ -24,6 +26,7 @@ import {
   type RenderSpec,
 } from '@wechart/core';
 
+import { isParallelType, lineMembersOf } from './series/parallel';
 import { colourKeyOf, isPieType, slicesOf } from './series/pie';
 import { isTreemapType, treemapNodesOf } from './series/treemap';
 
@@ -56,6 +59,11 @@ export function coloursMembers(spec: RenderSpec): boolean {
 
 export function colouredMembersOf(spec: RenderSpec): string[] {
   if (!coloursMembers(spec)) return [];
+  // Parallel coordinates' measures are axes, not series: without Colour, its
+  // lines are coloured by their members while they fit the palette, and
+  // otherwise by nothing (COLOUR-1).
+  if (isParallelType(spec.chartType) && memberOn(spec.encoding, 'color') === undefined)
+    return [...new Set(lineMembersOf(spec) ?? [])];
   const names = isPieType(spec.chartType)
     ? slicesOf(spec).map(colourKeyOf)
     : isTreemapType(spec.chartType)

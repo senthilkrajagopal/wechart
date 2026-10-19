@@ -223,6 +223,13 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R86 — colour on the Sales dashboard** (2026-10-19, the user, from screenshots of the deployed Sales dashboard: the combo "Revenue and orders by month" drawn all in the neutral grey, and every line of the parallel coordinates "Category profile" too)
+- The user: "all these have to be fixed.. with the coloring"
+- The user: "expand to more colors then.. use 16 or 32 whatever makes sense.."
+  - *The coordinator chose 16, because 32 can't be told apart. Slots 1–8 are unchanged. A tile of 16 or fewer coloured members never draws one in the neutral, and parallel lines take their member's colour (COLOUR-1, `docs/design/decisions-colour.md`). AC-039, AC-099 and AC-598 are amended, and so are direction.md §5 and rules 6 and 7. The combo's 8-series cap (AC-505) and the recommender's 8 colour categories (AC-031) are unchanged.*
+- The user: "use visualization agent and online documentation on what the 16 color palette can be"
+  - *Slots 9–16 come from a research agent's survey of published 16–20-colour categorical palettes, validated with the dataviz validator (`docs/research/palette-validation.md`, 2026-10-19).*
+
 **R85 — the SQL runner's "Cube" group** (2026-10-18, the user, after the coordinator compared it with direct SQL and recommended parking it)
 - The user: "yes park it Cube's own SQL API"
   - *AC-467 and AC-481 are parked, along with AC-482's Cube-group part, and tasks T825 and T826. The xcube request is withdrawn, and the pick-up notes are in `docs/phase-2/backlog.md` §7.*

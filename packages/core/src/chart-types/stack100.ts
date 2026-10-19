@@ -5,7 +5,7 @@
  *
  * At 100 %, each category's series are drawn as their shares of its total.
  * The shares are taken last: Top N's "Other" (AC-041) and the row limit
- * already shaped the rows, and past the categorical palette's 8 slots the
+ * already shaped the rows, and past the categorical palette's 16 slots the
  * smallest series fold into one "Other (n)" here, so the drawn shares of a
  * bar or a point always add to 100.
  *
@@ -19,8 +19,11 @@ export type Stack = 'sum' | 'percent';
 /** The types Stack applies to. */
 export const STACKED_TYPES = ['stackedBar', 'stackedArea'] as const;
 
-/** The categorical palette's slots (direction.md §5): past them, "Other (n)". */
-export const SHARE_SERIES_CAP = 8;
+/**
+ * The categorical palette's slots (direction.md §5): past them, "Other (n)".
+ * 16 from 2026-10-19, as the palette grew (COLOUR-1).
+ */
+export const SHARE_SERIES_CAP = 16;
 
 /** A chart's stacking, from its options: Sum unless 100 % is stored. */
 export function stackOf(options: Readonly<Record<string, unknown>> | undefined): Stack {
@@ -75,7 +78,7 @@ const numberOf = (raw: unknown): number | null => {
 };
 
 /**
- * At 100 %, past 8 series, the 7 largest by total kept and the rest summed
+ * At 100 %, past 16 series, the 15 largest by total kept and the rest summed
  * into "Other (n)" per category, before any share is taken (AC-584, AC-041).
  * The same spec when there is nothing to fold.
  */

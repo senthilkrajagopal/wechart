@@ -51,15 +51,13 @@ export const COMBO_MARK = {
 } as const;
 
 /**
- * direction.md §5, the light categorical ramp, in its fixed order. Eight
- * slots, which is also the recommender's hard cap on colour series — past
- * eight the chart facets or folds the tail into "Other" rather than inventing
- * a ninth hue.
- */
-/**
+ * direction.md §5, the light categorical ramp, in its fixed order: sixteen
+ * slots from 2026-10-19 (COLOUR-1), past which a member is drawn in the
+ * neutral. The recommender's cap on colour series stays 8 (AC-031).
+ *
  * Re-exported from `@wechart/ui` rather than written out again. AC-099 audits
  * this ramp against the marking tokens, which live there, and a second copy of
- * eight hex values is eight chances to disagree with the thing being audited.
+ * the hex values is that many chances to disagree with the thing being audited.
  */
 export const DEFAULT_PALETTE = CATEGORICAL.light;
 

@@ -194,17 +194,29 @@ describe('AC-099: every marking against every series colour', () => {
     });
   }
 
+  /** The 8 slots as they were before 2026-10-19, written out again here on purpose. */
+  const FIRST_EIGHT = {
+    light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'],
+    dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'],
+  };
+
   it('audits every pair the criterion names, and says how many', () => {
     /**
      * The count keeps the loops honest. A filter that quietly skipped a theme
      * or a slot would pass every assertion above by checking less, which is
      * the way an all-pairs audit usually goes wrong.
      */
-    const pairs = THEMES.length * MARKING_SLOT_KEYS.length * 8;
+    // 16 slots from 2026-10-19 (the user: "expand to more colors then.. use
+    // 16 or 32 whatever makes sense.."; COLOUR-1).
+    const pairs = THEMES.length * MARKING_SLOT_KEYS.length * 16;
 
-    expect(pairs).toBe(64);
+    expect(pairs).toBe(128);
     for (const theme of THEMES) {
-      expect(CATEGORICAL[theme]).toHaveLength(8);
+      expect(CATEGORICAL[theme]).toHaveLength(16);
+      // Slots 1–8 as they were, so nothing already drawn changes colour.
+      expect(CATEGORICAL[theme].slice(0, 8)).toEqual(FIRST_EIGHT[theme]);
+      // Sixteen different colours: no slot repeats another.
+      expect(new Set(CATEGORICAL[theme]).size).toBe(16);
       expect(markings(theme)).toHaveLength(4);
     }
   });

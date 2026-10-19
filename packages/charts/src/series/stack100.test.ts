@@ -89,11 +89,12 @@ describe('a stack drawn at 100 % (AC-584)', () => {
     expect(text).toContain('EMEA');
   });
 
-  it('folds 12 channels to 7 and "Other (5)" before shares are taken', () => {
-    const channels = ['Web', ...Array.from({ length: 11 }, (_, at) => `Channel ${String(at + 2)}`)];
+  it('folds 20 channels to 15 and "Other (5)" before shares are taken', () => {
+    const channels = ['Web', ...Array.from({ length: 19 }, (_, at) => `Channel ${String(at + 2)}`)];
     const option = optionFor(spec('stackedBar', { stack: 'percent' }, channels));
     const names = seriesOf(option).map((one) => one.name);
-    expect(names).toHaveLength(8);
+    // The palette's 16 slots from 2026-10-19 (COLOUR-1).
+    expect(names).toHaveLength(16);
     expect(names).toContain('Other (5)');
     const total = seriesOf(option).reduce((sum, one) => sum + Number(valueOf(one.data[1]) ?? 0), 0);
     expect(Math.abs(total - 100)).toBeLessThan(1e-9);

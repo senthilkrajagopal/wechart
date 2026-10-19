@@ -197,6 +197,63 @@ describe('parallel coordinates’ lines (T982, AC-598)', () => {
     expect(drawn['legend']).toMatchObject({ top: 0, left: 0, icon: 'roundRect' });
   });
 
+  /**
+   * COLOUR-1 (AC-598, AC-039; the user, on the Sales dashboard's "Category
+   * profile": every line was drawn in the neutral). Without Colour, and no
+   * more lines than the palette has slots, each line is its member's colour:
+   * the dashboard's for that member, or standing alone its place in the
+   * palette. Past the slots, every line is the palette's first colour, never
+   * the neutral. The lines' names stay in text ink.
+   */
+  describe('without Colour, each line in its member’s colour (COLOUR-1)', () => {
+    type Line = { name: string; lineStyle?: { color?: string } };
+    const linesIn = (option: Record<string, unknown>) =>
+      seriesOf(option).flatMap((one) =>
+        (one.data as Line[]).map((line) => line.lineStyle?.color ?? one.lineStyle.color),
+      );
+    const PALETTE = ['#aa0000', '#00bb00', '#0000cc', '#cc00cc'];
+
+    it('draws each line in its place in the palette, standing alone', () => {
+      const option = parallelOption(spec(rowsOf(3), { palette: PALETTE }));
+      expect(linesIn(option)).toEqual(PALETTE.slice(0, 3));
+      // As drawn: three polylines, each stroked in its own colour.
+      const svg = renderToSvg(optionFor(spec(rowsOf(3), { palette: PALETTE })));
+      const polylines = svg.match(/<polyline [^>]*>/g) ?? [];
+      const strokes = polylines.map((line) => /stroke="([^"]+)"/.exec(line)?.[1]);
+      expect(strokes).toEqual(PALETTE.slice(0, 3));
+      // The series' width kept under each line's own colour.
+      for (const line of polylines) expect(line).toContain('stroke-width="1.5"');
+    });
+
+    it('draws a line in the colour the dashboard gives its member', () => {
+      const option = parallelOption(
+        spec(rowsOf(3), {
+          palette: PALETTE,
+          colours: { 'Product 1': '#cc00cc', 'Product 2': '#0000cc', 'Product 3': '#aa0000' },
+        }),
+      );
+      expect(linesIn(option)).toEqual(['#cc00cc', '#0000cc', '#aa0000']);
+    });
+
+    it('draws every line in the palette’s first colour past its slots, never the neutral', () => {
+      const many = spec(rowsOf(PALETTE.length + 1), {
+        palette: PALETTE,
+        // The first measure's colour on the dashboard, which they once took.
+        colours: { 'products.revenue': '#b3b1ab' },
+      });
+      expect(new Set(linesIn(parallelOption(many)))).toEqual(new Set([PALETTE[0]]));
+    });
+
+    it('names the lines in text ink, not their colours', () => {
+      const option = parallelOption(spec(rowsOf(3), { palette: PALETTE }));
+      const fills = (option['graphic'] as { style: { fill: string } }[]).map(
+        (one) => one.style.fill,
+      );
+      expect(fills).toHaveLength(3);
+      for (const fill of fills) expect(PALETTE).not.toContain(fill);
+    });
+  });
+
   it('has no legend without Colour: its lines are one thing, not its measures', () => {
     expect(Object.keys(optionFor(spec(rowsOf(4))))).not.toContain('legend');
   });

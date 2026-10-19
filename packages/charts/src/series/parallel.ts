@@ -8,7 +8,8 @@
  * drawn at 0.6 so crossings read; past 1,000 members only the first 1,000 by
  * the first measure are drawn, the cap the marking has (23-Q5 (a)), and the
  * tile says so (`ParallelNotes`). With fewer than 3 measures nothing is drawn
- * (AC-597): the tile says what the chart needs instead.
+ * (AC-597): the tile says what the chart needs instead. Without Colour, up to
+ * a palette's lines are each in their member's colour (COLOUR-1).
  *
  * ECharts' own `parallel` series on a `parallel` coordinate system, one
  * `parallelAxis` per measure (research/echarts-parallel.md).
@@ -27,7 +28,7 @@ import { format } from 'echarts/core';
 
 import { colourFor } from '../colours';
 import { labelOf, nameWriter, titleOf } from '../modelWriter';
-import type { EChartsOption } from '../theme';
+import { DEFAULT_PALETTE, type EChartsOption } from '../theme';
 import { CHART_FONT } from '../themed';
 import { DEFAULT_CANVAS, type Canvas } from './bar';
 
@@ -119,6 +120,21 @@ export function parallelLinesOf(spec: RenderSpec): ParallelLines {
   }
   const rows = spec.rows.filter((row) => kept.has(memberOf(row)));
   return { lineBy, colour, axes, scale, rows, members, drawn: kept.size };
+}
+
+/**
+ * The member each line is coloured by, line by line, where the lines are
+ * coloured by their members (COLOUR-1; the user, 2026-10-19, of the Sales
+ * dashboard's parallel coordinates drawn all in the neutral): without Colour,
+ * and no more lines than the palette has slots. Otherwise nothing, and every
+ * line is drawn in one colour, or in its Colour member's.
+ */
+export function lineMembersOf(spec: RenderSpec): readonly string[] | undefined {
+  const { lineBy, colour, rows } = parallelLinesOf(spec);
+  const slots = (spec.palette ?? DEFAULT_PALETTE).length;
+  if (lineBy === undefined || colour !== undefined || rows.length === 0 || rows.length > slots)
+    return undefined;
+  return rows.map((row) => String(row[lineBy] ?? ''));
 }
 
 /** The least and greatest of these values; one value is widened so its axis has a length. */
@@ -280,9 +296,23 @@ export function parallelOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS
     };
   });
 
+  // Without Colour, each of up to a palette's lines in its member's colour:
+  // the dashboard's, or standing alone its place in the palette (COLOUR-1).
+  // Otherwise one colour for them all, the palette's first: never the
+  // neutral, which says "Other" or no data.
+  const members = lineMembersOf(spec);
+  const inOrder = [...new Set(members ?? [])];
+  const oneColour = (spec.palette ?? DEFAULT_PALETTE)[0] ?? DEFAULT_PALETTE[0];
+  const colourOfLine = (row: Row) => {
+    const member = String(row[lineBy ?? ''] ?? '');
+    return colourFor(spec, member, inOrder.indexOf(member));
+  };
   const lineOf = (row: Row) => ({
     name: name === undefined ? '' : name(row[lineBy ?? '']),
     value: axes.map((member) => numberOf(row[member])),
+    // Per line, as ECharts reads a data item's own `lineStyle`
+    // (research/echarts-parallel.md, "A line's own colour").
+    ...(members === undefined ? {} : { lineStyle: { color: colourOfLine(row) } }),
     // What a click on it marks: its member, as the row holds it (AC-599).
     ...(lineBy === undefined
       ? {}
@@ -317,7 +347,7 @@ export function parallelOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS
           {
             type: 'parallel' as const,
             name: lineBy === undefined ? '' : titleOf(spec, lineBy),
-            lineStyle: lineStyle(colourFor(spec, axes[0] ?? '', 0)),
+            lineStyle: lineStyle(oneColour),
             data: rows.map(lineOf),
           },
         ]

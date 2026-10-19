@@ -348,3 +348,259 @@ Getting this wrong is the most common bug: *"the most widely replicated matlab c
 5. **UNVERIFIED — Machado 2009's own colour-space intent.** Two independent reference implementations use linear RGB and fixture F6 confirms it reproduces R's published output — inference from implementations, not a sentence in the paper.
 6. **UNVERIFIED — no numeric published fixture for Viénot 1999 or Brettel 1997.**
 7. **Decision needed from the user**: ΔE variant; ×100 scale; simulation algorithm and severity; clamping; whether `other` and the 0.28 fade composite are in scope; whether marking↔marking is in scope. Until these are pinned, `markingPalette.test.ts` would be asserting numbers whose definition is unstated.
+
+## 2026-10-19: the 16-slot categorical palette (COLOUR-1, R86)
+
+The user, 2026-10-19: "expand to more colors then.. use 16 or 32 whatever makes sense..", then "use visualization agent and online documentation on what the 16 color palette can be". The coordinator chose 16, because 32 can't be told apart. Slots 1–8 are unchanged. Slots 9–16 were picked by a research agent from the survey below and checked with the dataviz skill's `validate_palette.js`, and with wechart's AC-099 audit (`packages/ui/src/audit/markingPalette.test.ts`), which passes for all 16 slots in both themes.
+
+This overrides two earlier rules, by the user's instruction above: the dataviz skill's "a 9th series is never a generated hue", and direction.md's "At most 8" categorical colours for drawing. The recommender's cap of 8 colour categories (AC-031) is unchanged.
+
+### The 16 slots
+
+| Slot | Hue | Light | Dark |
+|---|---|---|---|
+| 1–8 | as before (direction.md §5) | `#2a78d6` `#eb6834` `#1baf7a` `#eda100` `#e87ba4` `#008300` `#4a3aa7` `#e34948` | `#3987e5` `#d95926` `#199e70` `#c98500` `#d55181` `#008300` `#9085e9` `#e66767` |
+| 9 | cyan | `#00a1c4` | `#24a4be` |
+| 10 | ochre | `#a85d00` | `#aa5f04` |
+| 11 | cobalt | `#0953cd` | `#096cb5` |
+| 12 | wine | `#9b2843` | `#b14555` |
+| 13 | lavender (dark: indigo) | `#927efc` | `#5b55dd` |
+| 14 | raspberry | `#c83994` | `#be1d8c` |
+| 15 | olive | `#9b9118` | `#818606` |
+| 16 | purple | `#8b5db6` | `#9b54bf` |
+
+### The survey (the researcher's table, verbatim)
+
+| Palette | n | Strategy past ~8 | Source | Guidance on count |
+|---|---|---|---|---|
+| Tableau 10 | 10 | distinct hues | raw.githubusercontent.com/d3/d3-scale-chromatic/main/src/categorical/Tableau10.js | Tableau blog returned 403 (UNVERIFIED) |
+| Tableau 20 (Vega) | 20 | dark plus light tint of 10 hues, interleaved | raw.githubusercontent.com/vega/vega/main/packages/vega-scale/src/palettes.js | none |
+| d3 Category10 / Observable10 | 10 | distinct hues | d3-scale-chromatic `src/categorical/category10.js`, `observable10.js` | Observable blog returned 429 (UNVERIFIED) |
+| d3 v3 category20 / 20b / 20c | 20 | 20 is hue plus tint; 20b/20c are 5 hues × 4 steps | github.com/d3/d3-3.x-api-reference/blob/master/Ordinal-Scales.md | none |
+| IBM Carbon | 14 | distinct hues, reusing a hue at a different step (Red 50 / Red 90) | carbon-website `src/data/data-visualization/palettes.js`; `color-palettes/index.mdx` | "applied in sequence strictly"; "maximize contrast between neighboring colors". No numeric adjacency rule or maximum found |
+| Atlassian | 8 | 8 hues | cdn.jsdelivr.net/npm/@atlaskit/tokens (`token-names.js`, `atlassian-light.js`) | prose UNVERIFIED |
+| Power BI `dataColors` | 10 example, any length | algorithmic overflow: "adjusting saturation and hue" | learn.microsoft.com/en-us/power-bi/create-reports/report-themes-create-custom | default hexes UNVERIFIED |
+| ColorBrewer Paired / Set3 | 12 | Paired: light/dark pairs of 6 hues. Set3: 12 pastels | d3-scale-chromatic `Paired.js`, `Set3.js`; colorbrewer2.org | the tool caps at 12 classes |
+| Kelly | 22 | maximum contrast in sequence | gist ollieglass/f6ddd781…; kwstat.github.io/pals/reference/discrete.html | "First nine colors work well" for colour-blind viewers |
+| Glasbey | 32 / 256 | algorithmic | colorcet.holoviz.org/user_guide/Categorical.html | "more and more difficult … to perceive their differences" |
+| Okabe–Ito | 8 | CVD-safe | clauswilke.com/dataviz/color-pitfalls.html | stops at 8 |
+| Datawrapper | — | — | datawrapper.de/academy/what-to-consider-when-choosing-colors-for-data-visualization | "more than seven colors … consider using another chart type or to group" |
+| Wilke | — | — | clauswilke.com/dataviz/color-pitfalls.html | best at 3–5; "eight to ten … too burdensome"; direct-label past about 8 |
+| Superset (default) | 20 | 10 colours, then 10 pastel tints in the same order, then "analogous" colours | apache/superset `superset-ui-core/.../categorical/superset.ts` | — |
+| Metabase | 8 | light/dark variants, interleaved past 8; admins can set up to 24 | metabase `frontend/src/metabase/ui/colors/palette.ts`; docs `appearance` | — |
+| Grafana classic | about 64 | 6 hues × dark/light/super-light | grafana `createVisualizationColors.ts` | assigned by series order |
+| ECharts default | 9 | distinct hues | apache/echarts 5.6.0 `globalDefault.ts` | — |
+
+The researcher's notes:
+
+- A subagent fetched every URL; UNVERIFIED means the page couldn't be fetched.
+- Rejected alternative: Tableau-20-style paired tints. In light mode they failed the chroma floor (aqua and yellow can't stay in gamut at the dark end), the adjacent normal floor (12.8), and AC-099 against the markings (normal 11.1, CVD 2.1). All-pairs CVD collapsed to 0.2, and pairing implies series 1 and 9 are related.
+- `--pairs all` fails, as expected. Its worst pairs are within slots 1–8 (red↔orange 7.1), so all-pairs forms stay capped at 3 series.
+- Closest new pairs to watch: cobalt↔violet 9.4 (light), ochre↔orange 9.2 (dark). Olive is 13.5 / 11.8 from status-success and wine 12.1 / 13.2 from status-error; status colours always carry an icon and a label.
+
+### Validator runs (adjacent pairs, the default)
+
+Rerun by lane COLOUR1 on 2026-10-19 against the hexes committed in `packages/ui/src/tokens.ts`, with the same results as the researcher's `validator-adjacent.txt`:
+
+```
+$ node validate_palette.js "#2a78d6,#eb6834,#1baf7a,#eda100,#e87ba4,#008300,#4a3aa7,#e34948,#00a1c4,#a85d00,#0953cd,#9b2843,#927efc,#c83994,#9b9118,#8b5db6" --mode light --surface "#ffffff"
+
+Palette (light, surface #ffffff, categorical): 16 slots
+  [PASS] Lightness band         all 16 inside L 0.43–0.77
+  [PASS] Chroma floor           all 16 >= 0.1
+  [PASS] CVD separation         worst adjacent #eda100↔#1baf7a ΔE 9.1 (protan) · tritan 5.8
+  [PASS] Normal-vision floor    worst adjacent #e87ba4↔#eda100 ΔE 19.6 (normal)
+  [WARN] Contrast vs surface    below 3:1 — relief required (visible labels or table view): [["#1baf7a",2.82],["#eda100",2.17],["#e87ba4",2.69]]
+
+  → ALL CHECKS PASS  (CVD in the 6–8 floor band is legal ONLY with secondary encoding: direct labels, gaps, or texture)
+(exit 0)
+
+$ node validate_palette.js "#3987e5,#d95926,#199e70,#c98500,#d55181,#008300,#9085e9,#e66767,#24a4be,#aa5f04,#096cb5,#b14555,#5b55dd,#be1d8c,#818606,#9b54bf" --mode dark --surface "#1c1c1b"
+
+Palette (dark, surface #1c1c1b, categorical): 16 slots
+  [PASS] Lightness band         all 16 inside L 0.48–0.67
+  [PASS] Chroma floor           all 16 >= 0.1
+  [PASS] CVD separation         worst adjacent #c98500↔#199e70 ΔE 8.4 (protan) · tritan 7.7
+  [PASS] Normal-vision floor    worst adjacent #d55181↔#c98500 ΔE 19.3 (normal)
+  [PASS] Contrast vs surface    all 16 >= 3:1
+
+  → ALL CHECKS PASS  (CVD in the 6–8 floor band is legal ONLY with secondary encoding: direct labels, gaps, or texture)
+(exit 0)
+```
+
+The new slots alone, from slot 8 (the researcher's `validator-adjacent.txt`):
+
+```
+$ node validate_palette.js "#e34948,#00a1c4,#a85d00,#0953cd,#9b2843,#927efc,#c83994,#9b9118,#8b5db6" --mode light --surface "#ffffff"
+  [PASS] Lightness band         all 9 inside L 0.43–0.77
+  [PASS] Chroma floor           all 9 >= 0.1
+  [PASS] CVD separation         worst adjacent #c83994↔#927efc ΔE 15.8 (deutan) · tritan 9.9
+  [PASS] Normal-vision floor    worst adjacent #c83994↔#927efc ΔE 20.4 (normal)
+  [PASS] Contrast vs surface    all 9 >= 3:1
+(exit 0)
+
+$ node validate_palette.js "#e66767,#24a4be,#aa5f04,#096cb5,#b14555,#5b55dd,#be1d8c,#818606,#9b54bf" --mode dark --surface "#1c1c1b"
+  [PASS] Lightness band         all 9 inside L 0.48–0.67
+  [PASS] Chroma floor           all 9 >= 0.1
+  [PASS] CVD separation         worst adjacent #be1d8c↔#5b55dd ΔE 13.6 (protan) · tritan 7.7
+  [PASS] Normal-vision floor    worst adjacent #be1d8c↔#5b55dd ΔE 22.6 (normal)
+  [PASS] Contrast vs surface    all 9 >= 3:1
+(exit 0)
+```
+
+### Validator runs (`--pairs all`, the researcher's `validator-all.txt`)
+
+These fail, as the 8 slots already did. All-pairs forms (scatter, bubble, map, small multiples) keep their 3-series cap (direction.md §5).
+
+```
+$ node validate_palette.js "<the 16 light slots>" --mode light --surface "#ffffff" --pairs all
+  [FAIL] CVD separation         worst all-pairs #008300↔#eb6834 ΔE 3.2 (protan) · tritan 2.1
+  [FAIL] Normal-vision floor    worst all-pairs #e34948↔#eb6834 ΔE 7.1 (normal) — below 15, hard to tell apart even with full color vision
+(exit 1)
+
+$ node validate_palette.js "<the 16 dark slots>" --mode dark --surface "#1c1c1b" --pairs all
+  [FAIL] CVD separation         worst all-pairs #d55181↔#199e70 ΔE 1.6 (deutan) · tritan 2.9
+  [FAIL] Normal-vision floor    worst all-pairs #e66767↔#d95926 ΔE 7.1 (normal) — below 15, hard to tell apart even with full color vision
+(exit 1)
+
+$ node validate_palette.js "#00a1c4,#a85d00,#0953cd,#9b2843,#927efc,#c83994,#9b9118,#8b5db6" --mode light --surface "#ffffff" --pairs all
+  [FAIL] CVD separation         worst all-pairs #8b5db6↔#c83994 ΔE 5.8 (protan) · tritan 6.9
+  [FAIL] Normal-vision floor    worst all-pairs #8b5db6↔#927efc ΔE 12.3 (normal)
+(exit 1)
+
+$ node validate_palette.js "#24a4be,#aa5f04,#096cb5,#b14555,#5b55dd,#be1d8c,#818606,#9b54bf" --mode dark --surface "#1c1c1b" --pairs all
+  [FAIL] CVD separation         worst all-pairs #9b54bf↔#096cb5 ΔE 2.4 (protan) · tritan 3.0
+  [FAIL] Normal-vision floor    worst all-pairs #5b55dd↔#096cb5 ΔE 10.7 (normal)
+(exit 1)
+```
+
+Each of these runs passed the lightness band and the chroma floor. In light mode, contrast is a WARN on slots 3–5 only.
+
+### Per slot, and AC-099 (the researcher's `final-eval.txt`)
+
+Produced by `evaluate.mjs`, below. The normal and CVD distances use Machado 2009, as the validator does. The marking check uses Viénot 1999, unclamped, as `packages/ui/src/audit/oklab.ts` does.
+
+```
+light:
+   9 #00a1c4 L0.656 C0.120 h221 con 3.05 | nearest normal slot 1 ΔE 12.4, nearest CVD slot 5 ΔE 5.0 | nearest status success 22.0
+  10 #a85d00 L0.554 C0.130 h 60 con 4.96 | nearest normal slot 8 ΔE 13.3, nearest CVD slot 6 ΔE 3.7 | nearest status error 11.1
+  11 #0953cd L0.484 C0.200 h261 con 6.71 | nearest normal slot 7 ΔE 9.4, nearest CVD slot 7 ΔE 6.6 | nearest status error 35.4
+  12 #9b2843 L0.466 C0.151 h 12 con 7.56 | nearest normal slot 10 ΔE 14.6, nearest CVD slot 6 ΔE 8.0 | nearest status error 12.1
+  13 #927efc L0.670 C0.180 h288 con 3.18 | nearest normal slot 16 ΔE 12.3, nearest CVD slot 1 ΔE 7.0 | nearest status error 29.1
+  14 #c83994 L0.584 C0.200 h346 con 4.70 | nearest normal slot 16 ΔE 13.0, nearest CVD slot 16 ΔE 5.8 | nearest status error 13.1
+  15 #9b9118 L0.645 C0.130 h104 con 3.25 | nearest normal slot 3 ΔE 13.3, nearest CVD slot 8 ΔE 3.3 | nearest status success 13.5
+  16 #8b5db6 L0.566 C0.140 h306 con 4.84 | nearest normal slot 13 ΔE 12.3, nearest CVD slot 14 ΔE 5.8 | nearest status error 21.0
+  adjacent 8→16: worst normal 20.4 (slots 13↔14), worst CVD 15.8 (slots 13↔14)
+  all pairs involving 9–16: worst normal 9.4 (slots 7↔11), worst CVD 3.3 (slots 8↔15)
+  AC-099 vs markings (Viénot): worst normal 15.5 (slot 12 vs #5b3106), worst CVD 8.1 (slot 12 vs #225c60) → PASS
+dark:
+   9 #24a4be L0.665 C0.110 h216 con 5.79 | nearest normal slot 1 ΔE 11.2, nearest CVD slot 7 ΔE 7.0 | nearest status success 20.9
+  10 #aa5f04 L0.560 C0.130 h 60 con 3.53 | nearest normal slot 2 ΔE 9.2, nearest CVD slot 2 ΔE 2.9 | nearest status error 14.6
+  11 #096cb5 L0.520 C0.140 h249 con 3.11 | nearest normal slot 1 ΔE 10.5, nearest CVD slot 16 ΔE 2.4 | nearest status success 29.8
+  12 #b14555 L0.540 C0.141 h 14 con 3.13 | nearest normal slot 5 ΔE 9.5, nearest CVD slot 6 ΔE 5.7 | nearest status error 13.2
+  13 #5b55dd L0.535 C0.201 h279 con 3.08 | nearest normal slot 11 ΔE 10.7, nearest CVD slot 16 ΔE 5.2 | nearest status error 31.3
+  14 #be1d8c L0.544 C0.215 h345 con 3.04 | nearest normal slot 5 ΔE 10.4, nearest CVD slot 16 ΔE 8.3 | nearest status error 18.1
+  15 #818606 L0.596 C0.131 h112 con 4.34 | nearest normal slot 3 ΔE 11.4, nearest CVD slot 10 ΔE 3.1 | nearest status success 11.8
+  16 #9b54bf L0.575 C0.170 h313 con 3.58 | nearest normal slot 13 ΔE 11.8, nearest CVD slot 11 ΔE 2.4 | nearest status error 21.0
+  adjacent 8→16: worst normal 22.6 (slots 13↔14), worst CVD 13.6 (slots 13↔14)
+  all pairs involving 9–16: worst normal 9.2 (slots 2↔10), worst CVD 2.4 (slots 11↔16)
+  AC-099 vs markings (Viénot): worst normal 16.6 (slot 9 vs #b6bcd8), worst CVD 9.9 (slot 9 vs #b6bcd8) → PASS
+```
+
+### The scripts
+
+- `color.mjs`: the colour maths shared by the search scripts. It mirrors the dataviz validator (Machado 2009, clamped) and wechart's audit (Viénot 1999, unclamped).
+- `evaluate.mjs`: evaluates a 9–16 extension. For each slot it gives OKLCH, contrast, the nearest other slot and the nearest status colour; it also gives the AC-099 marking check and the adjacent and all-pairs minima. It wrote the output above.
+- `search.mjs` and `refine.mjs`: scan OKLCH candidates for a slot within a hue, L and C window, keeping AC-099, the lightness band, the chroma floor, contrast and a ΔE of at least 15 from the "Other" neutral. They rank candidates by their nearest normal and CVD distance to the other 15 slots.
+
+`color.mjs`:
+
+```js
+// Colour maths shared by the search scripts. Mirrors the dataviz validator
+// (Machado 2009, clamped) and wechart's audit (Viénot 1999, unclamped).
+export const hex2srgb = (h) => { h = h.replace(/^#/, ""); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255); };
+const s2lin = (c) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+const lin2s = (c) => c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+export const lin = (h) => hex2srgb(h).map(s2lin);
+export const relLum = (h) => { const [r, g, b] = lin(h); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+export const contrast = (a, b) => { const [hi, lo] = [relLum(a), relLum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+export function oklabFromLin([r, g, b]) {
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s];
+}
+export const oklab = (h) => oklabFromLin(lin(h));
+export const lch = (h) => { const [L, a, b] = oklab(h); return [L, Math.hypot(a, b), ((Math.atan2(b, a) * 180 / Math.PI) + 360) % 360]; };
+export function oklchToHex(L, C, H) {
+  const a = C * Math.cos(H * Math.PI / 180), b = C * Math.sin(H * Math.PI / 180);
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b, m_ = L - 0.1055613458 * a - 0.0638541728 * b, s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+  const l = l_ ** 3, m = m_ ** 3, s = s_ ** 3;
+  const rgb = [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s];
+  if (rgb.some(c => c < -1e-4 || c > 1 + 1e-4)) return null;
+  return "#" + rgb.map(c => Math.round(Math.max(0, Math.min(1, lin2s(Math.max(0, c)))) * 255).toString(16).padStart(2, "0")).join("");
+}
+const MACHADO = {
+  protan: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+  deutan: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]],
+};
+const VIENOT = {
+  protan: [[0.11238, 0.88762, 0.0], [0.11238, 0.88762, 0], [0.00401, -0.00401, 1.0]],
+  deutan: [[0.29275, 0.70725, 0.0], [0.29275, 0.70725, 0], [-0.02234, 0.02234, 1.0]],
+};
+const mul = (M, [r, g, b]) => M.map(row => row[0] * r + row[1] * g + row[2] * b);
+const cache = new Map();
+function labOf(h, kind, model) {
+  const k = h + kind + model; let v = cache.get(k); if (v) return v;
+  let L = lin(h);
+  if (kind) { L = mul((model === "v" ? VIENOT : MACHADO)[kind], L); if (model !== "v") L = L.map(c => Math.max(0, Math.min(1, c))); }
+  v = oklabFromLin(L); cache.set(k, v); return v;
+}
+export const dE = (a, b, kind, model = "m") => { const p = labOf(a, kind, model), q = labOf(b, kind, model); return 100 * Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); };
+export const dN = (a, b) => dE(a, b);
+export const dCVD = (a, b, model = "m") => Math.min(dE(a, b, "protan", model), dE(a, b, "deutan", model));
+```
+
+`evaluate.mjs` (with `old.mjs` exporting `OLD`, the 8 slots per theme above):
+
+```js
+// Evaluate a 9-16 extension: per-slot LCh, contrast, nearest other slot,
+// AC-099 marking check (Viénot, unclamped, as packages/ui/src/audit/oklab.ts),
+// adjacent and all-pairs minima (Machado, as the dataviz validator).
+import { lch, contrast, dN, dCVD } from "./color.mjs";
+import { OLD } from "./old.mjs";
+const SURF = { light: "#ffffff", dark: "#1c1c1b" };
+const MARK = { light: ["#151107", "#2d025e", "#5b3106", "#225c60"], dark: ["#f2f2f2", "#b6bcd8", "#fab72a", "#81fbbe"] };
+const STATUS = { light: { success: "#0ca30c", warning: "#fab219", error: "#d03b3b" }, dark: { success: "#0ca30c", warning: "#fab219", error: "#e66767" } };
+const [name, lightArg, darkArg] = process.argv.slice(2);
+const NEW = { light: lightArg.split(","), dark: darkArg.split(",") };
+console.log(`== ${name}`);
+for (const m of ["light", "dark"]) {
+  const all = [...OLD[m], ...NEW[m]];
+  let minN = [99], minC = [99], adjN = [99], adjC = [99], markN = [99], markC = [99];
+  const rows = [];
+  for (let i = 8; i < 16; i++) {
+    const [L, C, H] = lch(all[i]);
+    let near = [99, -1], nearC = [99, -1];
+    for (let j = 0; j < 16; j++) if (j !== i) {
+      const n = dN(all[i], all[j]), c = dCVD(all[i], all[j]);
+      if (n < near[0]) near = [n, j + 1]; if (c < nearC[0]) nearC = [c, j + 1];
+      if (j < i) { if (n < minN[0]) minN = [n, j + 1, i + 1]; if (c < minC[0]) minC = [c, j + 1, i + 1]; }
+    }
+    const n = dN(all[i - 1], all[i]), c = dCVD(all[i - 1], all[i]);
+    if (n < adjN[0]) adjN = [n, i, i + 1]; if (c < adjC[0]) adjC = [c, i, i + 1];
+    for (const k of MARK[m]) { const a = dN(all[i], k), b = dCVD(all[i], k, "v"); if (a < markN[0]) markN = [a, i + 1, k]; if (b < markC[0]) markC = [b, i + 1, k]; }
+    const st = Object.entries(STATUS[m]).map(([k, v]) => [k, dN(all[i], v)]).sort((a, b) => a[1] - b[1])[0];
+    rows.push(`  ${String(i + 1).padStart(2)} ${all[i]} L${L.toFixed(3)} C${C.toFixed(3)} h${H.toFixed(0).padStart(3)} con ${contrast(all[i], SURF[m]).toFixed(2)} | nearest normal slot ${near[1]} ΔE ${near[0].toFixed(1)}, nearest CVD slot ${nearC[1]} ΔE ${nearC[0].toFixed(1)} | nearest status ${st[0]} ${st[1].toFixed(1)}`);
+  }
+  console.log(`${m}:`); console.log(rows.join("\n"));
+  const f = (x) => `${x[0].toFixed(1)} (slots ${x.slice(1).join("↔")})`;
+  console.log(`  adjacent 8→16: worst normal ${f(adjN)}, worst CVD ${f(adjC)}`);
+  console.log(`  all pairs involving 9–16: worst normal ${f(minN)}, worst CVD ${f(minC)}`);
+  console.log(`  AC-099 vs markings (Viénot): worst normal ${markN[0].toFixed(1)} (slot ${markN[1]} vs ${markN[2]}), worst CVD ${markC[0].toFixed(1)} (slot ${markC[1]} vs ${markC[2]}) → ${markN[0] >= 15 && markC[0] >= 8 ? "PASS" : "FAIL"}`);
+}
+```
