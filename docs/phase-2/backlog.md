@@ -328,6 +328,12 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
 
 The user: these "will be deferred and not done in this phase". No task builds them, and requirements §P2.7 lists them as non-goals.
 
+- **MCP access from outside the cluster (parked 2026-10-18).** The user: "we dont need to enable the gateway now. lets assume it is claude code only for now.. we can part requirements for access from outside the cluster..".
+  - Parked: AC-633 (split from AC-476: `/mcp` on its own host over TLS, through a Gateway API HTTPRoute, behind a source-address allow-list, Anthropic's range off by default) and task T795 (the live check on docker-desktop).
+  - Built and kept: the Helm templates and their render tests (T792–T794: `templates/mcp-gateway.yaml`, the SecurityPolicy, 130 s timeouts, mode B attaching to an existing Gateway by default, mode A making its own).
+  - For now: Claude Code reaches `/mcp` on the API's own address, the local dev stack's or the cluster's through `kubectl port-forward svc/wechart-api 4100`, with the MCP host value set.
+  - At pick-up: on a real cluster with a Gateway, set `mcp.host`, `mcp.gateway.parentRefs` (with `sectionName`) and `mcp.allowedSourceRanges`, then run T795's checks there. On docker-desktop, the cluster-scoped installs in `docs/research/gateway-api.md` "Install" need the user to run or allow them. For Claude.ai or Desktop connectors, also see `mcp-deployment-and-tokens.md` on Request headers (beta) and the IPv4-only egress.
+
 - **xcube's slice 7.** The plan's optional slice: Cube's own answers in place of the rules wechart re-implements (`docs/tasks.md`, "Slice 7").
 - **JavaScript, Jinja and Python cubes on a changed target.** When a data source's target changes, xcube aliases only YAML cubes. A JavaScript, Jinja or Python cube in a file-set model keeps its alias, so its rollups renew only on their refresh keys. Its results are still its epoch's own (`~/Work/xcube-exchange/to-wechart/2026-09-28-0100-changed-in-place.md`).
   - wechart isn't affected today: its models are items, and it publishes only YAML (AC-332, AC-335).

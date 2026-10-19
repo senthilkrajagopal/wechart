@@ -223,6 +223,10 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R84 — MCP from outside the cluster** (2026-10-18, the user, after the coordinator explained what the Gateway is for)
+- The user: "we dont need to enable the gateway now. lets assume it is claude code only for now.. we can part requirements for access from outside the cluster.."
+  - *AC-476 is split: its no-host half stays; serving `/mcp` to clients outside the cluster through a Gateway becomes AC-633, parked with T795. The pick-up notes are in `docs/phase-2/backlog.md` §7. Claude Code reaches `/mcp` on the API's own address.*
+
 **R82 — scope, the Cube group, colours and the combo key** (2026-10-18, the user; asked by the coordinator after the standing instruction "complete all things that you have started.. and deploy it.. and dont start anything new")
 - Q: The Text tile's group: which of its started parts are finished? A: "Finish all of them"
   - *Read as: controls and dashboard parameters (F46), AI summaries (F47) and Security › AI (F48) count as started and are finished with the Text tile (F45).*

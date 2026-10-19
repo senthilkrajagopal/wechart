@@ -1645,7 +1645,8 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T794 (AC-476) Give the MCP route 130 s timeouts, tell the API its host, answer `/mcp` on the web app's host with 404, and render nothing for MCP when no host is named
 
-- [ ] T795 (AC-476, AC-474) Deploy the MCP host on docker-desktop through Envoy Gateway v1.9.2, with the patched Envoy image, and check it end to end
+- [ ] T795 (AC-633, AC-474) Deploy the MCP host on docker-desktop through Envoy Gateway v1.9.2, with the patched Envoy image, and check it end to end
+  - **Parked (the user, 2026-10-18):** "we dont need to enable the gateway now. lets assume it is claude code only for now.. we can part requirements for access from outside the cluster..". AC-476's Gateway half became AC-633, also parked. At pick-up, the cluster-scoped installs (Gateway API CRDs, Envoy Gateway, GatewayClass `eg`) need the user to run them or to allow them; the coordinator's permission check refused them on 2026-10-18. Commands: `docs/research/gateway-api.md` "Install". A real cluster with its own Gateway uses the chart's default mode B and needs no installs.
   - Lane: MCP
   - Files: `deploy/helm/values/docker-desktop-mcp.yaml`, `deploy/README.md` (installing the Gateway API v1.6.3 CRDs and Envoy Gateway's own, with `distroless-v1.39.3`, per `gateway-api.md` "Install"), `e2e/mcp/gateway.spec.ts`.
   - Failing test: `gateway.spec.ts`, against the k8s deploy: `curl --resolve <host>:443:127.0.0.1 https://<host>/mcp` with a token lists tools over TLS; with the observed address taken off the allow-list, the same request answers 403 and reaches no API log; `/`, `/mcp/` and `/.well-known/oauth-protected-resource` on the MCP host answer 404; `/mcp` on the web app's host answers 404; plain HTTP isn't served; the API logs the client's address, not Envoy's (AC-476, AC-474).
