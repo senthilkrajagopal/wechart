@@ -23,7 +23,7 @@ import { colourFor } from '../colours';
 import { nameWriter } from '../modelWriter';
 import type { EChartsOption } from '../theme';
 import { CHART_FONT } from '../themed';
-import { DEFAULT_CANVAS, type Canvas } from './bar';
+import { categoryAxisPx, DEFAULT_CANVAS, type Canvas } from './bar';
 
 export function isBoxplotType(chartType: string): boolean {
   return chartType === 'boxplot';
@@ -220,8 +220,11 @@ export function pointsLayoutOf(
   const plotWidth = canvas.width - GRID_PX.left - GRID_PX.right - valueLabels;
   const band = Math.max(0, plotWidth / Math.max(1, byCategory.size));
   const widestName = Math.max(0, ...[...byCategory.keys()].map(textWidth));
-  // Level labels take a row; turned ones (`fitCategoryLabels`) up to their length.
-  const nameRoom = widestName * 1.3 < band ? 24 : widestName + 12;
+  // Level labels take a row; turned ones up to their length. Turned as
+  // `fitCategoryLabels` turns them, by the span it measures, which keeps
+  // 80 px for the value labels (T991's review).
+  const span = categoryAxisPx(canvas, false) / Math.max(1, byCategory.size);
+  const nameRoom = widestName * 1.3 < Math.min(band, span) ? 24 : widestName + 12;
   const room = band / 2 - POINT_PX / 2 - 1;
   const jitterWidth = Math.max(0, Math.min(band / 2, band - POINT_PX));
 

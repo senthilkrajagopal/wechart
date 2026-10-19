@@ -335,6 +335,32 @@ describe('a box plot’s points (T991, AC-592, AC-306)', () => {
     expect(closest(swarmed)).toBeGreaterThanOrEqual(8);
   });
 
+  it('keeps the swarm apart where the category labels are turned (T991 review)', () => {
+    // Names of about 22 characters on 3 categories: level by the band the
+    // points measure, but turned by `fitCategoryLabels`, which keeps 80 px
+    // for the value labels.
+    const names = [
+      'Enterprise customers (EU)',
+      'Enterprise customers (US)',
+      'Small business (APAC)',
+    ];
+    const rows = names.flatMap((name, category) =>
+      Array.from({ length: 60 }, (_, at) => ({
+        'orders.region': name,
+        'orders.id': `${String(category)}-${String(at)}`,
+        'orders.amount': String(100 + ((at * 7) % 40) + category * 50),
+      })),
+    );
+    const dense = drawn('beeswarm', rows);
+    const said = distributionNotes(dense);
+    const placed = scatterOf(boxplotOption(dense))!.data;
+    const swarmed = dotsOf(renderToSvg(optionFor(dense))).filter(
+      (_, at) => !said.some((note) => note.includes(` in ${placed[at]!.value[0]}:`)),
+    );
+    expect(swarmed.length).toBeGreaterThan(0);
+    expect(closest(swarmed)).toBeGreaterThanOrEqual(8);
+  });
+
   it('draws APAC’s 3,000 points as All where they can’t fit side by side, and says so in the chart', () => {
     const many = drawn('beeswarm', regional(3000));
     const sentence = 'Too many points to place side by side in APAC: drawn as All, jittered.';
