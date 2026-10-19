@@ -24,7 +24,7 @@ import { isTrellisType, trellisOption } from './layout/trellis';
 import { legendFor } from './legend';
 import { tooltipFor } from './tooltip';
 import { boxplotOption, isBoxplotType } from './series/boxplot';
-import { comboOption, isComboType, withLineHalos } from './series/combo';
+import { comboOption, isComboType, withLineHalos, withSettledLogScale } from './series/combo';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { countryMap } from './geo/countryMap';
 import { isMapType, mapOption } from './series/map';
@@ -98,7 +98,9 @@ export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): E
    * honour two, and a count beside revenue was drawn flat on its axis. Its
    * axis then wears the first's format; the editor's pill names the rest.
    */
-  const spec = onOneScale(given);
+  // A combo's log scale as it can be drawn: never with bars, on both axes
+  // or neither (AC-502), before the axis settings read it.
+  const spec = withSettledLogScale(onOneScale(given));
   // The legend is decided once, here, rather than in each renderer. AC-038 is
   // a rule about charts, not about bar charts, and a renderer that forgot it
   // would be a chart type quietly exempt from it.

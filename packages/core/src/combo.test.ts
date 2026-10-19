@@ -19,8 +19,10 @@ import {
   comboProblems,
   comboSeriesOf,
   isSynchronized,
+  logScaleState,
   withComboAuto,
   withComboSeries,
+  withLogScale,
   withSynchronize,
 } from './combo';
 
@@ -324,5 +326,71 @@ describe('Synchronize axes (AC-501)', () => {
     const on = withSynchronize(options, true);
     expect(on['axes']).toEqual({ y: { max: 200_000 }, right: { title: 'Spend' } });
     expect(withSynchronize(on, false)['combo']).toBeUndefined();
+  });
+});
+
+/**
+ * T850 (AC-502): one scale type for both axes, log refused while bars are
+ * drawn, since a bar needs a zero baseline a log axis hasn't got.
+ */
+describe('log scale (AC-502)', () => {
+  const label = (measure: string) =>
+    ({ [REVENUE]: 'Revenue', [TARGET]: 'Target', [ORDERS]: 'Orders' })[measure] ?? measure;
+  const lines = { [REVENUE]: { mark: 'line' } };
+
+  it('makes the right axis log too when the left is, while two axes are drawn', () => {
+    const options = {
+      series: { ...lines, [ORDERS]: { axis: 'right' } },
+      axes: { y: { log: true } },
+    };
+
+    expect(logScaleState([REVENUE, ORDERS], options, label)).toEqual({
+      available: true,
+      left: true,
+      right: true,
+      both: true,
+    });
+  });
+
+  it('makes the left log too when only the right is set', () => {
+    const options = {
+      series: { ...lines, [ORDERS]: { axis: 'right' } },
+      axes: { right: { log: true } },
+    };
+
+    expect(logScaleState([REVENUE, ORDERS], options, label)).toEqual({
+      available: true,
+      left: true,
+      right: true,
+      both: true,
+    });
+  });
+
+  it('reads the left alone while every series is on it', () => {
+    expect(logScaleState([REVENUE, TARGET], { series: lines, axes: { y: { log: true } } })).toEqual(
+      { available: true, left: true, right: false, both: false },
+    );
+    expect(logScaleState([REVENUE, TARGET], { series: lines })).toEqual({
+      available: true,
+      left: false,
+      right: false,
+      both: false,
+    });
+  });
+
+  it('is unavailable on both while a series draws bars, naming it', () => {
+    const options = { series: { [ORDERS]: { axis: 'right' } }, axes: { y: { log: true } } };
+
+    expect(logScaleState([REVENUE, ORDERS], options, label)).toEqual({
+      available: false,
+      reason: 'Log scale · unavailable: Revenue draws bars, which need a zero baseline',
+    });
+  });
+
+  it('turns on, and off, for both axes at once', () => {
+    const on = withLogScale({ axes: { y: { min: 1 } } }, true);
+
+    expect(on['axes']).toEqual({ y: { min: 1, log: true }, right: { log: true } });
+    expect(withLogScale(on, false)['axes']).toEqual({ y: { min: 1 }, right: {} });
   });
 });

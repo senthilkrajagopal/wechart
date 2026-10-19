@@ -19,6 +19,7 @@ import {
   comboSeriesOf,
   formatterFor,
   isSynchronized,
+  logScaleState,
   memberOn,
   membersOn,
   seriesOf,
@@ -28,12 +29,13 @@ import {
 } from '@wechart/core';
 import { COLORS } from '@wechart/ui';
 
-import { allCounts, axesOf } from '../axis';
-import { alignedAxes, type AxisRange } from '../combo/alignedAxes';
+import { allCounts, axesOf, type AxisSettings } from '../axis';
+import { alignedAxes, alignedLogAxes, type AxisRange, type LogRange } from '../combo/alignedAxes';
 import { axisTitle } from '../combo/axisTitles';
 import { colourFor } from '../colours';
 import { plotEdgesOf } from '../customize';
 import { PROTOTYPE_GRID } from '../layout/grid';
+import { labelOf, modelWriter } from '../modelWriter';
 import {
   BAR_MAX_PX,
   categoryAxisPx,
@@ -49,6 +51,94 @@ export function isComboType(chartType: string): boolean {
 }
 
 const AXIS_INDEX: Record<ComboAxis, number> = { left: 0, right: 1 };
+
+/** Which of a combo's value axes are log axes (AC-502, `logScaleState`). */
+function logAxesOf(spec: RenderSpec): Record<ComboAxis, boolean> {
+  const state = logScaleState(membersOn(spec.encoding, 'y'), spec.options);
+  return state.available ? { left: state.left, right: state.right } : { left: false, right: false };
+}
+
+/**
+ * A combo's stored log settings as they are drawn (AC-502): off on both
+ * while bars are drawn, on both while two axes are drawn and either asks.
+ * One axis is drawn by the axis settings (`applyAxes`), which then read the
+ * left's as settled here. Any other chart is returned as it came.
+ */
+export function withSettledLogScale(spec: RenderSpec): RenderSpec {
+  if (!isComboType(spec.chartType)) return spec;
+  const axes = axesOf(spec);
+  const logOn = logAxesOf(spec);
+  if ((axes.y?.log === true) === logOn.left && (axes.right?.log === true) === logOn.right) {
+    return spec;
+  }
+  const settle = (settings: AxisSettings | undefined, on: boolean): AxisSettings => {
+    const rest: { -readonly [K in keyof AxisSettings]: AxisSettings[K] } = { ...settings };
+    delete rest.log;
+    return on ? { ...rest, log: true } : rest;
+  };
+  return {
+    ...spec,
+    options: {
+      ...spec.options,
+      axes: { ...axes, y: settle(axes.y, logOn.left), right: settle(axes.right, logOn.right) },
+    },
+  };
+}
+
+/** The values a combo's log axes leave out, and the note under the chart that counts them. */
+export interface LogOmissions {
+  readonly count: number;
+  readonly text: string;
+}
+
+/** "Jan", "Jan and Feb", "Jan, Feb and Mar". */
+const listed = (items: readonly string[]): string =>
+  items.length <= 1
+    ? (items[0] ?? '')
+    : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] ?? ''}`;
+
+/**
+ * What a combo's log axes leave out (AC-502, design 20 state E): each value
+ * at or below zero on a log axis, which has no place for it, counted and
+ * named under the chart — "3 values not drawn: Orders was 0 in Jan, Feb and
+ * Mar, and a log scale has no zero." Nothing while none is left out.
+ */
+export function logScaleOmissions(spec: RenderSpec): LogOmissions | undefined {
+  if (!isComboType(spec.chartType)) return undefined;
+  const logOn = logAxesOf(spec);
+  if (!logOn.left && !logOn.right) return undefined;
+  const { categories, series } = seriesOf(spec);
+  const resolved = comboSeriesOf(membersOn(spec.encoding, 'y'), spec.options);
+  const split = memberOn(spec.encoding, 'color') !== undefined;
+  const writeCategory = modelWriter(spec, membersOn(spec.encoding, 'x')[0]);
+  const named = (category: unknown) =>
+    writeCategory === undefined ? String(category) : writeCategory(category);
+
+  let count = 0;
+  let negative = false;
+  const parts = series.flatMap((one) => {
+    const axis = (split ? resolved[0] : resolved.find((each) => each.measure === one.name))?.axis;
+    if (axis === undefined || !logOn[axis]) return [];
+    const left = one.values.flatMap((value, at) =>
+      value !== null && value <= 0 ? [{ value, at }] : [],
+    );
+    if (left.length === 0) return [];
+    count += left.length;
+    const below = left.some(({ value }) => value < 0);
+    negative ||= below;
+    const label = split ? one.name : labelOf(spec, one.name);
+    return [
+      `${label} was ${below ? 'at or below 0' : '0'} in ${listed(left.map(({ at }) => named(categories[at])))}`,
+    ];
+  });
+  if (count === 0) return undefined;
+  return {
+    count,
+    text: `${String(count)} ${count === 1 ? 'value' : 'values'} not drawn: ${parts.join('; ')}, and a log scale has ${
+      negative ? 'nothing at or below zero' : 'no zero'
+    }.`,
+  };
+}
 
 /**
  * The value axes: one while every series is on the left; with a series on
@@ -71,6 +161,7 @@ function valueAxes(
     colour: string;
     values: readonly (number | null)[];
   }[],
+  log: boolean,
 ): EChartsOption['yAxis'] {
   const axes = axesOf(spec);
   /**
@@ -107,9 +198,33 @@ function valueAxes(
       ...(typeof settings?.max === 'number' ? { fixedMax: settings.max } : {}),
     };
   };
-  const aligned = alignedAxes(rangeOf('left'), rangeOf('right'), {
-    synchronize: isSynchronized(membersOn(spec.encoding, 'y'), spec.options, spec.formats),
-  });
+  const synchronize = isSynchronized(membersOn(spec.encoding, 'y'), spec.options, spec.formats);
+  /**
+   * Log on both or neither (AC-502), from the values it draws, those above
+   * zero, in whole decades; ECharts places the ticks at powers of ten.
+   */
+  const logRangeOf = (side: ComboAxis): LogRange => {
+    const settings = side === 'left' ? axes.y : axes.right;
+    const values = drawn
+      .filter((one) => one.axis === side)
+      .flatMap((one) => one.values.filter((value): value is number => value !== null && value > 0));
+    return {
+      min: values.length === 0 ? undefined : values.reduce((a, b) => Math.min(a, b)),
+      max: values.length === 0 ? undefined : values.reduce((a, b) => Math.max(a, b)),
+      ...(typeof settings?.min === 'number' ? { fixedMin: settings.min } : {}),
+      ...(typeof settings?.max === 'number' ? { fixedMax: settings.max } : {}),
+    };
+  };
+  const logAligned = log
+    ? alignedLogAxes(logRangeOf('left'), logRangeOf('right'), { synchronize })
+    : undefined;
+  const aligned: Record<ComboAxis, object> =
+    logAligned === undefined
+      ? { ...alignedAxes(rangeOf('left'), rangeOf('right'), { synchronize }) }
+      : {
+          left: { type: 'log', ...logAligned.left },
+          right: { type: 'log', ...logAligned.right },
+        };
 
   return (['left', 'right'] as const).map((side) => {
     const [first] = measuresOn(side);
@@ -156,6 +271,12 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
       axis: 'left',
     };
   const barCount = series.filter((one) => drawAs(one.name).mark === 'bar').length;
+  const logOn = logAxesOf(spec);
+  /** On a log axis a value at or below zero has no place, so isn't drawn (AC-502). */
+  const valuesOf = (one: { name: string; values: readonly (number | null)[] }) =>
+    logOn[drawAs(one.name).axis]
+      ? one.values.map((value) => (value !== null && value <= 0 ? null : value))
+      : one.values;
 
   // Bars a bar per category in each bar series, the gap kept only where it
   // leaves each bar its colour on this canvas (AC-210).
@@ -186,15 +307,16 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
         // Split, a glyph stands for every member, so is drawn in the
         // legend's own text colour (design 20 state D).
         colour: split ? COLORS.light['text-secondary'] : colourFor(spec, one.name, index),
-        values: one.values,
+        values: valuesOf(one),
       })),
+      logOn.right,
     ),
     series: series.map((one, index) => {
       const colour = colourFor(spec, one.name, index);
       const { mark, axis } = drawAs(one.name);
       const common = {
         name: one.name,
-        data: [...one.values],
+        data: [...valuesOf(one)],
         yAxisIndex: AXIS_INDEX[axis],
         z: COMBO_Z[mark],
       };

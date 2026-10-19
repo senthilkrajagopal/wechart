@@ -38,6 +38,7 @@ export {
 export { assignColours, OTHER_COLOUR, type ColourAssignment } from './colorAssignment';
 export { colouredMembersOf, coloursMembers, singleSeriesOf } from './colouredMembers';
 export { legendFor, seriesCount } from './legend';
+export { logScaleOmissions, type LogOmissions } from './series/combo';
 export { MAX_PANELS } from './layout/trellis';
 export { hiddenLabelShare } from './layout/hiddenLabels';
 export { isOneSource, labelOf, nameWriter } from './modelWriter';

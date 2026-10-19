@@ -14,9 +14,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from '@wechart/core';
 
-import { comboOption, withLineHalos } from './combo';
+import { comboOption, logScaleOmissions, withLineHalos } from './combo';
 import { optionFor } from '../optionFor';
-import { marksOf, renderToSvg, strokesOf, untitled } from '../testing/renderToSvg';
+import { labelsOf, marksOf, renderToSvg, strokesOf, untitled } from '../testing/renderToSvg';
 
 const BLUE = '#123456';
 const ORANGE = '#abcdef';
@@ -325,5 +325,125 @@ describe('each measure with its own mark, on its own axis (AC-497)', () => {
     };
 
     expect(seriesOf(optionFor(formatted)).map((one) => one.name)).toContain(MARGIN);
+  });
+});
+
+/**
+ * T850 (AC-502): both axes log or neither; never log while bars are drawn;
+ * and a value at or below zero, which a log axis has no place for, not drawn
+ * and counted under the chart.
+ */
+describe('log scale (AC-502)', () => {
+  const MONTH = 'orders.month';
+  const SESSIONS = 'web.sessions';
+  const ORDERS = 'orders.count';
+  const GREEN = '#0f9d58';
+  type Axis = { type?: string; min?: number; max?: number; interval?: number };
+  type Drawn = { name: string; data: unknown[] };
+  const logCombo = (options: Record<string, unknown>): RenderSpec => ({
+    chartType: 'combo',
+    encoding: { x: [MONTH], y: [SESSIONS, ORDERS] },
+    rows: [
+      { [MONTH]: 'Jan', [SESSIONS]: 120, [ORDERS]: 0 },
+      { [MONTH]: 'Feb', [SESSIONS]: 4_000, [ORDERS]: 0 },
+      { [MONTH]: 'Mar', [SESSIONS]: 35_000, [ORDERS]: 0 },
+      { [MONTH]: 'Apr', [SESSIONS]: 90_000, [ORDERS]: 12 },
+    ],
+    palette: [BLUE, GREEN],
+    titles: { [SESSIONS]: 'Sessions', [ORDERS]: 'Orders' },
+    options: {
+      series: { [SESSIONS]: { mark: 'line' }, [ORDERS]: { mark: 'point', axis: 'right' } },
+      axes: { y: { log: true } },
+      ...options,
+    },
+  });
+  const axesOf = (spec: RenderSpec) => optionFor(spec)['yAxis'] as Axis[];
+  const decades = (axis: Axis | undefined) =>
+    Math.round(Math.log10(axis?.max ?? NaN) - Math.log10(axis?.min ?? NaN));
+
+  it('draws one point for Orders 0, 0, 0 and 12, and reports 3 values not drawn', () => {
+    const spec = logCombo({});
+    const orders = (optionFor(spec)['series'] as Drawn[]).find((one) => one.name === ORDERS);
+
+    expect(orders?.data).toEqual([null, null, null, 12]);
+    // Drawn without the legend, whose point glyph is no point of the series.
+    expect(marksOf(draw(spec), [GREEN])).toHaveLength(1);
+    expect(logScaleOmissions(spec)).toEqual({
+      count: 3,
+      text: '3 values not drawn: Orders was 0 in Jan, Feb and Mar, and a log scale has no zero.',
+    });
+  });
+
+  it('makes both axes log, over as many decades, though only the left asked', () => {
+    const [left, right] = axesOf(logCombo({}));
+
+    expect(left?.type).toBe('log');
+    expect(right?.type).toBe('log');
+    expect(left?.interval).toBeUndefined();
+    expect(decades(left)).toBe(decades(right));
+    expect(left?.min).toBe(100);
+    expect(left?.max).toBe(100_000);
+    expect(right?.min).toBe(10);
+  });
+
+  it('draws each right tick level with a left one, in the SVG', () => {
+    const labels = labelsOf(renderToSvg(optionFor(logCombo({}))));
+    const side = (onLeft: boolean) =>
+      labels
+        .filter((label) => /\d/.test(label.text) && (onLeft ? label.x < 100 : label.x > 540))
+        .sort((a, b) => a.y - b.y);
+    const [left, right] = [side(true), side(false)];
+
+    expect(left.length).toBe(4);
+    expect(right).toHaveLength(left.length);
+    right.forEach((tick, at) =>
+      expect(Math.abs(tick.y - (left[at]?.y ?? NaN))).toBeLessThanOrEqual(1),
+    );
+  });
+
+  it('gives both axes one log extent while synchronized', () => {
+    const [left, right] = axesOf(logCombo({ combo: { synchronize: true } }));
+
+    expect(right?.type).toBe('log');
+    expect({ min: right?.min, max: right?.max }).toEqual({ min: left?.min, max: left?.max });
+    expect(left?.min).toBe(10);
+  });
+
+  it('never draws log while a series draws bars, whatever is stored', () => {
+    const spec = logCombo({
+      series: { [SESSIONS]: { mark: 'bar' }, [ORDERS]: { mark: 'point', axis: 'right' } },
+    });
+    const [left, right] = axesOf(spec);
+
+    expect(left?.type).toBe('value');
+    expect(right?.type).toBe('value');
+    expect(logScaleOmissions(spec)).toBeUndefined();
+  });
+
+  it('leaves a value at or below zero off a one-axis log chart too', () => {
+    const spec = logCombo({ series: { [SESSIONS]: { mark: 'line' }, [ORDERS]: { mark: 'line' } } });
+    const axis = optionFor(spec)['yAxis'] as Axis;
+    const orders = (optionFor(spec)['series'] as Drawn[]).find((one) => one.name === ORDERS);
+
+    expect(axis.type).toBe('log');
+    expect(orders?.data).toEqual([null, null, null, 12]);
+    expect(logScaleOmissions(spec)?.count).toBe(3);
+  });
+
+  it('says nothing when every value is above zero', () => {
+    expect(
+      logScaleOmissions({
+        ...logCombo({}),
+        rows: [{ [MONTH]: 'Jan', [SESSIONS]: 1, [ORDERS]: 2 }],
+      }),
+    ).toBeUndefined();
+  });
+
+  it('names a negative value as below zero', () => {
+    const spec = { ...logCombo({}), rows: [{ [MONTH]: 'Jan', [SESSIONS]: -5, [ORDERS]: 2 }] };
+
+    expect(logScaleOmissions(spec)?.text).toBe(
+      '1 value not drawn: Sessions was at or below 0 in Jan, and a log scale has nothing at or below zero.',
+    );
   });
 });

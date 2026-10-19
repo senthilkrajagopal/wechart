@@ -263,6 +263,79 @@ export function withSynchronize(
 }
 
 /**
+ * Log scale on a combo's axes (AC-502): unavailable while any series draws
+ * bars, or on for both axes while two are drawn, or the left's own setting
+ * while every series is on it.
+ */
+export type LogScaleState =
+  | { readonly available: false; readonly reason: string }
+  | {
+      readonly available: true;
+      readonly left: boolean;
+      readonly right: boolean;
+      /** Two axes drawn: log is on or off for both at once. */
+      readonly both: boolean;
+    };
+
+/** `options.axes[key]`, or none where it isn't a map. */
+function axisSettingsOf(
+  options: Readonly<Record<string, unknown>> | undefined,
+  key: 'y' | 'right',
+): Readonly<Record<string, unknown>> {
+  const axes = options?.['axes'];
+  const settings = isRecord(axes) ? axes[key] : undefined;
+  return isRecord(settings) ? settings : {};
+}
+
+/**
+ * Whether each of a combo's value axes is a log axis (AC-502, design 20
+ * state E, Q3 (a)). A bar needs a zero baseline, which a log axis hasn't got,
+ * so while any series draws bars log is unavailable on both, the reason
+ * naming the first ("Log scale · unavailable: Revenue draws bars, which need
+ * a zero baseline"). While two axes are drawn, ticks align only log to log,
+ * so log on either axis's settings is log on both.
+ */
+export function logScaleState(
+  measures: readonly string[],
+  options: Readonly<Record<string, unknown>> | undefined,
+  label: (measure: string) => string = (measure) => measure,
+): LogScaleState {
+  const series = comboSeriesOf(measures, options);
+  const bars = series.find((one) => one.mark === 'bar');
+  if (bars !== undefined) {
+    return {
+      available: false,
+      reason: `Log scale · unavailable: ${label(bars.measure)} draws bars, which need a zero baseline`,
+    };
+  }
+  const left = axisSettingsOf(options, 'y')['log'] === true;
+  if (!series.some((one) => one.axis === 'right')) {
+    return { available: true, left, right: false, both: false };
+  }
+  const on = left || axisSettingsOf(options, 'right')['log'] === true;
+  return { available: true, left: on, right: on, both: true };
+}
+
+/**
+ * Log scale turned on or off for both value axes at once (AC-502): with one
+ * axis drawn the right's setting is idle, and once a series moves right the
+ * two already agree. Off removes the key from both, other settings kept.
+ */
+export function withLogScale(
+  options: Readonly<Record<string, unknown>>,
+  on: boolean,
+): Record<string, unknown> {
+  const axes = isRecord(options['axes']) ? options['axes'] : {};
+  const set = (key: 'y' | 'right') => {
+    const settings: Record<string, unknown> = { ...axisSettingsOf(options, key) };
+    if (on) settings['log'] = true;
+    else delete settings['log'];
+    return settings;
+  };
+  return { ...options, axes: { ...axes, y: set('y'), right: set('right') } };
+}
+
+/**
  * Back to Auto (AC-498): the measure's mark and axis forgotten, its colour
  * and anything else kept, and no empty entry left behind, so the saved
  * options stay sparse.

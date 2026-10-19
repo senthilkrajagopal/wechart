@@ -110,11 +110,14 @@ export {
   comboProblems,
   comboSeriesOf,
   isSynchronized,
+  logScaleState,
   unitOfFormat,
   withComboAuto,
   withComboSeries,
+  withLogScale,
   withSynchronize,
   type ComboSeries,
+  type LogScaleState,
   type SynchronizeState,
 } from './combo';
 

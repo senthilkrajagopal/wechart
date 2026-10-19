@@ -12,6 +12,7 @@ import { DataTable, type DataTableProps } from './DataTable';
 import { Kpi } from './Kpi';
 import { PivotTable } from './PivotTable';
 import { TileEmpty } from './TileEmpty';
+import { LogScaleNote } from './LogScaleNote';
 import { ParallelNotes } from './ParallelNotes';
 import { UnplacedCodes } from './UnplacedCodes';
 
@@ -171,7 +172,8 @@ function ChartBody({
   kpiSolo,
 }: ChartBodyProps) {
   // A KPI alone, at text-kpi-solo (T683; design 06 state B).
-  if (spec.chartType === 'kpi') return <Kpi spec={spec} {...(kpiSolo === true ? { solo: true } : {})} />;
+  if (spec.chartType === 'kpi')
+    return <Kpi spec={spec} {...(kpiSolo === true ? { solo: true } : {})} />;
   const DomChart = DOM_TYPES[spec.chartType];
   if (DomChart !== undefined) {
     return (
@@ -453,6 +455,8 @@ export function ChartTile({
             : {})}
         />
       ) : null}
+      {/* A combo's values a log axis leaves out, counted under it (T850, AC-502). */}
+      {spec.chartType === 'combo' && !showingTable ? <LogScaleNote spec={spec} /> : null}
       {foot}
     </div>
   );

@@ -295,6 +295,73 @@ export function alignedAxes(
   return { left: pinned(l, sides[0].fixed), right: pinned(r, sides[1].fixed) };
 }
 
+/** A log axis's data: its values above zero, the only ones it draws (AC-502). */
+export interface LogRange {
+  /** The smallest value above zero, or none. */
+  readonly min: number | undefined;
+  /** The largest value above zero, or none. */
+  readonly max: number | undefined;
+  readonly fixedMin?: number;
+  readonly fixedMax?: number;
+}
+
+/** A log axis as drawn: its ends, ECharts choosing ticks at powers of ten. */
+export interface LogExtent {
+  readonly min: number;
+  readonly max: number;
+}
+
+/** The whole decades a log axis's data spans: `lo` to `hi`, at least one. */
+function decadesOf(range: LogRange): { lo: number; hi: number } {
+  const { min, max } = range;
+  if (min === undefined || max === undefined || !(min > 0) || !(max > 0)) return { lo: 0, hi: 1 };
+  const lo = Math.floor(clean(Math.log10(min)));
+  const hi = Math.max(lo + 1, Math.ceil(clean(Math.log10(max))));
+  return { lo, hi };
+}
+
+const power = (exponent: number) => clean(10 ** exponent);
+
+/** A fixed end above zero as typed, which a log axis can draw. */
+function logPinned(extent: LogExtent, range: LogRange): LogExtent {
+  const fixedMin = (range.fixedMin ?? 0) > 0 ? range.fixedMin : undefined;
+  const fixedMax = (range.fixedMax ?? 0) > 0 ? range.fixedMax : undefined;
+  const min = fixedMin ?? extent.min;
+  const max = fixedMax ?? extent.max;
+  return min < max ? { min, max } : extent;
+}
+
+/**
+ * Two log axes, ticks aligned (AC-502): ECharts ticks a log axis at powers of
+ * its base, one decade apart while it spans fewer than ten, and ten apart up
+ * to a hundred (`max(quantity(span), 1)` decades: research/
+ * echarts-axis-legend-bars.md, "type: 'log'"). So each axis is given whole
+ * decades from its own lowest, both as many as the wider needs, and each
+ * right tick then lies on a left one. Synchronized, both take one extent over
+ * both axes' data (AC-501). A fixed end above zero is kept as typed (T846-2),
+ * which can put its ticks off the other's; one at or below zero is ignored.
+ */
+export function alignedLogAxes(
+  left: LogRange,
+  right: LogRange,
+  { synchronize = false }: Pick<AlignOptions, 'synchronize'> = {},
+): { left: LogExtent; right: LogExtent } {
+  const [l, r] = [decadesOf(left), decadesOf(right)];
+  if (synchronize) {
+    const has = (range: LogRange) => range.min !== undefined && range.max !== undefined;
+    const both = has(left) && has(right);
+    const lo = both ? Math.min(l.lo, r.lo) : has(right) ? r.lo : l.lo;
+    const hi = both ? Math.max(l.hi, r.hi) : has(right) ? r.hi : l.hi;
+    const one = logPinned({ min: power(lo), max: power(hi) }, left);
+    return { left: one, right: one };
+  }
+  const n = Math.max(l.hi - l.lo, r.hi - r.lo);
+  return {
+    left: logPinned({ min: power(l.lo), max: power(l.lo + n) }, left),
+    right: logPinned({ min: power(r.lo), max: power(r.lo + n) }, right),
+  };
+}
+
 /** A fixed end exactly as typed, where the arithmetic left it a hair off. */
 const pinned = (extent: AxisExtent, fixed: Fixed): AxisExtent => ({
   ...extent,

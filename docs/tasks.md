@@ -1819,10 +1819,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T849 (AC-501) Synchronize a combo's two axes into one scale, labelled on both sides, only while both share a format
 
-- [ ] T850 (AC-502) Give both axes one scale type, refuse log scale while bars are drawn, and count the values at or below zero a log axis leaves out
-  - Files: `packages/core/src/combo.ts` (`logScaleState`), `packages/charts/src/series/combo.ts`, their tests.
-  - Failing test: `combo.test.ts`: log on the left with two axes drawn makes the right log too; with a bar series, `logScaleState` is unavailable, "Log scale · unavailable: Revenue draws bars, which need a zero baseline"; the charts' `combo.test.ts`: Orders 0, 0, 0 and 12 on a log axis draws one point and reports 3 values not drawn (AC-502).
-  - Depends on: T847
+- [x] T850 (AC-502) Give both axes one scale type, refuse log scale while bars are drawn, and count the values at or below zero a log axis leaves out
 
 - [ ] T851 (AC-503) Stack a combo's bars, and its areas, for the whole chart and per axis, never across axes
   - Files: `packages/core/src/combo.ts` (the stacking options), `packages/charts/src/series/combo.ts`, their tests.
