@@ -66,17 +66,16 @@ export function bulletsOf(spec: RenderSpec): {
   if (category === undefined || measure === undefined) return [];
   const { target } = bulletOptionsOf(spec.options);
   return distinctValues(spec.rows, category).map((member) => {
+    // One row per member: the query asks by the member alone (`toCubeQuery`).
     const row = spec.rows.find((one) => String(one[category] ?? '') === member) ?? {};
-    return {
-      member,
-      value: numberOf(row[measure]),
-      target:
-        target === undefined
-          ? null
-          : target.kind === 'value'
-            ? target.value
-            : numberOf(row[target.member]),
-    };
+    const goal =
+      target === undefined
+        ? null
+        : target.kind === 'value'
+          ? target.value
+          : numberOf(row[target.member]);
+    // A target of 0 has no bands and no share: no target (checkpoint 1's review, AC-581).
+    return { member, value: numberOf(row[measure]), target: goal === 0 ? null : goal };
   });
 }
 

@@ -48,6 +48,15 @@ describe('the bullet chart’s table view (AC-583)', () => {
     expect(bulletTableView(none).rows[0]).toEqual(['EMEA', '$412,000', '', '', 'No target']);
   });
 
+  // Checkpoint 1's review: a target of 0 is no target, as its label says.
+  it('says a member whose target is 0 has none, not "$0" and a blank band', () => {
+    const zero = {
+      ...spec,
+      options: { bullet: { target: { kind: 'value', value: 0 } } },
+    } as unknown as RenderSpec;
+    expect(bulletTableView(zero).rows[0]).toEqual(['EMEA', '$412,000', '', '', 'No target']);
+  });
+
   it('is the tile’s table view', () => {
     render(<DataTable spec={spec} />);
     expect(screen.getAllByRole('columnheader').map((head) => head.textContent)).toEqual([

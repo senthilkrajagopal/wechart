@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { isDrawable, optionFor } from '../optionFor';
 import { labelsOf, marksOf, renderToSvg } from '../testing/renderToSvg';
 import { themed } from '../themed';
-import { BULLET_PITCH_PX, bulletOption } from './bullet';
+import { BULLET_PITCH_PX, bulletOption, bulletsOf } from './bullet';
 
 /**
  * T954 / AC-581: THE SYSTEM SHALL draw one bullet per member on one shared
@@ -152,6 +152,16 @@ describe('a bullet chart drawn (AC-581)', () => {
     const said = labelsOf(svg).map((label) => label.text);
     expect(said).toContain('Africa');
     expect(said.some((text) => text.includes('No target'))).toBe(true);
+  });
+
+  // Checkpoint 1's review: a target of 0 has no bands and no share, so it is no target.
+  it('draws a member whose target is 0 as one with no target: no target mark, and "No target"', () => {
+    const zero = spec([...FOUR, ['Africa', 143000, 0]]);
+    const svg = renderToSvg(optionFor(zero));
+    expect(targetsOf(svg)).toHaveLength(4);
+    expect(marksOf(svg, [GREYS[0] ?? ''])).toHaveLength(4);
+    expect(labelsOf(svg).map((label) => label.text)).toContain('$143,000 · No target');
+    expect(bulletsOf(zero).find((one) => one.member === 'Africa')?.target).toBeNull();
   });
 
   it('draws a target value as every member’s target', () => {
