@@ -1893,10 +1893,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T878 (AC-515) The toolbar: block style in §3's sizes, bold, italic, both lists, link, Insert and the element count, and nothing for colour, font or size
 
-- [ ] T879 (AC-516) Convert markdown patterns as typed, undone by the next Undo, and let only ⌘B, ⌘I and ⌘Z act inside the text
-  - Files: `packages/web/src/tiles/text/editorExtensions.ts` (the input rules and the keymap), `packages/web/src/tiles/text/keys.test.ts`.
-  - Failing test: `keys.test.ts`: `## ` makes Heading medium, `- ` a bulleted list, `1. ` a numbered list, `**a**` bold, `*a*` italic, `[a](https://x.example)` a link, each reversed by the next ⌘Z; ⌘B and ⌘I toggle bold and italic and ⌘Z undoes typing; ⌘U, ⌘E, ⇧⌘X, ⌘⌥1 and ⇧⌘Z change nothing; with focus outside the text, ⌘B does nothing (AC-516).
-  - Depends on: T876
+- [x] T879 (AC-516) Convert markdown patterns as typed, undone by the next Undo, and let only ⌘B, ⌘I and ⌘Z act inside the text
 
 - [ ] T880 (AC-513) Strip what the schema doesn't allow from pasted content, and refuse unsafe links, in the editor
   - Files: `packages/web/src/tiles/text/editorExtensions.ts` (`transformPastedHTML`, the Link mark's `isAllowedUri`), `e2e/text-tile.spec.ts`.

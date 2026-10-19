@@ -672,6 +672,47 @@ test('an Icon, a Filter value, an As of and a Marking, each read as words in the
 });
 
 /**
+ * T879 / AC-516, in the browser: `## ` typed makes Heading medium, which the
+ * next ⌘Z gives back as typed; `[a](https://x.example)` a link; ⌘B bolds;
+ * ⇧⌘Z redoes nothing; ⌘U underlines nothing.
+ */
+test('markdown typed in a Text tile converts, the next Undo reverses it, and only ⌘B, ⌘I and ⌘Z act', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWithText(request, [{ type: 'paragraph' }]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const tile = page.locator('[data-tile="tile-text"]');
+  await tile.locator('.text-tile').dblclick();
+  const textbox = tile.getByRole('textbox');
+  await expect(textbox).toBeFocused();
+
+  await page.keyboard.type('## ');
+  await expect(textbox.locator('h4')).toHaveCount(1);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(textbox.locator('h4')).toHaveCount(0);
+  await expect(textbox.locator('p')).toHaveText('## ');
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expect(textbox.locator('h4')).toHaveCount(0);
+
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('see [a](https://x.example) now');
+  await expect(textbox.locator('a')).toHaveText('a');
+  await expect(textbox.locator('a')).toHaveAttribute('href', 'https://x.example');
+  await expect(textbox.locator('p')).toHaveText('see a now');
+
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.press('ControlOrMeta+u');
+  await expect(textbox.locator('u')).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+b');
+  // Bold over all three runs, the link between them.
+  await expect(textbox.locator('strong')).toHaveText(['see ', 'a', ' now']);
+});
+
+/**
  * T877 / AC-514: a dashboard of two Text tiles opened in view mode requests
  * no script of the editor's chunk (`text-editor-…`, named in
  * `vite.config.ts`), and none of the scripts it loads holds ProseMirror's

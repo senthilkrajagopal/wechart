@@ -1,5 +1,13 @@
-import { Extension, Node, type Extensions, type JSONContent, type Range } from '@tiptap/core';
-import { PluginKey, type EditorState } from '@tiptap/pm/state';
+import {
+  Extension,
+  InputRule,
+  Node,
+  textblockTypeInputRule,
+  type Extensions,
+  type JSONContent,
+  type Range,
+} from '@tiptap/core';
+import { Plugin, PluginKey, type EditorState } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import Suggestion, { type SuggestionKeyDownProps, type SuggestionProps } from '@tiptap/suggestion';
 
@@ -45,6 +53,16 @@ const Heading = Node.create({
   addAttributes() {
     return { level: { default: 1, rendered: false } };
   },
+  /** `#`, `##` or `###` then a space: Heading large, medium or small (AC-516). */
+  addInputRules() {
+    return [
+      textblockTypeInputRule({
+        find: /^(#{1,3})\s$/,
+        type: this.type,
+        getAttributes: (match) => ({ level: match[1]?.length ?? 1 }),
+      }),
+    ];
+  },
   parseHTML() {
     return ([1, 2, 3] as const).map((level) => ({ tag: HEADINGS[level].tag, attrs: { level } }));
   },
@@ -65,6 +83,84 @@ const LargeValue = Node.create({
   },
   renderHTML() {
     return ['p', { class: 'text-tile__large', 'data-type': 'text-kpi' }, 0];
+  },
+});
+
+/**
+ * `[text](address)` typed: a link, where the address passes the link check
+ * (AC-513, rule 42); otherwise it stays the text typed (AC-516). Undone by
+ * the next ⌘Z, as every input rule is: Tiptap records the conversion as its
+ * own history step after the typed character.
+ */
+const LinkPattern = Extension.create({
+  name: 'linkPattern',
+  addInputRules() {
+    return [
+      new InputRule({
+        find: /\[([^[\]]+)\]\(([^()\s]+)\)$/,
+        handler: ({ state, range, match }) => {
+          const [, label, href] = match;
+          const link = state.schema.marks['link'];
+          if (label === undefined || href === undefined || link === undefined) return null;
+          if (textLinkProblem(href) !== undefined) return null;
+          const marks = state.doc.resolve(range.from).marks();
+          state.tr
+            .replaceWith(
+              range.from,
+              range.to,
+              state.schema.text(label, [...marks, link.create({ href })]),
+            )
+            .removeStoredMark(link);
+          return undefined;
+        },
+      }),
+    ];
+  },
+});
+
+/**
+ * Only ⌘B, ⌘I and ⌘Z act inside the text (AC-516, approved under R75): the
+ * other bindings StarterKit's extensions bring — redo, the list and
+ * paragraph toggles, the line break — are taken and do nothing, ahead of
+ * every other keymap. Typing's own keys (Enter, Backspace, Delete, the
+ * arrows, select all) stay, as do the clipboard's. A key the editor leaves
+ * alone (⌘U, ⇧⌘X) can still ask the browser to format the text or redo,
+ * which is refused here too (decision T879-1).
+ */
+const OFF = [
+  'Shift-Mod-z',
+  'Mod-y',
+  'Shift-Mod-я',
+  'Mod-Alt-0',
+  'Mod-Shift-7',
+  'Mod-Shift-8',
+  'Mod-Shift-9',
+  'Mod-Enter',
+  'Shift-Enter',
+] as const;
+
+const OnlyTheTextKeys = Extension.create({
+  name: 'onlyTheTextKeys',
+  priority: 10_000,
+  addKeyboardShortcuts() {
+    return Object.fromEntries(OFF.map((key) => [key, () => true]));
+  },
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('noBrowserFormatting'),
+        props: {
+          handleDOMEvents: {
+            beforeinput: (_view, event) => {
+              const { inputType } = event;
+              if (!inputType.startsWith('format') && inputType !== 'historyRedo') return false;
+              event.preventDefault();
+              return true;
+            },
+          },
+        },
+      }),
+    ];
   },
 });
 
@@ -164,6 +260,7 @@ const insertMenu = (bridge: InsertBridge) =>
 /** The editor's extensions: the stored schema's nodes and marks, and nothing else. */
 export function textEditorExtensions(bridge?: InsertBridge): Extensions {
   return [
+    OnlyTheTextKeys,
     ...(bridge === undefined ? [] : [insertMenu(bridge)]),
     StarterKit.configure({
       blockquote: false,
@@ -187,6 +284,7 @@ export function textEditorExtensions(bridge?: InsertBridge): Extensions {
     }),
     Heading,
     LargeValue,
+    LinkPattern,
     ...elementNodes(),
     ElementKeys,
   ];
