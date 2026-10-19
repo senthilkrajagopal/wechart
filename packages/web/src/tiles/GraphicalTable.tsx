@@ -3,17 +3,18 @@ import {
   bulletBandOf,
   columnsOf,
   formatValue,
-  graphicalTableTrends,
+  graphicalTablePage,
   kpiTrendValues,
   memberOn,
   NO_COLUMNS,
+  pageQueries,
   type GraphicalTableColumn,
   type IconRule,
   type RenderSpec,
   type TimeGranularity,
 } from '@wechart/core';
 import { useQueries } from '@tanstack/react-query';
-import { useContext } from 'react';
+import { useContext, useState } from 'react';
 
 import { useQueryItem } from '../query/item';
 import { loadTile } from '../query/loadTile';
@@ -303,13 +304,19 @@ export function GraphicalTableView({
   trends,
   now = new Date(),
   onAddColumn,
+  page: shownPage,
+  onPage,
 }: {
   readonly spec: RenderSpec;
   readonly trends: readonly LoadedTrend[];
   readonly now?: Date;
   /** + Column: the chart's columns, where the tile can open them. */
   readonly onAddColumn?: (() => void) | undefined;
+  /** The page shown, from 0, where the tile asks each page's trends (T945); else the table's own. */
+  readonly page?: number | undefined;
+  readonly onPage?: ((page: number) => void) | undefined;
 }) {
+  const [ownPage, setOwnPage] = useState(0);
   const columns = columnsOf(spec.options);
   if (columns.length === 0)
     return (
@@ -328,63 +335,102 @@ export function GraphicalTableView({
   const groupBy = memberOn(spec.encoding, 'facet');
   const chartTime = Object.keys(spec.granularities ?? {})[0];
   const rowsTitle = labelOf(spec, rowsMember);
+  // 50 rows a page (T945, AC-572), sectioned within the page.
+  const paged = graphicalTablePage(spec.rows, shownPage ?? ownPage);
+  const turn = (to: number) => {
+    if (onPage === undefined) setOwnPage(to);
+    else onPage(to);
+  };
   const groups =
     groupBy === undefined
-      ? [{ name: undefined, rows: spec.rows }]
-      : [...new Set(spec.rows.map((row) => String(row[groupBy] ?? '')))].map((name) => ({
+      ? [{ name: undefined, rows: paged.rows }]
+      : [...new Set(paged.rows.map((row) => String(row[groupBy] ?? '')))].map((name) => ({
           name,
-          rows: spec.rows.filter((row) => String(row[groupBy] ?? '') === name),
+          rows: paged.rows.filter((row) => String(row[groupBy] ?? '') === name),
         }));
+  const pager =
+    paged.pages === 1 ? null : (
+      <p className="gt-pager">
+        <button
+          type="button"
+          className="btn btn-sm"
+          aria-label="Previous rows"
+          disabled={paged.page === 0}
+          onClick={() => {
+            turn(paged.page - 1);
+          }}
+        >
+          ‹
+        </button>
+        <span data-testid="gt-page">
+          {`Rows ${String(paged.first + 1)}–${String(paged.first + paged.rows.length)} of ${String(paged.total)}`}
+        </span>
+        <button
+          type="button"
+          className="btn btn-sm"
+          aria-label="Next rows"
+          disabled={paged.page === paged.pages - 1}
+          onClick={() => {
+            turn(paged.page + 1);
+          }}
+        >
+          ›
+        </button>
+      </p>
+    );
   return (
-    <div className="gt-scroll" data-testid="graphical-table">
-      <table className="gt">
-        <caption>{captionOf(rowsTitle, spec.rows, columns)}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{rowsTitle}</th>
-            {columns.map((column, at) => (
-              <th key={at} scope="col">
-                {headingOf(column, spec)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        {groups.map((group) => (
-          <tbody key={group.name ?? ''}>
-            {group.name === undefined ? null : (
-              <tr>
-                <th scope="rowgroup" colSpan={columns.length + 1}>
-                  {group.name}
+    <div className="gt-paged">
+      <div className="gt-scroll" data-testid="graphical-table">
+        <table className="gt">
+          <caption>{captionOf(rowsTitle, spec.rows, columns)}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{rowsTitle}</th>
+              {columns.map((column, at) => (
+                <th key={at} scope="col">
+                  {headingOf(column, spec)}
                 </th>
-              </tr>
-            )}
-            {group.rows.map((row, at) => {
-              const member = String(row[rowsMember] ?? '');
-              // This row's trend rows: its member, and its section's.
-              const matches = (one: Row) =>
-                String(one[rowsMember] ?? '') === member &&
-                (groupBy === undefined || String(one[groupBy] ?? '') === group.name);
-              return (
-                <tr key={`${member}-${String(at)}`}>
-                  <th scope="row">{member}</th>
-                  {columns.map((column, place) => (
-                    <Cell
-                      key={place}
-                      column={column}
-                      spec={spec}
-                      row={row}
-                      trends={trends}
-                      chartTime={chartTime}
-                      matches={matches}
-                      now={now}
-                    />
-                  ))}
+              ))}
+            </tr>
+          </thead>
+          {groups.map((group) => (
+            <tbody key={group.name ?? ''}>
+              {group.name === undefined ? null : (
+                <tr>
+                  <th scope="rowgroup" colSpan={columns.length + 1}>
+                    {group.name}
+                  </th>
                 </tr>
-              );
-            })}
-          </tbody>
-        ))}
-      </table>
+              )}
+              {group.rows.map((row, at) => {
+                const member = String(row[rowsMember] ?? '');
+                // This row's trend rows: its member, and its section's.
+                const matches = (one: Row) =>
+                  String(one[rowsMember] ?? '') === member &&
+                  (groupBy === undefined || String(one[groupBy] ?? '') === group.name);
+                return (
+                  <tr key={`${member}-${String(at)}`}>
+                    <th scope="row">{member}</th>
+                    {columns.map((column, place) => (
+                      <Cell
+                        key={place}
+                        column={column}
+                        spec={spec}
+                        row={row}
+                        trends={trends}
+                        chartTime={chartTime}
+                        matches={matches}
+                        now={now}
+                      />
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          ))}
+        </table>
+      </div>
+      {pager}
     </div>
   );
 }
@@ -392,7 +438,8 @@ export function GraphicalTableView({
 /**
  * The graphical table with its trends asked of Cube (T944): one query per
  * time and grain its columns draw, as the tile's own query is asked — its
- * filters and limits kept, its dashboard and previewed context — by Rows.
+ * filters and limits kept, its dashboard and previewed context — by Rows,
+ * for the shown page's members only (T945, AC-572).
  */
 export function GraphicalTable({
   spec,
@@ -406,15 +453,16 @@ export function GraphicalTable({
   const item = useQueryItem();
   const context = useContext(SecurityPreview);
   const now = new Date();
+  const [page, setPage] = useState(0);
   const asked =
     query === undefined
       ? []
-      : graphicalTableTrends(
-          query,
-          columnsOf(spec.options),
-          Object.keys(spec.granularities ?? {})[0],
+      : pageQueries(query, spec.rows, page, {
+          rows: memberOn(spec.encoding, 'x'),
+          columns: columnsOf(spec.options),
+          chartTime: Object.keys(spec.granularities ?? {})[0],
           now,
-        );
+        }).trends;
   const answers = useQueries({
     queries: asked.map((trend) => ({
       queryKey: ['graphical-table-trend', trend.query, context ?? null, item ?? null],
@@ -438,6 +486,8 @@ export function GraphicalTable({
       spec={spec}
       trends={trends}
       now={now}
+      page={page}
+      onPage={setPage}
       {...(onAddColumn === undefined ? {} : { onAddColumn })}
     />
   );

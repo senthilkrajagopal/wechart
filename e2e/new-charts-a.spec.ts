@@ -1714,6 +1714,145 @@ test('graphical tables on 5- and 6-column tiles draw their cells, sections and e
   );
 });
 
+/** A dashboard of graphical tables of orders, each its Rows and columns. */
+async function graphicalTableDashboard(
+  request: APIRequestContext,
+  tables: readonly {
+    readonly tile: string;
+    readonly dimensions: readonly string[];
+    readonly columns: readonly unknown[];
+    readonly w?: number;
+    readonly h?: number;
+  }[],
+) {
+  const title = `Tables ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const items = [];
+  for (const { tile, dimensions, columns, w = 6, h = 40 } of tables) {
+    const chart = (await (
+      await request.post(`${API}/documents`, {
+        data: { kind: 'chart', title: tile, ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`${API}/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: tile,
+          owner: 'admin',
+          localToDashboardId: dashboard.id,
+          chart: {
+            source: { cube: 'orders' },
+            wells: {
+              measures: ['orders.total_amount'],
+              dimensions,
+              timeDimensions: ['orders.ordered_at'],
+            },
+            chartType: 'graphicalTable',
+            options: { graphicalTable: { columns } },
+          },
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    items.push({ id: tile, kind: 'chart', w, h, chartId: chart.id });
+  }
+  const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [{ id: 'only', title: 'Only', items }],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  return { id: dashboard.id, title };
+}
+
+/**
+ * T945 / AC-572: WHILE a graphical table has more than 50 rows, THE SYSTEM
+ * SHALL show 50 a page with "Rows 1–50 of ‹n›" and ‹ › buttons; and SHALL
+ * query each page with two Cube requests, the values and the values by the
+ * sparkline's time granularity for that page's members only.
+ * `Fails when: more than 50 rows show at once; a page makes more than two
+ * Cube requests, or its trend request covers members outside the page.`
+ *
+ * The sample has 240 orders, a row each.
+ */
+test('a graphical table of 240 orders shows 50 a page, each page asking its own members’ trends', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await graphicalTableDashboard(request, [
+    {
+      tile: 'gt-orders',
+      dimensions: ['orders.id'],
+      columns: [
+        { kind: 'value', measure: 'orders.total_amount' },
+        { kind: 'sparkline', measure: 'orders.total_amount', granularity: 'month', last: 12 },
+      ],
+    },
+  ]);
+  const asked: { trend: boolean; members?: readonly string[] }[] = [];
+  page.on('request', (sent) => {
+    if (!sent.url().endsWith('/api/load') || sent.method() !== 'POST') return;
+    const query = (
+      sent.postDataJSON() as {
+        query?: {
+          dimensions?: string[];
+          timeDimensions?: unknown[];
+          filters?: { member?: string; values?: string[] }[];
+        };
+      } | null
+    )?.query;
+    if (!query?.dimensions?.includes('orders.id')) return;
+    const members = query.filters?.find((one) => one.member === 'orders.id')?.values;
+    asked.push({
+      trend: (query.timeDimensions ?? []).length > 0,
+      ...(members === undefined ? {} : { members }),
+    });
+  });
+  await page.clock.setFixedTime(new Date('2026-08-20T12:00:00Z'));
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  const tile = page.locator('[data-tile="gt-orders"]');
+  const rows = tile.locator('tbody tr');
+  const shownIds = () => tile.locator('tbody th[scope="row"]').allTextContents();
+  await expect(rows).toHaveCount(50);
+  await expect(tile.getByTestId('gt-page')).toHaveText('Rows 1–50 of 240');
+  await expect(tile.locator('caption')).toHaveText(/at a glance: 240 rows\.$/);
+  await expect(tile.getByRole('button', { name: 'Previous rows' })).toBeDisabled();
+  // Page 1: the values and one trend, of its own 50 members.
+  await expect.poll(() => asked.filter((one) => one.trend).length).toBe(1);
+  expect(asked.filter((one) => !one.trend)).toHaveLength(1);
+  expect([...(asked.find((one) => one.trend)?.members ?? [])].sort()).toEqual(
+    [...(await shownIds())].sort(),
+  );
+  await expect(tile.locator('tbody td svg[role="img"]').first()).toBeVisible();
+
+  asked.length = 0;
+  await tile.getByRole('button', { name: 'Next rows' }).click();
+  await expect(tile.getByTestId('gt-page')).toHaveText('Rows 51–100 of 240');
+  await expect(rows).toHaveCount(50);
+  await expect.poll(() => asked.filter((one) => one.trend).length).toBe(1);
+  // At most two requests for the page: here one, its trend; its values are the table's.
+  expect(asked.length).toBeLessThanOrEqual(2);
+  const second = await shownIds();
+  expect([...(asked.find((one) => one.trend)?.members ?? [])].sort()).toEqual([...second].sort());
+  await expect(tile.locator('tbody td svg[role="img"]').first()).toBeVisible();
+});
+
 /**
  * T939 / AC-566: IF a KPI's Compare to is Previous period or Same period last
  * year and Time is empty, THEN THE SYSTEM SHALL say "Compare to: ‹choice›

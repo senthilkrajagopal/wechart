@@ -1,5 +1,5 @@
 import { withColumns, type GraphicalTableColumn, type RenderSpec } from '@wechart/core';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { GraphicalTableView, type LoadedTrend } from './GraphicalTable';
@@ -177,6 +177,57 @@ describe('a graphical table drawn (T944, AC-571)', () => {
     render(<GraphicalTableView spec={spec({}, noRule)} trends={[]} now={now} />);
     const dairy = screen.getByRole('row', { name: /^Dairy/ });
     expect(within(dairy).getAllByRole('cell')[3]?.textContent).toBe('No rule matched');
+  });
+});
+
+/**
+ * T945 / AC-572: WHILE a graphical table has more than 50 rows, THE SYSTEM
+ * SHALL show 50 a page with "Rows 1–50 of ‹n›" and ‹ › buttons …
+ * `Fails when: more than 50 rows show at once; …`
+ */
+describe('a graphical table’s pages (T945, AC-572)', () => {
+  const many = () =>
+    spec({
+      rows: Array.from({ length: 214 }, (_, at) => ({
+        [CATEGORY]: `Product ${String(at + 1)}`,
+        [REVENUE]: String(1000 - at),
+      })),
+    } as Partial<RenderSpec>);
+  const bodyRows = () => screen.getAllByRole('row').filter((row) => row.closest('tbody') !== null);
+
+  it('shows 50 rows a page, "Rows 51–100 of 214" after ›, and back with ‹', () => {
+    render(<GraphicalTableView spec={many()} trends={[]} now={now} />);
+    expect(bodyRows()).toHaveLength(50);
+    expect(screen.getByTestId('gt-page').textContent).toBe('Rows 1–50 of 214');
+    const previous = screen.getByRole('button', { name: 'Previous rows' });
+    const next = screen.getByRole('button', { name: 'Next rows' });
+    expect([previous.textContent, next.textContent]).toEqual(['‹', '›']);
+    expect((previous as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(next);
+    expect(screen.getByTestId('gt-page').textContent).toBe('Rows 51–100 of 214');
+    expect(bodyRows()[0]?.textContent).toMatch(/^Product 51/);
+    expect(bodyRows()).toHaveLength(50);
+    fireEvent.click(screen.getByRole('button', { name: 'Previous rows' }));
+    expect(screen.getByTestId('gt-page').textContent).toBe('Rows 1–50 of 214');
+  });
+
+  it('shows the last page’s 14 rows, its › disabled', () => {
+    render(<GraphicalTableView spec={many()} trends={[]} now={now} page={4} />);
+    expect(screen.getByTestId('gt-page').textContent).toBe('Rows 201–214 of 214');
+    expect(bodyRows()).toHaveLength(14);
+    expect((screen.getByRole('button', { name: 'Next rows' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it('counts every row in its caption, and shows no pager at 50 rows or fewer', () => {
+    render(<GraphicalTableView spec={many()} trends={[]} now={now} />);
+    expect(screen.getByRole('table').querySelector('caption')?.textContent).toMatch(
+      /^Categories at a glance: 214 rows/,
+    );
+    cleanup();
+    render(<GraphicalTableView spec={spec()} trends={[]} now={now} />);
+    expect(screen.queryByTestId('gt-page')).toBeNull();
   });
 });
 

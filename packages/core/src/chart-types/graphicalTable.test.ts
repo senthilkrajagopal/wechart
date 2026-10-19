@@ -4,10 +4,13 @@ import { toChartSpec, type ChartDocument } from '../chart-document';
 import { toCubeQuery } from '../chart-spec';
 import {
   COLUMN_KINDS,
+  GRAPHICAL_TABLE_PAGE_ROWS,
   graphicalTableModule,
   graphicalTableOf,
+  graphicalTablePage,
   graphicalTableTrends,
   newColumn,
+  pageQueries,
   withColumns,
   type GraphicalTableColumn,
 } from './graphicalTable';
@@ -253,5 +256,81 @@ describe('what a graphical table asks of Cube (T944, AC-571)', () => {
     ).toEqual([]);
     const sparkline = { kind: 'sparkline' as const, settings: { measure: 'orders.revenue' } };
     expect(graphicalTableTrends({ measures: [] }, [sparkline], undefined, new Date())).toEqual([]);
+  });
+});
+
+/**
+ * T945 / AC-572: WHILE a graphical table has more than 50 rows, THE SYSTEM
+ * SHALL show 50 a page with "Rows 1–50 of ‹n›" and ‹ › buttons; and SHALL
+ * query each page with two Cube requests, the values and the values by the
+ * sparkline's time granularity for that page's members only.
+ * `Fails when: more than 50 rows show at once; a page makes more than two
+ * Cube requests, or its trend request covers members outside the page.`
+ */
+describe('a graphical table’s pages (T945, AC-572)', () => {
+  const now = new Date('2026-10-18T09:00:00Z');
+  const values = {
+    measures: ['orders.revenue'],
+    dimensions: ['products.product'],
+    filters: [{ member: 'orders.status', operator: 'equals', values: ['shipped'] }],
+  };
+  const rows = Array.from({ length: 214 }, (_, at) => ({
+    'products.product': `Product ${String(at + 1)}`,
+    'orders.revenue': String(1000 - at),
+  }));
+  const columns: readonly GraphicalTableColumn[] = [
+    { kind: 'value', settings: { measure: 'orders.revenue' } },
+    { kind: 'sparkline', settings: { measure: 'orders.revenue', granularity: 'month' } },
+  ];
+  const table = { rows: 'products.product', columns, chartTime: 'orders.ordered_at', now };
+
+  it('holds 50 rows a page, the last page what is left', () => {
+    expect(GRAPHICAL_TABLE_PAGE_ROWS).toBe(50);
+    const second = graphicalTablePage(rows, 1);
+    expect([second.first, second.rows.length, second.pages, second.total]).toEqual([
+      50, 50, 5, 214,
+    ]);
+    expect(second.rows[0]?.['products.product']).toBe('Product 51');
+    const last = graphicalTablePage(rows, 4);
+    expect([last.first, last.rows.length]).toEqual([200, 14]);
+    // Past the last page is the last page.
+    expect(graphicalTablePage(rows, 9).first).toBe(200);
+  });
+
+  it('asks page 2 of 214 rows in two queries, the second its 50 members by month', () => {
+    const asked = pageQueries(values, rows, 1, table);
+    const queries = [asked.values, ...asked.trends.map((trend) => trend.query)];
+    expect(queries).toHaveLength(2);
+    expect(asked.values).toEqual(values);
+    const trend = asked.trends[0]?.query ?? {};
+    expect(trend['timeDimensions']).toEqual([
+      {
+        dimension: 'orders.ordered_at',
+        granularity: 'month',
+        dateRange: ['2025-11-01', '2026-10-31'],
+      },
+    ]);
+    expect(trend['filters']).toEqual([
+      ...values.filters,
+      {
+        member: 'products.product',
+        operator: 'equals',
+        values: Array.from({ length: 50 }, (_, at) => `Product ${String(at + 51)}`),
+      },
+    ]);
+  });
+
+  it('asks a page’s members once each, even where Group rows by repeats them', () => {
+    const grouped = [
+      { 'products.product': 'Tea', 'customers.region': 'EMEA' },
+      { 'products.product': 'Tea', 'customers.region': 'APAC' },
+      { 'products.product': 'Cod', 'customers.region': 'EMEA' },
+    ];
+    const asked = pageQueries(values, grouped, 0, table);
+    expect(asked.trends[0]?.query['filters']).toContainEqual({
+      member: 'products.product',
+      operator: 'equals',
+      values: ['Tea', 'Cod'],
+    });
   });
 });

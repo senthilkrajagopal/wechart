@@ -256,5 +256,75 @@ export function graphicalTableTrends(
   });
 }
 
+/** The most rows on one page (AC-572; design 23 Q5 (a), "graphical-table rows ≤ 50 a page"). */
+export const GRAPHICAL_TABLE_PAGE_ROWS = 50;
+
+/** One page of the table's rows: where it starts, its rows, and how many there are. */
+export interface GraphicalTablePage<T> {
+  /** The page's index, from 0, held to the last page. */
+  readonly page: number;
+  readonly pages: number;
+  /** The index of its first row among all of them. */
+  readonly first: number;
+  readonly rows: readonly T[];
+  readonly total: number;
+}
+
+/** A page of 50 rows (T945, AC-572); a page past the last is the last. */
+export function graphicalTablePage<T>(rows: readonly T[], page: number): GraphicalTablePage<T> {
+  const pages = Math.max(1, Math.ceil(rows.length / GRAPHICAL_TABLE_PAGE_ROWS));
+  const at = Math.min(Math.max(0, page), pages - 1);
+  const first = at * GRAPHICAL_TABLE_PAGE_ROWS;
+  return {
+    page: at,
+    pages,
+    first,
+    rows: rows.slice(first, first + GRAPHICAL_TABLE_PAGE_ROWS),
+    total: rows.length,
+  };
+}
+
+/**
+ * What one page asks of Cube (T945, AC-572; design 23 sheet 2, "Each page
+ * queries its own trends"): the values, every page's rows at once, so the
+ * table can count them and each page reads its own; and the trends, each
+ * filtered to the page's members of Rows alone. A page whose columns draw at
+ * one time and grain asks two queries.
+ */
+export function pageQueries(
+  values: Readonly<Record<string, unknown>>,
+  answered: readonly Readonly<Record<string, unknown>>[],
+  page: number,
+  table: {
+    readonly rows: string | undefined;
+    readonly columns: readonly GraphicalTableColumn[];
+    readonly chartTime: string | undefined;
+    readonly now: Date;
+  },
+): { readonly values: Readonly<Record<string, unknown>>; readonly trends: GraphicalTableTrend[] } {
+  const trends = graphicalTableTrends(values, table.columns, table.chartTime, table.now);
+  const rowsMember = table.rows;
+  if (rowsMember === undefined) return { values, trends };
+  const members = [
+    ...new Set(
+      graphicalTablePage(answered, page).rows.flatMap((row) => {
+        const member = row[rowsMember];
+        return member === null || member === undefined ? [] : [String(member)];
+      }),
+    ),
+  ];
+  const filters = (values['filters'] as readonly unknown[] | undefined) ?? [];
+  return {
+    values,
+    trends: trends.map((trend) => ({
+      ...trend,
+      query: {
+        ...trend.query,
+        filters: [...filters, { member: rowsMember, operator: 'equals', values: members }],
+      },
+    })),
+  };
+}
+
 /** What a table with no columns says, beside + Column (AC-570). */
 export const NO_COLUMNS = 'Add a column: Value, Change, Sparkline, Bullet or Icon.';

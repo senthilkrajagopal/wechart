@@ -2204,10 +2204,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T944 (AC-571, AC-570) Draw the graphical table as a real `<table>` with its caption, 24 px rows, and its Value, Change, Sparkline, Bullet and Icon cells
 
-- [ ] T945 (AC-572) Page a graphical table at 50 rows, each page asking Cube for its values and its own members' trends
-  - Files: `packages/web/src/tiles/GraphicalTable.tsx`, `packages/core/src/chart-types/graphicalTable.ts` (`pageQueries`; + test).
-  - Failing test: `graphicalTable.test.ts`: page 2 of 214 rows makes two queries, the second filtered to that page's 50 members and by month; `GraphicalTable.test.tsx`: "Rows 51–100 of 214" with ‹ › (AC-572).
-  - Depends on: T944
+- [x] T945 (AC-572) Page a graphical table at 50 rows, each page asking Cube for its values and its own members' trends
 
 - [ ] T946 (AC-573) Mark a graphical table's rows as table tiles do, never by sorting, with "· $X marked" in partly marked additive cells, and cross-filter by row
   - Files: `packages/web/src/tiles/GraphicalTable.tsx`, `packages/web/src/tiles/graphicalTableMarking.test.tsx`, `packages/charts/src/marking/partial.ts`.

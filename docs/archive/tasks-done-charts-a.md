@@ -96,6 +96,15 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - **Shared:** core `kpiTrendQuery`, `kpiTrendPeriods` and `kpiTrendValues` take a number of periods. `defaultEncoding` reads a graphical table's Rows as x and Group rows by as facet. `graphicalTable` came out of `AWAITING_SERIES`.
     - **ACs:** AC-571 and AC-570 are ticked on `e2e/new-charts-a.spec.ts`, "graphical tables on 5- and 6-column tiles draw their cells, sections and empty state, and + Column opens Columns" (fixed clock), with `chart-editor.spec.ts`'s undrawn walk, on headless Chromium; `GraphicalTable.test.tsx` and core `graphicalTable.test.ts` seen red, then green. A bullet cell reads its values in their own format ("23.1% of 25%"); the task's "23.1 %" spacing is the format's.
 
+- [x] T945 (AC-572) Page a graphical table at 50 rows, each page asking Cube for its values and its own members' trends
+  - Files: `packages/web/src/tiles/GraphicalTable.tsx`, `packages/core/src/chart-types/graphicalTable.ts` (`pageQueries`; + test).
+  - Failing test: `graphicalTable.test.ts`: page 2 of 214 rows makes two queries, the second filtered to that page's 50 members and by month; `GraphicalTable.test.tsx`: "Rows 51–100 of 214" with ‹ › (AC-572).
+  - Depends on: T944
+  - Done (2026-10-18), decision T945-1:
+    - **Core:** `GRAPHICAL_TABLE_PAGE_ROWS` (50), `graphicalTablePage` (a page past the last is the last) and `pageQueries`, which gives the values query unchanged and each trend filtered to the page's members of Rows, each once.
+    - **Tile:** `GraphicalTable` keeps the page and asks only its trends; `GraphicalTableView` takes `page` and `onPage`, or keeps its own. Past 50 rows, "Rows 51–100 of 214" sits under the table between ‹ › ("Previous rows", "Next rows"), as the tiled KPI's pager does. The caption still counts every row. Sections are drawn within the page.
+    - **AC-572** is ticked on `e2e/new-charts-a.spec.ts`, "a graphical table of 240 orders shows 50 a page…", on headless Chromium: page 2 asks one new request, its trend, for exactly its 50 shown members. Unit tests seen red, then green.
+
 - [x] T953 (AC-580, AC-037) The bullet chart's spec and wells: Target, 2–3 bands at 80, 100 and 120 % by default, and its empty state
   - Files: `packages/core/src/chart-types/bullet.ts` (+ test), `packages/web/src/editor/wells/bullet.tsx` (+ test).
   - Failing test: `bullet.test.ts`: bands default to [80, 100, 120]; a fourth band is refused with "At most 3 bands: R80's three greys, and no fourth without a new colour."; one band is refused; `bullet.test.tsx` (wells): with Target emptied the tile says "A bullet chart compares each member with a target. Put a measure or a value in Target." with Target as its action (AC-580, AC-037).
