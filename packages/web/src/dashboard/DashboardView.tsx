@@ -5317,7 +5317,14 @@ export function DashboardView({
       if (node.type === 'icon') {
         const query = sentFor(withFilters(iconQueryOf(node, predicate), textFiltersOf(tileId)));
         return (
-          <AnsweredTooltip key={key} query={query} context={preview} facts={facts('icon')}>
+          <AnsweredTooltip
+            key={key}
+            query={query}
+            context={preview}
+            facts={facts('icon')}
+            // Its member, so no data is said as such (checkpoint 3, AC-525).
+            member={measure}
+          >
             <IconElement query={query} member={measure} attrs={attrs} context={preview} />
           </AnsweredTooltip>
         );
@@ -5383,7 +5390,14 @@ export function DashboardView({
             ? undefined
             : withFilters(changeQueryOf(node, time, predicate), textFiltersOf(tileId));
         return (
-          <AnsweredTooltip key={key} query={query} context={preview} facts={facts('change')}>
+          <AnsweredTooltip
+            key={key}
+            query={query}
+            context={preview}
+            facts={facts('change')}
+            // Its member, so no data is said as such (checkpoint 3, AC-525).
+            member={measure}
+          >
             <ChangeElement
               query={query}
               member={measure}

@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { BulletGraphSvg, rangesProblem } from './BulletGraph';
+import { BulletGraphSvg, BulletNoData, rangesProblem } from './BulletGraph';
 
 /**
  * T885 / AC-521: … a Bullet graph, 96 × 16 px, its value bar 4 px in
@@ -20,6 +20,17 @@ const props = {
   member: 'orders.margin',
   formats: { 'orders.margin': 'percent' },
 };
+
+// Checkpoint 3 (AC-525): its "—" said nothing of why.
+describe('a Bullet graph with no data (AC-525)', () => {
+  it('says "No data for these filters" with its "—", as its description', () => {
+    const { container } = render(<BulletNoData title="Margin %" />);
+    const dash = container.querySelector<HTMLElement>('[aria-describedby]');
+    const said = document.getElementById(dash?.getAttribute('aria-describedby') ?? '');
+    expect(dash?.textContent).toBe('—');
+    expect(said?.textContent).toBe('Bullet graph · Margin % No data for these filters');
+  });
+});
 
 describe('a Bullet graph (T885, AC-521)', () => {
   it('is a 96 × 16 image: three ranges in three greys, a 4 px value bar and a 2 px target', () => {

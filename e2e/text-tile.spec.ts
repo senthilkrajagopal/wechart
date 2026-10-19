@@ -1153,6 +1153,55 @@ test('an element’s loading, failed and removed states, Retry, and an empty til
 });
 
 /**
+ * AC-525, checkpoint 3: with a filter that leaves no rows, every live element
+ * that reads a value — Value, Change, Icon, Sparkline and Bullet graph —
+ * reads "—" and says "No data for these filters" in its tooltip.
+ */
+test('every live element under a filter that leaves no rows says “No data for these filters”', async ({
+  page,
+  request,
+}) => {
+  const none = [{ member: 'orders.status', operator: 'equals', values: ['no-such-status'] }];
+  // A sum, which Cube answers with no value over no rows (a count answers 0, which is data).
+  const measure = 'orders.total_amount';
+  const kinds = [
+    { type: 'value', attrs: { measure, filters: none } },
+    { type: 'change', attrs: { measure, period: 'month', direction: 'higher', filters: none } },
+    {
+      type: 'icon',
+      attrs: {
+        measure,
+        filters: none,
+        rules: [{ op: '>=', value: 1, state: 'success', label: 'Some' }],
+      },
+    },
+    { type: 'sparkline', attrs: { measure, granularity: 'month', filters: none } },
+    { type: 'bulletGraph', attrs: { measure, filters: none } },
+  ];
+  const { id, title } = await dashboardWithText(request, [
+    {
+      type: 'paragraph',
+      content: kinds.flatMap((element, at) =>
+        at === 0 ? [element] : [{ type: 'text', text: ' · ' }, element],
+      ),
+    },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const text = page.locator('[data-tile="tile-text"] .text-tile');
+  const read = text.locator('.text-element-read');
+  await expect(read).toHaveCount(5, { timeout: 20_000 });
+  // An Icon with no data reads "No rule matched" (T886), and says why in its tooltip.
+  await expect(text).toHaveText('— · — · No rule matched · — · —');
+  for (const [at, kind] of ['Value', 'Change', 'Icon', 'Sparkline', 'Bullet graph'].entries()) {
+    await read.nth(at).focus();
+    const tip = page.getByRole('tooltip').filter({ visible: true });
+    await expect(tip).toContainText(`${kind} · Total Amount`);
+    await expect(tip).toContainText('No data for these filters');
+  }
+});
+
+/**
  * AC-520 / AC-116, on the real surface: with nothing marked, a Value limited
  * by the marking reads all data, as one that isn't; marking a bar limits it
  * to the marked rows, the unlimited one keeping all data, and a Value whose

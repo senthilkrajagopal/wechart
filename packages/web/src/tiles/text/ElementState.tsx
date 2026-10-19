@@ -69,6 +69,20 @@ export function failureOf(error: unknown): 'forbidden' | { readonly message: str
 }
 
 /**
+ * No data, for an element drawn as an image (a Sparkline, a Bullet graph;
+ * checkpoint 3, AC-525): "—" where it would be, focusable, its tooltip and
+ * description saying what it is and "No data for these filters", as a
+ * Value's does.
+ */
+export function ElementNoData({ kind, title }: { readonly kind: string; readonly title: string }) {
+  return (
+    <ElementTooltip lines={[`${kind} · ${title}`, 'No data for these filters']}>
+      <span className="text-value">—</span>
+    </ElementTooltip>
+  );
+}
+
+/**
  * "Unavailable" where a value would be. On an error, the warning icon, and
  * Details — the measure and Cube's error — on focus or hover; for a member
  * the viewer may not query, or one no longer in the model, nothing that

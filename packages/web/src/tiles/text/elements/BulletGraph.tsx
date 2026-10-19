@@ -1,6 +1,6 @@
 import { formatValue, type MemberFormats } from '@wechart/core';
 
-import { ElementSkeleton, ElementUnavailable } from '../ElementState';
+import { ElementNoData, ElementSkeleton, ElementUnavailable } from '../ElementState';
 import { useElementAnswer } from './useElementAnswer';
 
 /** 96 × 16: six of a word's height wide (direction §7h). */
@@ -123,6 +123,11 @@ const numberOf = (value: unknown): number | undefined => {
   return value === null || value === undefined || !Number.isFinite(number) ? undefined : number;
 };
 
+/** A Bullet graph with no data for its filters (AC-525): "—", saying so. */
+export function BulletNoData({ title }: { readonly title: string }) {
+  return <ElementNoData kind="Bullet graph" title={title} />;
+}
+
 /** A Bullet graph asked of Cube: its value, and its target where that is a measure. */
 export function BulletGraphElement({
   query,
@@ -146,7 +151,8 @@ export function BulletGraphElement({
     return <ElementUnavailable measure={title} error={answer.error} />;
   const row = answer.rows[0] ?? {};
   const value = numberOf(row[member]);
-  if (value === undefined) return <span className="text-value">—</span>;
+  // No data: said, not a bare "—" (checkpoint 3, AC-525).
+  if (value === undefined) return <BulletNoData title={title} />;
   const target = attrs['target'] as { kind?: unknown; value?: unknown; measure?: unknown } | null;
   const targetValue =
     target?.kind === 'fixed'

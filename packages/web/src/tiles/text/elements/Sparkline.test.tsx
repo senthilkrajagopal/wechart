@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { SparklineSvg } from './Sparkline';
+import { SparklineNoData, SparklineSvg } from './Sparkline';
 
 /**
  * T885 / AC-521: THE SYSTEM SHALL draw a Sparkline as wechart's own SVG,
@@ -64,5 +64,14 @@ describe('a Sparkline (T885, AC-521)', () => {
     const none = render(<SparklineSvg {...props} values={[]} />).container;
     expect(none.querySelector('svg')).toBeNull();
     expect(none.textContent).toBe('—');
+  });
+
+  // Checkpoint 3 (AC-525): its "—" said nothing of why.
+  it('says "No data for these filters" with its "—", as its description', () => {
+    const none = render(<SparklineNoData title="Revenue" />).container;
+    const dash = none.querySelector<HTMLElement>('[aria-describedby]');
+    const said = document.getElementById(dash?.getAttribute('aria-describedby') ?? '');
+    expect(dash?.textContent).toBe('—');
+    expect(said?.textContent).toBe('Sparkline · Revenue No data for these filters');
   });
 });

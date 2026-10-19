@@ -1,6 +1,6 @@
 import type { MemberFormats } from '@wechart/core';
 
-import { ElementSkeleton, ElementUnavailable } from '../ElementState';
+import { ElementNoData, ElementSkeleton, ElementUnavailable } from '../ElementState';
 import { shortValues } from './shortNumbers';
 import { useElementAnswer } from './useElementAnswer';
 
@@ -106,6 +106,11 @@ export function SparklineSvg({
   );
 }
 
+/** A Sparkline with no data for its filters (AC-525): "—", saying so. */
+export function SparklineNoData({ title }: { readonly title: string }) {
+  return <ElementNoData kind="Sparkline" title={title} />;
+}
+
 /** A Sparkline asked of Cube: the last periods, newest first, drawn oldest first. */
 export function SparklineElement({
   query,
@@ -132,9 +137,13 @@ export function SparklineElement({
   if (answer.error !== undefined)
     return <ElementUnavailable measure={title} error={answer.error} />;
   const values = answer.rows
+    // A period Cube answered with no value is none, never 0.
+    .filter((row) => row[member] !== null && row[member] !== undefined)
     .map((row) => Number(row[member]))
     .filter((value) => Number.isFinite(value))
     .reverse();
+  // No data: said, not a bare "—" (checkpoint 3, AC-525).
+  if (values.length === 0) return <SparklineNoData title={title} />;
   const granularity = typeof attrs['granularity'] === 'string' ? attrs['granularity'] : 'month';
   const last = typeof attrs['last'] === 'number' ? attrs['last'] : 12;
   return (
