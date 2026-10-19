@@ -143,6 +143,7 @@ import { FilterValueText, filterValueWords } from '../tiles/text/elements/Filter
 import { IconElement } from '../tiles/text/elements/IconElement';
 import { MarkingText } from '../tiles/text/elements/MarkingElement';
 import {
+  batchedQueries,
   bulletQueryOf,
   changeQueryOf,
   iconQueryOf,
@@ -162,7 +163,7 @@ import { ME_QUERY } from '../shell/me';
 import { MarkingToken, MeasureToken, UnknownMarkingToken } from './tiles/LiveToken';
 import { measureQueryOf } from './tiles/TextTokens';
 import { coverageOf, type Reach } from '../filters/coverage';
-import { chartTilesOf, scopeOf } from '../filters/scope';
+import { chartTilesOf, scopeOf, textTilesOf } from '../filters/scope';
 import {
   crossChipWords,
   effectsOn,
@@ -1177,11 +1178,7 @@ interface TileCharts {
   readonly onViewQuery?: ((chartId: string, tileId: string) => void) | undefined;
   /** A tile's Data as of submenu (T273, AC-245), read when its menu opens. */
   readonly dataAsOfOf?:
-    | ((
-        chartId: string,
-        tileId: string,
-      ) => () => DataAsOfSaid | undefined)
-    | undefined;
+    ((chartId: string, tileId: string) => () => DataAsOfSaid | undefined) | undefined;
   /** Copy › To dashboard (T271, AC-243): the dialog that picks one. */
   readonly onCopyToDashboard?: ((chartId: string, tileId: string) => void) | undefined;
   /**
@@ -2761,11 +2758,24 @@ export function DashboardView({
    */
   const crossEffects = useMemo(() => {
     const perChart: Record<string, CrossEffects> = {};
+    /** What each Text tile is filtered by: a target only, Filter or None (AC-523). */
+    const perText: Record<string, CrossEffects> = {};
     /** The name each highlighted chart's own cube or view takes the member by. */
     const askHighlightAs: Record<string, string> = {};
-    if (!crossFiltering || crossSelections.length === 0) return { perChart, askHighlightAs };
+    if (!crossFiltering || crossSelections.length === 0)
+      return { perChart, perText, askHighlightAs };
     const tiles = chartTilesOf(live);
     const pageOfSource = new Map(tiles.map((tile) => [tile.tileId, tile.pageId]));
+    for (const text of textTilesOf(live)) {
+      // Text draws no marks, so a pair set to Highlight filters it instead,
+      // as a chart that can show neither drawing is filtered (apply.ts).
+      perText[text.tileId] = effectsOn(
+        text.tileId,
+        crossSelections.filter((each) => pageOfSource.get(each.from) === text.pageId),
+        interactions.crossFilter,
+        { chartType: 'text', members: [] },
+      );
+    }
 
     for (const tile of tiles) {
       const chartId = tile.chartId;
@@ -2817,7 +2827,7 @@ export function DashboardView({
       perChart[chartId] = effects;
       askHighlightAs[chartId] = as ?? highlight.selection.member;
     }
-    return { perChart, askHighlightAs };
+    return { perChart, perText, askHighlightAs };
   }, [crossFiltering, crossSelections, live, interactions.crossFilter, drawn.specs, reachOf]);
   /**
    * The charts a filter in effect reaches, each with the filters that reach it
@@ -2841,27 +2851,43 @@ export function DashboardView({
   const crossFilters = useMemo(() => {
     const byKey = new Map<
       string,
-      { from: string; part: { member: string; value: string }; chartIds: string[] }
+      {
+        from: string;
+        part: { member: string; value: string };
+        chartIds: string[];
+        textIds: string[];
+      }
     >();
+    // A tuple's every member, each a filter (a Sankey link, T988, AC-612).
+    const entriesOf = (selection: CrossSelection) =>
+      selectionParts(selection).map((part) => {
+        const key = `${selection.from}:${part.member}:${part.value}`;
+        const entry = byKey.get(key) ?? {
+          from: selection.from,
+          part,
+          chartIds: [],
+          textIds: [],
+        };
+        byKey.set(key, entry);
+        return entry;
+      });
     for (const [chartId, effects] of Object.entries(crossEffects.perChart))
       for (const selection of effects.filters)
-        // A tuple's every member, each a filter (a Sankey link, T988, AC-612).
-        for (const part of selectionParts(selection)) {
-          const key = `${selection.from}:${part.member}:${part.value}`;
-          const entry = byKey.get(key) ?? { from: selection.from, part, chartIds: [] };
-          entry.chartIds.push(chartId);
-          byKey.set(key, entry);
-        }
+        for (const entry of entriesOf(selection)) entry.chartIds.push(chartId);
+    // A Text tile set to Filter is filtered as a chart is (AC-523).
+    for (const [tileId, effects] of Object.entries(crossEffects.perText))
+      for (const selection of effects.filters)
+        for (const entry of entriesOf(selection)) entry.textIds.push(tileId);
     const tilesOf = (chartIds: readonly string[]) =>
       chartTilesOf(live)
         .filter((tile) => tile.chartId !== undefined && chartIds.includes(tile.chartId))
         .map((tile) => tile.tileId);
-    return [...byKey.values()].map(({ from, part, chartIds }) => ({
+    return [...byKey.values()].map(({ from, part, chartIds, textIds }) => ({
       filter: {
         id: `cross:${from}:${part.member}`,
         widget: 'checkbox' as const,
         member: part.member,
-        scope: { kind: 'tiles' as const, tileIds: tilesOf(chartIds) },
+        scope: { kind: 'tiles' as const, tileIds: [...tilesOf(chartIds), ...textIds] },
       },
       value: { kind: 'values' as const, values: [part.value] },
     }));
@@ -2973,7 +2999,12 @@ export function DashboardView({
     const pageId = live.pages.find((page) => holds(page.items, tileId))?.id;
     const reaches = ({ filter }: ActiveFilter) => {
       const scope = scopeOf(filter);
-      return scope.kind === 'dashboard' || (scope.kind === 'page' && scope.pageId === pageId);
+      return (
+        scope.kind === 'dashboard' ||
+        (scope.kind === 'page' && scope.pageId === pageId) ||
+        // A cross-filter the pair matrix sets to Filter on this tile (AC-523).
+        (scope.kind === 'tiles' && scope.tileIds.includes(tileId))
+      );
     };
     return [
       ...[...activeFilters(live.filters ?? [], filterValues), ...crossFilters].filter(reaches),
@@ -4266,6 +4297,70 @@ export function DashboardView({
       .map((range) => ({ from: range.from, to: range.to, slot: marking.slot }));
   };
 
+  /** The marking a Text element follows, by its name, as a token found one (AC-116). */
+  const markingNamed = (attrs: Readonly<Record<string, unknown>>) => {
+    const named = typeof attrs['marking'] === 'string' ? attrs['marking'] : undefined;
+    const found =
+      named === undefined
+        ? undefined
+        : markings.find((each) => each.name.trim().toLowerCase() === named.trim().toLowerCase());
+    return {
+      named,
+      found,
+      predicate: found === undefined ? undefined : markingOf(marks, found.id),
+    };
+  };
+  /**
+   * What a Text element asking only measures is asked, under its tile's
+   * filters: a Value, an Icon, a Bullet graph, an As of.
+   */
+  const flatQueryOf = (node: TextNode, tileId: string): Record<string, unknown> | undefined => {
+    const attrs = node.attrs ?? {};
+    const measure = typeof attrs['measure'] === 'string' ? attrs['measure'] : undefined;
+    const { named, found, predicate } = markingNamed(attrs);
+    if (measure === undefined || (named !== undefined && found === undefined)) return undefined;
+    const filters = textFiltersOf(tileId);
+    if (node.type === 'asOf') {
+      const asked = valueQueryOf({ attrs: { measure } }, undefined);
+      return 'query' in asked ? withFilters(asked.query, filters) : undefined;
+    }
+    if (node.type === 'value') {
+      const asked = valueQueryOf(node, predicate);
+      return 'query' in asked ? withFilters(asked.query, filters) : undefined;
+    }
+    if (node.type === 'icon') return withFilters(iconQueryOf(node, predicate), filters);
+    if (node.type === 'bulletGraph') return withFilters(bulletQueryOf(node, predicate), filters);
+    return undefined;
+  };
+  /**
+   * A Text tile's elements of one cube under the same filters, asked as one
+   * Cube request (T887, AC-523): what each element's own query is sent as —
+   * its batch's — from which it reads its own measure. Worked out once a
+   * render for each tile.
+   */
+  const textBatches = new Map<
+    string,
+    (query: Record<string, unknown>) => Record<string, unknown>
+  >();
+  const textBatchOf = (tileId: string) => {
+    const known = textBatches.get(tileId);
+    if (known !== undefined) return known;
+    const tile = elementAt(live, tileId);
+    const flat =
+      tile !== null && isTile(tile) && tile.kind === 'text' && tile.document !== undefined
+        ? elementsOf(tile.document).flatMap((node): Record<string, unknown>[] => {
+            const query = flatQueryOf(node, tileId);
+            return query === undefined ? [] : [query];
+          })
+        : [];
+    const batches = new Map(
+      [...batchedQueries(flat)].map(([own, sent]) => [JSON.stringify(own), sent]),
+    );
+    const sentFor = (query: Record<string, unknown>) => batches.get(JSON.stringify(query)) ?? query;
+    textBatches.set(tileId, sentFor);
+    return sentFor;
+  };
+
   const charts: TileCharts = {
     specs: withWholes,
     errors: withFiltered.errors,
@@ -4852,6 +4947,7 @@ export function DashboardView({
      * until their own drawing (T885, T886).
      */
     textElementsOf: (tileId: string) => (node, key) => {
+      const sentFor = textBatchOf(tileId);
       const attrs = node.attrs ?? {};
       // A Filter value (T886, AC-522): what its dashboard filter is set to,
       // "all ‹values›" while unset; "Unavailable" for a filter gone (G5).
@@ -4872,14 +4968,9 @@ export function DashboardView({
       }
       const measure = typeof attrs['measure'] === 'string' ? attrs['measure'] : undefined;
       // The marking it follows, by its name, as a token found one (AC-116).
-      const named = typeof attrs['marking'] === 'string' ? attrs['marking'] : undefined;
-      const found =
-        named === undefined
-          ? undefined
-          : markings.find((each) => each.name.trim().toLowerCase() === named.trim().toLowerCase());
+      const { named, found, predicate } = markingNamed(attrs);
       if (named !== undefined && found === undefined)
         return <UnknownMarkingToken key={key} name={named} />;
-      const predicate = found === undefined ? undefined : markingOf(marks, found.id);
       // A Marking (T886, AC-522, AC-116): its count, or its summary.
       if (node.type === 'marking') {
         const count = predicate === undefined ? 0 : markedCount(predicate);
@@ -4899,21 +4990,17 @@ export function DashboardView({
       if (measure === undefined) return undefined;
       // An As of (T886, AC-522): when its measure's answer was refreshed, and by what.
       if (node.type === 'asOf') {
-        const asked = valueQueryOf({ attrs: { measure } }, undefined);
-        return 'query' in asked ? (
-          <AsOfElement
-            key={key}
-            query={withFilters(asked.query, textFiltersOf(tileId))}
-            context={preview}
-          />
-        ) : null;
+        const query = flatQueryOf(node, tileId);
+        return query === undefined ? null : (
+          <AsOfElement key={key} query={sentFor(query)} context={preview} />
+        );
       }
       // An Icon (T886, AC-522): its rules against its measure, or its share of another.
       if (node.type === 'icon')
         return (
           <IconElement
             key={key}
-            query={withFilters(iconQueryOf(node, predicate), textFiltersOf(tileId))}
+            query={sentFor(withFilters(iconQueryOf(node, predicate), textFiltersOf(tileId)))}
             member={measure}
             attrs={attrs}
             context={preview}
@@ -4945,7 +5032,7 @@ export function DashboardView({
         return (
           <BulletGraphElement
             key={key}
-            query={withFilters(bulletQueryOf(node, predicate), textFiltersOf(tileId))}
+            query={sentFor(withFilters(bulletQueryOf(node, predicate), textFiltersOf(tileId)))}
             title={title}
             member={measure}
             attrs={attrs}
@@ -4959,7 +5046,9 @@ export function DashboardView({
           <ValueElement
             key={key}
             asked={
-              'query' in asked ? { query: withFilters(asked.query, textFiltersOf(tileId)) } : asked
+              'query' in asked
+                ? { query: sentFor(withFilters(asked.query, textFiltersOf(tileId))) }
+                : asked
             }
             member={measure}
             formats={formats}
@@ -5884,7 +5973,9 @@ export function DashboardView({
             {onHistory === undefined || session.editing || readOnly || narrow ? null : (
               <button
                 type="button"
-                className={historyOpen ? 'btn pressed dashboard__history' : 'btn dashboard__history'}
+                className={
+                  historyOpen ? 'btn pressed dashboard__history' : 'btn dashboard__history'
+                }
                 data-history-button=""
                 aria-pressed={historyOpen}
                 // Named and titled by its word, which only its icon shows
@@ -6008,7 +6099,9 @@ export function DashboardView({
                 label="More"
                 testId="dashboard-more"
                 className={
-                  exporting ? 'icon-button dashboard__more is-pressed' : 'icon-button dashboard__more'
+                  exporting
+                    ? 'icon-button dashboard__more is-pressed'
+                    : 'icon-button dashboard__more'
                 }
                 items={[
                   // Below 1,024 px, History and Bookmarks… first (AC-495;

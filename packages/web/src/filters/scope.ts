@@ -57,6 +57,26 @@ export function inScope(filter: DashboardFilter, tile: ChartTileRef): boolean {
   }
 }
 
+/** A Text tile, and the page tab it is on: a cross-filter target, never a source (AC-523). */
+export interface TextTileRef {
+  readonly tileId: string;
+  readonly pageId: string;
+}
+
+/** Every Text tile on the dashboard, in document order, as `chartTilesOf` walks it. */
+export function textTilesOf(document: DashboardDocument): TextTileRef[] {
+  const found: TextTileRef[] = [];
+  const walk = (items: readonly Element_[], pageId: string) => {
+    for (const element of items) {
+      if (isSection(element)) walk(element.items, pageId);
+      else if (isTabGroup(element)) for (const tab of element.tabs) walk(tab.items, pageId);
+      else if (element.kind === 'text') found.push({ tileId: element.id, pageId });
+    }
+  };
+  for (const page of document.pages) walk(page.items, page.id);
+  return found;
+}
+
 /** A chart tile's name: its chart's title. */
 export function tileName(
   tile: ChartTileRef,

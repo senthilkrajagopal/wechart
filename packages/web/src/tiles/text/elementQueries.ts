@@ -113,6 +113,55 @@ export function iconQueryOf(node: Element, marking: MarkingPredicate | undefined
   };
 }
 
+/** The cube a member is of: its name's first part. */
+const cubeOf = (member: unknown) => (typeof member === 'string' ? member.split('.')[0] : undefined);
+
+/** A query with its keys in order, so two that ask the same read the same. */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (typeof value !== 'object' || value === null) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, canonical((value as Record<string, unknown>)[key])]),
+  );
+}
+
+/**
+ * The query each of a tile's elements is asked by (T887, AC-523): elements
+ * whose queries ask only measures of one cube, under the same filters, are
+ * asked as one query of all their measures — one Cube request — each
+ * reading its own measure from its one row. A query over time (a Change, a
+ * Sparkline) is left as it is, rather than its periods being decided by
+ * another measure's rows; two such that ask the same are one request
+ * anyway, keyed by what they ask (decision T887-1).
+ */
+export function batchedQueries(queries: readonly Query[]): Map<Query, Query> {
+  const groups = new Map<string, { measures: string[]; members: Query[]; rest: Query }>();
+  const sent = new Map<Query, Query>();
+  for (const query of queries) {
+    const { measures, ...rest } = query;
+    const cubes = new Set(Array.isArray(measures) ? measures.map(cubeOf) : []);
+    const flat = Object.keys(rest).every((key) => key === 'filters');
+    const [cube] = cubes;
+    if (!Array.isArray(measures) || cubes.size !== 1 || cube === undefined || !flat) {
+      sent.set(query, query);
+      continue;
+    }
+    const key = JSON.stringify([cube, canonical(rest)]);
+    const group = groups.get(key) ?? { measures: [], members: [], rest };
+    for (const measure of measures as string[])
+      if (!group.measures.includes(measure)) group.measures.push(measure);
+    group.members.push(query);
+    groups.set(key, group);
+  }
+  for (const { measures, members, rest } of groups.values()) {
+    const one = members.length === 1 ? members[0] : { ...rest, measures };
+    for (const member of members) sent.set(member, one ?? member);
+  }
+  return sent;
+}
+
 /** The periods a Change compares, when it names none: a month (decision T884-1). */
 const PERIOD = 'month';
 

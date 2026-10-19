@@ -4,6 +4,7 @@ import { EMPTY_PREDICATE, withItem, type MarkingPredicate } from '@wechart/core'
 
 import { withFilters, type ActiveFilter } from '../../filters/apply';
 import {
+  batchedQueries,
   bulletQueryOf,
   changeOf,
   changeQueryOf,
@@ -218,5 +219,59 @@ describe('what a Change asks, and what it comes to (T884, AC-520)', () => {
       ),
     ).toBe('orders.shipped_at');
     expect(timeOf({ type: 'change', attrs: { measure: 'people.count' } }, model)).toBeUndefined();
+  });
+});
+
+/**
+ * T887 / AC-523: THE SYSTEM SHALL query in one Cube request the elements of
+ * one tile whose measures come from one cube under the same filters and
+ * granularity.
+ * `Fails when: … three Values of one cube's measures under the same filters
+ * make more than one Cube request.`
+ */
+describe('one Cube request for a tile’s elements of one cube (T887, AC-523)', () => {
+  const COUNTRY: ActiveFilter = {
+    filter: { id: 'f1', widget: 'list', member: 'orders.country' },
+    value: { kind: 'values', values: ['DE'] },
+  };
+  const asked = (measure: string, attrs: Record<string, unknown> = {}) => {
+    const value = valueQueryOf({ type: 'value', attrs: { measure, ...attrs } }, undefined);
+    if (!('query' in value)) throw new Error('Nothing asked');
+    return withFilters(value.query, [COUNTRY]);
+  };
+
+  it('asks three Values of orders under the same filters as one query, a fourth with its own filter apart', () => {
+    const queries = [
+      asked('orders.revenue'),
+      asked('orders.count'),
+      asked('orders.margin'),
+      asked('orders.count', { filters: [OWN] }),
+    ];
+    const batches = batchedQueries(queries);
+    const sent = queries.map((query) => batches.get(query));
+    expect(new Set(sent.map((query) => JSON.stringify(query))).size).toBe(2);
+    expect(sent[0]).toEqual({
+      ...queries[0],
+      measures: ['orders.revenue', 'orders.count', 'orders.margin'],
+    });
+    expect(sent[1]).toBe(sent[0]);
+    expect(sent[2]).toBe(sent[0]);
+    expect(sent[3]).toEqual(queries[3]);
+  });
+
+  it('asks measures of two cubes apart, and leaves a query over time as it is', () => {
+    const time = changeQueryOf(
+      { type: 'change', attrs: { measure: 'orders.count' } },
+      'orders.created_at',
+    );
+    const queries = [asked('orders.revenue'), asked('people.count'), time];
+    const batches = batchedQueries(queries);
+    expect(queries.map((query) => batches.get(query))).toEqual(queries);
+  });
+
+  it('asks a measure two elements both name once', () => {
+    const queries = [asked('orders.count'), asked('orders.count'), asked('orders.revenue')];
+    const batches = batchedQueries(queries);
+    expect(batches.get(queries[0] ?? {})?.['measures']).toEqual(['orders.count', 'orders.revenue']);
   });
 });

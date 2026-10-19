@@ -97,3 +97,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/tiles/text/elementLimit.ts` (+ test), `packages/web/src/tiles/text/InsertMenu.tsx`, `packages/web/src/tiles/text/TextToolbar.tsx`.
   - Failing test: `elementLimit.test.ts`: at 10 elements Insert and every menu row are disabled with "This tile holds 10 elements, the most a Text tile can. Remove one, or add another Text tile."; pasting text holding 2 elements into a tile of 9 is refused with that reason and changes nothing; a filter control and a button count (AC-518).
   - Depends on: T882
+
+- [x] T887 (AC-523) A Text tile as a cross-filter target only, Filter or None, and its elements of one cube in one Cube request
+  - Files: `packages/web/src/dashboard/settings/CrossFilterMatrix.tsx`, `packages/web/src/tiles/text/elementQueries.ts` (+ test), `packages/web/src/dashboard/crossfilter/` (targets).
+  - Failing test: `elementQueries.test.ts`: three Values of `orders` measures under the same filters make one `/load` query; a fourth with its own filter makes a second; `CrossFilterMatrix` test: a Text tile's Highlight is disabled with "Text has no marks to highlight" and it isn't listed as a source; with Filter, a click on a bar changes the tile's Value (AC-523).
+  - Depends on: T884

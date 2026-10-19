@@ -1903,10 +1903,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T886 (AC-522, AC-116) The Icon, Marking, Filter value and As of elements
 
-- [ ] T887 (AC-523) A Text tile as a cross-filter target only, Filter or None, and its elements of one cube in one Cube request
-  - Files: `packages/web/src/dashboard/settings/CrossFilterMatrix.tsx`, `packages/web/src/tiles/text/elementQueries.ts` (+ test), `packages/web/src/dashboard/crossfilter/` (targets).
-  - Failing test: `elementQueries.test.ts`: three Values of `orders` measures under the same filters make one `/load` query; a fourth with its own filter makes a second; `CrossFilterMatrix` test: a Text tile's Highlight is disabled with "Text has no marks to highlight" and it isn't listed as a source; with Filter, a click on a bar changes the tile's Value (AC-523).
-  - Depends on: T884
+- [x] T887 (AC-523) A Text tile as a cross-filter target only, Filter or None, and its elements of one cube in one Cube request
 
 - [ ] T888 (AC-524) View mode: values as text in their sentence's type and weight, focusable, with a dotted underline and a tooltip that is their accessible description
   - Files: `packages/web/src/tiles/text/ElementTooltip.tsx` (+ test), `packages/web/src/tiles/text/readMapping.tsx`.

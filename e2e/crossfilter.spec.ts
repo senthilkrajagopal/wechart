@@ -32,11 +32,14 @@ async function crossFilterDashboard(
     unreachable = false,
     markings = false,
     statusSplit,
+    text,
   }: {
     defaultAction?: string;
     pairs?: Pairs;
     unreachable?: boolean;
     markings?: boolean;
+    /** A Text tile's document's blocks, on the page after the charts (T887). */
+    text?: unknown[];
     /** "By status" split by category: as a grouped bar's series, or a trellis's panels (T631). */
     statusSplit?: 'groupedBar' | 'trellis';
   } = {},
@@ -123,6 +126,17 @@ async function crossFilterDashboard(
               ...(apart === undefined
                 ? []
                 : [{ id: 'tile-apart', kind: 'chart', w: 6, h: 40, chartId: apart }]),
+              ...(text === undefined
+                ? []
+                : [
+                    {
+                      id: 'tile-text',
+                      kind: 'text',
+                      w: 6,
+                      h: 12,
+                      document: { version: 1, doc: { type: 'doc', content: text } },
+                    },
+                  ]),
             ],
           },
         ],
@@ -705,4 +719,61 @@ test('a pair set to None leaves the other tile untouched', async ({ page, reques
   await page.waitForLoadState('networkidle');
   expect(await valuesIn(category)).toEqual(before);
   await expect(category.getByTestId('chart-canvas')).not.toHaveAttribute('data-highlight', /./);
+});
+
+/**
+ * T887 / AC-523: a Text tile is a cross-filter target: set to Filter, a click
+ * on a bar changes its Value, and set to None it stays; and its three Values
+ * of `orders` measures, under the same filters, are one Cube request.
+ */
+test('a Text tile is filtered by a click on a bar, and asks its three Values of one cube at once', async ({
+  page,
+  request,
+}) => {
+  const value = (measure: string) => ({ type: 'value', attrs: { measure } });
+  const text = [
+    {
+      type: 'paragraph',
+      content: [
+        value('orders.count'),
+        { type: 'text', text: ' orders, ' },
+        value('orders.total_amount'),
+        { type: 'text', text: ' in all, ' },
+        value('orders.average_amount'),
+        { type: 'text', text: ' each' },
+      ],
+    },
+  ];
+  const asked: string[][] = [];
+  page.on('request', (sent) => {
+    if (!sent.url().endsWith('/api/load') || sent.method() !== 'POST') return;
+    const body = sent.postDataJSON() as { query?: { measures?: string[] } } | null;
+    const measures = body?.query?.measures ?? [];
+    if (measures.some((measure) => measure !== 'orders.count')) asked.push(measures);
+  });
+
+  const filtered = await crossFilterDashboard(request, { defaultAction: 'filter', text });
+  await open(page, filtered.id, filtered.title);
+  const values = tile(page, 'tile-text').locator('.text-tile .text-value');
+  await expect(values.first()).toHaveText('240');
+  await page.waitForLoadState('networkidle');
+  // One request for all three: no Value asked on its own.
+  expect(asked).toEqual([['orders.count', 'orders.total_amount', 'orders.average_amount']]);
+
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+  await expect(values.first()).not.toHaveText('240');
+  await expect(values.first()).toHaveText(/^\d+$/);
+
+  // Set to None, the click leaves it as it was.
+  const none = await crossFilterDashboard(request, {
+    defaultAction: 'filter',
+    pairs: { 'tile-status>tile-text': 'none' },
+    text,
+  });
+  await open(page, none.id, none.title);
+  await expect(values.first()).toHaveText('240');
+  await clickBar(page, tile(page, 'tile-status'), 'shipped');
+  await expect(tile(page, 'tile-category').getByTestId('chart-canvas')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  await expect(values.first()).toHaveText('240');
 });

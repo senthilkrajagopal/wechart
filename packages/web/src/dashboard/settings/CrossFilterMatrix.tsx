@@ -1,6 +1,6 @@
-import { chartTilesOf, tileName } from '../../filters/scope';
+import { chartTilesOf, textTilesOf, tileName } from '../../filters/scope';
 import { pairKey } from '../crossfilter/apply';
-import type { DashboardDocument } from '../model/document';
+import { nameOfTile, type DashboardDocument } from '../model/document';
 import type { CrossFilterConfig, Interactions, PairAction } from './interactionMode';
 
 /**
@@ -21,6 +21,9 @@ const ACTIONS: readonly { readonly value: PairAction; readonly label: string }[]
   { value: 'highlight', label: 'Highlight' },
   { value: 'none', label: 'None' },
 ];
+
+/** Why a Text tile can't be highlighted (AC-523; design 21 state H). */
+const NO_MARKS = 'Text has no marks to highlight';
 
 export interface CrossFilterMatrixProps {
   readonly document: DashboardDocument;
@@ -68,11 +71,22 @@ export function CrossFilterMatrix({
     onChange(Object.keys(next).length === 0 ? { defaultAction } : { defaultAction, pairs: next });
   };
 
-  /** Each page's own matrix: a click reaches the tiles on its tab (rule 13). */
+  /**
+   * Each page's own matrix: a click reaches the tiles on its tab (rule 13).
+   * Its Text tiles are columns only: a target set to Filter or None, never a
+   * source, since text has no marks to click (AC-523).
+   */
+  const texts = textTilesOf(document);
   const pages = document.pages.map((page) => ({
     page,
     tiles: tiles.filter((tile) => tile.pageId === page.id),
+    texts: texts.filter((tile) => tile.pageId === page.id),
   }));
+  /** A Text tile's cell: what a click does to it, Highlight read as Filter (AC-523). */
+  const textAction = (source: string, target: string): PairAction => {
+    const action = pairs?.[pairKey(source, target)] ?? defaultAction;
+    return action === 'highlight' ? 'filter' : action;
+  };
 
   return (
     <>
@@ -106,8 +120,8 @@ export function CrossFilterMatrix({
         What a click in the source tile (row) does to each target tile (column).
       </p>
 
-      {pages.map(({ page, tiles: on }) =>
-        on.length < 2 ? null : (
+      {pages.map(({ page, tiles: on, texts: onText }) =>
+        on.length === 0 || on.length + onText.length < 2 ? null : (
           <section key={page.id} aria-label={`Tile pairs on ${page.title}`}>
             {document.pages.length > 1 ? <h3>{page.title}</h3> : null}
             <div className="table-scroll">
@@ -118,6 +132,11 @@ export function CrossFilterMatrix({
                     {on.map((target) => (
                       <th key={target.tileId} scope="col">
                         {nameOf(target)}
+                      </th>
+                    ))}
+                    {onText.map((target) => (
+                      <th key={target.tileId} scope="col">
+                        {nameOfTile(document, target.tileId)}
                       </th>
                     ))}
                   </tr>
@@ -157,6 +176,36 @@ export function CrossFilterMatrix({
                           </td>
                         ),
                       )}
+                      {onText.map((target) => {
+                        const name = nameOfTile(document, target.tileId);
+                        return (
+                          <td key={target.tileId}>
+                            <select
+                              className="select-sm"
+                              aria-label={`${nameOf(source)} to ${name}`}
+                              value={textAction(source.tileId, target.tileId)}
+                              onChange={(event) => {
+                                setPair(
+                                  source.tileId,
+                                  target.tileId,
+                                  event.target.value as PairAction,
+                                );
+                              }}
+                            >
+                              {ACTIONS.map(({ value, label }) => (
+                                <option
+                                  key={value}
+                                  value={value}
+                                  disabled={value === 'highlight'}
+                                  {...(value === 'highlight' ? { title: NO_MARKS } : {})}
+                                >
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
