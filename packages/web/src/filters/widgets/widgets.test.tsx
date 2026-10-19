@@ -171,6 +171,60 @@ describe('a list with search', () => {
       'Showing the first 1,000 values. Search to find others.',
     );
   });
+
+  /**
+   * T893 / AC-529: cut short with the count Cube gave, and a search over
+   * more than 1,000 saying how many match in all.
+   */
+  it('says how many there are in all, and how many a search matches', async () => {
+    const { rerender } = render(
+      <ListSearch
+        label="Customer"
+        noun="customers"
+        options={STATUSES}
+        value={undefined}
+        onChange={vi.fn()}
+        cutShort
+        total={4212}
+      />,
+    );
+    expect(screen.getByTestId('filter-options-cut').textContent).toBe(
+      'Showing 1,000 of 4,212 · type to find the rest',
+    );
+
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search Customer' }), 'c');
+    rerender(
+      <ListSearch
+        label="Customer"
+        noun="customers"
+        options={['completed']}
+        value={undefined}
+        onChange={vi.fn()}
+        total={4212}
+        matches={1}
+      />,
+    );
+    expect(screen.getByTestId('filter-options-matches').textContent).toBe(
+      '1 match in all 4,212 customers',
+    );
+    expect(screen.queryByTestId('filter-options-cut')).toBeNull();
+  });
+
+  it('says nothing of matches for a list of 1,000 or fewer', async () => {
+    render(
+      <ListSearch
+        label="Status"
+        noun="statuses"
+        options={['completed']}
+        value={undefined}
+        onChange={vi.fn()}
+        total={3}
+        matches={1}
+      />,
+    );
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search Status' }), 'c');
+    expect(screen.queryByTestId('filter-options-matches')).toBeNull();
+  });
 });
 
 describe('a numeric range', () => {

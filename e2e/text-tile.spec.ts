@@ -1624,6 +1624,88 @@ test('a Filter control is the bar’s filter: one value in both places, and a de
 });
 
 /**
+ * T893 / AC-529: a Filter control over a dimension of more than 1,000
+ * values lists the first 1,000 with "Showing 1,000 of ‹n› · type to find
+ * the rest", and its search asks Cube for every value containing what is
+ * typed, saying how many match in all.
+ *
+ * The seeded model has no dimension of more than 1,000 values, so Cube's
+ * answer for Customer is replaced by one of 4,212 customers (1,000 rows and
+ * `total`), after Cube itself has answered the same query: the query the
+ * control asks is one Cube takes, `contains` and `total` included.
+ */
+test('a Filter control over 4,212 customers lists the first 1,000 and the count, and finds one past them by asking Cube', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWithText(
+    request,
+    [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Customer ' },
+          { type: 'filterControl', attrs: { filter: 'f-customer' } },
+        ],
+      },
+    ],
+    [{ id: 'f-customer', widget: 'list', member: 'customers.name' }],
+  );
+  const asked: { filters?: unknown; total?: unknown }[] = [];
+  await page.route('**/api/load', async (route) => {
+    const body = JSON.parse(route.request().postData() ?? '{}') as {
+      query?: { dimensions?: string[]; measures?: string[]; filters?: unknown; total?: unknown };
+    };
+    const query = body.query;
+    if (query?.dimensions?.[0] !== 'customers.name' || (query.measures ?? []).length > 0)
+      return route.continue();
+    asked.push(query);
+    // Cube answers the query as asked …
+    const real = await route.fetch();
+    const answered = (await real.json()) as { total?: unknown };
+    expect(real.ok()).toBe(true);
+    expect(typeof answered.total).toBe('number');
+    // … and its rows are those of 4,212 customers.
+    const searched = query.filters !== undefined;
+    const names = searched
+      ? ['Acme Foods GmbH', 'Acme Retail SARL', 'Acmeco Trading']
+      : Array.from({ length: 1000 }, (_, at) => `Customer ${String(at).padStart(4, '0')}`);
+    return route.fulfill({
+      json: {
+        ...answered,
+        data: names.map((name) => ({ 'customers.name': name })),
+        total: searched ? 3 : 4212,
+      },
+    });
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const control = page.locator('[data-tile="tile-text"]').getByTestId('filter-control-f-customer');
+
+  await control.getByRole('button', { expanded: false }).click();
+  const list = control.locator('.filter-widget__options');
+  await expect(control.getByTestId('filter-options-cut')).toHaveText(
+    'Showing 1,000 of 4,212 · type to find the rest',
+  );
+  await expect(list.getByRole('button')).toHaveCount(1000);
+  await expect(list.getByRole('button', { name: 'Acme Retail SARL' })).toHaveCount(0);
+
+  await control.getByRole('searchbox', { name: 'Search Customers Name' }).fill('acme');
+  await expect(control.getByTestId('filter-options-matches')).toHaveText(
+    '3 matches in all 4,212 names',
+  );
+  await expect(list.getByRole('button')).toHaveCount(3);
+  expect(asked.at(-1)).toMatchObject({
+    filters: [{ member: 'customers.name', operator: 'contains', values: ['acme'] }],
+    total: true,
+  });
+
+  // A value past the first 1,000, found and chosen.
+  await list.getByRole('button', { name: 'Acme Retail SARL' }).click();
+  await expect(control.getByRole('button', { expanded: true })).toContainText('Acme Retail SARL');
+});
+
+/**
  * T894 / AC-530: an Action button runs its declared actions in order and
  * nothing else — Export downloads the chosen tile's CSV as its ⋯ does
  * (AC-171), under the filters in effect; Reset filters then Go to page tab

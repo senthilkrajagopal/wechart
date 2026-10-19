@@ -157,3 +157,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/tiles/text/textStyles.ts`, `e2e/text-tile.spec.ts`.
   - Failing test: `text-tile.spec.ts` at 390 px: a Controls tile's parameter control and filter control are on separate rows, each the tile's width; its four buttons wrap with none cut off; tapping a value shows its tooltip and tapping elsewhere hides it; the document doesn't scroll sideways (AC-526).
   - Depends on: T888, T892, T894, T899 (built after T900, for its controls)
+
+- [x] T893 (AC-529) A filter control of more than 1,000 values: the first 1,000, the count, and search through Cube
+  - Files: `packages/web/src/filters/widgets/` (the list widget's cap and search), `packages/web/src/tiles/text/elements/FilterControl.tsx`, tests.
+  - Failing test: the list widget's test over 4,212 customers: 1,000 options and "Showing 1,000 of 4,212 · type to find the rest"; typing "acme" queries Cube with `contains` and lists "Acme Retail SARL", which wasn't in the first 1,000, with "3 matches in all 4,212 customers" (AC-529).
+  - Depends on: T892

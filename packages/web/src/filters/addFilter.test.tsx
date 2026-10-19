@@ -253,6 +253,7 @@ describe('the values a list filter offers', () => {
       dimensions: ['orders.status'],
       order: { 'orders.status': 'asc' },
       limit: 1000,
+      total: true,
     });
 
     await userEvent.type(within(bar()).getByRole('searchbox', { name: 'Search Status' }), 'ship');
@@ -263,6 +264,7 @@ describe('the values a list filter offers', () => {
         filters: [{ member: 'orders.status', operator: 'contains', values: ['ship'] }],
         order: { 'orders.status': 'asc' },
         limit: 1000,
+        total: true,
       });
     });
   });

@@ -7855,7 +7855,8 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   line-height: 32px;
   color: var(--wc-text-secondary);
 }
-.filter-widget__cut {
+.filter-widget__cut,
+.filter-widget__matches {
   flex-basis: 100%;
   margin: 0;
   font-size: 12px;

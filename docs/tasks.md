@@ -1902,10 +1902,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T892 (AC-528) A Filter control that is one of the dashboard's filters: the bar's widget at 28 px with its scope tag, one value in both places, and a deleted filter's control needing fixing
 
-- [ ] T893 (AC-529) A filter control of more than 1,000 values: the first 1,000, the count, and search through Cube
-  - Files: `packages/web/src/filters/widgets/` (the list widget's cap and search), `packages/web/src/tiles/text/elements/FilterControl.tsx`, tests.
-  - Failing test: the list widget's test over 4,212 customers: 1,000 options and "Showing 1,000 of 4,212 · type to find the rest"; typing "acme" queries Cube with `contains` and lists "Acme Retail SARL", which wasn't in the first 1,000, with "3 matches in all 4,212 customers" (AC-529).
-  - Depends on: T892
+- [x] T893 (AC-529) A filter control of more than 1,000 values: the first 1,000, the count, and search through Cube
 
 - [x] T894 (AC-530) Action buttons: a label, a style, and an ordered list of declared actions, run in order and nothing else
 

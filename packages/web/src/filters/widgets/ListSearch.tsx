@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { CutShort } from './CutShort';
+import { CutShort, SearchMatches } from './CutShort';
 import { picked, pickedOf, type ValuesWidgetProps } from './props';
 
 /**
@@ -19,12 +19,18 @@ export function ListSearch({
   onChange,
   onSearch,
   cutShort,
+  total,
+  matches,
+  noun = 'values',
 }: ValuesWidgetProps) {
   const [search, setSearch] = useState('');
   const chosen = pickedOf(value);
   const shown = options.filter((option) =>
     option.toLowerCase().includes(search.trim().toLowerCase()),
   );
+  const searching = search.trim() !== '';
+  // A member of more than 1,000 values: its search says how many match in all (T893, AC-529).
+  const many = total !== undefined && total > 1000;
 
   return (
     <fieldset className="filter-widget filter-widget--list">
@@ -58,7 +64,13 @@ export function ListSearch({
           );
         })}
       </span>
-      {cutShort === true ? <CutShort search /> : null}
+      {searching && many ? (
+        matches === undefined ? null : (
+          <SearchMatches matches={matches} total={total} noun={noun} />
+        )
+      ) : cutShort === true ? (
+        <CutShort search total={total} />
+      ) : null}
     </fieldset>
   );
 }

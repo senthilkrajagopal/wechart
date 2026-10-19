@@ -9,7 +9,7 @@ import { FOLDERS_QUERY } from '../workspaces/explore/folders';
 import { loadTile } from '../query/loadTile';
 import { metaQueryOf, useWorkspaceItem } from '../query/meta';
 import { SecurityPreview } from '../query/securityPreview';
-import { summaryOf } from './describe';
+import { pluralOf, summaryOf } from './describe';
 import {
   FILTER_WIDGETS,
   membersFor,
@@ -83,6 +83,10 @@ interface Options {
   readonly values: readonly string[];
   /** As many rows came back as were asked for: there are more. */
   readonly cutShort: boolean;
+  /** How many values there are in all, past the limit: Cube's `total` (T893, AC-529). */
+  readonly total: number | undefined;
+  /** What was searched for, of which `total` counts the matches; '' for none. */
+  readonly asked: string;
 }
 
 function useOptions(member: Member, search: string, needed: boolean) {
@@ -107,18 +111,27 @@ function useOptions(member: Member, search: string, needed: boolean) {
             : { filters: [{ member: member.name, operator: 'contains', values: [asked] }] }),
           order: { [member.name]: 'asc' },
           limit: OPTION_LIMIT,
+          // How many there are in all, as if there were no limit: the count
+          // a list cut short says, and a search's matches (T893, AC-529;
+          // research/cube/data-apis.md, `total`).
+          total: true,
         },
         // A search overtaken by the next is cancelled on Cube too (AC-011).
         signal,
         ...(context === undefined ? {} : { context }),
         item,
-      })) as { data?: Record<string, unknown>[] };
+      })) as { data?: Record<string, unknown>[]; total?: unknown };
       const rows = result.data ?? [];
       const values = rows
         .map((row) => row[member.name])
         .filter((value) => value !== null && value !== undefined && value !== '')
         .map(String);
-      return { values: [...new Set(values)], cutShort: rows.length >= OPTION_LIMIT };
+      return {
+        values: [...new Set(values)],
+        cutShort: rows.length >= OPTION_LIMIT,
+        total: typeof result.total === 'number' ? result.total : undefined,
+        asked,
+      };
     },
   });
 }
@@ -151,10 +164,16 @@ function FilterWidgetFor({
   const picksValues = filter.widget === 'list' || filter.widget === 'checkbox';
   const [search, setSearch] = useState('');
   const options = useOptions(member, usePaused(search), picksValues);
+  // The values unsearched, for how many there are in all: the same query as
+  // the list's before a search, so asked of Cube once (T893, AC-529).
+  const all = useOptions(member, '', picksValues);
   const props = { label: member.title, value, onChange: onValue };
   const values = {
     options: options.data?.values ?? [],
     cutShort: options.data?.cutShort ?? false,
+    total: all.data?.total,
+    matches: options.data !== undefined && options.data.asked !== '' ? options.data.total : undefined,
+    noun: pluralOf(member.shortTitle),
   };
 
   switch (filter.widget) {

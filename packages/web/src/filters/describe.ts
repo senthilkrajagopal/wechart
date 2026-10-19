@@ -1,5 +1,13 @@
 import type { FilterValue, FilterWidget } from './model';
 
+/** A field's title as a plural, lower case: "Country" → "countries". */
+export function pluralOf(title: string): string {
+  const words = title.trim().toLowerCase();
+  if (/[^aeiou]y$/.test(words)) return `${words.slice(0, -1)}ies`;
+  if (/(s|x|z|ch|sh)$/.test(words)) return `${words}es`;
+  return `${words}s`;
+}
+
 /**
  * A filter's value as its pill shows it, after the field's name (AC-187, the
  * prototype's "Category: all"): short, and never the value's full list.

@@ -113,6 +113,85 @@ describe('a Filter control (T892, AC-528)', () => {
     expect(onValue).toHaveBeenLastCalledWith(undefined);
   });
 
+  /**
+   * T893 / AC-529: WHEN a Filter control in a Text tile lists a dimension of
+   * more than 1,000 values, THE SYSTEM SHALL show the first 1,000 with
+   * "Showing 1,000 of ‹n› · type to find the rest", and its search SHALL ask
+   * Cube for every value containing what is typed, saying how many match in
+   * all ‹n›.
+   * `Fails when: more than 1,000 values are listed at once; the count is
+   * missing; or a value past the first 1,000 can't be found by searching.`
+   */
+  it('over 4,212 customers lists the first 1,000 and the count, and finds one past them through Cube', async () => {
+    const customer = {
+      name: 'customers.name',
+      title: 'Customers Name',
+      shortTitle: 'Customer',
+      kind: 'dimension' as const,
+      type: 'string',
+      cube: 'customers',
+    };
+    const filter: DashboardFilter = { id: 'f-customer', widget: 'list', member: customer.name };
+    const asked: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const { query } = JSON.parse(String(init?.body)) as { query: Record<string, unknown> };
+        asked.push(query);
+        const searched = query['filters'] !== undefined;
+        // Cube's answer: the rows under the limit, and with `total` every row there is.
+        const names = searched
+          ? ['Acme Foods GmbH', 'Acme Retail SARL', 'Acmeco Trading']
+          : Array.from({ length: 1000 }, (_, index) => `Customer ${String(index).padStart(4, '0')}`);
+        return new Response(
+          JSON.stringify({
+            data: names.map((name) => ({ 'customers.name': name })),
+            ...(query['total'] === true ? { total: searched ? 3 : 4212 } : {}),
+          }),
+        );
+      }),
+    );
+    render(
+      <FilterControl
+        filter={filter}
+        member={customer}
+        name="Customer"
+        scope="Dashboard"
+        value={undefined}
+        onValue={() => undefined}
+      />,
+      { wrapper },
+    );
+    await userEvent.click(screen.getByRole('button', { expanded: false }));
+    const list = await screen.findByRole('group', { name: 'Customers Name' });
+
+    // The first 1,000, never more, and how many there are in all.
+    expect(await screen.findByTestId('filter-options-cut')).toHaveProperty(
+      'textContent',
+      'Showing 1,000 of 4,212 · type to find the rest',
+    );
+    expect(within(list).getAllByRole('button')).toHaveLength(1000);
+    expect(within(list).queryByRole('button', { name: 'Acme Retail SARL' })).toBeNull();
+
+    // Searching asks Cube for every value containing what is typed.
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search Customers Name' }), 'acme');
+    await waitFor(() => {
+      expect(asked.at(-1)).toEqual({
+        dimensions: ['customers.name'],
+        filters: [{ member: 'customers.name', operator: 'contains', values: ['acme'] }],
+        order: { 'customers.name': 'asc' },
+        limit: 1000,
+        total: true,
+      });
+    });
+    expect(await within(list).findByRole('button', { name: 'Acme Retail SARL' })).toBeTruthy();
+    expect(within(list).getAllByRole('button')).toHaveLength(3);
+    expect((await screen.findByTestId('filter-options-matches')).textContent).toBe(
+      '3 matches in all 4,212 customers',
+    );
+    expect(screen.queryByTestId('filter-options-cut')).toBeNull();
+  });
+
   it('draws nothing a reader can work once its filter is deleted', async () => {
     const { container } = render(
       <FilterControl

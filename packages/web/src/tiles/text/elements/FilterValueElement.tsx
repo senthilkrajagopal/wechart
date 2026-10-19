@@ -1,12 +1,5 @@
+import { pluralOf } from '../../../filters/describe';
 import type { FilterValue } from '../../../filters/model';
-
-/** A field's title as a plural, lower case: "Country" → "countries". */
-function pluralOf(title: string): string {
-  const words = title.trim().toLowerCase();
-  if (/[^aeiou]y$/.test(words)) return `${words.slice(0, -1)}ies`;
-  if (/(s|x|z|ch|sh)$/.test(words)) return `${words}es`;
-  return `${words}s`;
-}
 
 /**
  * What a dashboard filter is set to, in words (T886, AC-522; design 21 pin
