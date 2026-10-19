@@ -26,7 +26,7 @@ import {
 } from './quickCalc';
 import { CHANNELS, type ChartType, type Encoding, type RenderSpec } from './render-spec';
 import { applySort } from './sort';
-import { applyComboFold, applyRowLimit, applyTopN } from './topN';
+import { applyRowLimit, applyTopN } from './topN';
 
 export interface CompileOptions {
   readonly rows: readonly Record<string, unknown>[];
@@ -176,39 +176,34 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
   // The row limit last, on the rows as drawn (T390, AC-041).
   const drawn = applyRowLimit(
     applySort(
-      // A split combo's members folded within its 8 series (T853, AC-505).
-      applyComboFold(
-        applyTopN({
-          chartType: chart.chartType ?? options.chartType,
-          encoding,
-          rows: options.rows,
-          // Carried through unchanged. Compile decides the encoding; it has no
-          // business interpreting what a chart type does with its own options.
-          ...(chart.options === undefined ? {} : { options: chart.options }),
-          // What one point is, for a box plot's Points (T991).
-          ...(chart.wells.eachPointIs === undefined
-            ? {}
-            : { eachPointIs: chart.wells.eachPointIs }),
-          ...(options.formats === undefined ? {} : { formats: options.formats }),
-          ...(options.titles === undefined ? {} : { titles: options.titles }),
-          ...(options.shortTitles === undefined ? {} : { shortTitles: options.shortTitles }),
-          ...(options.measureTypes === undefined ? {} : { measureTypes: options.measureTypes }),
-          ...(Object.keys(calculated).length === 0 ? {} : { calculated }),
-          // By the grain each was asked at, chosen or not (AC-188, AC-216).
-          granularities,
-          measures: [...chart.wells.measures],
-          // The wells' order, which a table heads its columns by (T393, AC-301).
-          fields: [
-            ...chart.wells.timeDimensions,
-            ...chart.wells.dimensions,
-            // A box plot's "Each point is" is a dimension too (T393's review).
-            ...(chart.wells.eachPointIs === undefined ? [] : [chart.wells.eachPointIs]),
-            ...chart.wells.measures,
-          ],
-          ...(options.palette === undefined ? {} : { palette: options.palette }),
-          ...(options.surface === undefined ? {} : { surface: options.surface }),
-        }),
-      ),
+      applyTopN({
+        chartType: chart.chartType ?? options.chartType,
+        encoding,
+        rows: options.rows,
+        // Carried through unchanged. Compile decides the encoding; it has no
+        // business interpreting what a chart type does with its own options.
+        ...(chart.options === undefined ? {} : { options: chart.options }),
+        // What one point is, for a box plot's Points (T991).
+        ...(chart.wells.eachPointIs === undefined ? {} : { eachPointIs: chart.wells.eachPointIs }),
+        ...(options.formats === undefined ? {} : { formats: options.formats }),
+        ...(options.titles === undefined ? {} : { titles: options.titles }),
+        ...(options.shortTitles === undefined ? {} : { shortTitles: options.shortTitles }),
+        ...(options.measureTypes === undefined ? {} : { measureTypes: options.measureTypes }),
+        ...(Object.keys(calculated).length === 0 ? {} : { calculated }),
+        // By the grain each was asked at, chosen or not (AC-188, AC-216).
+        granularities,
+        measures: [...chart.wells.measures],
+        // The wells' order, which a table heads its columns by (T393, AC-301).
+        fields: [
+          ...chart.wells.timeDimensions,
+          ...chart.wells.dimensions,
+          // A box plot's "Each point is" is a dimension too (T393's review).
+          ...(chart.wells.eachPointIs === undefined ? [] : [chart.wells.eachPointIs]),
+          ...chart.wells.measures,
+        ],
+        ...(options.palette === undefined ? {} : { palette: options.palette }),
+        ...(options.surface === undefined ? {} : { surface: options.surface }),
+      }),
     ),
   );
   // The rows as answered, for a pick made again (T510's review).

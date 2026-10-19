@@ -15,6 +15,7 @@
  */
 import type { MemberFormat, MemberFormats } from './format';
 import { comboSeriesOf, comboLimit, membersShownOf, type MembersShown } from './combo';
+import { applyComboFold } from './topN';
 import {
   distinctValues,
   membersOn,
@@ -209,12 +210,21 @@ export function onOneScale(spec: RenderSpec): RenderSpec {
       .filter((each) => each.reason === 'scale' || each.reason === 'series')
       .map((each) => each.member),
   );
-  if (off.size === 0) return spec;
-  return {
-    ...spec,
-    encoding: {
-      ...spec.encoding,
-      y: membersOn(spec.encoding, 'y').filter((member) => !off.has(member)),
-    },
-  };
+  const held: RenderSpec =
+    off.size === 0
+      ? spec
+      : {
+          ...spec,
+          encoding: {
+            ...spec.encoding,
+            y: membersOn(spec.encoding, 'y').filter((member) => !off.has(member)),
+          },
+        };
+  /**
+   * A split combo's members folded within its 8 series (T853, AC-505): here,
+   * as it's drawn, with the model's formats, so the editor and a dashboard,
+   * which compiles before its formats arrive, fold alike (checkpoint 1's
+   * review).
+   */
+  return applyComboFold(held);
 }

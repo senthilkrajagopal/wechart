@@ -414,7 +414,10 @@ describe('a combo split across every measure (AC-504)', () => {
     };
     const halos = (optionFor(spec)['series'] as Drawn[]).filter((one) => one.tooltip !== undefined);
 
-    expect(halos).toHaveLength(4);
+    // 3 measures × 4 regions is past 8 series, so the regions fold to the
+    // top 1 + Other (T853, AC-505; folded as drawn since checkpoint 1's
+    // review): Margin %'s line is drawn twice, a halo under each.
+    expect(halos).toHaveLength(2);
     expect(halos.every((one) => one.yAxisIndex === 1)).toBe(true);
   });
 

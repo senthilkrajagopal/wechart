@@ -119,7 +119,8 @@ export function applyComboFold(spec: RenderSpec): RenderSpec {
   const split = memberOn(spec.encoding, 'color');
   if (split === undefined) return spec;
   const measures = membersOn(spec.encoding, 'y');
-  // Counted over the measures drawn on their scale, as `undrawnMeasures` counts.
+  // Counted over the well's measures drawn on their scale, as
+  // `undrawnMeasures` counts them, whichever are still on y.
   const offScale = new Set(
     undrawnMeasures(spec)
       .filter((each) => each.reason === 'scale')
@@ -127,7 +128,7 @@ export function applyComboFold(spec: RenderSpec): RenderSpec {
   );
   const { top } = comboLimitOf(
     spec,
-    measures.filter((measure) => !offScale.has(measure)),
+    (spec.measures ?? measures).filter((measure) => !offScale.has(measure)),
   );
   if (top === undefined) return spec;
 

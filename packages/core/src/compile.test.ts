@@ -405,3 +405,38 @@ describe('an encoding the user overrode', () => {
     expect(compile(cleared, { rows: ROWS, chartType: 'bar' }).encoding.x).toEqual([]);
   });
 });
+
+/**
+ * Checkpoint 1's review of T853 (AC-505): a dashboard compiles its charts
+ * before the model's formats reach them, so a fold decided in compile
+ * counted a measure on another scale as drawn there and not in the editor.
+ * Compile leaves a split combo's members as they came; drawing folds them,
+ * with the formats (`onOneScale`).
+ */
+describe("a split combo's members, as compiled (AC-505)", () => {
+  it('keeps every member, whatever the formats compiled with', () => {
+    const combo = documentFor((spec) => {
+      let next = addToWell(spec, 'measures', 'orders.revenue');
+      next = addToWell(next, 'measures', 'orders.cost');
+      next = addToWell(next, 'measures', 'orders.margin');
+      next = addToWell(next, 'timeDimensions', 'orders.ordered_at');
+      return addToWell(next, 'dimensions', 'orders.region');
+    });
+    const rows = ['North', 'South', 'East', 'West'].map((region, at) => ({
+      'orders.ordered_at.month': '2026-01-01',
+      'orders.region': region,
+      'orders.revenue': 40 - at,
+      'orders.cost': 10,
+      'orders.margin': 0.1,
+    }));
+
+    const compiled = compile(combo, { rows, chartType: 'combo' });
+
+    expect(compiled.rows.map((row) => row['orders.region'])).toEqual([
+      'North',
+      'South',
+      'East',
+      'West',
+    ]);
+  });
+});

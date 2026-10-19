@@ -223,6 +223,43 @@ describe('a combo past 8 series (T853, AC-505)', () => {
     expect(onOneScale(split).encoding.y).toEqual([COUNT, 'orders.items']);
   });
 
+  /**
+   * Checkpoint 1's review (AC-505): the fold is drawing's, with the formats,
+   * so the editor and a dashboard fold alike. Revenue ($), Cost ($) and
+   * Margin % (a plain number here) by 4 regions: Margin % is on another
+   * scale, so 2 measures × 4 = 8 draw unfolded; all three on one scale fold
+   * to the top 1 + Other.
+   */
+  it('folds the members as drawn, by the measures drawn on their scale', () => {
+    const REVENUE = 'orders.revenue';
+    const COST = 'orders.cost';
+    const MARGIN = 'orders.margin';
+    const split = (formats: Record<string, string>): RenderSpec => ({
+      chartType: 'combo',
+      encoding: { x: [STATUS], color: [REGION], y: [REVENUE, COST, MARGIN] },
+      measures: [REVENUE, COST, MARGIN],
+      rows: ['North', 'South', 'East', 'West'].map((region, at) => ({
+        [STATUS]: 'open',
+        [REGION]: region,
+        [REVENUE]: 40 - at,
+        [COST]: 10,
+        [MARGIN]: 2,
+      })),
+      formats,
+    });
+    const regions = (spec: RenderSpec) => onOneScale(spec).rows.map((row) => row[REGION]);
+
+    expect(regions(split({ [REVENUE]: 'currency', [COST]: 'currency' }))).toEqual([
+      'North',
+      'South',
+      'East',
+      'West',
+    ]);
+    expect(
+      regions(split({ [REVENUE]: 'currency', [COST]: 'currency', [MARGIN]: 'currency' })),
+    ).toEqual(['North', 'Other (3)']);
+  });
+
   it('offers Small multiples and Table for a measure over 8 series', () => {
     expect(undrawnOffers('combo', 'series')).toEqual(['smallMultiples', 'table']);
   });
