@@ -56,3 +56,8 @@ Lane COMBO's ticked tasks from `docs/tasks.md` §P2.26 (F44), their sub-lines wo
   - Files: `packages/web/src/editor/Wells.tsx`, `packages/web/src/editor/combo/PillMarkMenu.tsx` (+ test).
   - Failing test: `PillMarkMenu.test.tsx`: Margin %'s menu holds Draw as (Bar, Line, Area, Point) and Axis (Left, Right) as `menuitemradio` with the current ones checked, then Back to Auto, Format… and Remove; choosing Right puts an R tag before ×, and Customize › Series shows Right; Esc returns focus to the pill (AC-497).
   - Depends on: T855
+
+- [x] T859 (AC-503) The stacking rows, Bars side by side or stacked, and Areas overlap or stacked while an area is drawn
+  - Files: `packages/web/src/editor/combo/StackingRows.tsx` (+ test), `packages/web/src/editor/CustomizeTab.tsx`.
+  - Failing test: `StackingRows.test.tsx`: Bars offers Side by side and Stacked; Areas shows only once Cost is drawn as an area; choosing Stacked sets the spec's stacking for every bar series (AC-503).
+  - Depends on: T851, T855

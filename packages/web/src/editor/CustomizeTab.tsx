@@ -1,3 +1,4 @@
+import { comboSeriesOf } from '@wechart/core';
 import {
   inSeriesOrder,
   type AxesSettings,
@@ -10,6 +11,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { AxisPanel } from './AxisPanel';
 import { ColourSetting } from './ColourSetting';
 import { SeriesRows, type SeriesRowsProps } from './combo/SeriesRows';
+import { StackingRows } from './combo/StackingRows';
 import { BoxplotDistribution } from './wells/boxplotDistribution';
 import { SankeyColourLinks } from './wells/sankey';
 
@@ -264,13 +266,25 @@ export function CustomizeTab({
           {combo === undefined ? null : (
             // A combo's series: each one's mark and axis, in place of the
             // list below (T855, AC-497; design 20 screen 1 pin 2).
-            <SeriesRows
-              measures={combo.measures}
-              {...(combo.split === undefined ? {} : { split: combo.split })}
-              options={options}
-              onOptions={onOptions}
-              colourOf={colourOf}
-            />
+            <>
+              <SeriesRows
+                measures={combo.measures}
+                {...(combo.split === undefined ? {} : { split: combo.split })}
+                options={options}
+                onOptions={onOptions}
+                colourOf={colourOf}
+              />
+              {/* Stacking, chart-wide, under the rows (T859, AC-503; pin 4). */}
+              <StackingRows
+                series={comboSeriesOf(
+                  combo.measures.map((one) => one.measure),
+                  options,
+                  { split: combo.split !== undefined },
+                )}
+                options={options}
+                onOptions={onOptions}
+              />
+            </>
           )}
           <ol
             className="customize-tab__series"

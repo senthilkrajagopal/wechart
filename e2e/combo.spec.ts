@@ -261,3 +261,61 @@ test.describe('a combo of revenue and a count, by month (T855 follow-up)', () =>
     await expect(moved).toBeFocused();
   });
 });
+
+/**
+ * T859 (AC-503; design 20 pin 4): a combo's stacking, set once for the whole
+ * chart under Customize › Series: Bars side by side or stacked, and Areas
+ * only while a series is an area.
+ */
+test('stacks a combo’s bars chart-wide from Customize › Series, and offers Areas only with an area (T859)', async ({
+  page,
+}) => {
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'measures').selectOption('orders.average_amount');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+  // By month: a few categories, so each bar is wide enough to be found.
+  await page.getByRole('combobox', { name: 'Grain of Ordered at' }).selectOption('month');
+  await chooseChartType(page, 'combo');
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  await page.locator('summary', { hasText: /^Series/ }).click();
+  // Both amounts as bars, on the left.
+  await page
+    .getByRole('radiogroup', { name: 'Average Amount mark' })
+    .getByRole('radio', { name: 'Bar' })
+    .check();
+
+  /**
+   * The bars standing on the zero line: both amounts' bars side by side, only
+   * the lower segment of each month's stack once stacked.
+   */
+  const columns = () =>
+    page
+      .getByTestId('chart-canvas')
+      .locator('svg path')
+      .evaluateAll((nodes) => {
+        const boxes = nodes
+          .map((node) => node.getBoundingClientRect())
+          .filter((box) => box.height > 0 && box.width >= 2 && box.width <= 40);
+        const baseline = Math.max(...boxes.map((box) => box.bottom));
+        return boxes.filter((box) => Math.abs(box.bottom - baseline) < 1.5).length;
+      });
+  const bars = page.getByRole('radiogroup', { name: 'Bars' });
+  await expect(bars.getByRole('radio', { name: 'Side by side' })).toBeChecked();
+  await expect(page.getByRole('radiogroup', { name: 'Areas' })).toHaveCount(0);
+  await expect.poll(columns).toBeGreaterThan(1);
+  const sideBySide = await columns();
+
+  await bars.getByRole('radio', { name: 'Stacked' }).check();
+  await expect.poll(columns).toBeLessThan(sideBySide);
+
+  // An area brings its row, Overlap first.
+  await page
+    .getByRole('radiogroup', { name: 'Average Amount mark' })
+    .getByRole('radio', { name: 'Area' })
+    .check();
+  await expect(
+    page.getByRole('radiogroup', { name: 'Areas' }).getByRole('radio', { name: 'Overlap' }),
+  ).toBeChecked();
+});

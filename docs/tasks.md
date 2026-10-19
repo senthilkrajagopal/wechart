@@ -1839,10 +1839,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `AxisPanel.test.tsx`: with every series on the left there's no Right group and no Synchronize; with Margin % on the right, the Right group lists "Margin % · %" and has no gridlines field; with a bar series, include zero reads "Include zero · on, because Revenue draws bars" and can't be switched; Log on one axis announces "Log scale on for both axes" and shows on both; `SynchronizeSwitch.test.tsx`: disabled for $ and % with the reason, and for $ and $ turning it on clears the right's fixed max with "Right axis now follows the left axis · Undo", which restores it; the canvas line reads "3 series on 2 value axes, aligned at zero", then "3 series on 2 axes, synchronized" (AC-219, AC-499, AC-501, AC-502).
   - Depends on: T849, T850, T855
 
-- [ ] T859 (AC-503) The stacking rows, Bars side by side or stacked, and Areas overlap or stacked while an area is drawn
-  - Files: `packages/web/src/editor/combo/StackingRows.tsx` (+ test), `packages/web/src/editor/CustomizeTab.tsx`.
-  - Failing test: `StackingRows.test.tsx`: Bars offers Side by side and Stacked; Areas shows only once Cost is drawn as an area; choosing Stacked sets the spec's stacking for every bar series (AC-503).
-  - Depends on: T851, T855
+- [x] T859 (AC-503) The stacking rows, Bars side by side or stacked, and Areas overlap or stacked while an area is drawn
 
 - [ ] T860 (AC-504, AC-505) The combo's Split by well, its count against 8, "‹dimension› shown", and "not drawn · over 8 series" with its offers
   - Files: `packages/web/src/editor/Wells.tsx`, `packages/web/src/editor/combo/SplitCount.tsx` (+ test), `packages/web/src/editor/Wells.test.tsx`.
