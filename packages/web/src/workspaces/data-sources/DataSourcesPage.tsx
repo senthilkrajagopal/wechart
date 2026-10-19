@@ -11,6 +11,7 @@ import { DataSourcesList } from './DataSourcesList';
 import { CubeStoreTurnOn } from './SqlRunner';
 import { NewSourceWizard } from './NewSourceWizard';
 import { DATA_SOURCES_QUERY } from './query';
+import { useSqlRunnable } from '../sql/runnable';
 
 /**
  * Data sources (T364; AC-157, AC-233): its title, a note saying what the
@@ -22,6 +23,8 @@ import { DATA_SOURCES_QUERY } from './query';
 export function DataSourcesPage() {
   const sources = useQuery(DATA_SOURCES_QUERY);
   const me = useQuery(ME_QUERY);
+  /** Those this user may run SQL on now: "Open in SQL runner" in their rows' ⋯ (T823). */
+  const sqlRunnable = useSqlRunnable();
   const queryClient = useQueryClient();
   /**
    * Cube Store (T536, AC-384; design 15's P5): while off, its switch is in
@@ -152,6 +155,7 @@ export function DataSourcesPage() {
             seesEveryFolder={me.data?.superAdmin === true}
             readWrite={me.data?.readWrite === true}
             cubeStore={listed}
+            sqlRunnable={sqlRunnable}
           />
         )}
       </div>

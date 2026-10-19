@@ -9,6 +9,11 @@ import { TableScroll } from '../../shell/TableScroll';
 import { MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
 import { CUBE_STORE_ID } from './cubeStore';
 import { ActionIcon } from '../jobs/ActionIcon';
+import { MenuButton } from '../../shell/MenuButton';
+import { OPEN_IN_SQL_RUNNER, openInSqlRunner } from '../sql/openIn';
+
+/** None that runs SQL for this user. */
+const NONE: ReadonlySet<string> = new Set();
 
 /**
  * Every data source the user may see, in every folder (T364, AC-157), as
@@ -141,8 +146,8 @@ function UsedBy({ cubes, hidden = 0 }: { cubes: ListedSource['usedBy']; hidden?:
   );
 }
 
-/** The list's columns (design 01). */
-function SourcesHead() {
+/** The list's columns (design 01), and each row's ⋯ where one has any (T823). */
+function SourcesHead({ actions = false }: { actions?: boolean }) {
   return (
     <thead>
       <tr>
@@ -154,6 +159,11 @@ function SourcesHead() {
           Used by
         </th>
         <th scope="col">Updated</th>
+        {actions ? (
+          <th scope="col" className="sources-actions">
+            <span className="visually-hidden">Actions</span>
+          </th>
+        ) : null}
       </tr>
     </thead>
   );
@@ -164,8 +174,20 @@ export function DataSourcesList({
   seesEveryFolder = false,
   readWrite = false,
   cubeStore = false,
+  sqlRunnable = NONE,
+  go = (href) => {
+    globalThis.location.assign(href);
+  },
 }: {
   sources: readonly ListedSource[];
+  /**
+   * The data sources this user may run SQL on now, as the SQL runner
+   * workspace's picker lists them (T823, AC-464, AC-373): each row's ⋯ then
+   * offers "Open in SQL runner".
+   */
+  sqlRunnable?: ReadonlySet<string>;
+  /** Opens another page: the SQL runner workspace. */
+  go?: (href: string) => void;
   /** A Super-Admin, or the one user with security off: none listed is none there. */
   seesEveryFolder?: boolean;
   /** A read-write member of some folder: none listed is none in their folders yet. */
@@ -229,6 +251,7 @@ export function DataSourcesList({
     driver === '' &&
     health === '' &&
     'cube store'.includes(search.trim().toLowerCase());
+  const actions = sources.some((source) => sqlRunnable.has(source.id));
 
   return (
     <>
@@ -281,7 +304,7 @@ export function DataSourcesList({
       </div>
       <TableScroll label="Data sources">
         <table className="query-log" aria-label="Data sources">
-          <SourcesHead />
+          <SourcesHead actions={actions} />
           <tbody>
             {shown.map((source) => {
               return (
@@ -317,6 +340,27 @@ export function DataSourcesList({
                       {shortDay(new Date(source.updatedAt), now)}
                     </time>
                   </td>
+                  {actions ? (
+                    <td className="sources-actions">
+                      {sqlRunnable.has(source.id) ? (
+                        <MenuButton
+                          label={`Actions for ${source.name}`}
+                          className="icon-button"
+                          items={[
+                            {
+                              key: 'sql',
+                              label: OPEN_IN_SQL_RUNNER,
+                              onSelect: () => {
+                                go(openInSqlRunner(source.id));
+                              },
+                            },
+                          ]}
+                        >
+                          <span aria-hidden="true">⋯</span>
+                        </MenuButton>
+                      ) : null}
+                    </td>
+                  ) : null}
                 </tr>
               );
             })}
@@ -333,6 +377,7 @@ export function DataSourcesList({
                 <td className="sources-muted">every folder’s rollups</td>
                 <td />
                 <td />
+                {actions ? <td /> : null}
               </tr>
             ) : null}
           </tbody>

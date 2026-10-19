@@ -16,10 +16,13 @@ export function SqlSurface() {
   const [asked] = useState(() => new URLSearchParams(searched).get('tab') ?? undefined);
   // A saved query ⌘K opens (T815, AC-460): in its tab, which then names the address.
   const [saved] = useState(() => new URLSearchParams(searched).get('saved') ?? undefined);
+  // "Open in SQL runner" (T823, AC-464): a new tab on that data source.
+  const [source] = useState(() => new URLSearchParams(searched).get('source') ?? undefined);
   return (
     <SqlWorkspace
       tab={asked}
       saved={saved}
+      source={source}
       onOpenTab={(id) => {
         if (router.state.location.pathname !== '/sql') return;
         router.history.replace(`/sql?tab=${encodeURIComponent(id)}`);

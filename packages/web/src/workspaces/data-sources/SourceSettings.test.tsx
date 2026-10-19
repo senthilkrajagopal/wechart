@@ -263,3 +263,64 @@ describe('its head and version line as design 03 draws them (SRC-03, SRC-06, SRC
     ]);
   });
 });
+
+/**
+ * T823 (AC-464, AC-373; design 17's N): the sixth tab, renamed "SQL
+ * runner", to those AC-373 names; and "Open in SQL runner" first in the
+ * page head's ⋯ for one who may run SQL there now.
+ */
+describe('its “SQL runner” tab and “Open in SQL runner” (T823, AC-464, AC-373)', () => {
+  const on = {
+    sqlRunner: { on: true, confirmedBy: { name: 'Ada Admin' }, confirmedAt: '2026-10-01T09:12:00.000Z' },
+    sqlAccess: { tab: true, runs: true },
+  };
+
+  it('names the sixth tab “SQL runner”, and offers “Open in SQL runner” first in the head’s ⋯', async () => {
+    serve(source(on));
+    open('ds-1');
+    const tabs = within(await screen.findByRole('tablist', { name: 'Data source' }));
+    expect(tabs.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'General',
+      'Connection',
+      'Test history',
+      'Usage',
+      'In Cube',
+      'SQL runner',
+    ]);
+    await userEvent.click(screen.getByRole('button', { name: 'More actions for emea_replica' }));
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Open in SQL runner',
+      'Delete data source…',
+    ]);
+  });
+
+  it('has the ⋯ for “Open in SQL runner” alone on its owner’s source in My workspace', async () => {
+    serve({ ...copy, sqlAccess: { tab: true, runs: true } });
+    open('ds-2');
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'More actions for emea_replica' }),
+    );
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Open in SQL runner',
+    ]);
+  });
+
+  it('offers no “Open in SQL runner” while it is off, nor the tab to one AC-373 doesn’t name', async () => {
+    serve(source({ ...on, sqlAccess: { tab: true, runs: false } }));
+    open('ds-1');
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'More actions for emea_replica' }),
+    );
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Delete data source…',
+    ]);
+  });
+
+  it('shows neither the tab nor the ⋯ item to a reader the API gives no tab', async () => {
+    serve(source({ canWrite: false, sqlRunner: on.sqlRunner }));
+    open('ds-1');
+    const tabs = within(await screen.findByRole('tablist', { name: 'Data source' }));
+    expect(tabs.queryByRole('tab', { name: /SQL/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'More actions for emea_replica' })).toBeNull();
+  });
+});

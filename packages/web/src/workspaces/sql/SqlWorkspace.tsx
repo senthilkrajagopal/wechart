@@ -68,6 +68,7 @@ import {
 export function SqlWorkspace({
   tab,
   saved,
+  source,
   onOpenTab,
   go = (href) => {
     globalThis.location.assign(href);
@@ -77,6 +78,8 @@ export function SqlWorkspace({
   readonly go?: (href: string) => void;
   /** The tab the address names, `/sql?tab=…` (T801, AC-446). */
   readonly tab?: string | undefined;
+  /** The data source the address names, `/sql?source=…`: "Open in SQL runner" (T823, AC-464). */
+  readonly source?: string | undefined;
   /** The saved query the address names, `/sql?saved=…`, as ⌘K opens one (T815, AC-460). */
   readonly saved?: string | undefined;
   /** Names the open tab in the address, as it opens. */
@@ -96,6 +99,7 @@ export function SqlWorkspace({
       user={user}
       tab={tab}
       saved={saved}
+      source={source}
       onOpenTab={onOpenTab}
       superAdmin={me.data.superAdmin || me.data.security === 'off'}
       go={go}
@@ -260,6 +264,7 @@ function Workbench({
   user,
   tab,
   saved,
+  source,
   onOpenTab,
   go,
 }: {
@@ -268,6 +273,7 @@ function Workbench({
   readonly user: string;
   readonly tab: string | undefined;
   readonly saved: string | undefined;
+  readonly source: string | undefined;
   readonly onOpenTab: ((id: string) => void) | undefined;
 }) {
   const sources = useQuery({ ...SQL_SOURCES_QUERY, retry: false });
@@ -286,6 +292,15 @@ function Workbench({
   // Kept from before, and the address names a tab: that one opens (AC-446).
   useEffect(() => {
     if (tab !== undefined) store.dispatch({ kind: 'select', id: tab });
+    // On opening only, as the address is read once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // The address names a data source: a new tab on it, once (T823, AC-464).
+  const openedSource = useRef(false);
+  useEffect(() => {
+    if (openedSource.current || source === undefined || source === '') return;
+    openedSource.current = true;
+    store.dispatch({ kind: 'add', sourceId: source });
     // On opening only, as the address is read once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

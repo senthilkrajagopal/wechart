@@ -1361,14 +1361,15 @@ test.describe('Save and Find keys (T816, AC-455)', () => {
       await page.keyboard.press('Escape');
       await expect(find).toHaveCount(0);
 
-      // Outside the workspace neither key is taken: Explore, and a data source's own SQL tab.
+      // Outside the workspace neither key is taken: Explore, and a data source's own
+      // "SQL runner" tab, which holds no editor since T823 (AC-464).
       await page.goto('/explore');
       await expect(page.getByRole('button', { name: /theme/i })).toBeVisible();
       expect(await syntheticPrevented(page, 's')).toBe(false);
       expect(await syntheticPrevented(page, 'f')).toBe(false);
       await page.goto(`/explore/data-sources/${world.sources.on}`);
-      await page.getByRole('tablist', { name: 'Data source' }).getByRole('tab', { name: 'SQL' }).click();
-      await page.getByRole('tabpanel', { name: 'SQL' }).locator('.sql-editor .cm-content').click();
+      await page.getByRole('tablist', { name: 'Data source' }).getByRole('tab', { name: 'SQL runner' }).click();
+      await page.getByRole('tabpanel', { name: 'SQL runner' }).getByRole('link', { name: 'Open in SQL runner' }).focus();
       expect(await syntheticPrevented(page, 'f')).toBe(false);
       expect(await syntheticPrevented(page, 's')).toBe(false);
       await expect(page.locator('.cm-search')).toHaveCount(0);

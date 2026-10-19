@@ -452,16 +452,16 @@ describe('tabs kept in this browser, the open one in the address (T801, AC-451, 
     localStorage.clear();
   });
 
-  function openAt(me: Me, tab: string | undefined, onOpenTab = vi.fn()) {
+  function openAt(me: Me, tab: string | undefined, onOpenTab = vi.fn(), source?: string) {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => undefined)));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(ME_QUERY.queryKey, me);
-    render(
+    const shown = render(
       <QueryClientProvider client={client}>
-        <SqlWorkspace tab={tab} onOpenTab={onOpenTab} />
+        <SqlWorkspace tab={tab} source={source} onOpenTab={onOpenTab} />
       </QueryClientProvider>,
     );
-    return onOpenTab;
+    return Object.assign(onOpenTab, { shown, client });
   }
   const names = () => screen.getAllByRole('tab').map((tab) => tab.textContent);
 
@@ -513,6 +513,30 @@ describe('tabs kept in this browser, the open one in the address (T801, AC-451, 
     expect(stored.tabs.map((tab) => tab.name)).toEqual(['Query 1', 'Query 2']);
     expect(stored.active).toBe(stored.tabs[1]?.id);
     expect(onOpenTab).toHaveBeenLastCalledWith(stored.tabs[1]?.id);
+  });
+
+  // T823 (AC-464): "Open in SQL runner" from a data source's page and its rows' ⋯.
+  it('opens a new tab on the data source the address names, `/sql?source=…`, once, and names it there', () => {
+    localStorage.setItem('wechart.sql.tabs.wren@example.com', JSON.stringify(kept));
+
+    const onOpenTab = openAt(wren, undefined, vi.fn(), 'ds-9');
+
+    expect(names()).toEqual(['orders check', 'Query 2', 'Query 3']);
+    const stored = JSON.parse(localStorage.getItem('wechart.sql.tabs.wren@example.com') ?? '{}') as {
+      tabs: { id: string; sourceId: string; sql: string }[];
+      active: string;
+    };
+    expect(stored.tabs[2]?.sourceId).toBe('ds-9');
+    expect(stored.tabs[2]?.sql).toBe('');
+    expect(stored.active).toBe(stored.tabs[2]?.id);
+    expect(onOpenTab).toHaveBeenLastCalledWith(stored.tabs[2]?.id);
+    // Shown again with the same address: no second tab.
+    onOpenTab.shown.rerender(
+      <QueryClientProvider client={onOpenTab.client}>
+        <SqlWorkspace source="ds-9" onOpenTab={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    expect(names()).toEqual(['orders check', 'Query 2', 'Query 3']);
   });
 });
 
@@ -574,7 +598,7 @@ describe('a run going, across tabs and away (T804, AC-452, AC-379)', () => {
   };
 
   /** The database's side: one run held open until it is answered. */
-  function server() {
+  function server({ cancelRefused }: { cancelRefused?: string } = {}) {
     const posts: string[] = [];
     let answer: ((body: unknown) => void) | null = null;
     const json = (body: unknown, status = 200) =>
@@ -585,7 +609,8 @@ describe('a run going, across tabs and away (T804, AC-452, AC-379)', () => {
       vi.fn((url: string, init?: RequestInit) => {
         if (url === '/api/sql-runs/cancel' && init?.method === 'POST') {
           posts.push(url);
-          answer?.({ outcome: 'cancelled', durationMs: 1200 });
+          if (cancelRefused !== undefined) return json({ error: cancelRefused }, 503);
+          answer?.({ outcome: 'cancelled', error: 'Cancelled: the run was stopped on the database.', durationMs: 1200 });
           return json({ cancelled: true });
         }
         if (init?.method === 'POST') {
@@ -659,6 +684,37 @@ describe('a run going, across tabs and away (T804, AC-452, AC-379)', () => {
     db.finish();
     expect(await screen.findByRole('tab', { name: 'Query 1, Finished, 1 row, on emea_replica' })).toBeTruthy();
     expect(screen.getByTestId('sql-result-head').textContent).toMatch(/^Finished/);
+  });
+
+  // Moved from the data source page's runner, which no longer has one (T823, AC-464).
+  it('Cancel stops the open tab’s run, which then says it was cancelled and nothing came back (AC-379, AC-378)', async () => {
+    const db = server();
+    open();
+    await startRun('SELECT pg_sleep(20)');
+    await screen.findByRole('button', { name: 'Running…' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(db.posts.filter((url) => url === '/api/sql-runs/cancel')).toHaveLength(1);
+    await vi.waitFor(() => {
+      // The workspace's result head, as design 17 labels it: "Cancelled at ‹time›".
+      expect(screen.getByTestId('sql-result-head').textContent).toMatch(/^Cancelled at \d\d:\d\d:\d\d/);
+    });
+    expect(screen.getByTestId('sql-result-note').textContent).toContain('Nothing came back.');
+    expect(screen.getByRole('button', { name: 'Run' }).hasAttribute('disabled')).toBe(false);
+  });
+
+  it('says when Cancel fails, rather than nothing (T535’s review, moved here by T823)', async () => {
+    const db = server({ cancelRefused: 'SQL runs on xcube, which this deployment doesn’t run.' });
+    open();
+    await startRun('SELECT pg_sleep(20)');
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    expect((await screen.findByTestId('sql-cancel-failed')).textContent).toBe(
+      'It couldn’t be cancelled: SQL runs on xcube, which this deployment doesn’t run.',
+    );
+    db.finish();
+    expect(await screen.findByRole('tab', { name: 'Query 1, Finished, 1 row, on emea_replica' })).toBeTruthy();
   });
 
   it('holds Run on every other tab, with Go to it selecting the running tab and Cancel that run cancelling it', async () => {

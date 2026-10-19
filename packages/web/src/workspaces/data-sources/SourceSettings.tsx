@@ -33,7 +33,8 @@ import {
 } from './SourceEditor';
 import { DATA_SOURCES_QUERY } from './query';
 import { SqlTab, type SqlRunnerState } from './SqlRunner';
-import { MenuButton } from '../../shell/MenuButton';
+import { MenuButton, type MenuItem } from '../../shell/MenuButton';
+import { OPEN_IN_SQL_RUNNER, openInSqlRunner } from '../sql/openIn';
 import { DeleteDialog } from '../explore/DeleteDialog';
 import { checkSource, openProposalOf, removeSource } from '../explore/deleteChecks';
 import { sayOnExplore } from '../explore/deletedToast';
@@ -174,7 +175,7 @@ const TABS = [
  * for Super-Admins and the folder's own read-write members, and a workspace
  * data source's owner; with its off panel while off, never greyed out (P1).
  */
-const WITH_SQL = [...TABS, ['sql', 'SQL']] as const;
+const WITH_SQL = [...TABS, ['sql', 'SQL runner']] as const;
 type Tab = (typeof WITH_SQL)[number][0];
 
 export function SourceSettings({ id }: { id: string }) {
@@ -231,6 +232,37 @@ function Settings({ source }: { source: StoredSource }) {
   /** Deleting a shared one (T526; design 14, state C). */
   const [deleting, setDeleting] = useState(false);
   const moreButton = useRef<HTMLSpanElement>(null);
+  /**
+   * The head's ⋯ (T526; T823): "Open in SQL runner" for one who may run SQL
+   * on it now (AC-464, AC-373), then Delete data source…, last, for a shared
+   * one, for those who may change its folder. A workspace copy keeps Discard
+   * my copy…, since no published cube is ever bound to a copy (AC-280).
+   */
+  const headItems: MenuItem[] = [
+    ...(source.sqlAccess?.runs === true
+      ? [
+          {
+            key: 'sql',
+            label: OPEN_IN_SQL_RUNNER,
+            onSelect: () => {
+              router.history.push(openInSqlRunner(source.id));
+            },
+          },
+        ]
+      : []),
+    ...(!source.inWorkspace && source.canWrite
+      ? [
+          {
+            key: 'delete',
+            label: 'Delete data source…',
+            danger: true,
+            onSelect: () => {
+              setDeleting(true);
+            },
+          },
+        ]
+      : []),
+  ];
   /**
    * Changed here where the user may write it, in their workspace (T497). A
    * shared one is changed through a copy (rule 71), with sign-in off too
@@ -500,25 +532,13 @@ function Settings({ source }: { source: StoredSource }) {
               Edit in my workspace
             </button>
           ) : null}
-          {/* Delete data source…, last, in the header's ⋯ (T526; design 14,
-            state C1): a shared one, for those who may change its folder. A
-            workspace copy keeps Discard my copy…, since no published cube is
-            ever bound to a copy (AC-280). */}
-          {!source.inWorkspace && source.canWrite && viewing === undefined ? (
+          {/* The header's ⋯ (T526, design 14's C1; T823, design 17's N4). */}
+          {viewing === undefined && headItems.length > 0 ? (
             <span ref={moreButton}>
               <MenuButton
                 label={`More actions for ${source.name}`}
                 className="icon-button"
-                items={[
-                  {
-                    key: 'delete',
-                    label: 'Delete data source…',
-                    danger: true,
-                    onSelect: () => {
-                      setDeleting(true);
-                    },
-                  },
-                ]}
+                items={headItems}
               >
                 <span aria-hidden="true">⋯</span>
               </MenuButton>

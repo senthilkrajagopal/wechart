@@ -84,7 +84,8 @@ export interface TabsState {
 }
 
 export type TabsAction =
-  | { readonly kind: 'add' }
+  /** A new tab: on the current tab's source, or on one named, as "Open in SQL runner" opens (T823). */
+  | { readonly kind: 'add'; readonly sourceId?: string }
   /** A new tab, last, on a source and holding SQL: Preview 100 rows' (T807). */
   | {
       readonly kind: 'open';
@@ -206,10 +207,11 @@ export function tabsReducer(
   const target = state.tabs[at];
   switch (action.kind) {
     case 'add': {
-      // On the current tab's data source (AC-450).
+      // On the current tab's data source (AC-450), or the one named (AC-464).
       const id = makeId();
+      const sourceId = action.sourceId ?? openTab(state)?.sourceId ?? '';
       return {
-        tabs: [...state.tabs, blank(id, nextName(state.tabs), openTab(state)?.sourceId ?? '')],
+        tabs: [...state.tabs, blank(id, nextName(state.tabs), sourceId)],
         active: id,
       };
     }

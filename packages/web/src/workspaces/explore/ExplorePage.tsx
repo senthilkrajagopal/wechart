@@ -38,6 +38,8 @@ import { ImportPane } from './import/ImportPane';
 import { fileHref, modelsAreWorkspaceOnly } from '../model/inFolder';
 import { generateFrom, startModelDraft } from '../model/ModelFilePage';
 import { cubeSourceOf } from '../data-sources/cubeSource';
+import { openInSqlRunner } from '../sql/openIn';
+import { useSqlRunnable } from '../sql/runnable';
 import { FolderDescription } from './FolderDescription';
 import { DeleteDialog, type Checked, type Confirmation, type Refusal } from './DeleteDialog';
 import { ClearWorkspaceDialog } from './ClearWorkspaceDialog';
@@ -372,6 +374,8 @@ export function ExplorePage() {
    */
   const me = useQuery(ME_QUERY);
   const signedIn = me.data?.security === 'oidc';
+  /** The data sources this user may run SQL on now: "Open in SQL runner" in their ⋯ (T823). */
+  const sqlRunnable = useSqlRunnable();
   /**
    * Who may generate cubes from a data source (T492): one with a workspace,
    * whose model they go to, or the single user with sign-in off.
@@ -1319,6 +1323,11 @@ export function ExplorePage() {
                   : undefined
               }
               generates={(item) => cubeSourceOfItem(item) !== undefined}
+              // A workspace tab on it, for one who may run SQL on it now (T823, AC-464).
+              onOpenInSqlRunner={(item) => {
+                router.history.push(openInSqlRunner(item.id));
+              }}
+              sqlRuns={(item) => sqlRunnable.has(item.id)}
               // Once the folders are read: before, every target would read as
               // one the user can't see (T498's review).
               {...(inOwnWorkspace && folders.isSuccess

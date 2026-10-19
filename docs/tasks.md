@@ -1717,11 +1717,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 ### Lane SQL: the data source page, lost access and the "Cube" group
 
-- [ ] T823 (AC-464, AC-373) The data source page's "SQL runner" tab holds the off panel or the switch's record, with Turn off and who may run, plus "Open in SQL runner", and no editor; "Open in SQL runner" in the page head's ⋯ and in each row's ⋯
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/data-sources/SqlRunner.tsx` (+ test; the editor removed), `packages/web/src/workspaces/data-sources/SourceEditor.tsx`, `packages/web/src/workspaces/data-sources/DataSourcesList.tsx` (+ test), `packages/web/src/workspaces/explore/FolderContents.tsx` (+ test), `e2e/security/sql-runner.spec.ts`.
-  - Failing test: `SqlRunner.test.tsx`: the tab, renamed "SQL runner", shows the off panel when off, and when on the switch's record (who confirmed it and when), Turn off for a Super-Admin and who may run, plus "Open in SQL runner", and no editor; it is shown only to those AC-373 names. The e2e: "Open in SQL runner" from the tab, the page head's ⋯, a Data sources row's ⋯ and an Explore row's ⋯ each opens `/sql` on a new tab on that same source (AC-464, AC-373).
-  - Depends on: T801
+- [x] T823 (AC-464, AC-373) The data source page's "SQL runner" tab holds the off panel or the switch's record, with Turn off and who may run, plus "Open in SQL runner", and no editor; "Open in SQL runner" in the page head's ⋯ and in each row's ⋯
 
 - [ ] T824 (AC-466, AC-373) A tab whose source is switched off, or whose folder access is lost, can't run, saying so without naming the source again
   - Lane: SQL

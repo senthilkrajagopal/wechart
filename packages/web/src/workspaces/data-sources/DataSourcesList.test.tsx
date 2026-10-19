@@ -289,3 +289,47 @@ describe('the data sources a user may see (T364, AC-157)', () => {
     );
   });
 });
+
+/**
+ * T823 (AC-464, AC-373; design 17's N4): "Open in SQL runner" in the ⋯ of
+ * each row whose data source the user may run SQL on now, opening a
+ * workspace tab on that same source; none on the others.
+ */
+describe('“Open in SQL runner” in a row’s ⋯ (T823, AC-464)', () => {
+  it('offers it in the ⋯ of each row the user may run SQL on, opening a tab on that source', async () => {
+    const go = vi.fn();
+    render(
+      <DataSourcesList
+        sources={[source(), failed, untested]}
+        readWrite
+        sqlRunnable={new Set(['ds-1', 'ds-3'])}
+        go={go}
+      />,
+    );
+    const table = screen.getByRole('table', { name: 'Data sources' });
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent),
+    ).toEqual(['Name', 'Folder', 'Driver', 'Health', 'Used by', 'Updated', 'Actions']);
+    // None for one the user may not run SQL on.
+    expect(screen.queryByRole('button', { name: 'Actions for lake' })).toBeNull();
+    expect(cellsOf(rows()[1]!)).toHaveLength(7);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for archive' }));
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Open in SQL runner',
+    ]);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Open in SQL runner' }));
+    expect(go).toHaveBeenCalledWith('/sql?source=ds-3');
+  });
+
+  it('adds no column where the user may run SQL on none', () => {
+    render(<DataSourcesList sources={[source()]} readWrite sqlRunnable={new Set()} />);
+    expect(
+      within(screen.getByRole('table', { name: 'Data sources' }))
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent),
+    ).toEqual(['Name', 'Folder', 'Driver', 'Health', 'Used by', 'Updated']);
+  });
+});

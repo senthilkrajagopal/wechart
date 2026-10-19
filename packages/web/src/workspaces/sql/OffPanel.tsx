@@ -18,6 +18,47 @@ import { loginFor, pageKeyOf, pathText, routeOf, type SqlSource } from './sqlSou
  * (AC-447, AC-373).
  */
 
+/**
+ * The folder's read-write groups, named as design 15 names them (pin 1;
+ * T698, SRC-21): as the Access panel reads them, for one who may see them.
+ * None named where they can't be read.
+ */
+export function useReadWriteGroups(source: SqlSource): readonly string[] {
+  const folderId = source.folderPath.at(-1)?.id ?? SHARED_ROOT.id;
+  const access = useQuery({
+    ...folderAccessQuery(folderId),
+    enabled: !source.inWorkspace && source.cubeStore !== true,
+    retry: false,
+  });
+  return [...new Set(access.data?.effective.readWrite.map((grant) => grant.group) ?? [])];
+}
+
+/** "Super-Admins, and read-write members of Sales / EMEA: sales-emea-rw" (pin 1; design 17's N1). */
+export function WhoRuns({
+  source,
+  groups,
+}: {
+  readonly source: SqlSource;
+  readonly groups: readonly string[];
+}) {
+  return (
+    <>
+      Super-Admins, and read-write members of {pathText(source.folderPath)}
+      {groups.length === 0 ? null : (
+        <>
+          {': '}
+          {groups.map((group, at) => (
+            <Fragment key={group}>
+              {at === 0 ? '' : ', '}
+              <code>{group}</code>
+            </Fragment>
+          ))}
+        </>
+      )}
+    </>
+  );
+}
+
 /** While off (P1; screen 2, G3): who could run SQL once on, and Turn on… for a Super-Admin. */
 export function OffPanel({
   source,
@@ -45,18 +86,7 @@ export function OffPanel({
     source.cubeStore === true
       ? 'Turn on the SQL runner for Cube Store…'
       : 'Turn on the SQL runner…';
-  /**
-   * The folder's read-write groups, named as design 15 names them (pin 1;
-   * T698, SRC-21): as the Access panel reads them, for one who may see them.
-   * None named where they can't be read.
-   */
-  const folderId = source.folderPath.at(-1)?.id ?? SHARED_ROOT.id;
-  const access = useQuery({
-    ...folderAccessQuery(folderId),
-    enabled: !source.inWorkspace && source.cubeStore !== true,
-    retry: false,
-  });
-  const groups = [...new Set(access.data?.effective.readWrite.map((grant) => grant.group) ?? [])];
+  const groups = useReadWriteGroups(source);
   return (
     <section className="sql-off" aria-labelledby={heading}>
       <h2 id={heading}>
@@ -94,18 +124,7 @@ export function OffPanel({
           <dl className="sql-off__who">
             <dt>Who could run SQL</dt>
             <dd>
-              Super-Admins, and read-write members of {pathText(source.folderPath)}
-              {groups.length === 0 ? null : (
-                <>
-                  {': '}
-                  {groups.map((group, at) => (
-                    <Fragment key={group}>
-                      {at === 0 ? '' : ', '}
-                      <code>{group}</code>
-                    </Fragment>
-                  ))}
-                </>
-              )}
+              <WhoRuns source={source} groups={groups} />
             </dd>
             <dt>Who couldn’t</dt>
             <dd>Members who see it from a folder below, and read-only members</dd>

@@ -93,6 +93,22 @@ describe('a tab, bound to one data source (T800, AC-450)', () => {
     expect(added.active).toBe('c');
   });
 
+  // T823 (AC-464): "Open in SQL runner" opens a new tab on that data source.
+  it('opens a new tab on a given data source, after the others, and selects it', () => {
+    const state: TabsState = {
+      tabs: [tab({ id: 'a', name: 'Query 1', sourceId: 'fx' }), tab({ id: 'b', name: 'Query 2' })],
+      active: 'a',
+    };
+
+    const added = tabsReducer(state, { kind: 'add', sourceId: 'emea' }, () => 'c');
+
+    expect(added.tabs.map((each) => each.id)).toEqual(['a', 'b', 'c']);
+    expect(added.tabs[2]?.name).toBe('Query 3');
+    expect(added.tabs[2]?.sourceId).toBe('emea');
+    expect(added.tabs[2]?.sql).toBe('');
+    expect(added.active).toBe('c');
+  });
+
   // T807 (AC-449): Preview 100 rows opens a new tab holding its SELECT.
   it('opens a new tab, last, on a given source and holding given SQL, and selects it', () => {
     const state: TabsState = {

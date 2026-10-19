@@ -93,6 +93,32 @@ async function signedIn(browser: Browser, role: 'super' | 'writer' | 'reader') {
   return { context, page };
 }
 
+/** The WCAG contrast ratio of two colours as the browser paints them (T638). */
+async function contrastOn(page: Page, one: string, other: string) {
+  return page.evaluate(
+    ([a, b]) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      const context = canvas.getContext('2d', { willReadFrequently: true })!;
+      const luminance = (colour: string) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = colour;
+        context.fillRect(0, 0, 1, 1);
+        const [r = 0, g = 0, bl = 0] = context.getImageData(0, 0, 1, 1).data;
+        const linear = (channel: number) => {
+          const c = channel / 255;
+          return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        };
+        return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(bl);
+      };
+      const [light = 0, dark = 0] = [luminance(a!), luminance(b!)].sort((x, y) => y - x);
+      return (light + 0.05) / (dark + 0.05);
+    },
+    [one, other],
+  );
+}
+
 const runOn = (request: APIRequestContext, id: string, sql: string) =>
   request.post(`${BASE_URL}/api/data-sources/${id}/sql`, { data: { sql }, timeout: 90_000 });
 
@@ -406,43 +432,34 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
   });
 
   /**
-   * T535 (AC-373, AC-377, AC-378, AC-379, AC-380, AC-381, AC-383, AC-385,
-   * AC-387; design 15): the SQL tab on the data source's page, as its
-   * folder's read-write member and a Super-Admin use it.
+   * T535 (design 15) put the runner on the data source's page; T823
+   * (AC-464, AC-373; design 17's N) leaves there the tab, renamed "SQL
+   * runner", with the switch's record or the off panel and "Open in SQL
+   * runner", and no editor. The runs T535 showed on the page are the SQL
+   * runner workspace's (F42), opened from that tab, where these tests run
+   * them now (AC-377, AC-378, AC-379, AC-383). The page's editor, warning,
+   * selection, My runs and schema browser tests went with it: the workspace's
+   * are `sql-workspace.spec.ts`'s T802, T803, T805 and T817.
    */
-  test.describe('the SQL tab (T535)', () => {
-    /** The writer, on the data source's SQL tab. */
+  test.describe('the data source page’s SQL runner tab, and the workspace it opens (T535, T823)', () => {
+    /** The writer, on the data source's "SQL runner" tab. */
     async function onTab(browser: Browser, id = world.sourceId) {
       const writer = await signedIn(browser, 'writer');
+      await writer.page.setViewportSize({ width: 1440, height: 900 });
       await writer.page.goto(`/explore/data-sources/${id}`);
       const tabs = writer.page.getByRole('tablist', { name: 'Data source' });
-      await tabs.getByRole('tab', { name: 'SQL' }).click();
-      return { ...writer, panel: writer.page.getByRole('tabpanel', { name: 'SQL' }) };
+      await tabs.getByRole('tab', { name: 'SQL runner' }).click();
+      return { ...writer, panel: writer.page.getByRole('tabpanel', { name: 'SQL runner' }) };
     }
-    /** The WCAG contrast ratio of two colours as the browser paints them (T638). */
-    async function contrastOn(page: Page, one: string, other: string) {
-      return page.evaluate(
-        ([a, b]) => {
-          const canvas = document.createElement('canvas');
-          canvas.width = 1;
-          canvas.height = 1;
-          const context = canvas.getContext('2d', { willReadFrequently: true })!;
-          const luminance = (colour: string) => {
-            context.clearRect(0, 0, 1, 1);
-            context.fillStyle = colour;
-            context.fillRect(0, 0, 1, 1);
-            const [r = 0, g = 0, bl = 0] = context.getImageData(0, 0, 1, 1).data;
-            const linear = (channel: number) => {
-              const c = channel / 255;
-              return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-            };
-            return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(bl);
-          };
-          const [light = 0, dark = 0] = [luminance(a!), luminance(b!)].sort((x, y) => y - x);
-          return (light + 0.05) / (dark + 0.05);
-        },
-        [one, other],
-      );
+    /** The SQL runner workspace's tabs. */
+    const sqlTabs = (page: Page) => page.getByRole('tablist', { name: 'SQL tabs' }).getByRole('tab');
+    /** The writer, in the workspace that tab's "Open in SQL runner" opened on `id`. */
+    async function inWorkspace(browser: Browser, id = world.sourceId) {
+      const opened = await onTab(browser, id);
+      await opened.panel.getByRole('link', { name: 'Open in SQL runner' }).click();
+      await expect(opened.page).toHaveURL(/\/sql\?tab=[0-9a-f]{8}$/);
+      await expect(opened.page.locator('.sql-editor')).toBeVisible();
+      return opened;
     }
     /** The editor's text replaced by `sql`, typed as a person types it. */
     async function typeSql(page: Page, sql: string) {
@@ -452,62 +469,64 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       await page.keyboard.type(sql);
     }
 
-    test('is the sixth tab, warns above the editor, and shows a run’s columns, types, rows and time, and its CSV (AC-373, AC-385, AC-380)', async ({
+    test('is the sixth tab, “SQL runner”, with the switch’s record and no editor; “Open in SQL runner” there, in the page head’s ⋯, a Data sources row’s ⋯ and an Explore row’s ⋯ each opens a workspace tab on it (T823, AC-464, AC-373)', async ({
       browser,
     }) => {
       const { context, page, panel } = await onTab(browser);
-      const posts: string[] = [];
-      page.on('request', (request) => {
-        if (request.method() === 'POST' && request.url().endsWith('/sql'))
-          posts.push(request.url());
-      });
+      const opened = new RegExp(`^Query \\d+, Not run yet, on ${SOURCE}$`);
+      const selected = () =>
+        page.getByRole('tablist', { name: 'SQL tabs' }).getByRole('tab', { selected: true });
       try {
         await expect(
           page.getByRole('tablist', { name: 'Data source' }).getByRole('tab'),
-        ).toHaveText(['General', 'Connection', 'Test history', 'Usage', 'In Cube', 'SQL']);
-        const warning = panel.getByTestId('sql-warning');
-        await expect(warning).toHaveText(
-          'This SQL runs on the database directly, as sample. Folder permissions and access policies don’t apply here: you can read whatever that login can read.',
+        ).toHaveText(['General', 'Connection', 'Test history', 'Usage', 'In Cube', 'SQL runner']);
+        await expect(panel.getByTestId('sql-switch')).toContainText(
+          'SQL runner on · turned on by',
         );
-        const above = (await warning.boundingBox())!;
-        const editor = (await panel.locator('.sql-editor').boundingBox())!;
-        expect(above.y + above.height).toBeLessThanOrEqual(editor.y);
+        const who = panel.locator('dl.sql-off__who');
+        await expect(who.locator('dt')).toHaveText(['Who may run SQL', 'Runs as']);
+        await expect(who.locator('dd').first()).toHaveText(
+          /^Super-Admins, and read-write members of .+: sales-rw$/,
+        );
+        await expect(who.locator('dd').nth(1)).toHaveText('sample on sample at sample-db:5432');
+        // No editor, nor Run: the runner is the workspace's (AC-464).
+        await expect(panel.locator('.sql-editor')).toHaveCount(0);
+        await expect(panel.getByRole('button', { name: 'Run', exact: true })).toHaveCount(0);
+        // Not for the folder's member's eyes alone: no Turn off.
+        await expect(panel.getByRole('button', { name: 'Turn off' })).toHaveCount(0);
 
-        await typeSql(page, "SELECT 1 AS one, 'a' AS letter");
-        await panel.getByRole('button', { name: 'Run', exact: true }).click();
-        const grid = panel.getByRole('table', { name: 'Result: 1 row, 2 columns' });
-        await expect(grid.getByRole('columnheader')).toHaveText(['#', 'oneint4', 'lettertext']);
-        // Focus goes back to the editor when the run ends (design 15, keyboard).
-        await expect(panel.locator('.sql-editor .cm-content')).toBeFocused();
-        await expect(panel.getByTestId('sql-result-head')).toHaveText(
-          /^Finished 1 row · (under )?[\d.]+ s · at \d\d:\d\d:\d\dDownload CSV$/,
-        );
-        const [download] = await Promise.all([
-          page.waitForEvent('download'),
-          panel.getByRole('button', { name: 'Download CSV' }).click(),
-        ]);
-        expect(download.suggestedFilename()).toMatch(
-          new RegExp(`^${SOURCE}-\\d{4}-\\d\\d-\\d\\d-\\d{6}\\.csv$`),
-        );
-        expect(readFileSync(await download.path(), 'utf8')).toBe('one,letter\r\n1,a\r\n');
-        expect(posts).toHaveLength(1);
-      } finally {
-        await context.close();
-      }
-    });
+        // From the tab: the workspace, on a new tab on this source.
+        await panel.getByRole('link', { name: 'Open in SQL runner' }).click();
+        await expect(page).toHaveURL(/\/sql\?tab=[0-9a-f]{8}$/);
+        await expect(sqlTabs(page)).toHaveCount(2);
+        await expect(selected()).toHaveAttribute('aria-label', opened);
 
-    test('runs only the selection, Run reading “Run selection”, with ⌘/Ctrl+Enter (AC-387)', async ({
-      browser,
-    }) => {
-      const { context, page, panel } = await onTab(browser);
-      try {
-        await typeSql(page, 'SELECT 1 AS a;\nSELECT 2 AS b');
-        await page.keyboard.press('Shift+Home');
-        await expect(panel.getByRole('button', { name: 'Run selection' })).toBeVisible();
-        await page.keyboard.press('ControlOrMeta+Enter');
-        await expect(
-          panel.getByRole('table', { name: 'Result' }).getByRole('columnheader'),
-        ).toHaveText(['#', 'bint4']);
+        // From the page head's ⋯.
+        await page.goto(`/explore/data-sources/${world.sourceId}`);
+        await page.getByRole('button', { name: `More actions for ${SOURCE}` }).click();
+        await page.getByRole('menuitem', { name: 'Open in SQL runner' }).click();
+        await expect(page).toHaveURL(/\/sql\?tab=[0-9a-f]{8}$/);
+        await expect(sqlTabs(page)).toHaveCount(3);
+        await expect(selected()).toHaveAttribute('aria-label', opened);
+
+        // From its row's ⋯ in Data sources.
+        await page.goto('/data-sources');
+        await page
+          .getByRole('table', { name: 'Data sources' })
+          .getByRole('button', { name: `Actions for ${SOURCE}` })
+          .click();
+        await page.getByRole('menuitem', { name: 'Open in SQL runner' }).click();
+        await expect(page).toHaveURL(/\/sql\?tab=[0-9a-f]{8}$/);
+        await expect(sqlTabs(page)).toHaveCount(4);
+        await expect(selected()).toHaveAttribute('aria-label', opened);
+
+        // And from its row's ⋯ in Explore.
+        await page.goto(`/explore?folder=${world.folderId}`);
+        await page.getByRole('button', { name: `Actions for ${SOURCE}` }).click();
+        await page.getByRole('menuitem', { name: 'Open in SQL runner' }).click();
+        await expect(page).toHaveURL(/\/sql\?tab=[0-9a-f]{8}$/);
+        await expect(sqlTabs(page)).toHaveCount(5);
+        await expect(selected()).toHaveAttribute('aria-label', opened);
       } finally {
         await context.close();
       }
@@ -516,7 +535,8 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
     test('says a run was cut at 10,000 rows, holds Run back while one goes with Cancel, and says a refusal’s why (AC-377, AC-379, AC-378)', async ({
       browser,
     }) => {
-      const { context, page, panel } = await onTab(browser);
+      const { context, page } = await inWorkspace(browser);
+      const panel = page;
       try {
         await typeSql(page, 'SELECT g FROM generate_series(1, 10001) g');
         await panel.getByRole('button', { name: 'Run', exact: true }).click();
@@ -549,7 +569,8 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
           )
           .toBe('1');
         await panel.getByRole('button', { name: 'Cancel', exact: true }).click();
-        await expect(panel.getByTestId('sql-result-head')).toHaveText(/^Cancelled after [\d.]+ s/);
+        // The workspace's head names the state as its tab does: "Cancelled" (T804, AC-452).
+        await expect(panel.getByTestId('sql-result-head')).toHaveText(/^Cancelled at \d\d:\d\d:\d\d/);
         await expect(panel.getByTestId('sql-result-note')).toHaveText(
           'You cancelled the run, and it was stopped on the database. Nothing came back.',
         );
@@ -571,7 +592,7 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
           .toBe('1');
         await panel.getByRole('button', { name: 'Cancel', exact: true }).click();
         await expect(panel.getByTestId('sql-result-head')).toHaveText(
-          /^Cancelled after [\d.]+ s 2 rows · at /,
+          /^Cancelled 2 rows · at \d\d:\d\d:\d\d/,
         );
         await expect(panel.getByTestId('sql-result-note')).toHaveText(
           'You cancelled the run, and it was stopped on the database. These are the 2 rows that came back before it was stopped.',
@@ -603,7 +624,8 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       browser,
     }) => {
       test.setTimeout(120_000);
-      const { context, page, panel } = await onTab(browser);
+      const { context, page } = await inWorkspace(browser);
+      const panel = page;
       const marker = `pagestop_${RUN}`;
       try {
         await typeSql(
@@ -613,7 +635,8 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         await panel.getByRole('button', { name: 'Run', exact: true }).click();
         await expect(panel.getByRole('button', { name: 'Running…' })).toBeDisabled();
         await expect(panel.getByTestId('sql-result-head')).toHaveText(
-          /^Stopped at 30 seconds 3 rows · at \d\d:\d\d:\d\dDownload CSV · 3 rows$/,
+          // With Make a cube… and Make a chart…, held, before Download CSV (T819, AC-461).
+          /^Stopped at 30 seconds 3 rows · at \d\d:\d\d:\d\dRun it to the end first\.Make a cube…Make a chart…Download CSV · 3 rows$/,
           { timeout: 45_000 },
         );
         await expect(panel.getByTestId('sql-result-note')).toHaveText(
@@ -638,83 +661,15 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       }
     });
 
-    test('lists My runs, this data source’s by default, with All (AC-381)', async ({ browser }) => {
-      const { context, page, panel } = await onTab(browser);
-      try {
-        await typeSql(page, `SELECT 'mine_${RUN}' AS m`);
-        await panel.getByRole('button', { name: 'Run', exact: true }).click();
-        await expect(panel.getByRole('table', { name: 'Result' })).toBeVisible();
-        const runs = panel.getByRole('region', { name: 'My runs' });
-        await expect(runs.getByRole('radio', { name: 'This data source' })).toBeChecked();
-        await expect(runs.getByRole('listitem').first()).toContainText(`SELECT 'mine_${RUN}' AS m`);
-
-        /**
-         * T638 (AC-176; the re-audit): a run's focus ring whole in the list
-         * that clips, and the toast's Undo ring 3:1 against the toast's
-         * inverted ground, as the undo toast's is (T182).
-         */
-        await typeSql(page, 'SELECT 2');
-        const run = runs.locator('.sql-runs__run').first();
-        // A key first, so the browser draws the ring for focus moved by script.
-        await page.keyboard.press('Shift');
-        await run.focus();
-        expect(
-          await run.evaluate((element) => {
-            const style = getComputedStyle(element);
-            if (style.outlineStyle === 'none') return 'no ring';
-            const reach =
-              Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
-            const box = element.getBoundingClientRect();
-            const list = element.closest('.sql-runs')!;
-            const edge = list.getBoundingClientRect();
-            return box.left - reach >= edge.left + list.clientLeft - 0.5 &&
-              box.right + reach <= edge.left + list.clientLeft + list.clientWidth + 0.5
-              ? 'whole'
-              : 'cut off';
-          }),
-        ).toBe('whole');
-        await page.keyboard.press('Enter');
-        const toast = panel.locator('.sql-runner__toast');
-        const undo = toast.getByRole('button', { name: 'Undo' });
-        await page.keyboard.press('Shift');
-        await undo.focus();
-        const [ring, ground, style, width] = await undo.evaluate((element) => [
-          getComputedStyle(element).outlineColor,
-          getComputedStyle(element.closest('.sql-runner__toast')!).backgroundColor,
-          getComputedStyle(element).outlineStyle,
-          getComputedStyle(element).outlineWidth,
-        ]);
-        // A ring is drawn at all: with none, `currentColor` would pass alone (T638's review).
-        expect(style).not.toBe('none');
-        expect(Number.parseFloat(width!)).toBeGreaterThanOrEqual(2);
-        expect(await contrastOn(page, ring!, ground!)).toBeGreaterThanOrEqual(3);
-        // Undo left alone: the run's SQL stays in the editor for what follows.
-
-        await runs.getByRole('radio', { name: 'All' }).click();
-        await expect(runs.getByRole('listitem').first()).toContainText(`${SOURCE} · SQL ${RUN}`);
-        await expect(runs.getByRole('listitem').first()).toContainText(/Today \d\d:\d\d/);
-        // A run's link opens its data source on the SQL tab, the editor's text kept (T535's review).
-        await page.goto(`/explore/data-sources/${world.sourceId}?tab=sql`);
-        await expect(
-          page.getByRole('tablist', { name: 'Data source' }).getByRole('tab', { name: 'SQL' }),
-        ).toHaveAttribute('aria-selected', 'true');
-        await expect(panel.locator('.sql-editor .cm-content')).toHaveText(
-          `SELECT 'mine_${RUN}' AS m`,
-        );
-      } finally {
-        await context.close();
-      }
-    });
-
     test('shows the off panel while off, and a Super-Admin turns it on only by confirming (AC-373; P1)', async ({
       page,
     }) => {
       await page.goto(`/explore/data-sources/${world.sourceId}`);
       await page
         .getByRole('tablist', { name: 'Data source' })
-        .getByRole('tab', { name: 'SQL' })
+        .getByRole('tab', { name: 'SQL runner' })
         .click();
-      const panel = page.getByRole('tabpanel', { name: 'SQL' });
+      const panel = page.getByRole('tabpanel', { name: 'SQL runner' });
       await panel.getByRole('button', { name: 'Turn off' }).click();
       const off = panel.getByRole('region', { name: `The SQL runner is off for ${SOURCE}` });
       await expect(off).toBeVisible();
@@ -748,7 +703,7 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       await expect(
         page
           .getByRole('tablist', { name: 'Data source' })
-          .getByRole('tab', { name: 'SQL' })
+          .getByRole('tab', { name: 'SQL runner' })
           .locator('svg'),
       ).toHaveAttribute('data-icon', 'sql');
       await off.getByRole('button', { name: 'Turn on the SQL runner…' }).click();
@@ -757,19 +712,24 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       await dialog.getByRole('checkbox', { name: /I confirm that sample can only read/ }).check();
       await dialog.getByRole('button', { name: 'Turn on' }).click();
       await expect(panel.getByTestId('sql-switch')).toContainText('SQL runner on · turned on by');
-      await expect(panel.locator('.sql-editor')).toBeVisible();
-      await expect(panel.locator('.sql-editor .cm-content')).toBeFocused();
+      // Its record, and the way to the runner, focused: no editor here (T823, AC-464).
+      await expect(panel.locator('.sql-editor')).toHaveCount(0);
+      await expect(panel.getByRole('link', { name: 'Open in SQL runner' })).toBeFocused();
     });
 
     test('lists the database’s schemas, tables and columns with their types beside the editor, and puts a name chosen there into it (T539, AC-386)', async ({
       browser,
     }) => {
-      const { context, page, panel } = await onTab(browser);
+      // In the workspace's left pane, since T823 (AC-464).
+      const { context, page } = await inWorkspace(browser);
+      const panel = page;
       try {
         await typeSql(page, 'SELECT * FROM ');
-        const tree = panel.getByRole('region', { name: `Tables in ${SOURCE}` });
+        const tree = page
+          .getByRole('complementary', { name: 'Data source and schema' })
+          .getByRole('tree', { name: `Schemas in ${SOURCE}` });
         const publicSchema = tree.getByRole('treeitem', { name: 'public', exact: true });
-        await publicSchema.getByTestId('sql-schema-caret').click();
+        await publicSchema.getByTestId('sql-schema-caret').first().click();
         // The sample's tables, and the one this spec made, as introspection lists them.
         await expect(tree.getByRole('group', { name: 'Tables in public' })).toContainText(TABLE);
         // By the keyboard, as a tree: down to `orders`, → opens its columns.
@@ -779,9 +739,10 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         await expect(
           tree.getByRole('group', { name: 'Columns of public.orders' }).getByRole('treeitem'),
         ).toHaveText([
-          'idinteger',
-          'customer_idinteger',
-          'product_idinteger',
+          // With their keys' tags, as the workspace's tree shows them (T806, AC-448).
+          'idintegerPK',
+          'customer_idintegerFK',
+          'product_idintegerFK',
           'statustext',
           'amountnumeric',
           'ordered_attimestamp with time zone',
@@ -814,21 +775,27 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       const copyId = ((await copied.json()) as { id: string }).id;
       const project = await projectFolderOf(writer.page.request, 'data-source', copyId);
       await writer.context.close();
-      const { context, page, panel } = await onTab(browser, copyId);
+      const { context, page, panel: tab } = await onTab(browser, copyId);
+      const leftPane = page.getByRole('complementary', { name: 'Data source and schema' });
       try {
-        await expect(panel.getByTestId('sql-yours')).toHaveText(
+        await expect(tab.getByTestId('sql-yours')).toHaveText(
           'Yours: you may run SQL on your own data sources in My workspace, with no switch. Nobody else can.',
         );
+        // Run in the workspace, on a tab its "Open in SQL runner" opens (T823, AC-464).
+        await tab.getByRole('link', { name: 'Open in SQL runner' }).click();
+        await expect(page).toHaveURL(/\/sql\?tab=[0-9a-f]{8}$/);
+        const panel = page;
         await typeSql(page, 'SELECT current_database() AS db');
         await panel.getByRole('button', { name: 'Run', exact: true }).click();
         await expect(
           panel.getByRole('table', { name: 'Result' }).getByRole('cell').nth(1),
         ).toHaveText('sample');
         // Its schema browser lists its own catalog, read in its workspace's overlay (T539, T547).
-        const tree = panel.getByRole('region', { name: `Tables in ${SOURCE}` });
+        const tree = leftPane.getByRole('tree', { name: `Schemas in ${SOURCE}` });
         await tree
           .getByRole('treeitem', { name: 'public', exact: true })
           .getByTestId('sql-schema-caret')
+          .first()
           .click();
         await expect(tree.getByRole('treeitem', { name: 'orders', exact: true })).toBeVisible();
 
@@ -852,10 +819,13 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
           await page.goto(`/explore/data-sources/${freshId}`);
           await page
             .getByRole('tablist', { name: 'Data source' })
-            .getByRole('tab', { name: 'SQL' })
+            .getByRole('tab', { name: 'SQL runner' })
             .click();
-          const freshPanel = page.getByRole('tabpanel', { name: 'SQL' });
-          await expect(freshPanel.getByTestId('sql-yours')).toBeVisible();
+          const freshTab = page.getByRole('tabpanel', { name: 'SQL runner' });
+          await expect(freshTab.getByTestId('sql-yours')).toBeVisible();
+          await freshTab.getByRole('link', { name: 'Open in SQL runner' }).click();
+          await expect(page).toHaveURL(/\/sql\?tab=[0-9a-f]{8}$/);
+          const freshPanel = page;
           await typeSql(page, 'SELECT 41 + 1 AS answer');
           await freshPanel.getByRole('button', { name: 'Run', exact: true }).click();
           await expect(
@@ -863,10 +833,11 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
           ).toHaveText('42');
           // Its browser lists its own catalog, read in the workspace's overlay,
           // where alone it is: nothing landed bears its name (T547, AC-386).
-          const freshTree = freshPanel.getByRole('region', { name: `Tables in fresh_${RUN}` });
+          const freshTree = leftPane.getByRole('tree', { name: `Schemas in fresh_${RUN}` });
           await freshTree
             .getByRole('treeitem', { name: 'public', exact: true })
             .getByTestId('sql-schema-caret')
+            .first()
             .click();
           await expect(freshTree.getByRole('group', { name: 'Tables in public' })).toContainText(
             TABLE,
@@ -995,6 +966,48 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
           );
           await expect(panel.getByTestId('sql-result-note')).toContainText(said);
         }
+
+        /**
+         * T638 (AC-176; the re-audit), moved here from the data source page,
+         * whose My runs went to the workspace (T823): a run's focus ring
+         * whole in the list that clips, and the toast's Undo ring 3:1
+         * against the toast's inverted ground, as the undo toast's is (T182).
+         */
+        const runs = panel.getByRole('region', { name: 'My runs' });
+        const run = runs.locator('.sql-runs__run').first();
+        await expect(run).toBeVisible();
+        // A key first, so the browser draws the ring for focus moved by script.
+        await page.keyboard.press('Shift');
+        await run.focus();
+        expect(
+          await run.evaluate((element) => {
+            const style = getComputedStyle(element);
+            if (style.outlineStyle === 'none') return 'no ring';
+            const reach =
+              Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
+            const box = element.getBoundingClientRect();
+            const list = element.closest('.sql-runs')!;
+            const edge = list.getBoundingClientRect();
+            return box.left - reach >= edge.left + list.clientLeft - 0.5 &&
+              box.right + reach <= edge.left + list.clientLeft + list.clientWidth + 0.5
+              ? 'whole'
+              : 'cut off';
+          }),
+        ).toBe('whole');
+        await page.keyboard.press('Enter');
+        const undo = panel.locator('.sql-runner__toast').getByRole('button', { name: 'Undo' });
+        await page.keyboard.press('Shift');
+        await undo.focus();
+        const [ring, ground, style, width] = await undo.evaluate((element) => [
+          getComputedStyle(element).outlineColor,
+          getComputedStyle(element.closest('.sql-runner__toast')!).backgroundColor,
+          getComputedStyle(element).outlineStyle,
+          getComputedStyle(element).outlineWidth,
+        ]);
+        // A ring is drawn at all: with none, `currentColor` would pass alone (T638's review).
+        expect(style).not.toBe('none');
+        expect(Number.parseFloat(width!)).toBeGreaterThanOrEqual(2);
+        expect(await contrastOn(page, ring!, ground!)).toBeGreaterThanOrEqual(3);
 
         // The reader isn't allowed on any data source: no Cube Store, listed or by its page.
         await reader.page.goto('/explore?folder=root');

@@ -7,6 +7,7 @@ import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { dayOf, exactOf } from '../../shell/formatTime';
 import { CUBE_STORE_ID } from '../data-sources/cubeStore';
 import { HistoryIcon } from '../history/HistoryPanel';
+import { OPEN_IN_SQL_RUNNER } from '../sql/openIn';
 import { chartTypeText } from './chartTypeLabels';
 import { PersonIcon } from './WorkspaceBand';
 
@@ -146,6 +147,13 @@ export interface FolderContentsProps {
   readonly onGenerate?: ((item: CatalogItem) => void) | undefined;
   /** Which data sources it is offered for: those Cube lists (T492's review). */
   readonly generates?: ((item: CatalogItem) => boolean) | undefined;
+  /**
+   * "Open in SQL runner", first in a data source row's ⋯ (T823, AC-464;
+   * design 17's N4): a workspace tab on it, for one who may run SQL on it.
+   */
+  readonly onOpenInSqlRunner?: ((item: CatalogItem) => void) | undefined;
+  /** Which data sources the user may run SQL on now (AC-373). */
+  readonly sqlRuns?: ((item: CatalogItem) => boolean) | undefined;
   /**
    * Deleting a row (design 14, pin 8; T517): "Delete…" last in its ⋯, set
    * apart in the error ink, where `deletes` says it may be — given only to
@@ -366,6 +374,8 @@ export function FolderContents({
   onExport,
   onGenerate,
   generates = () => true,
+  onOpenInSqlRunner,
+  sqlRuns = () => false,
   onDelete,
   deletes = () => false,
   onCopy,
@@ -465,6 +475,16 @@ export function FolderContents({
       workspace === undefined && (item.kind === 'dashboard' || item.kind === 'chart');
     const copy = item.copy;
     return [
+      // First in a data source's ⋯, for one who may run SQL on it (T823, AC-464).
+      ...(onOpenInSqlRunner !== undefined && item.kind === 'data-source' && sqlRuns(item)
+        ? [
+            {
+              key: 'sql',
+              label: OPEN_IN_SQL_RUNNER,
+              onSelect: () => onOpenInSqlRunner(item),
+            },
+          ]
+        : []),
       ...nextStep(item),
       // A model's Open only where it may be deleted (design 14, pin 9 and D1).
       ...(onOpen !== undefined &&

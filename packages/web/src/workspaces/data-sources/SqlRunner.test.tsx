@@ -11,6 +11,12 @@ import { SqlTab, type SqlRunnerState, type SqlSource } from './SqlRunner';
  * T535 (AC-373, AC-377, AC-378, AC-379, AC-380, AC-381, AC-383, AC-385,
  * AC-387; design 15's screens 1 and 2, states A–I): the SQL tab on a data
  * source's page, against a stubbed API.
+ *
+ * T823 (AC-464, AC-373; design 17's N): on a data source's page the tab,
+ * renamed "SQL runner", holds the off panel or the switch's record, with
+ * Turn off and who may run, plus "Open in SQL runner", and no editor; the
+ * runner itself is the SQL runner workspace's. Cube Store's own page keeps
+ * its runner (design 17's table: "Unchanged"), whose tests here run on it.
  */
 const ON: SqlRunnerState = {
   on: true,
@@ -35,6 +41,16 @@ const SOURCE: SqlSource = {
     { id: 'sales', title: 'Sales' },
     { id: 'emea', title: 'EMEA' },
   ],
+  inWorkspace: false,
+  sqlRunner: ON,
+};
+/** Cube Store, whose own page keeps the runner (T536; design 17's table). */
+const CUBE: SqlSource = {
+  cubeStore: true,
+  id: 'cubestore',
+  version: 0,
+  name: 'Cube Store',
+  folderPath: [],
   inWorkspace: false,
   sqlRunner: ON,
 };
@@ -126,7 +142,7 @@ function serve({
 
 /** Signed in, as the app's gate has already asked before any page shows. */
 const ME = { name: 'Wanda Writer', identity: 'writer@example.com', groups: [], superAdmin: false };
-function open(source: SqlSource = SOURCE, superAdmin = false, me: object = ME) {
+function open(source: SqlSource = CUBE, superAdmin = false, me: object = ME) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(['me'], { security: 'oidc', ...me });
   const tab = (shown: SqlSource) => (
@@ -162,13 +178,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('the SQL tab, the runner on (T535)', () => {
-  it('says where it runs and as whom, who turned it on, and warns above the editor with no way to hide it (AC-385)', async () => {
+describe('a data source page’s “SQL runner” tab, on (T823, AC-464, AC-373; design 17’s N1)', () => {
+  it('holds the switch’s record, who may run and as whom, and “Open in SQL runner” on that source, with no editor', async () => {
     serve();
-    const { container } = open();
-    expect(screen.getByTestId('sql-runline').textContent).toBe(
-      'Runs on sales at pg-replica-1:5432, as cube_reader',
-    );
+    const { container } = open(SOURCE);
     expect(screen.getByTestId('sql-switch').textContent).toContain(
       'SQL runner on · turned on by Ada Admin, who confirmed the login can only read',
     );
@@ -178,21 +191,54 @@ describe('the SQL tab, the runner on (T535)', () => {
     const when = screen.getByTestId('sql-switch').querySelector('time')!;
     expect(when.textContent).toBe(whenOf(confirmedAt));
     expect(when.getAttribute('title')).toBe(exactOf(confirmedAt));
-    const warning = screen.getByTestId('sql-warning');
-    expect(warning.textContent).toBe(
-      'This SQL runs on the database directly, as cube_reader. Folder permissions and access policies don’t apply here: you can read whatever that login can read.',
-    );
-    // Above the editor, and nothing in it closes it.
-    const editor = container.querySelector('.sql-editor')!;
-    expect(warning.compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(warning).queryAllByRole('button')).toHaveLength(0);
-    expect(
-      screen.getByText(
-        'SELECT or EXPLAIN, one statement · up to 10,000 rows, 10 MB, 30 seconds · one run at a time',
-      ),
-    ).toBeTruthy();
+    // Who may run, the folder's read-write groups named once read, and as whom.
+    const who = container.querySelector('dl.sql-off__who')!;
+    await waitFor(() => {
+      expect([...who.querySelectorAll('dt')].map((term) => term.textContent)).toEqual([
+        'Who may run SQL',
+        'Runs as',
+      ]);
+      expect([...who.querySelectorAll('dd')].map((each) => each.textContent)).toEqual([
+        'Super-Admins, and read-write members of Sales / EMEA: sales-emea-rw, sales-rw',
+        'cube_reader on sales at pg-replica-1:5432',
+      ]);
+    });
+    const link = screen.getByRole('link', { name: 'Open in SQL runner' });
+    expect(link.getAttribute('href')).toBe('/sql?source=ds-1');
+    // No editor, no Run, and no warning: those are the workspace's (AC-464).
+    expect(container.querySelector('.sql-editor')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Run' })).toBeNull();
+    expect(screen.queryByTestId('sql-warning')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'My runs' })).toBeNull();
+    // Turn off is a Super-Admin's alone.
+    expect(screen.queryByRole('button', { name: 'Turn off' })).toBeNull();
   });
 
+  it('offers a Super-Admin Turn off beside the record', () => {
+    serve();
+    open(SOURCE, true);
+    expect(
+      within(screen.getByTestId('sql-switch')).getByRole('button', { name: 'Turn off' }).textContent,
+    ).toBe('Turn off');
+    expect(screen.getByRole('link', { name: 'Open in SQL runner' }).getAttribute('href')).toBe(
+      '/sql?source=ds-1',
+    );
+  });
+
+  it('opens a source in My workspace with no switch, saying it is the owner’s, with “Open in SQL runner” (AC-383; design 17’s N3)', () => {
+    serve();
+    open({ ...SOURCE, inWorkspace: true, sqlRunner: { on: false, tab: true, runs: true } });
+    expect(screen.getByTestId('sql-yours').textContent).toBe(
+      'Yours: you may run SQL on your own data sources in My workspace, with no switch. Nobody else can.',
+    );
+    expect(screen.getByRole('link', { name: 'Open in SQL runner' }).getAttribute('href')).toBe(
+      '/sql?source=ds-1',
+    );
+    expect(document.querySelector('.sql-editor')).toBeNull();
+  });
+});
+
+describe('Cube Store’s SQL tab, the runner on (T535, T536)', () => {
   it('runs the SQL, and shows each column’s name and type, the rows and the time (AC-380)', async () => {
     const asked = serve();
     const { container } = open();
@@ -226,89 +272,9 @@ describe('the SQL tab, the runner on (T535)', () => {
     expect(sqlPosts(asked)).toHaveLength(1);
   });
 
-  it('holds Run back while a run goes, offers Cancel, and says the run was cancelled (AC-379, AC-378)', async () => {
-    let finish: (answer: { status: number; body: unknown }) => void = () => undefined;
-    const asked = serve({
-      answers: [new Promise((resolve) => (finish = resolve))],
-    });
-    const { container } = open();
-    typeSql(container, 'SELECT pg_sleep(20)');
-    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
-    const running = await screen.findByRole('button', { name: 'Running…' });
-    expect((running as HTMLButtonElement).disabled).toBe(true);
-    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(
-      asked.some((each) => each.url === '/api/sql-runs/cancel' && each.method === 'POST'),
-    ).toBe(true);
-    finish({
-      status: 422,
-      body: {
-        outcome: 'cancelled',
-        error: 'Cancelled: the run was stopped on the database.',
-        durationMs: 8200,
-      },
-    });
-    await waitFor(() => {
-      expect(screen.getByTestId('sql-result-head').textContent).toMatch(/^Cancelled after 8\.2 s/);
-    });
-    expect(screen.getByTestId('sql-result-note').textContent).toContain('Nothing came back.');
-    expect(screen.getByRole('button', { name: 'Run' })).toBeTruthy();
-  });
-
-  it('shows the rows a cancelled run had, marked cut, and downloads exactly them (T545, AC-379)', async () => {
-    let finish: (answer: { status: number; body: unknown }) => void = () => undefined;
-    const asked = serve({ answers: [new Promise((resolve) => (finish = resolve))] });
-    const { container } = open();
-    typeSql(container, 'SELECT g, pg_sleep(20) FROM generate_series(1, 9) g');
-    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
-    finish({
-      status: 422,
-      body: {
-        outcome: 'cancelled',
-        error: 'Cancelled: the run was stopped on the database.',
-        durationMs: 1_503,
-        columns: [{ name: 'g', type: 'int4' }],
-        rows: [[1], [2]],
-        rowCount: 2,
-        truncated: 'stopped',
-        statement: 'select',
-      },
-    });
-    await screen.findByRole('table', { name: 'Result: 2 rows, 1 column' });
-    expect(screen.getByTestId('sql-result-cut').textContent).toBe(
-      'Cancelled before it finished. Run it again to see every row.',
-    );
-    await waitFor(() => {
-      expect(container.querySelector('[role="status"][aria-live="polite"]')?.textContent).toBe(
-        'Cancelled: 2 rows came back before it was stopped',
-      );
-    });
-    const made = vi.mocked(URL.createObjectURL);
-    await userEvent.click(screen.getByRole('button', { name: 'Download CSV · 2 rows' }));
-    expect(await (made.mock.calls[0]![0] as Blob).text()).toBe('g\r\n1\r\n2\r\n');
-    expect(sqlPosts(asked)).toHaveLength(1);
-  });
-
-  it('says when Cancel fails, rather than nothing (T535’s review)', async () => {
-    let finish: (answer: { status: number; body: unknown }) => void = () => undefined;
-    serve({
-      answers: [new Promise((resolve) => (finish = resolve))],
-      cancelled: {
-        status: 503,
-        body: { error: 'SQL runs on xcube, which this deployment doesn’t run.' },
-      },
-    });
-    const { container } = open();
-    typeSql(container, 'SELECT pg_sleep(20)');
-    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
-    expect((await screen.findByTestId('sql-cancel-failed')).textContent).toBe(
-      'It couldn’t be cancelled: SQL runs on xcube, which this deployment doesn’t run.',
-    );
-    finish({ status: 200, body: FINISHED });
-    await screen.findByRole('table', { name: 'Result: 2 rows, 2 columns' });
-  });
+  // Cancel, a cancelled run's rows and a failed Cancel were the data source
+  // page's runner's (T535, T545): Cube Store has no Cancel (R64), and they are
+  // the workspace's now (QueryTab.test.tsx, SqlWorkspace.test.tsx's T804).
 
   it('gives focus back to the editor when a run ends, and says a refusal whole to a screen reader (design 15, keyboard)', async () => {
     serve({
@@ -331,7 +297,8 @@ describe('the SQL tab, the runner on (T535)', () => {
     expect(document.activeElement).toBe(editorView(container).contentDOM);
     await waitFor(() => {
       expect(container.querySelector('[role="status"][aria-live="polite"]')?.textContent).toBe(
-        'Not run. Only SELECT and EXPLAIN run here, one statement at a time. This is a DELETE statement. Nothing reached the database.',
+        // As Cube Store says it (T536): a command, and nothing reached Cube Store.
+        'Not run. Only SELECT and EXPLAIN run here, one statement at a time. This is a DELETE command. Nothing reached Cube Store.',
       );
     });
   });
@@ -358,7 +325,7 @@ describe('the SQL tab, the runner on (T535)', () => {
     expect(
       described.split(' ').map((id) => document.getElementById(id)?.textContent ?? `none: ${id}`),
     ).toEqual([
-      'This SQL runs on the database directly, as cube_reader. Folder permissions and access policies don’t apply here: you can read whatever that login can read.',
+      'This SQL runs on Cube Store directly. It holds every folder’s rollups, and folder permissions and access policies don’t apply.',
       'SELECT or EXPLAIN, one statement · up to 10,000 rows, 10 MB, 30 seconds · one run at a time',
     ]);
   });
@@ -368,7 +335,7 @@ describe('the SQL tab, the runner on (T535)', () => {
     const first = open();
     typeSql(first.container, 'SELECT secret FROM vault');
     first.unmount();
-    const next = open(SOURCE, false, { ...ME, name: 'Rae Reader', identity: 'reader@example.com' });
+    const next = open(CUBE, false, { ...ME, name: 'Rae Reader', identity: 'reader@example.com' });
     expect(editorView(next.container).state.doc.toString()).toBe('');
     next.unmount();
     const again = open();
@@ -394,7 +361,7 @@ describe('the SQL tab, the runner on (T535)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => {
       expect(screen.getByTestId('sql-result-note').textContent).toBe(
-        'Only SELECT and EXPLAIN run here, one statement at a time. This is a DELETE statement. Nothing reached the database.',
+        'Only SELECT and EXPLAIN run here, one statement at a time. This is a DELETE command. Nothing reached Cube Store.',
       );
     });
   });
@@ -438,7 +405,8 @@ describe('the SQL tab, the runner on (T535)', () => {
         {
           id: 'r1',
           sql: 'SELECT count(*) FROM sales.customers',
-          dataSource: { id: 'ds-1', name: 'emea_replica', folderPath: [], inWorkspace: false },
+          // Cube Store's runs have no data source (T536).
+          dataSource: null,
           startedAt: '2026-10-01T14:32:00.000Z',
           outcome: 'finished',
           rowCount: 1,
@@ -451,7 +419,7 @@ describe('the SQL tab, the runner on (T535)', () => {
     const { container } = open();
     const pane = await screen.findByRole('region', { name: 'My runs' });
     await within(pane).findByText('SELECT count(*) FROM sales.customers');
-    expect(asked.some((each) => each.url === '/api/sql-runs?dataSource=ds-1')).toBe(true);
+    expect(asked.some((each) => each.url === '/api/sql-runs?dataSource=cubestore')).toBe(true);
     expect(within(pane).getByRole('radio', { name: 'This data source' })).toHaveProperty(
       'checked',
       true,
@@ -474,7 +442,7 @@ describe('the SQL tab, the runner on (T535)', () => {
       const run = (id: string, at: Date) => ({
         id,
         sql: `SELECT ${id}`,
-        dataSource: { id: 'ds-1', name: 'emea_replica', folderPath: [], inWorkspace: false },
+        dataSource: null,
         startedAt: at.toISOString(),
         outcome: 'finished',
         rowCount: 1,
@@ -508,7 +476,7 @@ describe('the SQL tab, the runner on (T535)', () => {
     const run = (id: string, outcome: string, rowCount: number) => ({
       id,
       sql: `SELECT ${id}`,
-      dataSource: { id: 'ds-1', name: 'emea_replica', folderPath: [], inWorkspace: false },
+      dataSource: null,
       startedAt: '2026-10-01T14:32:00.000Z',
       outcome,
       rowCount,
@@ -556,10 +524,13 @@ describe('the SQL tab, the runner on (T535)', () => {
   });
 
   it('moves between runs with ↑ and ↓, and Enter puts a run’s SQL in the editor and focus there (design 15, keyboard)', async () => {
-    const run = (id: string, dataSource: string) => ({
+    const run = (id: string, dataSource: string | null) => ({
       id,
       sql: `SELECT ${id}`,
-      dataSource: { id: dataSource, name: dataSource, folderPath: [], inWorkspace: false },
+      dataSource:
+        dataSource === null
+          ? null
+          : { id: dataSource, name: dataSource, folderPath: [], inWorkspace: false },
       startedAt: '2026-10-01T14:32:00.000Z',
       outcome: 'finished',
       rowCount: 1,
@@ -567,7 +538,7 @@ describe('the SQL tab, the runner on (T535)', () => {
       truncated: null,
       statement: 'select',
     });
-    serve({ runs: [run('a', 'ds-1'), run('b', 'ds-1'), run('c', 'ds-9')] });
+    serve({ runs: [run('a', null), run('b', null), run('c', 'ds-9')] });
     const { container } = open();
     const pane = await screen.findByRole('region', { name: 'My runs' });
     const first = await within(pane).findByRole('button', { name: /SELECT a/ });
@@ -575,40 +546,17 @@ describe('the SQL tab, the runner on (T535)', () => {
     await userEvent.keyboard('{ArrowDown}');
     expect(document.activeElement).toBe(within(pane).getByRole('button', { name: /SELECT b/ }));
     await userEvent.keyboard('{ArrowDown}');
-    // Another data source's run opens its own SQL tab.
+    // A data source's run opens a SQL runner workspace tab on it (T823, AC-464).
     const there = within(pane).getByRole('link', { name: /SELECT c/ });
     expect(document.activeElement).toBe(there);
-    expect(there.getAttribute('href')).toBe('/explore/data-sources/ds-9?tab=sql');
+    expect(there.getAttribute('href')).toBe('/sql?source=ds-9');
     await userEvent.keyboard('{ArrowUp}{Enter}');
     expect(editorView(container).state.doc.toString()).toBe('SELECT b');
     expect(document.activeElement).toBe(editorView(container).contentDOM);
   });
 
-  it('puts a name chosen in the schema browser beside the editor into it at the cursor (T539, AC-386)', async () => {
-    serve();
-    const { container } = open();
-    typeSql(container, 'SELECT * FROM  LIMIT 5');
-    const view = editorView(container);
-    act(() => {
-      view.dispatch({ selection: { anchor: 14 } });
-    });
-    const browser = screen.getByRole('region', { name: 'Tables in emea_replica' });
-    // Beside the editor, after the warning.
-    expect(
-      screen.getByTestId('sql-warning').compareDocumentPosition(browser) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    await userEvent.click(
-      within(await within(browser).findByRole('treeitem', { name: 'public' })).getByTestId(
-        'sql-schema-caret',
-      ),
-    );
-    await userEvent.click(
-      within(await within(browser).findByRole('treeitem', { name: 'orders' })).getByText('orders'),
-    );
-    expect(view.state.doc.toString()).toBe('SELECT * FROM public.orders LIMIT 5');
-    expect(document.activeElement).toBe(view.contentDOM);
-  });
+  // The schema browser beside a data source's editor (T539) moved to the
+  // workspace's left pane (T805; SchemaTree.test.tsx): Cube Store has none.
 
   it('says another run of the user’s is going elsewhere, and offers to cancel it (AC-379, D2)', async () => {
     const asked = serve({
@@ -620,10 +568,8 @@ describe('the SQL tab, the runner on (T535)', () => {
     open();
     const note = await screen.findByTestId('sql-going-elsewhere');
     expect(note.textContent).toContain('You have a run going on finance_dw');
-    // To its own SQL tab (T535's review).
-    expect(within(note).getByRole('link', { name: 'Go to it' }).getAttribute('href')).toBe(
-      '/explore/data-sources/ds-9?tab=sql',
-    );
+    // To the SQL runner workspace, where it runs (T823, AC-464).
+    expect(within(note).getByRole('link', { name: 'Go to it' }).getAttribute('href')).toBe('/sql');
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
     await userEvent.click(within(note).getByRole('button', { name: 'Cancel that run' }));
     expect(asked.some((each) => each.url === '/api/sql-runs/cancel')).toBe(true);
@@ -757,10 +703,10 @@ describe('the SQL tab, the runner off (T535, AC-373; design 15’s P1 and screen
     ).toEqual([{ on: true, readOnlyConfirmed: true }]);
   });
 
-  it('turns it on once however often Turn on is pressed, then opens on the editor with focus in it (T535’s review)', async () => {
+  it('turns it on once however often Turn on is pressed, then shows the record with focus on “Open in SQL runner” (T535’s review; T823)', async () => {
     let answer: (answered: { status: number; body: unknown }) => void = () => undefined;
     const asked = serve({ switched: [new Promise((resolve) => (answer = resolve))] });
-    const { container, reshow } = open({ ...SOURCE, sqlRunner: OFF }, true);
+    const { reshow } = open({ ...SOURCE, sqlRunner: OFF }, true);
     await userEvent.click(screen.getByRole('button', { name: 'Turn on the SQL runner…' }));
     const dialog = screen.getByRole('dialog', { name: 'Turn on the SQL runner for emea_replica?' });
     await userEvent.click(within(dialog).getByRole('checkbox'));
@@ -773,8 +719,9 @@ describe('the SQL tab, the runner off (T535, AC-373; design 15’s P1 and screen
       expect(screen.queryByRole('dialog')).toBeNull();
     });
     reshow(SOURCE);
+    // No editor here now (AC-464): focus goes to the way to one.
     await waitFor(() => {
-      expect(document.activeElement).toBe(editorView(container).contentDOM);
+      expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Open in SQL runner' }));
     });
     expect(asked.filter((each) => each.url.endsWith('/sql-runner'))).toHaveLength(1);
   });

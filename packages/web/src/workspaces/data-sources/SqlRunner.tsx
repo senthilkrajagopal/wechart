@@ -5,40 +5,38 @@ import type { Me } from '../../shell/AccountMenu';
 import { clockOf as clock, exactOf, whenOf as momentOf } from '../../shell/formatTime';
 import { ME_QUERY } from '../../shell/me';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
-import { SchemaBrowser } from './SchemaBrowser';
 import { csvFileName, csvOf } from './sqlCsv';
 import { SqlEditor } from './SqlEditor';
 import { CUBE_STORE_ID } from './cubeStore';
 import { refusalSentence, SqlResult, type SqlOutcome } from './SqlResult';
 import { cancelRun, GOING_QUERY, NO_CANCEL } from '../sql/going';
 import { NO_LONGER_AVAILABLE } from '../sql/HistoryList';
-import { OffPanel } from '../sql/OffPanel';
+import { OffPanel, useReadWriteGroups, WhoRuns } from '../sql/OffPanel';
+import { OPEN_IN_SQL_RUNNER, openInSqlRunner } from '../sql/openIn';
 import { loginFor, pageKeyOf, pathText, routeOf, type SqlSource } from '../sql/sqlSource';
 
 /**
- * The SQL tab on a data source's page (T535, F40; design 15 of 2026-10-01,
- * approved with P1–P5 and its answers, R51).
+ * The "SQL runner" tab on a data source's page (T535, F40; design 15 of
+ * 2026-10-01, approved with P1–P5 and its answers, R51), and since T823
+ * (AC-464; design 17's N) no editor: the runner is the SQL runner
+ * workspace's (F42).
  *
  * - **While the runner is off,** a panel says so, to Super-Admins with Turn
  *   on… and to the folder's own read-write members (P1, AC-373). The page
  *   shows the tab to nobody else.
- * - **Once on:** where the SQL runs and as whom, who turned it on, and the
- *   warning, always above the editor (AC-385, Q3); the app's CodeMirror in
- *   SQL mode, with Run and ⌘/Ctrl+Enter, the selection run alone where there
- *   is one (P2, Q1, AC-387); the limits; the result, its grid headed by each
- *   column's name and database type, with Download CSV of exactly its rows
- *   (AC-380, Q5); Run held back while a run goes, with Cancel (AC-379); the
- *   schema browser beside the editor, a name chosen there put in at the
- *   cursor (P3, AC-386); and My runs beside it all, this data source's by
- *   default (AC-381, Q2).
+ * - **Once on:** the switch's record (who confirmed it, and when), Turn off
+ *   for a Super-Admin, who may run and as whom, and "Open in SQL runner",
+ *   which opens a workspace tab on this data source (N1).
  * - **In My workspace,** its owner runs it with no switch (AC-383), unless a
- *   copy is pointed elsewhere, which needs one (Q8).
- * - **On Cube Store** (T536, AC-384; design 15's H): its own page's tab, its
- *   own switch and warning, no schema browser, and no Cancel, which Cube
- *   Store hasn't: xcube stops waiting at 30 seconds (research
- *   `xcube-sql-runner.md`).
+ *   copy is pointed elsewhere, which needs one (Q8): the tab says so, with
+ *   "Open in SQL runner" (N3).
+ * - **On Cube Store** (T536, AC-384; design 15's H): its own page's tab
+ *   keeps the runner, as design 17's table has it ("Unchanged"): its own
+ *   switch and warning, the editor and My runs, no schema browser, and no
+ *   Cancel, which Cube Store hasn't: xcube stops waiting at 30 seconds
+ *   (research `xcube-sql-runner.md`).
  *
- * A stopped or cancelled run shows the rows that came back before the stop,
+ * A stopped run on Cube Store shows the rows that came back before the stop,
  * marked cut, and offers them as a CSV; with none, it says nothing came back
  * (T545, xcube `6d9673ccda`; design 15's Q6).
  */
@@ -47,9 +45,6 @@ import { loginFor, pageKeyOf, pathText, routeOf, type SqlSource } from '../sql/s
 // importable from here for the page's own users.
 export type { SqlRunnerState, SqlSource } from '../sql/sqlSource';
 export { CubeStoreTurnOn } from '../sql/OffPanel';
-
-/** Another page's SQL tab: a data source's, or Cube Store's. */
-const sqlTabHref = (id: string) => `/explore/data-sources/${encodeURIComponent(id)}?tab=sql`;
 
 const LIMITS =
   'SELECT or EXPLAIN, one statement · up to 10,000 rows, 10 MB, 30 seconds · one run at a time';
@@ -119,29 +114,124 @@ function outcomeOf(status: number, body: unknown): SqlOutcome {
 
 export function SqlTab({ source, superAdmin }: { source: SqlSource; superAdmin: boolean }) {
   /**
-   * What the switch just did here: after Turn on, focus goes to the editor;
-   * after Turn off, to "Turn on the SQL runner…", with a note (design 15,
-   * keyboard). The tab shows again once the page has read the switch.
+   * What the switch just did here: after Turn on, focus goes to the editor,
+   * or on a data source to "Open in SQL runner"; after Turn off, to "Turn on
+   * the SQL runner…", with a note (design 15, keyboard). The tab shows again
+   * once the page has read the switch.
    */
   const [switched, setSwitched] = useState<'on' | 'off' | null>(null);
-  return source.sqlRunner.runs ? (
+  const onTurnedOff = () => {
+    setSwitched('off');
+  };
+  if (!source.sqlRunner.runs)
+    return (
+      <OffPanel
+        source={source}
+        superAdmin={superAdmin}
+        turnedOff={switched === 'off'}
+        onTurnedOn={() => {
+          setSwitched('on');
+        }}
+      />
+    );
+  return source.cubeStore === true ? (
     <Runner
       source={source}
       superAdmin={superAdmin}
       turnedOn={switched === 'on'}
-      onTurnedOff={() => {
-        setSwitched('off');
-      }}
+      onTurnedOff={onTurnedOff}
     />
   ) : (
-    <OffPanel
+    <SwitchRecord
       source={source}
       superAdmin={superAdmin}
-      turnedOff={switched === 'off'}
-      onTurnedOn={() => {
-        setSwitched('on');
-      }}
+      turnedOn={switched === 'on'}
+      onTurnedOff={onTurnedOff}
     />
+  );
+}
+
+/**
+ * A data source's tab while its runner runs for this user (T823, AC-464;
+ * design 17's N1 and N3): the switch's record with Turn off, who may run
+ * and as whom, and "Open in SQL runner"; never an editor.
+ */
+function SwitchRecord({
+  source,
+  superAdmin,
+  turnedOn,
+  onTurnedOff,
+}: {
+  source: SqlSource;
+  superAdmin: boolean;
+  /** Just turned on here: focus goes to "Open in SQL runner". */
+  turnedOn: boolean;
+  onTurnedOff: () => void;
+}) {
+  const heading = useId();
+  const open = useRef<HTMLAnchorElement>(null);
+  const groups = useReadWriteGroups(source);
+  const login = loginFor(source);
+  const runner = source.sqlRunner;
+  useEffect(() => {
+    if (turnedOn) open.current?.focus();
+    // On showing only: the tab is shown again after each switch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const yours = source.inWorkspace && runner.needsSwitch !== true;
+  return (
+    <section className="sql-off sql-on" aria-labelledby={heading}>
+      <h2 id={heading} className="visually-hidden">
+        SQL runner for {source.name}
+      </h2>
+      <div className="sql-runner__line">
+        {yours ? (
+          <span className="status status--ok" data-testid="sql-yours">
+            <StatusIcon kind="ok" />
+            Yours: you may run SQL on your own data sources in My workspace, with no switch. Nobody
+            else can.
+          </span>
+        ) : (
+          <span className="status status--ok" data-testid="sql-switch">
+            <StatusIcon kind="ok" />
+            SQL runner on · turned on by {runner.confirmedBy?.name ?? 'a Super-Admin'}, who
+            confirmed the login can only read
+            {runner.confirmedAt === undefined ? null : (
+              <>
+                {' · '}
+                <When iso={runner.confirmedAt} />
+              </>
+            )}
+            {superAdmin ? <TurnOff source={source} onTurnedOff={onTurnedOff} /> : null}
+          </span>
+        )}
+      </div>
+      {yours ? null : (
+        <dl className="sql-off__who">
+          <dt>Who may run SQL</dt>
+          <dd>
+            <WhoRuns source={source} groups={groups} />
+          </dd>
+          <dt>Runs as</dt>
+          <dd>
+            {login.as === null ? 'its own login' : <code>{login.as}</code>}
+            {login.database === null ? null : (
+              <>
+                {' on '}
+                <code>{login.database}</code>
+              </>
+            )}
+            {' at '}
+            <code>{login.where}</code>
+          </dd>
+        </dl>
+      )}
+      <div className="sql-off__act">
+        <a ref={open} className="btn btn-primary" href={openInSqlRunner(source.id)}>
+          {OPEN_IN_SQL_RUNNER}
+        </a>
+      </div>
+    </section>
   );
 }
 
@@ -155,7 +245,7 @@ interface Shown {
 
 const clockWithSeconds = (iso: string) => clock(new Date(iso), { seconds: true });
 
-/** Once on (screen 1): where it runs, the warning, the editor, the result, and My runs. */
+/** Cube Store's runner, once on (screen 1; design 15's H): the warning, the editor, the result, and My runs. */
 function Runner({
   source,
   superAdmin,
@@ -180,14 +270,10 @@ function Runner({
   const [cancelFailed, setCancelFailed] = useState<string | null>(null);
   /** Focus asked of the editor: on showing after Turn on, at a run's end, on a run picked. */
   const [focusing, setFocusing] = useState<object | undefined>(() => (turnedOn ? {} : undefined));
-  /** A name chosen in the schema browser, for the editor's cursor (T539). */
-  const [insertion, setInsertion] = useState<{ readonly text: string } | undefined>(undefined);
   const bar = useRef<HTMLDivElement>(null);
   const warningId = useId();
   const limitsId = useId();
-  const login = loginFor(source);
   const runner = source.sqlRunner;
-  const onCubeStore = source.cubeStore === true;
 
   const going = useQuery(GOING_QUERY);
   const elsewhere = running === null ? (going.data ?? null) : null;
@@ -237,9 +323,9 @@ function Runner({
       setShown({ result, sql, startedAt, answeredAt: Date.now() });
       setRunning(null);
       setCancelFailed(null);
-      setSaid(spokenOf(result, sql, source.cubeStore === true));
+      setSaid(spokenOf(result, sql));
       // Back to the editor, unless the user has moved on elsewhere meanwhile
-      // (design 15, keyboard): Run and Cancel are held back or gone.
+      // (design 15, keyboard): Run is held back or gone.
       const active = document.activeElement;
       if (active === null || active === document.body || bar.current?.contains(active) === true)
         setFocusing({});
@@ -248,6 +334,7 @@ function Runner({
     [running, elsewhere, source, queryClient],
   );
 
+  /** Another run of the user's, on a data source, going in the workspace. */
   const cancel = async () => {
     setCancelFailed(null);
     setCancelFailed(await cancelRun());
@@ -276,7 +363,7 @@ function Runner({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = csvFileName(onCubeStore ? CUBE_STORE_ID : source.name, shown.startedAt);
+    link.download = csvFileName(CUBE_STORE_ID, shown.startedAt);
     link.click();
     setTimeout(() => {
       URL.revokeObjectURL(url);
@@ -293,41 +380,15 @@ function Runner({
     <div className="sql-runner">
       <div className="sql-runner__main">
         <div className="sql-runner__line">
-          {onCubeStore ? (
-            <span data-testid="sql-runline">
-              Runs on <span className="is-code">Cube Store</span>, which holds every folder’s
-              rollups
-            </span>
-          ) : (
-            <span data-testid="sql-runline">
-              Runs on{' '}
-              {login.database === null ? null : (
-                <>
-                  <b className="is-code">{login.database}</b> at{' '}
-                </>
-              )}
-              <span className="is-code">{login.where}</span>
-              {login.as === null ? null : (
-                <>
-                  , as <span className="is-code">{login.as}</span>
-                </>
-              )}
-            </span>
-          )}
+          <span data-testid="sql-runline">
+            Runs on <span className="is-code">Cube Store</span>, which holds every folder’s rollups
+          </span>
           <span className="sql-runner__spacer" />
-          {source.inWorkspace && runner.needsSwitch !== true ? (
-            <span className="status status--ok" data-testid="sql-yours">
-              <StatusIcon kind="ok" />
-              Yours: you may run SQL on your own data sources in My workspace, with no switch.
-              Nobody else can.
-            </span>
-          ) : runner.on ? (
+          {runner.on ? (
             <span className="status status--ok" data-testid="sql-switch">
               <StatusIcon kind="ok" />
-              SQL runner on · turned on by {switchedBy ?? 'a Super-Admin'}, who confirmed{' '}
-              {onCubeStore
-                ? 'everyone allowed may read every folder’s rollups'
-                : 'the login can only read'}
+              SQL runner on · turned on by {switchedBy ?? 'a Super-Admin'}, who confirmed everyone
+              allowed may read every folder’s rollups
               {runner.confirmedAt === undefined ? null : (
                 <>
                   {' · '}
@@ -344,22 +405,11 @@ function Runner({
           data-testid="sql-warning"
         >
           <StatusIcon kind="warn" />
-          {onCubeStore ? (
-            // Design 15's H2.
-            <span>
-              <b>This SQL runs on Cube Store directly.</b> It holds every folder’s rollups, and
-              folder permissions and access policies don’t apply.
-            </span>
-          ) : (
-            <span>
-              <b>
-                This SQL runs on the database directly
-                {login.as === null ? '' : `, as ${login.as}`}.
-              </b>{' '}
-              Folder permissions and access policies don’t apply here: you can read whatever that
-              login can read.
-            </span>
-          )}
+          {/* Design 15's H2. */}
+          <span>
+            <b>This SQL runs on Cube Store directly.</b> It holds every folder’s rollups, and
+            folder permissions and access policies don’t apply.
+          </span>
         </p>
         {elsewhere === null ? null : elsewhere.stopping === true ? (
           // Nothing to cancel, nor to go to: Cube Store can't stop it (T548).
@@ -378,11 +428,8 @@ function Runner({
             {elsewhere.dataSource?.name ??
               (elsewhere.cubeStore === true ? 'Cube Store' : 'a data source')}
             , started at {clockOf(elsewhere.startedAt)}. One run at a time.{' '}
-            {elsewhere.dataSource !== null && elsewhere.dataSource.id !== source.id ? (
-              <a href={sqlTabHref(elsewhere.dataSource.id)}>Go to it</a>
-            ) : elsewhere.cubeStore === true && !onCubeStore ? (
-              <a href={sqlTabHref(CUBE_STORE_ID)}>Go to it</a>
-            ) : null}{' '}
+            {/* A data source's run is the SQL runner workspace's (T823, AC-464). */}
+            {elsewhere.dataSource !== null ? <a href="/sql">Go to it</a> : null}{' '}
             {/* Cube Store's has no cancel, and says so: it can't stop a query (AC-379, R64). */}
             {elsewhere.cubeStore === true ? (
               <span data-testid="sql-no-cancel">{NO_CANCEL}</span>
@@ -393,10 +440,8 @@ function Runner({
             )}
           </p>
         )}
-        {/* The editor, and the schema browser beside it, after it in the tab order (T539). */}
-        <div
-          className={onCubeStore ? 'sql-runner__work sql-runner__work--alone' : 'sql-runner__work'}
-        >
+        {/* Cube Store has no catalog to introspect: its tables are in information_schema. */}
+        <div className="sql-runner__work sql-runner__work--alone">
           <div className="sql-runner__editor">
             <SqlEditor
               value={text}
@@ -405,7 +450,6 @@ function Runner({
               onSelection={setSelected}
               label={`SQL for ${source.name}`}
               describedBy={`${warningId} ${limitsId}`}
-              insertion={insertion}
               focusing={focusing}
             />
             <div className="sql-runner__bar" ref={bar}>
@@ -427,20 +471,13 @@ function Runner({
               {running === null ? null : (
                 <>
                   {/* Cube Store can't stop a query: no Cancel, said so (AC-379, R64); xcube stops waiting at 30 s. */}
-                  {onCubeStore ? null : (
-                    <button type="button" className="btn" onClick={() => void cancel()}>
-                      Cancel
-                    </button>
-                  )}
                   <span className="status status--run">
                     <StatusIcon kind="run" />
                     Running {String(Math.floor((now - running.getTime()) / 1000))} s · stops at 30 s
                   </span>
-                  {onCubeStore ? (
-                    <span className="sql-runner__note" data-testid="sql-no-cancel">
-                      {NO_CANCEL}
-                    </span>
-                  ) : null}
+                  <span className="sql-runner__note" data-testid="sql-no-cancel">
+                    {NO_CANCEL}
+                  </span>
                 </>
               )}
               <span className="sql-runner__spacer" />
@@ -449,17 +486,6 @@ function Runner({
               </span>
             </div>
           </div>
-          {/* Cube Store has no catalog to introspect: its tables are in information_schema. */}
-          {onCubeStore ? null : (
-            <SchemaBrowser
-              sourceId={source.id}
-              sourceVersion={source.version}
-              sourceName={source.name}
-              onChoose={(name) => {
-                setInsertion({ text: name });
-              }}
-            />
-          )}
         </div>
         {cancelFailed === null ? null : (
           <p className="sql-runner__failed" role="alert" data-testid="sql-cancel-failed">
@@ -476,7 +502,7 @@ function Runner({
             sql={shown.sql}
             startedAt={shown.startedAt}
             onDownload={download}
-            onCubeStore={onCubeStore}
+            onCubeStore
             // Heard since its answer: Cube Store's run on has ended (T548).
             ended={going.dataUpdatedAt > shown.answeredAt && going.data?.stopping !== true}
           />
@@ -487,7 +513,6 @@ function Runner({
       </div>
       <MyRuns
         source={source}
-        user={user}
         onPick={(run) => {
           setUndo({ text, when: whenOf(run.startedAt) });
           edit(run.sql);
@@ -513,12 +538,12 @@ function Runner({
   );
 }
 
-/** What a screen reader hears once a run ends (design 15, keyboard). */
-function spokenOf(result: SqlOutcome, sql: string, onCubeStore: boolean): string {
+/** What a screen reader hears once a run on Cube Store ends (design 15, keyboard). */
+function spokenOf(result: SqlOutcome, sql: string): string {
   switch (result.outcome) {
     case 'refused':
       // Whole, as the note says it (T535's review).
-      return `Not run. ${result.error} ${refusalSentence(result, sql, onCubeStore)} Nothing reached ${onCubeStore ? 'Cube Store' : 'the database'}.`;
+      return `Not run. ${result.error} ${refusalSentence(result, sql, true)} Nothing reached Cube Store.`;
     case 'finished':
       return result.truncated === 'rows'
         ? 'Limited to 10,000 rows'
@@ -570,6 +595,8 @@ function TurnOff({ source, onTurnedOff }: { source: SqlSource; onTurnedOff: () =
     // Off, Cube Store is listed nowhere (AC-384).
     if (source.cubeStore === true)
       await queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+    // And the SQL runner workspace's picker shows it off (T798).
+    await queryClient.invalidateQueries({ queryKey: ['sql-sources'] });
   };
   return (
     <>
@@ -623,17 +650,8 @@ const runLabel = (run: PastRun): readonly [StateKind, string] =>
       ? ['warn', 'Limited to 10 MB']
       : (RUN_LABELS[run.outcome] ?? ['err', 'Not run']);
 
-/** My runs (pins 11, 12; F; Q2): only the user's, this data source's by default, 50 at a time. */
-function MyRuns({
-  source,
-  user,
-  onPick,
-}: {
-  source: SqlSource;
-  /** Whose drafts a run on another data source is put in. */
-  user: string;
-  onPick: (run: PastRun) => void;
-}) {
+/** My runs (pins 11, 12; F; Q2): only the user's, Cube Store's by default, 50 at a time. */
+function MyRuns({ source, onPick }: { source: SqlSource; onPick: (run: PastRun) => void }) {
   const heading = useId();
   const [scope, setScope] = useState<'source' | 'all'>('source');
   const runs = useInfiniteQuery({
@@ -707,7 +725,7 @@ function MyRuns({
           const [kind, label] = runLabel(run);
           const there = run.dataSource;
           // Cube Store's runs have no data source (T536).
-          const here = source.cubeStore === true ? there === null : there?.id === source.id;
+          const here = there === null;
           const body = (
             <>
               <span className="sql-runs__top">
@@ -745,8 +763,6 @@ function MyRuns({
               <span className="sql-runs__sql">{run.sql}</span>
             </>
           );
-          // Another page's run, a data source's or Cube Store's, opens there (T535's review).
-          const elsewhereId = there === null ? CUBE_STORE_ID : there.id;
           return (
             <li key={run.id}>
               {run.unavailable === true ? (
@@ -763,14 +779,8 @@ function MyRuns({
                   {body}
                 </button>
               ) : (
-                // It opens its own SQL tab, its SQL in the editor (F).
-                <a
-                  className="sql-runs__run"
-                  href={sqlTabHref(elsewhereId)}
-                  onClick={() => {
-                    keepDraft(user, elsewhereId, run.sql);
-                  }}
-                >
+                // A data source's run opens a workspace tab on it (T823, AC-464).
+                <a className="sql-runs__run" href={openInSqlRunner(there.id)}>
                   {body}
                 </a>
               )}

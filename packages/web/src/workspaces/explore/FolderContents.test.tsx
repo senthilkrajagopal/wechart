@@ -1229,4 +1229,31 @@ describe('the list as design 14 draws it (T693)', () => {
       await userEvent.keyboard('{Escape}');
     }
   });
+
+  // T823 (AC-464, AC-373; design 17's N4): first in a data source row's ⋯,
+  // for one who may run SQL on it now, opening a workspace tab on it.
+  it('offers “Open in SQL runner” first in the ⋯ of a data source the user may run SQL on, and nowhere else', async () => {
+    const other: CatalogItem = { ...source, id: 's2', title: 'lake' };
+    const onOpenInSqlRunner = vi.fn();
+    render(
+      <FolderContents
+        items={[source, other, items[0]!]}
+        onGenerate={vi.fn()}
+        onOpenInSqlRunner={onOpenInSqlRunner}
+        sqlRuns={(item) => item.id === 's1'}
+      />,
+    );
+    await userEvent.click(within(rowFor('s1')).getByRole('button', { name: /^Actions for / }));
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Open in SQL runner',
+      'Generate cubes…',
+    ]);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Open in SQL runner' }));
+    expect(onOpenInSqlRunner).toHaveBeenCalledWith(source);
+
+    await userEvent.click(within(rowFor('s2')).getByRole('button', { name: /^Actions for / }));
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Generate cubes…',
+    ]);
+  });
 });
