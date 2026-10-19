@@ -1,4 +1,4 @@
-import { comboSeriesOf, emptySpec, withComboSeries } from '@wechart/core';
+import { emptySpec, undrawnMeasures, type RenderSpec } from '@wechart/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { WELLS, Wells, rejectionReason } from './Wells';
+import { undrawnWell } from './combo/undrawnWell';
 import type { Member } from './fields';
 import { TYPE_WELLS, type TypeWellsProps } from './wells/registry';
 
@@ -1233,14 +1234,24 @@ describe('a metric the form doesn’t draw (T510)', () => {
   });
 
   it('puts the metric on the right axis from that offer, its pill then ending in R (T854, AC-506)', async () => {
-    /** The wells over options held as the editor holds them; the count is undrawn while left. */
+    /**
+     * The wells over options held as the editor holds them, with the
+     * editor's own wiring (`undrawnWell`, checkpoint 1's review): what's
+     * undrawn is worked out from the drawn spec each time, as the editor
+     * does, so the count is undrawn only while it's on the left.
+     */
     function Combo() {
       const [options, setOptions] = useState<Record<string, unknown>>({});
       const onOptions = (patch: Readonly<Record<string, unknown>>) =>
         setOptions((current) => ({ ...current, ...patch }));
-      const onRight =
-        comboSeriesOf(spec.measures, options).find((one) => one.measure === 'orders.count')
-          ?.axis === 'right';
+      const drawn: RenderSpec = {
+        chartType: 'combo',
+        encoding: { x: ['orders.ordered_at'], y: spec.measures },
+        measures: spec.measures,
+        rows: [],
+        formats: { 'orders.total_amount': 'currency' },
+        options,
+      };
       return (
         <Wells
           spec={spec}
@@ -1248,19 +1259,14 @@ describe('a metric the form doesn’t draw (T510)', () => {
           onAdd={vi.fn()}
           onRemove={vi.fn()}
           combo={{ options, onOptions, onFormat: vi.fn() }}
-          undrawn={
-            onRight
-              ? undefined
-              : {
-                  metrics: [{ member: 'orders.count', reason: 'scale' }],
-                  drawnAs: 'Combo',
-                  onTable: vi.fn(),
-                  onRightAxis: (member) =>
-                    onOptions({
-                      series: withComboSeries(options, member, { axis: 'right' })['series'],
-                    }),
-                }
-          }
+          undrawn={undrawnWell({
+            undrawn: undrawnMeasures(drawn),
+            shownType: 'combo',
+            options,
+            onOptions,
+            onSmallMultiples: undefined,
+            onTable: vi.fn(),
+          })}
         />
       );
     }

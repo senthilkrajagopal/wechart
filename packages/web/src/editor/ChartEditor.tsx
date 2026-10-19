@@ -23,7 +23,6 @@ import {
   toUnderlyingQuery,
   undrawnMeasures,
   wellFor,
-  withComboSeries,
   type ChartSpec,
   type SortSettings,
 } from '@wechart/core';
@@ -72,6 +71,7 @@ import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from 
 import { CubeSourcePicker, FieldList, membersWithJoins, useJoined } from './FieldList';
 import { Wells } from './Wells';
 import { LegendGlyphButtons } from './combo/LegendGlyphButtons';
+import { undrawnWell } from './combo/undrawnWell';
 import { stackChoice, stackCustomize } from './wells/stack';
 import { requestCalculation } from './calcRequests';
 import { RequestCalcDialog } from './RequestCalcDialog';
@@ -1284,26 +1284,15 @@ function EditorBody({
                         },
                       }
                     : {})}
-                  undrawn={
-                    undrawn.length === 0 || shownType === null
-                      ? undefined
-                      : {
-                          metrics: undrawn,
-                          drawnAs: CHART_TYPE_NAMES[shownType],
-                          onSmallMultiples: byMetric ? () => chooseAndReturn('trellis') : undefined,
-                          onTable: () => chooseAndReturn('table'),
-                          // A combo draws a metric on another scale on its right axis (AC-506).
-                          onRightAxis:
-                            shownType === 'combo'
-                              ? (member: string) =>
-                                  setOptions({
-                                    series: withComboSeries(options, member, { axis: 'right' })[
-                                      'series'
-                                    ],
-                                  })
-                              : undefined,
-                        }
-                  }
+                  // A combo draws a metric on another scale on its right axis (AC-506).
+                  undrawn={undrawnWell({
+                    undrawn,
+                    shownType,
+                    options,
+                    onOptions: setOptions,
+                    onSmallMultiples: byMetric ? () => chooseAndReturn('trellis') : undefined,
+                    onTable: () => chooseAndReturn('table'),
+                  })}
                   // A combo's pills: each metric's mark and axis, from its
                   // glyph's menu (T856, AC-497). Format… is the value axis's
                   // Number format, on Customize (decision T856-1).
