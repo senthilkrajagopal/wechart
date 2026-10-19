@@ -84,6 +84,16 @@ export function TextToolbar({
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
+    // ↓ or ↑ on the menu button opens its menu (APG menu button).
+    if (
+      (event.key === 'ArrowDown' || event.key === 'ArrowUp') &&
+      event.target === controls.current[0]
+    ) {
+      event.preventDefault();
+      setLinking(false);
+      setMenu(true);
+      return;
+    }
     const last = controls.current.length - 1;
     const step =
       event.key === 'ArrowRight'
@@ -114,6 +124,7 @@ export function TextToolbar({
       {...(props.popup === undefined
         ? {}
         : { 'aria-haspopup': props.popup, 'aria-expanded': props.expanded ?? false })}
+      {...(props.controls === undefined ? {} : { 'aria-controls': props.controls })}
       {...(props.id === undefined ? {} : { id: props.id })}
       onMouseDown={(event) => {
         event.preventDefault();
@@ -121,7 +132,15 @@ export function TextToolbar({
       onFocus={() => {
         setAt(index);
       }}
-      onClick={props.run}
+      onClick={(event) => {
+        /**
+         * From the block-style menu or the link field, which a press here may
+         * close: focus comes to this button first, so it isn't lost with what
+         * held it (T878's review). From the text, it stays there.
+         */
+        if (!editor.view.dom.contains(window.document.activeElement)) event.currentTarget.focus();
+        props.run();
+      }}
     >
       {props.children}
     </button>
@@ -143,13 +162,16 @@ export function TextToolbar({
           id: ids.button,
           popup: 'menu',
           expanded: menu,
+          controls: menu ? ids.menu : undefined,
+          // As drawn: a press that first took focus from the open menu has
+          // already closed it, and must not open it again.
           run: () => {
             setLinking(false);
-            setMenu((open) => !open);
+            setMenu(!menu);
           },
           children: (
             <>
-              <span>{current.name}</span>
+              <span className="text-toolbar__block-name">{current.name}</span>
               <span aria-hidden="true">▾</span>
             </>
           ),
@@ -178,7 +200,7 @@ export function TextToolbar({
           pressed: state.linked,
           run: () => {
             setMenu(false);
-            setLinking((open) => !open);
+            setLinking(!linking);
           },
           children: (
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
@@ -245,6 +267,8 @@ interface ControlProps {
   readonly popup?: 'menu' | 'listbox';
   readonly expanded?: boolean;
   readonly id?: string;
+  /** The popup it opens, while open. */
+  readonly controls?: string | undefined;
 }
 
 /**
@@ -368,7 +392,14 @@ function LinkForm({ editor, onClose }: { editor: Editor; onClose: (refocus: bool
   };
 
   return (
-    <div className="text-link-form">
+    <div
+      className="text-link-form"
+      // Closed once focus leaves it, for the text or another control.
+      onBlur={(event) => {
+        if (event.relatedTarget === null || !event.currentTarget.contains(event.relatedTarget))
+          onClose(false);
+      }}
+    >
       <label htmlFor={id}>Link address</label>
       <input
         ref={field}

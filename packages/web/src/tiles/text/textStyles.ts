@@ -99,6 +99,7 @@ export const TEXT_CSS = `
 .text-toolbar__button:hover { background: var(--wc-bg-hover); }
 .text-toolbar__button[aria-pressed='true'] { background: var(--wc-bg-accent-soft); color: var(--wc-accent); }
 .text-toolbar__block { width: 128px; justify-content: space-between; }
+.text-toolbar__block-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .text-toolbar__count { margin-left: auto; padding: 0 4px; white-space: nowrap; }
 /* The block-style menu, under its button, each style in its own type. */
 .text-style-menu {

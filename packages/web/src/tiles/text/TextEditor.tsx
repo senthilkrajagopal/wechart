@@ -99,6 +99,21 @@ export default function TextEditor({ document, name, onLeave }: TextEditorProps)
         if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey)
           event.stopPropagation();
       }}
+      /**
+       * A press on a part of it that takes no focus — the toolbar's strip,
+       * the count, a gap — keeps focus where it is; otherwise the tile around
+       * it, which takes focus, would, and the text would be left (T878's
+       * review).
+       */
+      onMouseDown={(event) => {
+        const target = event.target as Element;
+        if (
+          target.closest(
+            'button, input, label, [contenteditable="true"], [role="menuitemradio"], [role="option"]',
+          ) === null
+        )
+          event.preventDefault();
+      }}
       // Esc from the toolbar leaves the text too; the text's own Esc, and a
       // menu's or the link field's, is handled where it's pressed.
       onKeyDown={(event) => {

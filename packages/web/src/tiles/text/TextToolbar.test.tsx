@@ -202,6 +202,63 @@ describe('the Text tile’s toolbar (T878, AC-515)', () => {
     });
   });
 
+  it('closes the block-style menu and the link field by their own buttons, focus on the button (T878’s review)', async () => {
+    const { toolbar, onLeave } = await opened();
+    const block = within(toolbar).getByRole('button', { name: 'Block style: Paragraph' });
+    await userEvent.click(block);
+    expect(block.getAttribute('aria-controls')).toBe(screen.getByRole('menu').id);
+    await userEvent.click(block);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(window.document.activeElement).toBe(block);
+
+    const link = within(toolbar).getByRole('button', { name: 'Link' });
+    await userEvent.click(link);
+    expect(window.document.activeElement).toBe(
+      screen.getByRole('textbox', { name: 'Link address' }),
+    );
+    await userEvent.click(link);
+    expect(screen.queryByRole('textbox', { name: 'Link address' })).toBeNull();
+    expect(window.document.activeElement).toBe(link);
+    expect(onLeave).not.toHaveBeenCalled();
+  });
+
+  it('opens the block-style menu by ↓ on its button, as an APG menu button does', async () => {
+    const { toolbar } = await opened();
+    within(toolbar).getByRole('button', { name: 'Block style: Paragraph' }).focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(window.document.activeElement?.getAttribute('role')).toBe('menuitemradio');
+  });
+
+  it('closes the link field once focus leaves it', async () => {
+    const { toolbar, textbox } = await opened();
+    await userEvent.click(within(toolbar).getByRole('button', { name: 'Link' }));
+    await userEvent.click(within(toolbar).getByRole('button', { name: 'Bold' }));
+    expect(screen.queryByRole('textbox', { name: 'Link address' })).toBeNull();
+    await waitFor(() => {
+      expect(textbox.contains(window.document.activeElement)).toBe(true);
+    });
+  });
+
+  it('stays open for a click on its own parts that take no focus, inside a focusable tile', async () => {
+    const onLeave = vi.fn();
+    render(
+      // A tile, as the canvas draws one in edit mode: a group that takes focus
+      // (`grid/Canvas.tsx` weighs the rule below for the real one).
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      <div tabIndex={0} role="group" aria-label="Tile" data-testid="tile">
+        <TextEditor document={THREE} name="EMEA summary" onLeave={onLeave} />
+      </div>,
+    );
+    const textbox = screen.getByRole('textbox', { name: 'EMEA summary' });
+    await waitFor(() => {
+      expect(textbox.contains(window.document.activeElement)).toBe(true);
+    });
+    await userEvent.click(screen.getByText('3 / 10 elements'));
+    await userEvent.click(screen.getByRole('toolbar'));
+    expect(onLeave).not.toHaveBeenCalled();
+    expect(textbox.contains(window.document.activeElement)).toBe(true);
+  });
+
   it('counts past 10 in the warning state', async () => {
     const many: TextDocument = {
       version: 1,
