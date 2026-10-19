@@ -1,6 +1,5 @@
 import {
   COLUMN_KINDS,
-  columnsOf,
   graphicalTableOf,
   newColumn,
   NO_COLUMNS,
@@ -9,7 +8,7 @@ import {
   type GraphicalTableColumn,
   type IconRule,
 } from '@wechart/core';
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import { UndoToast } from '../../dashboard/edit/UndoToast';
 import { MenuButton } from '../../shell/MenuButton';
@@ -610,30 +609,61 @@ export function GraphicalTableWells({
   const [removed, setRemoved] = useState<{
     readonly column: GraphicalTableColumn;
     readonly at: number;
+    /** The columns it left, as `JSON.stringify` writes them. */
+    readonly after: string;
   } | null>(null);
 
   const set = (next: readonly GraphicalTableColumn[]) => {
     onOptions({ graphicalTable: withColumns({}, next)['graphicalTable'] });
   };
+  /**
+   * Where focus goes once the columns are redrawn (T943's review): a moved
+   * column's ⋯, so it can be moved again; after a Remove, the ⋯ of the column
+   * now in its place, or + Column when none is left.
+   */
+  const box = useRef<HTMLDivElement>(null);
+  const focusAt = useRef<number | null>(null);
+  const setFocusAt = (at: number) => {
+    focusAt.current = at;
+  };
+  // After every render: the columns are redrawn once the editor has the change.
+  useEffect(() => {
+    const at = focusAt.current;
+    if (at === null) return;
+    const more = box.current?.querySelectorAll<HTMLElement>('.gt-columns__more');
+    const target =
+      more !== undefined && more.length > 0
+        ? more[Math.min(at, more.length - 1)]
+        : box.current?.querySelector<HTMLElement>('[data-testid="add-graphicalTableColumn"]');
+    target?.focus();
+    focusAt.current = null;
+  });
+
+  /** The columns as a removal left them, so its Undo holds only while they still are. */
+  const columnsKey = JSON.stringify(columns);
+  const undoable = removed !== null && removed.after === columnsKey;
+
   const move = (from: number, to: number) => {
     const next = [...columns];
     const [column] = next.splice(from, 1);
     if (column === undefined) return;
     next.splice(to, 0, column);
     setOpen(null);
+    setFocusAt(to);
     set(next);
   };
   const remove = (at: number) => {
     const column = columns[at];
     if (column === undefined) return;
+    const next = columns.filter((_, index) => index !== at);
     setOpen(null);
-    setRemoved({ column, at });
-    set(columns.filter((_, index) => index !== at));
+    setRemoved({ column, at, after: JSON.stringify(next) });
+    setFocusAt(at);
+    set(next);
   };
   const undo = () => {
-    if (removed === null) return;
-    // Back where it was among what is there now, read fresh from the options.
-    const now = [...columnsOf(options)];
+    if (!undoable) return;
+    const now = [...columns];
     now.splice(Math.min(removed.at, now.length), 0, removed.column);
     setRemoved(null);
     set(now);
@@ -667,7 +697,11 @@ export function GraphicalTableWells({
         <h3 id={`${ids}-columns`} className="well-field__label">
           Columns <span className="well-field__opt">in order</span>
         </h3>
-        <div className="well well--settings gt-columns" data-testid="well-graphicalTable-columns">
+        <div
+          ref={box}
+          className="well well--settings gt-columns"
+          data-testid="well-graphicalTable-columns"
+        >
           {columns.length === 0 ? (
             <p className="panel-section__note">{NO_COLUMNS}</p>
           ) : (
@@ -683,7 +717,7 @@ export function GraphicalTableWells({
                     ),
                   );
                 return (
-                  <li key={`${String(at)}-${column.kind}`} className="gt-columns__item">
+                  <li key={at} className="gt-columns__item">
                     <div className="gt-columns__row">
                       <button
                         type="button"
@@ -696,7 +730,7 @@ export function GraphicalTableWells({
                       </button>
                       <MenuButton
                         label={`Column ${String(at + 1)}, ${name}: more`}
-                        className="addbtn"
+                        className="addbtn gt-columns__more"
                         align="end"
                         items={[
                           {
@@ -776,9 +810,7 @@ export function GraphicalTableWells({
       </section>
 
       <UndoToast
-        message={
-          removed === null ? '' : `Removed the column ${columnName(removed.column, titleOf)}.`
-        }
+        message={undoable ? `Removed the column ${columnName(removed.column, titleOf)}.` : ''}
         onUndo={undo}
         onDismiss={() => setRemoved(null)}
       />

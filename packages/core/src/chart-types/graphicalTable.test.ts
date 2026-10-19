@@ -130,6 +130,21 @@ describe('the graphical table’s spec (AC-570, AC-037)', () => {
     ]);
   });
 
+  it('keeps no marking or filter of a column’s own: the table’s rows mark, and its filters are the chart’s (T943-1)', () => {
+    const reopened = graphicalTableModule.parse({
+      columns: [
+        {
+          kind: 'value',
+          measure: 'orders.revenue',
+          marking: 'Marking',
+          whenUnmarked: 'none',
+          filters: [{ member: 'orders.region', operator: 'equals', values: ['EMEA'] }],
+        },
+      ],
+    });
+    expect(reopened.columns).toEqual([{ kind: 'value', settings: { measure: 'orders.revenue' } }]);
+  });
+
   it('saves nothing for a table with no columns, so its options stay as they were', () => {
     expect(graphicalTableModule.save({ columns: [] })).toBeUndefined();
     expect(graphicalTableModule.parse(undefined)).toEqual({ columns: [] });

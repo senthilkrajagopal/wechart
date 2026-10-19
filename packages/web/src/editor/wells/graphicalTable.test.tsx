@@ -309,6 +309,75 @@ describe('the graphical table’s wells (AC-570)', () => {
     ]);
   });
 
+  it('keeps focus on a moved column’s ⋯, so it can be moved again from the keyboard (T943’s review)', async () => {
+    const user = userEvent.setup();
+    const { last } = wells();
+    const more = screen.getByRole('button', {
+      name: 'Column 5, Change · Revenue vs last quarter: more',
+    });
+    more.focus();
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: 'Move up' }));
+    expect(document.activeElement?.getAttribute('aria-label')).toBe(
+      'Column 4, Change · Revenue vs last quarter: more',
+    );
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: 'Move up' }));
+    expect(last().map((one) => one.kind)).toEqual([
+      'value',
+      'sparkline',
+      'change',
+      'bullet',
+      'icon',
+    ]);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe(
+      'Column 3, Change · Revenue vs last quarter: more',
+    );
+  });
+
+  it('after a Remove, puts focus on the next column’s ⋯, or + Column when none is left', async () => {
+    const user = userEvent.setup();
+    wells({ columns: DESIGN_COLUMNS.slice(0, 2) });
+    await user.click(screen.getByRole('button', { name: 'Column 1, Value · Revenue: more' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Remove' }));
+    expect(document.activeElement?.getAttribute('aria-label')).toBe(
+      'Column 1, Sparkline · Revenue by month, last 12: more',
+    );
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: 'Remove' }));
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Add a column');
+  });
+
+  it('drops the toast’s Undo once the columns change otherwise, so it never puts a column back twice', async () => {
+    const user = userEvent.setup();
+    const onOptions = vi.fn();
+    const { rerender } = render(
+      <GraphicalTableWells
+        chartType="graphicalTable"
+        available={AVAILABLE}
+        titleOf={titleOf}
+        options={withColumns({}, DESIGN_COLUMNS)}
+        spec={{ measures: ['orders.revenue'], dimensions: ['products.category'] }}
+        onOptions={onOptions}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Column 1, Value · Revenue: more' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Remove' }));
+    // The editor applies the removal, then its own Undo puts the column back.
+    rerender(
+      <GraphicalTableWells
+        chartType="graphicalTable"
+        available={AVAILABLE}
+        titleOf={titleOf}
+        options={withColumns({}, DESIGN_COLUMNS)}
+        spec={{ measures: ['orders.revenue'], dimensions: ['products.category'] }}
+        onOptions={onOptions}
+      />,
+    );
+    expect(screen.queryByTestId('undo-toast')).toBeNull();
+    expect(onOptions).toHaveBeenCalledTimes(1);
+  });
+
   it('removes a column from its ⋯ menu, and Undo puts it back where it was', async () => {
     const user = userEvent.setup();
     const { last } = wells();

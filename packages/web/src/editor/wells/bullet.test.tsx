@@ -124,6 +124,41 @@ describe('the bullet chart’s wells (AC-580)', () => {
     expect(last().target).toEqual({ kind: 'value', value: 450000 });
   });
 
+  it('reads a Target measure its cube doesn’t have as no target, saying what it needs (T953’s review)', () => {
+    wells(
+      withBulletOptions(
+        {},
+        {
+          target: { kind: 'measure', member: 'customers.lifetime_value' },
+          bands: [80, 100, 120],
+        },
+      ),
+    );
+    expect(valueOf(screen.getByRole('combobox', { name: 'Target' }))).toBe('');
+    expect(screen.getByText(/compares each member with a target/)).toBeTruthy();
+  });
+
+  it('shows no value box beside a measure Target that comes back, as by Undo, after "A value" was chosen', async () => {
+    const user = userEvent.setup();
+    const props = {
+      chartType: 'bullet' as const,
+      available: AVAILABLE,
+      titleOf,
+      spec: { measures: ['orders.revenue'], dimensions: ['orders.region'] },
+      onOptions: vi.fn(),
+    };
+    const { rerender } = render(<BulletWells {...props} options={TARGETED} />);
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Target' }), 'value');
+    // Empty while no value is typed: still saying what it needs.
+    rerender(<BulletWells {...props} options={{}} />);
+    expect(screen.getByRole('spinbutton', { name: 'Target: value' })).toBeTruthy();
+    expect(screen.getByText(/compares each member with a target/)).toBeTruthy();
+    // The editor's Undo puts the measure back.
+    rerender(<BulletWells {...props} options={TARGETED} />);
+    expect(valueOf(screen.getByRole('combobox', { name: 'Target' }))).toBe('orders.revenue_target');
+    expect(screen.queryByRole('spinbutton', { name: 'Target: value' })).toBeNull();
+  });
+
   it('starts its bands at 80, 100 and 120 % of the target', () => {
     const { bands } = wells(TARGETED);
     expect(bands()).toEqual(['80', '100', '120']);

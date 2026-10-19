@@ -78,13 +78,23 @@ function isElement(element: string, attrs: Readonly<Record<string, unknown>>): b
   );
 }
 
+/**
+ * R80's settings a column inside a chart doesn't take: the table marks its
+ * rows as table tiles do, and every column shares the chart's filters
+ * (decision T943-1). Read and dropped, never kept.
+ */
+const NOT_IN_A_CHART = new Set(['marking', 'whenUnmarked', 'filters']);
+
 function columnOf(stored: unknown): GraphicalTableColumn | undefined {
   const one = record(stored);
   if (one === undefined) return undefined;
   const { kind: element, ...attrs } = one;
   const kind = COLUMN_KINDS.find((each) => each.element === element)?.kind;
   if (kind === undefined || !isElement(element as string, attrs)) return undefined;
-  return { kind, settings: attrs as GraphicalTableColumn['settings'] };
+  const settings = Object.fromEntries(
+    Object.entries(attrs).filter(([key]) => !NOT_IN_A_CHART.has(key)),
+  );
+  return { kind, settings: settings as GraphicalTableColumn['settings'] };
 }
 
 /**

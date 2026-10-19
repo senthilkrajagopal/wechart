@@ -2310,9 +2310,9 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T943 (AC-570, AC-037) The graphical table's spec and wells: Rows, Group rows by, and ordered columns of R80's element kinds, moved and removed from a ⋯ menu with Undo
 
-- [ ] T944 (AC-571) Draw the graphical table as a real `<table>` with its caption, 24 px rows, and its Value, Change, Sparkline, Bullet and Icon cells
+- [ ] T944 (AC-571, AC-570) Draw the graphical table as a real `<table>` with its caption, 24 px rows, and its Value, Change, Sparkline, Bullet and Icon cells
   - Files: `packages/web/src/tiles/GraphicalTable.tsx` (+ test).
-  - Failing test: `GraphicalTable.test.tsx`: 6 categories render a `table` with column headers and the caption "Categories at a glance: 6 rows; 2 on track, 2 at risk, 2 off track."; rows 24 px under a 28 px header; Sparkline cells are 64 × 16 `img`s each scaled to its own row; a Bullet cell is 96 × 16 with "23.1%" beside it, read "23.1 % of 25 %, in the 80–100 % band"; an Icon cell shows the icon and "At risk"; a row with no trend shows "—" with "No data for these filters"; Group rows by Region puts each region's rows under a heading row (AC-571).
+  - Failing test: `GraphicalTable.test.tsx`: 6 categories render a `table` with column headers and the caption "Categories at a glance: 6 rows; 2 on track, 2 at risk, 2 off track."; rows 24 px under a 28 px header; Sparkline cells are 64 × 16 `img`s each scaled to its own row; a Bullet cell is 96 × 16 with "23.1%" beside it, read "23.1 % of 25 %, in the 80–100 % band"; an Icon cell shows the icon and "At risk"; a row with no trend shows "—" with "No data for these filters"; Group rows by Region puts each region's rows under a heading row (AC-571); with no column the tile says "Add a column: Value, Change, Sparkline, Bullet or Icon." with + Column (design 23 sheet 2's empty state), and AC-570 is ticked on an e2e of both (added 2026-10-18 after T943's review: T943 built the wells, the tile is T944's).
   - Depends on: T943, T885, T886
 
 - [ ] T945 (AC-572) Page a graphical table at 50 rows, each page asking Cube for its values and its own members' trends
@@ -2364,7 +2364,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [ ] T954 (AC-581) Draw one bullet per member on one axis from zero: R80's greys lightest lowest, an 8 px value bar and a 2 × 32 px target
   - Files: `packages/charts/src/series/bullet.ts` (+ test).
-  - Failing test: `bullet.test.ts` (series): 4 regions share one value axis with `min: 0` and the note "Axis starts at $0: bars are lengths"; bands are `bg-subtle`, `border-subtle`, `border-strong` from low to high, 24 px tall on a 48 px pitch; the value bar is 8 px `text-primary`; the target 2 × 32 px; a member with no target draws its bar labelled "No target"; 30 members scroll with the axis fixed (AC-581).
+  - Failing test: `bullet.test.ts` (series): 4 regions share one value axis with `min: 0` and the note "Axis starts at $0: bars are lengths"; bands are `bg-subtle`, `border-subtle`, `border-strong` from low to high, 24 px tall on a 48 px pitch; the value bar is 8 px `text-primary`; the target 2 × 32 px; a member with no target draws its bar labelled "No target"; 30 members scroll with the axis fixed (AC-581); a saved bullet chart with Target emptied draws, in the tile, design 23 sheet 8's empty state: "A bullet chart compares each member with a target. Put a measure or a value in Target." with + Target (added 2026-10-18 after T953's review: T953 says it in the editor's Target well).
   - Depends on: T953
 
 - [ ] T955 (AC-582) Mark and cross-filter a bullet as its member, drawing another tile's marked share on the value bar from zero
@@ -2837,7 +2837,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 | AC-559 | T934, T972 | AC-560 | T968, T1012 | AC-561 | T969, T1012 |
 | AC-562 | T970 | AC-563 | T971, T1013 | AC-564 | T936 |
 | AC-565 | T937, T938 | AC-566 | T939 | AC-567 | T940 |
-| AC-568 | T941, T972 | AC-569 | T942 | AC-570 | T943 |
+| AC-568 | T941, T972 | AC-569 | T942 | AC-570 | T943, T944 |
 | AC-571 | T944 | AC-572 | T945 | AC-573 | T946, T972 |
 | AC-574 | T947 | AC-575 | T948 | AC-576 | T949 |
 | AC-577 | T950 | AC-578 | T951, T972 | AC-579 | T952 |

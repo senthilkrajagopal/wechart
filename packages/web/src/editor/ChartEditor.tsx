@@ -567,7 +567,7 @@ function EditorBody({
       (name) => available.find((member) => member.name === name)?.type === 'number',
     ).length,
     eachPointIs: spec.eachPointIs === undefined ? 0 : 1,
-    targets: targetCount(options), // A bullet chart's Target (T953, AC-580).
+    targets: targetCount(options, (name) => available.some((one) => one.name === name)), // T953
   };
 
   const recommendation = useMemo(() => recommend(signature), [signature]);

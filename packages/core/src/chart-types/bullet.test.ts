@@ -81,6 +81,21 @@ describe('the bullet chart’s spec (AC-580, AC-037)', () => {
     expect(targetCount(withBulletOptions({}, valued))).toBe(1);
   });
 
+  it('counts no target whose measure the chart’s cube doesn’t have, as after a change of cube (T953’s review)', () => {
+    const options = withBulletOptions(
+      {},
+      { target: { kind: 'measure', member: 'orders.revenue_target' }, bands: [80, 100, 120] },
+    );
+    expect(targetCount(options, (member) => member === 'orders.revenue_target')).toBe(1);
+    expect(targetCount(options, (member) => member.startsWith('customers.'))).toBe(0);
+    // A value is no member, so any cube has it.
+    const valued = withBulletOptions(
+      {},
+      { target: { kind: 'value', value: 1 }, bands: [80, 100, 120] },
+    );
+    expect(targetCount(valued, () => false)).toBe(1);
+  });
+
   it('says what an empty Target needs, in AC-580’s words', () => {
     expect(BULLET_NO_TARGET).toBe(
       'A bullet chart compares each member with a target. Put a measure or a value in Target.',

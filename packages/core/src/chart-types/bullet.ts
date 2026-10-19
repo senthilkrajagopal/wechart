@@ -113,7 +113,16 @@ export function withBulletOptions(
   return next;
 }
 
-/** The measures or values in Target, for what the chart needs (AC-580; `FieldCounts.targets`). */
-export function targetCount(options: Readonly<Record<string, unknown>> | undefined): number {
-  return bulletOptionsOf(options).target === undefined ? 0 : 1;
+/**
+ * The measures or values in Target, for what the chart needs (AC-580;
+ * `FieldCounts.targets`). Given what the chart's cube has, a measure it
+ * doesn't — kept in the options through a change of cube — counts as none.
+ */
+export function targetCount(
+  options: Readonly<Record<string, unknown>> | undefined,
+  has: (member: string) => boolean = () => true,
+): number {
+  const { target } = bulletOptionsOf(options);
+  if (target === undefined) return 0;
+  return target.kind === 'value' || has(target.member) ? 1 : 0;
 }

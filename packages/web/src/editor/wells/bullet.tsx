@@ -64,12 +64,21 @@ export function BulletWells({
   titleOf = (member) => member,
 }: TypeWellsProps) {
   const ids = useId();
-  const bullet = bulletOptionsOf(options);
+  const stored = bulletOptionsOf(options);
   const measures = available.filter((one) => one.kind === 'measure');
-  // "A value" chosen before its value is typed is held here until it has one.
+  // A Target measure the cube doesn't have, kept through a change of cube,
+  // is no target: the chart can't be drawn from it (T953's review).
+  const bullet: BulletSettings =
+    stored.target?.kind === 'measure' &&
+    !measures.some((one) => stored.target?.kind === 'measure' && one.name === stored.target.member)
+      ? { bands: stored.bands }
+      : stored;
+  // "A value" chosen before its value is typed is held here until it has
+  // one; only while Target is empty, so a target put back by Undo shows as itself.
   const [valuePending, setValuePending] = useState(false);
   const shown = bullet.target?.kind === 'measure' ? bullet.target.member : '';
-  const valueShown = bullet.target?.kind === 'value' || valuePending;
+  const valueShown =
+    bullet.target?.kind === 'value' || (valuePending && bullet.target === undefined);
   /** The last refusal, said until the next change (AC-580). */
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
 
@@ -100,9 +109,7 @@ export function BulletWells({
         >
           <select
             aria-labelledby={`${ids}-target`}
-            {...(bullet.target === undefined && !valuePending
-              ? { 'aria-describedby': `${ids}-needs` }
-              : {})}
+            {...(bullet.target === undefined ? { 'aria-describedby': `${ids}-needs` } : {})}
             value={shown !== '' ? shown : valueShown ? 'value' : ''}
             onChange={(event) => {
               const chosen = event.target.value;
@@ -126,7 +133,7 @@ export function BulletWells({
               onValue={(value) => set({ ...bullet, target: { kind: 'value', value } })}
             />
           ) : null}
-          {bullet.target === undefined && !valuePending ? (
+          {bullet.target === undefined ? (
             <p id={`${ids}-needs`} className="panel-section__note">
               {BULLET_NO_TARGET}
             </p>
