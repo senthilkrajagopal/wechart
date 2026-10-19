@@ -79,10 +79,10 @@ export function renderToSvg(
 }
 
 /**
- * An option with its value axes' titles taken off. A combo titles each axis
- * with its measures' mark glyphs, drawn in their series' colours (T848,
- * AC-500), so a test that finds a series' marks by colour would count the
- * glyph as a mark; the titles are tested on their own (`axisTitles.test.ts`).
+ * An option with its value axes' titles taken off, so a test that finds a
+ * series' marks reads the plot alone; the titles are tested on their own
+ * (`axisTitles.test.ts`). (T848 drew glyphs in the titles, which R82 took
+ * out.)
  */
 export function untitled(option: Record<string, unknown>): Record<string, unknown> {
   const strip = (axis: unknown) => {

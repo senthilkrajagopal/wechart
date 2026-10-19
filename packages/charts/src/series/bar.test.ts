@@ -412,7 +412,7 @@ describe('a dense bar chart (AC-210)', () => {
   it('shows the colour of every bar of a dense combo and of a dense trellis', () => {
     const canvas = { width: 320, height: 320 };
     const combo: RenderSpec = { ...bars('bar', 120), chartType: 'combo' };
-    // Its axis title's bar glyph (T848) is no bar.
+    // The plot alone, without its axis title.
     const comboMarks = marksOf(renderToSvg(untitled(comboOption(combo, canvas)), canvas), [BLUE]);
     expect(comboMarks).toHaveLength(120);
     for (const mark of comboMarks) expect(colourShown(mark, 'width')).toBeGreaterThan(0);

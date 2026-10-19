@@ -27,7 +27,7 @@ const STATUS = 'orders.status';
 const COUNT = 'orders.count';
 const AMOUNT = 'orders.amount';
 
-// Its axis titles' glyphs (T848) are no marks of its series.
+// The plot alone, its axis titles tested in `axisTitles.test.ts`.
 const draw = (spec: RenderSpec) => renderToSvg(untitled(comboOption(spec)));
 
 /**

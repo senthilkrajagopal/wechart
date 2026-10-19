@@ -89,7 +89,7 @@ async function textsIn(page: Page) {
   );
 }
 
-test('a combo titles its two axes with their glyphs, says "(right)", and a hovered series emphasises its axis', async ({
+test('a combo titles its two axes with their units, says "(right)", and a hovered series emphasises its axis', async ({
   page,
   request,
 }) => {
@@ -99,11 +99,12 @@ test('a combo titles its two axes with their glyphs, says "(right)", and a hover
   const svg = page.locator('[data-tile="tile-combo"] svg').first();
   await expect(svg).toBeVisible();
 
-  // The legend says which series is on the right; the left axis's title
-  // ends in its unit (AC-500).
+  // The legend says which series is on the right; the left axis's title is
+  // its unit alone, naming no measure (AC-500 as amended by R82).
   await expect.poll(async () => (await textsIn(page)).map((one) => one.text)).toContain('(right)');
   const texts = await textsIn(page);
-  expect(texts.some((one) => /\(\$\)$/.test(one.text))).toBe(true);
+  expect(texts.some((one) => one.text === '$')).toBe(true);
+  expect(texts.some((one) => /\(\$\)$/.test(one.text))).toBe(false);
 
   // The right axis's ticks: numbers right of the plot.
   const box = (await svg.boundingBox())!;

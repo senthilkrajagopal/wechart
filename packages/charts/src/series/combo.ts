@@ -28,7 +28,6 @@ import {
   type ComboMark,
   type RenderSpec,
 } from '@wechart/core';
-import { COLORS } from '@wechart/ui';
 
 import { allCounts, axesOf, type AxisSettings } from '../axis';
 import { alignedAxes, alignedLogAxes, type AxisRange, type LogRange } from '../combo/alignedAxes';
@@ -209,16 +208,15 @@ function valueAxes(
     measure: string;
     mark: ComboMark;
     axis: ComboAxis;
-    colour: string;
     values: readonly (number | null)[];
   }[],
   log: boolean,
 ): EChartsOption['yAxis'] {
   const axes = axesOf(spec);
   /**
-   * Each axis titled with its measures' glyphs and its unit (AC-500), each
-   * measure once, in its first series' colour. One axis keeps a title set in
-   * Customize instead (`applyAxes`).
+   * Each axis titled with its unit, or with no unit its measures, each once
+   * (AC-500 as amended by R82). One axis keeps a title set in Customize
+   * instead (`applyAxes`).
    */
   const titleOf = (side: ComboAxis) => {
     const seen = new Set<string>();
@@ -313,7 +311,6 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
    * (T852, AC-504).
    */
   const { categories, series } = comboDrawingOf(spec);
-  const split = isSplit(spec);
   const barCount = series.filter((one) => one.mark === 'bar').length;
   const logOn = logAxesOf(spec);
   /** On a log axis a value at or below zero has no place, so isn't drawn (AC-502). */
@@ -350,9 +347,6 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
         measure: one.measure,
         mark: one.mark,
         axis: one.axis,
-        // Split, a glyph stands for every member, so is drawn in the
-        // legend's own text colour (design 20 state D).
-        colour: split ? COLORS.light['text-secondary'] : colourFor(spec, one.name, one.colourIndex),
         values: valuesOf(one),
       })),
       logOn.right,

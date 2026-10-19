@@ -1,7 +1,8 @@
 /**
- * T848 (AC-500, rules 119 and 2): each value axis of a combo titled
- * horizontally above itself with its measures, each after its mark glyph in
- * its series' colour, then the axis's unit; and tick labels in
+ * T848 as amended by R82 (AC-500, rules 119 and 2): each value axis of a
+ * combo titled horizontally above itself with its unit alone ("$", "%"), or,
+ * where its format has no unit, with its measures' names ("Orders"), never
+ * with a mark glyph, the legend holding the glyphs; and tick labels in
  * `text-secondary`, never a series colour, in both themes.
  */
 import { describe, expect, it } from 'vitest';
@@ -18,6 +19,7 @@ const MONTH = 'orders.month';
 const REVENUE = 'orders.revenue';
 const TARGET = 'orders.target';
 const MARGIN = 'orders.margin_pct';
+const ORDERS = 'orders.count';
 const BLUE = '#2a78d6';
 const ORANGE = '#eb6834';
 const GREEN = '#1baa7d';
@@ -46,35 +48,19 @@ const axesOf = (option: Record<string, unknown>) => {
   const axes = option['yAxis'];
   return (Array.isArray(axes) ? axes : [axes]) as Axis[];
 };
-/** A title's words, its glyph tokens taken out. */
-const wordsOf = (name: string | undefined) =>
-  (name ?? '')
-    .replace(/\{\w+\|\}/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-/** The rich style of each glyph token in a title, in order. */
-const glyphsOf = (axis: Axis | undefined) =>
-  [...(axis?.name ?? '').matchAll(/\{(\w+)\|\}/g)].map(
-    ([, token]) => axis?.nameTextStyle?.rich?.[token ?? ''] ?? {},
-  );
+/** Whether a title holds a rich-text token, which is how a glyph is drawn. */
+const hasGlyph = (axis: Axis | undefined) =>
+  /\{\w+\|/.test(axis?.name ?? '') || Object.keys(axis?.nameTextStyle?.rich ?? {}).length > 0;
 
-describe('the left axis’s title (AC-500)', () => {
+describe('the left axis’s title (AC-500, R82)', () => {
   const [left] = axesOf(comboOption(spec));
 
-  it('names its measures, then its unit', () => {
-    expect(wordsOf(left?.name)).toBe('Revenue · Target ($)');
+  it('is its unit alone, with no measure named', () => {
+    expect(left?.name).toBe('$');
   });
 
-  it('puts each measure after its mark’s glyph, in its series’ colour', () => {
-    const name = left?.name ?? '';
-    expect(name.indexOf('{')).toBe(0);
-    expect(name.indexOf('Revenue')).toBeLessThan(name.lastIndexOf('{'));
-    expect(glyphsOf(left)).toEqual([
-      // A bar: an 8 × 8 square, radius 2.
-      { width: 8, height: 8, borderRadius: 2, backgroundColor: BLUE },
-      // A line: a 12 × 2 rule.
-      { width: 12, height: 2, backgroundColor: ORANGE },
-    ]);
+  it('carries no mark glyph', () => {
+    expect(hasGlyph(left)).toBe(false);
   });
 
   it('sits horizontally above its axis, from the axis line inwards', () => {
@@ -84,61 +70,66 @@ describe('the left axis’s title (AC-500)', () => {
   });
 });
 
-describe('the right axis’s title (AC-500)', () => {
+describe('the right axis’s title (AC-500, R82)', () => {
   const [, right] = axesOf(comboOption(spec));
 
-  it('names its measure after a point’s glyph, then its unit, ending at the axis line', () => {
-    expect(wordsOf(right?.name)).toBe('Margin % (%)');
-    expect(glyphsOf(right)).toEqual([
-      // A point: an 8 px dot, ringed 1 px in the surface colour.
-      {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: GREEN,
-        borderColor: '#ffffff',
-        borderWidth: 1,
-      },
-    ]);
+  it('is its unit alone, ending at the axis line, with no glyph', () => {
+    expect(right?.name).toBe('%');
+    expect(hasGlyph(right)).toBe(false);
     expect(right?.nameTextStyle?.align).toBe('right');
     expect(right?.nameRotate).toBe(0);
   });
 
-  it('writes an area as a 12 × 8 block, and a plain number with no unit', () => {
-    const area: RenderSpec = {
+  it('names its measures where its format has no unit, as "Orders"', () => {
+    const counts: RenderSpec = {
       ...spec,
-      formats: {},
-      options: { series: { [MARGIN]: { mark: 'area', axis: 'right' } } },
+      encoding: { x: [MONTH], y: [REVENUE, ORDERS] },
+      rows: [
+        { [MONTH]: 'Jan', [REVENUE]: 120_000, [ORDERS]: 310 },
+        { [MONTH]: 'Feb', [REVENUE]: 155_000, [ORDERS]: 402 },
+      ],
+      formats: { [REVENUE]: 'currency' },
+      titles: { [REVENUE]: 'Revenue', [ORDERS]: 'Orders' },
+      options: { series: { [ORDERS]: { mark: 'line', axis: 'right' } } },
     };
-    const [, axis] = axesOf(comboOption(area));
+    const [left, right] = axesOf(comboOption(counts));
 
-    expect(wordsOf(axis?.name)).toBe('Margin %');
-    expect(glyphsOf(axis)).toEqual([{ width: 12, height: 8, backgroundColor: GREEN }]);
+    expect(left?.name).toBe('$');
+    expect(right?.name).toBe('Orders');
+    expect(hasGlyph(right)).toBe(false);
+  });
+
+  it('names each of several unitless measures once, joined by " · "', () => {
+    const plain: RenderSpec = { ...spec, formats: {}, options: {} };
+    const [axis] = axesOf(comboOption(plain));
+
+    expect(axis?.name).toBe('Revenue · Target · Margin %');
   });
 });
 
 describe('one value axis', () => {
   it('is titled the same way while every series is on the left', () => {
     // Margin % in %, drawn by Auto on the left, isn't drawn beside money
-    // (R67): the axis is titled with what it draws.
+    // (R67): the axis is titled with the unit of what it draws.
     const [axis] = axesOf(optionFor({ ...spec, options: {} }));
 
-    expect(wordsOf(axis?.name)).toBe('Revenue · Target ($)');
+    expect(axis?.name).toBe('$');
     expect(axis?.nameRotate).toBe(0);
+    expect(hasGlyph(axis)).toBe(false);
   });
 });
 
 describe('drawn', () => {
-  it('writes both titles upright above the plot', () => {
+  it('writes both units upright above the plot', () => {
     const labels = labelsOf(renderToSvg(optionFor(spec)));
-    const revenue = labels.find((label) => label.text.includes('Revenue'));
-    const margin = labels.find((label) => label.text.includes('Margin %'));
+    const dollars = labels.find((label) => label.text === '$');
+    const percent = labels.find((label) => label.text === '%');
     const ticks = labels.filter((label) => /\$\d/.test(label.text));
 
-    expect(revenue).toBeDefined();
-    expect(margin).toBeDefined();
+    expect(dollars).toBeDefined();
+    expect(percent).toBeDefined();
     // Above every tick of the axis.
-    expect(revenue!.y).toBeLessThan(Math.min(...ticks.map((tick) => tick.y)));
+    expect(dollars!.y).toBeLessThan(Math.min(...ticks.map((tick) => tick.y)));
   });
 });
 
