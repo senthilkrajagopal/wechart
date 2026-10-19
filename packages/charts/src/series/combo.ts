@@ -17,6 +17,7 @@
  */
 import {
   comboSeriesOf,
+  comboStackingOf,
   formatterFor,
   isSynchronized,
   logScaleState,
@@ -52,6 +53,48 @@ export function isComboType(chartType: string): boolean {
 }
 
 const AXIS_INDEX: Record<ComboAxis, number> = { left: 0, right: 1 };
+
+/**
+ * The stack a series is drawn in, or none (AC-503, rule 126): every bar
+ * series while bars are stacked, every area series while areas are, each in
+ * its axis's own stack. ECharts stacks series by their `stack` string alone,
+ * whatever their axis, so the id carries the axis's index ("0:bars",
+ * "1:areas"; research/rich-tiles-and-combo-tech.md §2). Lines and points
+ * never stack.
+ */
+function stackOf(spec: RenderSpec, mark: ComboMark, axis: ComboAxis): string | undefined {
+  const stacking = comboStackingOf(spec.options);
+  if (mark === 'bar' && stacking.bars === 'stacked') return `${String(AXIS_INDEX[axis])}:bars`;
+  if (mark === 'area' && stacking.areas === 'stacked') return `${String(AXIS_INDEX[axis])}:areas`;
+  return undefined;
+}
+
+/**
+ * The values an axis must reach (AC-503): each unstacked series' own, and
+ * each stack's running totals per category, ECharts stacking values of one
+ * sign on those of the same sign (`stackStrategy` 'samesign', its default).
+ */
+function reachOf(
+  drawn: readonly { stack: string | undefined; values: readonly (number | null)[] }[],
+): number[] {
+  const reach: number[] = [];
+  const stacks = new Map<string, { above: number[]; below: number[] }>();
+  for (const one of drawn) {
+    if (one.stack === undefined) {
+      for (const value of one.values) if (value !== null) reach.push(value);
+      continue;
+    }
+    const sums = stacks.get(one.stack) ?? { above: [], below: [] };
+    stacks.set(one.stack, sums);
+    one.values.forEach((value, at) => {
+      if (value === null) return;
+      const side = value < 0 ? sums.below : sums.above;
+      side[at] = (side[at] ?? 0) + value;
+      reach.push(side[at]);
+    });
+  }
+  return reach;
+}
 
 /** Whether a combo is split by a dimension, across every measure (AC-504). */
 const isSplit = (spec: RenderSpec) => memberOn(spec.encoding, 'color') !== undefined;
@@ -208,6 +251,7 @@ function valueAxes(
     measure: string;
     mark: ComboMark;
     axis: ComboAxis;
+    stack: string | undefined;
     values: readonly (number | null)[];
   }[],
   log: boolean,
@@ -232,9 +276,8 @@ function valueAxes(
     ...new Set(drawn.filter((one) => one.axis === side).map((one) => one.measure)),
   ];
   const rangeOf = (side: ComboAxis): AxisRange => {
-    const values = drawn
-      .filter((one) => one.axis === side)
-      .flatMap((one) => one.values.filter((value): value is number => value !== null));
+    // A stack reaches its totals, not its tallest part (AC-503).
+    const values = reachOf(drawn.filter((one) => one.axis === side));
     const settings = side === 'left' ? axes.y : axes.right;
     // Reduced, not spread: a long result is more arguments than a call takes.
     return {
@@ -254,9 +297,7 @@ function valueAxes(
    */
   const logRangeOf = (side: ComboAxis): LogRange => {
     const settings = side === 'left' ? axes.y : axes.right;
-    const values = drawn
-      .filter((one) => one.axis === side)
-      .flatMap((one) => one.values.filter((value): value is number => value !== null && value > 0));
+    const values = reachOf(drawn.filter((one) => one.axis === side)).filter((value) => value > 0);
     return {
       min: values.length === 0 ? undefined : values.reduce((a, b) => Math.min(a, b)),
       max: values.length === 0 ? undefined : values.reduce((a, b) => Math.max(a, b)),
@@ -347,6 +388,7 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
         measure: one.measure,
         mark: one.mark,
         axis: one.axis,
+        stack: stackOf(spec, one.mark, one.axis),
         values: valuesOf(one),
       })),
       logOn.right,
@@ -354,7 +396,9 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
     series: series.map((one) => {
       const colour = colourFor(spec, one.name, one.colourIndex);
       const { mark, axis } = one;
+      const stack = stackOf(spec, mark, axis);
       const common = {
+        ...(stack === undefined ? {} : { stack }),
         name: one.name,
         // Which measure it draws, beyond ECharts (which ignores the key):
         // split, its name is its member's, so the tooltip finds its format

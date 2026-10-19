@@ -161,9 +161,8 @@ export function comboProblems(options: Readonly<Record<string, unknown>> | undef
   // Settings of another shape hold no mark or axis: every renderer reads
   // them as none (T845's review).
   const series = options?.['series'];
-  if (!isRecord(series)) return [];
   const problems: string[] = [];
-  for (const [name, settings] of Object.entries(series)) {
+  for (const [name, settings] of Object.entries(isRecord(series) ? series : {})) {
     if (!isRecord(settings)) continue;
     const { mark, axis } = settings;
     if (mark !== undefined && !isMark(mark)) {
@@ -177,7 +176,87 @@ export function comboProblems(options: Readonly<Record<string, unknown>> | undef
       );
     }
   }
+  return [...problems, ...stackingProblems(options)];
+}
+
+/** How a combo's bars sit within a category (AC-503). */
+export type BarStacking = 'side-by-side' | 'stacked';
+/** How a combo's areas sit over each other (AC-503). */
+export type AreaStacking = 'overlap' | 'stacked';
+/** A combo's stacking, chart-wide (AC-503, rule 126). */
+export interface ComboStacking {
+  readonly bars: BarStacking;
+  readonly areas: AreaStacking;
+}
+/** The two stacking rows Customize › Series can show (AC-503). */
+export type ComboStackingRow = keyof ComboStacking;
+
+const STACKING_STARTS: ComboStacking = { bars: 'side-by-side', areas: 'overlap' };
+const STACKING_VALUES: Readonly<Record<ComboStackingRow, readonly string[]>> = {
+  bars: ['side-by-side', 'stacked'],
+  areas: ['overlap', 'stacked'],
+};
+
+/** A stored stacking other than its row's two, in words (`comboProblems`). */
+function stackingProblems(options: Readonly<Record<string, unknown>> | undefined): string[] {
+  const combo = comboSettingsOf(options);
+  const problems: string[] = [];
+  const { bars, areas } = combo;
+  if (bars !== undefined && !STACKING_VALUES.bars.includes(bars as string)) {
+    problems.push(
+      `Bars are stacked as "${String(bars)}", but a combo's bars are side by side or stacked.`,
+    );
+  }
+  if (areas !== undefined && !STACKING_VALUES.areas.includes(areas as string)) {
+    problems.push(
+      `Areas are stacked as "${String(areas)}", but a combo's areas overlap or are stacked.`,
+    );
+  }
   return problems;
+}
+
+/**
+ * A combo's stacking (AC-503): one setting for every bar series and one for
+ * every area series, kept in `options.combo` as `bars` and `areas`, sparse:
+ * absent is side by side, or overlapping. Anything else stored is read as
+ * the start (and refused on reading the chart, `comboProblems`).
+ */
+export function comboStackingOf(
+  options: Readonly<Record<string, unknown>> | undefined,
+): ComboStacking {
+  const combo = comboSettingsOf(options);
+  return {
+    bars: combo['bars'] === 'stacked' ? 'stacked' : STACKING_STARTS.bars,
+    areas: combo['areas'] === 'stacked' ? 'stacked' : STACKING_STARTS.areas,
+  };
+}
+
+/**
+ * One stacking row set for the whole chart (AC-503). The starting value is
+ * stored as nothing, and an emptied `combo` entry is dropped, so the saved
+ * options stay sparse.
+ */
+export function withComboStacking<Row extends ComboStackingRow>(
+  options: Readonly<Record<string, unknown>>,
+  row: Row,
+  value: ComboStacking[Row],
+): Record<string, unknown> {
+  const combo: Record<string, unknown> = { ...comboSettingsOf(options) };
+  if (value === STACKING_STARTS[row]) delete combo[row];
+  else combo[row] = value;
+  const next: Record<string, unknown> = { ...options, combo };
+  if (Object.keys(combo).length === 0) delete next['combo'];
+  return next;
+}
+
+/**
+ * The stacking rows a combo offers (AC-503, design 20 pin 4): Bars always,
+ * Areas only while a series is drawn as an area.
+ */
+export function comboStackingRows(
+  series: readonly Pick<ComboSeries, 'mark'>[],
+): ComboStackingRow[] {
+  return series.some((one) => one.mark === 'area') ? ['bars', 'areas'] : ['bars'];
 }
 
 /** `options` with one series' settings replaced, its map and the options dropped when empty. */

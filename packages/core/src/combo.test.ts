@@ -18,12 +18,15 @@ import {
   COMBO_MARKS,
   comboProblems,
   comboSeriesOf,
+  comboStackingOf,
+  comboStackingRows,
   isSynchronized,
   logScaleState,
   markTakenBy,
   withComboAuto,
   withComboSeries,
   withComboSplit,
+  withComboStacking,
   withLogScale,
   withSynchronize,
 } from './combo';
@@ -468,5 +471,52 @@ describe('log scale (AC-502)', () => {
 
     expect(on['axes']).toEqual({ y: { min: 1, log: true }, right: { log: true } });
     expect(withLogScale(on, false)['axes']).toEqual({ y: { min: 1 }, right: {} });
+  });
+});
+
+/**
+ * T851 (AC-503, rule 126): stacking is set once for the whole chart, bars
+ * side by side or stacked, areas overlapping or stacked; the Areas row only
+ * while a series is an area.
+ */
+describe('stacking (AC-503)', () => {
+  it('starts with bars side by side and areas overlapping, storing nothing', () => {
+    expect(comboStackingOf(undefined)).toEqual({ bars: 'side-by-side', areas: 'overlap' });
+    expect(comboStackingOf({})).toEqual({ bars: 'side-by-side', areas: 'overlap' });
+  });
+
+  it('stacks bars and areas each on its own, chart-wide, kept with the other combo settings', () => {
+    const bars = withComboStacking({ combo: { synchronize: true } }, 'bars', 'stacked');
+
+    expect(bars['combo']).toEqual({ synchronize: true, bars: 'stacked' });
+    expect(comboStackingOf(bars)).toEqual({ bars: 'stacked', areas: 'overlap' });
+
+    const both = withComboStacking(bars, 'areas', 'stacked');
+    expect(comboStackingOf(both)).toEqual({ bars: 'stacked', areas: 'stacked' });
+  });
+
+  it('leaves no combo entry behind once both are back to their starting values', () => {
+    const stacked = withComboStacking({}, 'areas', 'stacked');
+
+    expect(withComboStacking(stacked, 'areas', 'overlap')).toEqual({});
+    expect(withComboStacking({ title: 'x' }, 'bars', 'side-by-side')).toEqual({ title: 'x' });
+  });
+
+  it('offers the Bars row always, and the Areas row only while a series is an area', () => {
+    const lines = comboSeriesOf([REVENUE, TARGET]);
+    const withArea = comboSeriesOf([REVENUE, TARGET], { series: { [TARGET]: { mark: 'area' } } });
+
+    expect(comboStackingRows(lines)).toEqual(['bars']);
+    expect(comboStackingRows(withArea)).toEqual(['bars', 'areas']);
+  });
+
+  it('refuses a stored stacking that is neither of its two', () => {
+    expect(comboProblems({ combo: { bars: 'stacked', areas: 'stacked' } })).toEqual([]);
+    expect(comboProblems({ combo: { bars: 'percent' } })).toEqual([
+      'Bars are stacked as "percent", but a combo\'s bars are side by side or stacked.',
+    ]);
+    expect(comboProblems({ combo: { areas: 'stacked-ish' } })).toEqual([
+      'Areas are stacked as "stacked-ish", but a combo\'s areas overlap or are stacked.',
+    ]);
   });
 });

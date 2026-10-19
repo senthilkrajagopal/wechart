@@ -590,3 +590,135 @@ describe('log scale (AC-502)', () => {
     );
   });
 });
+
+/**
+ * T851 (AC-503, rule 126): stacking set once for the whole chart, keyed per
+ * axis so a stack never crosses axes (ECharts stacks by the `stack` string
+ * alone; research/rich-tiles-and-combo-tech.md §2).
+ */
+describe('stacking (AC-503)', () => {
+  const MONTH = 'orders.month';
+  const REVENUE = 'orders.revenue';
+  const COST = 'orders.cost';
+  const ORDERS = 'orders.count';
+  const RETURNS = 'orders.returns';
+  const SESSIONS = 'orders.sessions';
+  const FOUR = [BLUE, ORANGE, '#0f8a5f', '#c0392b'];
+
+  /** Revenue and Cost bars on the left; Orders and Returns bars on the right. */
+  const bars = (combo?: Record<string, unknown>): RenderSpec => ({
+    chartType: 'combo',
+    encoding: { x: [MONTH], y: [REVENUE, COST, ORDERS, RETURNS] },
+    rows: [
+      { [MONTH]: 'Jan', [REVENUE]: 120, [COST]: 80, [ORDERS]: 10, [RETURNS]: 2 },
+      { [MONTH]: 'Feb', [REVENUE]: 150, [COST]: 90, [ORDERS]: 12, [RETURNS]: 3 },
+    ],
+    palette: FOUR,
+    options: {
+      series: {
+        [COST]: { mark: 'bar' },
+        [ORDERS]: { mark: 'bar', axis: 'right' },
+        [RETURNS]: { mark: 'bar', axis: 'right' },
+      },
+      ...(combo === undefined ? {} : { combo }),
+    },
+  });
+  /** Revenue and Cost areas on the left, Sessions an area on the right. */
+  const areas = (combo?: Record<string, unknown>): RenderSpec => ({
+    chartType: 'combo',
+    encoding: { x: [MONTH], y: [REVENUE, COST, SESSIONS] },
+    rows: [
+      { [MONTH]: 'Jan', [REVENUE]: 120, [COST]: 80, [SESSIONS]: 1000 },
+      { [MONTH]: 'Feb', [REVENUE]: 150, [COST]: 90, [SESSIONS]: 1400 },
+    ],
+    palette: PALETTE,
+    options: {
+      series: {
+        [REVENUE]: { mark: 'area' },
+        [COST]: { mark: 'area' },
+        [SESSIONS]: { mark: 'area', axis: 'right' },
+      },
+      ...(combo === undefined ? {} : { combo }),
+    },
+  });
+
+  type Drawn = { name?: string; stack?: string; type?: string; areaStyle?: unknown };
+  const stacksOf = (spec: RenderSpec) =>
+    Object.fromEntries(
+      (comboOption(spec)['series'] as Drawn[])
+        // A line's halo isn't one of its series (T846-1).
+        .filter((one) => one.type !== 'line' || one.areaStyle !== undefined)
+        .map((one) => [one.name, one.stack]),
+    );
+  type Axis = { min?: number; max?: number };
+  const axesOf = (spec: RenderSpec) => comboOption(spec)['yAxis'] as Axis[];
+
+  it('draws bars side by side by default, in no stack', () => {
+    expect(stacksOf(bars())).toEqual({
+      [REVENUE]: undefined,
+      [COST]: undefined,
+      [ORDERS]: undefined,
+      [RETURNS]: undefined,
+    });
+  });
+
+  it('stacks every bar series, the left’s in "0:bars" and the right’s in "1:bars"', () => {
+    expect(stacksOf(bars({ bars: 'stacked' }))).toEqual({
+      [REVENUE]: '0:bars',
+      [COST]: '0:bars',
+      [ORDERS]: '1:bars',
+      [RETURNS]: '1:bars',
+    });
+  });
+
+  it('gives overlapping areas no stack, and stacked areas "‹axis›:areas"', () => {
+    expect(stacksOf(areas())).toEqual({
+      [REVENUE]: undefined,
+      [COST]: undefined,
+      [SESSIONS]: undefined,
+    });
+    expect(stacksOf(areas({ areas: 'stacked' }))).toEqual({
+      [REVENUE]: '0:areas',
+      [COST]: '0:areas',
+      [SESSIONS]: '1:areas',
+    });
+  });
+
+  it('never stacks a line or a point, even with both stackings on', () => {
+    const spec: RenderSpec = {
+      ...bars({ bars: 'stacked', areas: 'stacked' }),
+      options: {
+        series: { [COST]: { mark: 'point' }, [ORDERS]: { mark: 'line' } },
+        combo: { bars: 'stacked', areas: 'stacked' },
+      },
+    };
+    const drawn = comboOption(spec)['series'] as Drawn[];
+
+    const unstacked = drawn.filter((one) => one.name === COST || one.name === ORDERS);
+
+    expect(unstacked.length).toBeGreaterThan(0);
+    expect(unstacked.map((one) => one.stack)).toEqual(unstacked.map(() => undefined));
+  });
+
+  it('scales each axis to its stacks’ totals, so no stack runs off the top', () => {
+    const [left, right] = axesOf(bars({ bars: 'stacked' }));
+
+    // Feb's stack is 150 + 90 = 240 on the left and 12 + 3 = 15 on the right.
+    expect(left?.max).toBeGreaterThanOrEqual(240);
+    expect(right?.max).toBeGreaterThanOrEqual(15);
+    // Side by side, the tallest bar is all each axis needs to reach.
+    const [sideLeft] = axesOf(bars());
+    expect(sideLeft?.max).toBeLessThan(240);
+  });
+
+  it('draws a right stack beside the left one, never on top of it', () => {
+    const svg = draw(bars({ bars: 'stacked' }));
+    const marks = marksOf(svg, FOUR);
+
+    expect(marks).toHaveLength(8);
+
+    // Two stacks per month, one per axis, side by side: four columns of bars
+    // whose left edges differ.
+    expect(new Set(marks.map((mark) => Math.round(mark.left))).size).toBe(4);
+  });
+});

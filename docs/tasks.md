@@ -1814,10 +1814,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T850 (AC-502) Give both axes one scale type, refuse log scale while bars are drawn, and count the values at or below zero a log axis leaves out
 
-- [ ] T851 (AC-503) Stack a combo's bars, and its areas, for the whole chart and per axis, never across axes
-  - Files: `packages/core/src/combo.ts` (the stacking options), `packages/charts/src/series/combo.ts`, their tests.
-  - Failing test: `combo.test.ts`: Stacked bars give the left's bar series `stack` "0:bars" and the right's "1:bars"; Overlap areas give no `stack` and Stacked areas "‹axis›:areas"; a combo with no area series offers no area stacking (AC-503).
-  - Depends on: T846
+- [x] T851 (AC-503) Stack a combo's bars, and its areas, for the whole chart and per axis, never across axes
 
 - [x] T852 (AC-504) Split a combo by one dimension across every measure: a series per measure × member, coloured by member, on its measure's axis, one mark per measure
 
