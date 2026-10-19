@@ -400,9 +400,49 @@ describe('a combo’s Series section (T855)', () => {
     });
   });
 
+  it('counts every measure of a combo, one on another scale too (T855’s follow-up)', () => {
+    render(
+      <CustomizeTab
+        options={{}}
+        onOptions={vi.fn()}
+        cartesian
+        valueAxes={['y']}
+        drawn
+        stackable
+        // As drawn, the count on another scale isn't a series yet.
+        series={[series[1]!]}
+        colourOf={() => '#123456'}
+        combo={combo}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Series (2)' })).toBeTruthy();
+    expect(screen.getByRole('radiogroup', { name: 'Orders Count axis' })).toBeTruthy();
+  });
+
   it('keeps the order list for any other chart', () => {
     tab();
     expect(screen.queryByRole('radiogroup', { name: /mark$/ })).toBeNull();
-    expect(screen.getByRole('list', { name: 'Series order', hidden: true })).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Series order' })).toBeTruthy();
+  });
+
+  it('offers Reset order to a combo whose order was set as another type (T855’s review)', async () => {
+    const onOptions = vi.fn();
+    render(
+      <CustomizeTab
+        options={{ seriesOrder: ['orders.amount'] }}
+        onOptions={onOptions}
+        cartesian
+        valueAxes={['y']}
+        drawn
+        stackable
+        series={series}
+        colourOf={() => '#123456'}
+        combo={combo}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reset the series order' }));
+    expect(onOptions).toHaveBeenLastCalledWith({ seriesOrder: undefined });
   });
 });

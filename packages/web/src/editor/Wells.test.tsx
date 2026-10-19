@@ -1204,6 +1204,33 @@ describe('a metric the form doesn’t draw (T510)', () => {
     expect(within(line).getByRole('button', { name: 'Table' })).toBeTruthy();
   });
 
+  it('offers a combo’s metric on another scale Draw on a right axis, first (AC-506)', async () => {
+    const onRightAxis = vi.fn();
+    render(
+      <Wells
+        spec={spec}
+        available={[amount, measure]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        undrawn={{
+          metrics: [{ member: 'orders.count', reason: 'scale' }],
+          drawnAs: 'Combo',
+          onSmallMultiples: vi.fn(),
+          onTable: vi.fn(),
+          onRightAxis,
+        }}
+      />,
+    );
+    const line = screen.getByTestId('undrawn-metrics');
+    expect(
+      within(line)
+        .getAllByRole('button')
+        .map((one) => one.textContent),
+    ).toEqual(['Draw on a right axis', 'Small multiples', 'Table', 'Remove Count']);
+    await userEvent.click(within(line).getByRole('button', { name: 'Draw on a right axis' }));
+    expect(onRightAxis).toHaveBeenCalledWith('orders.count');
+  });
+
   it('says nothing where every metric is drawn', () => {
     render(<Wells spec={spec} available={[amount, measure]} onAdd={vi.fn()} onRemove={vi.fn()} />);
     expect(screen.queryByTestId('undrawn-metrics')).toBeNull();

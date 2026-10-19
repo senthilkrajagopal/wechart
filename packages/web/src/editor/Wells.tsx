@@ -8,7 +8,7 @@ import type {
   WellName,
 } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
-import { QUERY_GRANULARITY, quickCalcName } from '@wechart/core';
+import { QUERY_GRANULARITY, quickCalcName, undrawnOffers } from '@wechart/core';
 import { Fragment, useId, useRef, useState, type ReactNode } from 'react';
 
 import { useQueryItem } from '../query/item';
@@ -314,6 +314,11 @@ export interface WellsProps {
         /** Small multiples, a panel per metric, where they can draw them all. */
         readonly onSmallMultiples?: (() => void) | undefined;
         readonly onTable: () => void;
+        /**
+         * A combo's: a metric on another scale put on the right axis, where
+         * it's drawn (AC-506), offered first (`undrawnOffers`).
+         */
+        readonly onRightAxis?: ((member: string) => void) | undefined;
       }
     | undefined;
   /**
@@ -464,6 +469,32 @@ export function Wells({
             {rest}
           </p>
           <div className="wells__undrawn-actions">
+            {(() => {
+              // A combo's metrics on another scale, each offered the right axis first (AC-506).
+              const { onRightAxis } = undrawn;
+              if (onRightAxis === undefined) return null;
+              const movable = undrawn.metrics.filter((each) =>
+                undrawnOffers('combo', each.reason).includes('rightAxis'),
+              );
+              return movable.map((each) => (
+                <button
+                  key={`right-${each.member}`}
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => {
+                    onRightAxis(each.member);
+                    // The line goes once it's drawn: focus to Metrics' "+".
+                    root.current
+                      ?.querySelector<HTMLElement>('[data-testid="add-measures"]')
+                      ?.focus();
+                  }}
+                >
+                  {movable.length === 1
+                    ? 'Draw on a right axis'
+                    : `Draw ${titleOf(each.member)} on a right axis`}
+                </button>
+              ));
+            })()}
             {undrawn.onSmallMultiples === undefined ? null : (
               <button type="button" className="btn btn-sm" onClick={undrawn.onSmallMultiples}>
                 Small multiples

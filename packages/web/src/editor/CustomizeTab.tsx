@@ -252,11 +252,14 @@ export function CustomizeTab({
         </details>
       ) : null}
 
-      {series.length === 0 ? null : (
+      {series.length === 0 && combo === undefined ? null : (
         // Closed at first, and counted, as the prototype's "SERIES (n)".
         <details className="customize-tab__section" aria-labelledby={`${ids}-series`}>
           <summary>
-            <h3 id={`${ids}-series`}>Series ({series.length})</h3>
+            <h3 id={`${ids}-series`}>
+              {/* A combo's every measure, one on another scale too (T855's follow-up). */}
+              Series ({combo === undefined ? series.length : combo.measures.length})
+            </h3>
           </summary>
           {combo === undefined ? null : (
             // A combo's series: each one's mark and axis, in place of the
@@ -304,7 +307,7 @@ export function CustomizeTab({
           <span className="visually-hidden" role="status">
             {said}
           </span>
-          {setOrder.length > 0 && combo === undefined ? (
+          {setOrder.length > 0 ? (
             // Back to the order the data comes in, said so rather than
             // guessed from a move that happens to match it.
             <button

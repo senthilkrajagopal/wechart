@@ -130,8 +130,10 @@ export {
   scaleOf,
   undrawnMeasures,
   undrawnOf,
+  undrawnOffers,
   type FormShape,
   type Undrawn,
+  type UndrawnOffer,
   type UndrawnReason,
 } from './undrawn';
 

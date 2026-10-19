@@ -110,6 +110,22 @@ describe('a row per series (AC-497)', () => {
     expect(checked(within(axis).getByRole('radio', { name: 'Left' }))).toBe(true);
   });
 
+  it('shows or hides each series, unsplit too (T855’s review)', async () => {
+    const user = userEvent.setup();
+    render(
+      <Held
+        measures={measures}
+        colourOf={() => '#123456'}
+        start={{ series: { [TARGET]: { hidden: true } } }}
+      />,
+    );
+    const target = screen.getByRole('checkbox', { name: 'Show Revenue target' });
+
+    expect(checked(target)).toBe(false);
+    await user.click(target);
+    expect(optionsNow()).toEqual({});
+  });
+
   it("keeps a series' colour when its mark is set", async () => {
     const user = userEvent.setup();
     render(
@@ -177,6 +193,18 @@ describe('split by Region (AC-504)', () => {
     expect(bar.closest('label')?.getAttribute('title')).toBe(
       'Revenue draws bars. While the chart is split by Region, each measure needs its own mark.',
     );
+  });
+
+  it('never disables the mark a measure draws, though another chose it too (T855’s review)', () => {
+    const both = { series: { [REVENUE]: { mark: 'line' }, [MARGIN]: { mark: 'line' } } };
+    render(<Held measures={two} colourOf={() => '#123456'} split={split} start={both} />);
+    const line = within(screen.getByRole('radiogroup', { name: 'Margin % mark' })).getByRole(
+      'radio',
+      { name: 'Line' },
+    );
+
+    expect(checked(line)).toBe(true);
+    expect((line as HTMLInputElement).disabled).toBe(false);
   });
 
   it('enables every mark unsplit', () => {

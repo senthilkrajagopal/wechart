@@ -124,7 +124,24 @@ export function SeriesRows({ measures, options, onOptions, colourOf, split }: Se
             onChoose={(next) => setSeries(measure, { colour: next })}
           />
         )}
-        <span className="combo-series__name">{title}</span>
+        {splitBy ? (
+          <span className="combo-series__name">{title}</span>
+        ) : (
+          // Unsplit, a series is its measure, shown or hidden as any chart's
+          // (AC-219; T855's review): a measure hidden as another type would
+          // otherwise stay hidden with nothing to bring it back.
+          <label className="customize-tab__check combo-series__name">
+            <input
+              type="checkbox"
+              aria-label={`Show ${title}`}
+              checked={record(perSeries[measure])['hidden'] !== true}
+              onChange={(event) =>
+                setSeries(measure, { hidden: event.target.checked ? undefined : true })
+              }
+            />
+            {title}
+          </label>
+        )}
         <div
           role="radiogroup"
           aria-label={`${title} mark`}
@@ -132,8 +149,10 @@ export function SeriesRows({ measures, options, onOptions, colourOf, split }: Se
         >
           {COMBO_MARKS.map((mark) => {
             const takenBy = markTakenBy(names, options, splitBy, mark, measure);
+            // Never the mark it draws: two measures stored on one mark
+            // before a split each keep theirs (T852-1; T855's review).
             const why =
-              takenBy === undefined || split === undefined
+              takenBy === undefined || split === undefined || series.mark === mark
                 ? undefined
                 : `${titleOf(takenBy)} draws ${DRAWS[mark]}. While the chart is split by ${split.dimension}, each measure needs its own mark.`;
             const whyId = `${ids}-${String(index)}-${mark}-why`;

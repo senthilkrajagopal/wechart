@@ -50,6 +50,22 @@ export interface Undrawn {
   readonly reason: UndrawnReason;
 }
 
+/** What an undrawn metric is offered: a combo's right axis, small multiples, a table. */
+export type UndrawnOffer = 'rightAxis' | 'smallMultiples' | 'table';
+
+/**
+ * The offers for a metric a form leaves undrawn, in order (AC-506, R67):
+ * in a combo, one on another scale is offered a right axis first, which
+ * draws it; everywhere else, and for a metric past what a form draws,
+ * Small multiples and Table, as R67 has them. Small multiples is offered
+ * only where they can draw every metric (the editor's call).
+ */
+export function undrawnOffers(chartType: ChartType, reason: UndrawnReason): UndrawnOffer[] {
+  return chartType === 'combo' && reason === 'scale'
+    ? ['rightAxis', 'smallMultiples', 'table']
+    : ['smallMultiples', 'table'];
+}
+
 /**
  * The forms that draw their metrics as series on one value axis, unsplit
  * (`seriesOf`): one series per metric, or split by colour one per member of

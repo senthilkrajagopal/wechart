@@ -20,6 +20,7 @@ import {
   toUnderlyingQuery,
   undrawnMeasures,
   wellFor,
+  withComboSeries,
   type ChartSpec,
   type SortSettings,
 } from '@wechart/core';
@@ -746,7 +747,9 @@ function EditorBody({
     if (drawnSpec === undefined || drawnSpec.chartType !== 'combo') return undefined;
     const own = (member: string) =>
       (Object.hasOwn(titles, member) ? titles[member] : undefined) ?? member;
-    const measures = membersOn(onOneScale(drawnSpec).encoding, 'y').map((measure) => ({
+    // Every measure in the well, one on another scale too: putting it on the
+    // right is how it's drawn (T855's review; AC-506).
+    const measures = membersOn(drawnSpec.encoding, 'y').map((measure) => ({
       measure,
       title: own(measure),
     }));
@@ -1210,6 +1213,16 @@ function EditorBody({
                           drawnAs: CHART_TYPE_NAMES[shownType],
                           onSmallMultiples: byMetric ? () => chooseAndReturn('trellis') : undefined,
                           onTable: () => chooseAndReturn('table'),
+                          // A combo draws a metric on another scale on its right axis (AC-506).
+                          onRightAxis:
+                            shownType === 'combo'
+                              ? (member: string) =>
+                                  setOptions({
+                                    series: withComboSeries(options, member, { axis: 'right' })[
+                                      'series'
+                                    ],
+                                  })
+                              : undefined,
                         }
                   }
                   topN={topN}

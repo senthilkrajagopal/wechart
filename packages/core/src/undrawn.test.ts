@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from './render-spec';
-import { onOneScale, scaleOf, undrawnMeasures } from './undrawn';
+import { onOneScale, scaleOf, undrawnMeasures, undrawnOffers } from './undrawn';
 
 /**
  * T510 (AC-036, AC-187; UX-057, design 01-5; R67, the user): never draw a
@@ -147,6 +147,21 @@ describe('the metrics a form leaves undrawn (T510)', () => {
     // Nor is any taken off its axis to hold the first's scale.
     const drawn = spec('parallel', four);
     expect(onOneScale(drawn)).toBe(drawn);
+  });
+});
+
+/**
+ * AC-506 (T855's follow-up, T854): a combo's metric on another scale is
+ * offered a right axis first; R67's offers stay as they were elsewhere.
+ */
+describe('what an undrawn metric is offered (AC-506)', () => {
+  it('offers a combo’s metric on another scale a right axis, small multiples and a table, in that order', () => {
+    expect(undrawnOffers('combo', 'scale')).toEqual(['rightAxis', 'smallMultiples', 'table']);
+  });
+
+  it('offers a line chart’s the same metric small multiples and a table only', () => {
+    expect(undrawnOffers('line', 'scale')).toEqual(['smallMultiples', 'table']);
+    expect(undrawnOffers('combo', 'form')).toEqual(['smallMultiples', 'table']);
   });
 });
 

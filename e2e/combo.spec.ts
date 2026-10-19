@@ -1,5 +1,8 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { chooseChartType } from './chartType';
+import { cubePicker } from './cubePicker';
+import { wellPicker } from './wells';
 import { IN_MY_WORKSPACE } from './workspace';
 
 /**
@@ -153,4 +156,66 @@ test('a combo titles its two axes with their glyphs, says "(right)", and a hover
     .poll(async () => new Set((await rightTicks()).map((one) => one.fill)))
     .toEqual(new Set([TEXT_SECONDARY]));
   await expect.poll(async () => new Set(await bars())).toEqual(new Set([1]));
+});
+
+/**
+ * The editor half of a combo of revenue and a count, by month (T855's
+ * follow-up; AC-497, AC-506). Auto puts both on the left, so the count is
+ * "not drawn · on another scale"; Customize › Series still lists it, so it
+ * can be put on the right, where it's drawn; and the undrawn line offers
+ * "Draw on a right axis" first, before Small multiples and Table.
+ */
+test.describe('a combo of revenue and a count, by month (T855 follow-up)', () => {
+  async function comboOfRevenueAndCount(page: Page) {
+    await page.goto('/explore/charts/seed-chart-empty/edit');
+    await cubePicker(page).selectOption({ label: 'Orders' });
+    await wellPicker(page, 'measures').selectOption('orders.total_amount');
+    await wellPicker(page, 'measures').selectOption('orders.count');
+    await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+    await chooseChartType(page, 'combo');
+    await expect(page.getByTestId('in-measures-orders.count')).toContainText(
+      'not drawn · on another scale',
+    );
+  }
+  const axesOnCanvas = (page: Page) =>
+    page
+      .getByTestId('chart-canvas')
+      .locator('svg text')
+      .allTextContents()
+      .then((texts) => texts.filter((text) => text.includes('Count')).length);
+
+  test('lists the count in Customize › Series, and Right draws it', async ({ page }) => {
+    await comboOfRevenueAndCount(page);
+
+    await page.getByRole('tab', { name: 'Customize' }).click();
+    await page.locator('summary', { hasText: /^Series/ }).click();
+    const axis = page.getByRole('radiogroup', { name: 'Count axis' });
+    await expect(axis).toBeVisible();
+    await expect(page.getByRole('radiogroup', { name: 'Total Amount axis' })).toBeVisible();
+    await axis.getByRole('radio', { name: 'Right' }).check();
+
+    await page.getByRole('tab', { name: 'Data' }).click();
+    await expect(page.getByTestId('in-measures-orders.count')).not.toContainText('not drawn');
+    await expect(page.getByTestId('undrawn-metrics')).toHaveCount(0);
+    // The right axis is titled by the count now drawn on it (AC-500).
+    await expect.poll(() => axesOnCanvas(page)).toBeGreaterThan(0);
+  });
+
+  test('offers Draw on a right axis first in the undrawn line, and it draws the count there', async ({
+    page,
+  }) => {
+    await comboOfRevenueAndCount(page);
+
+    const line = page.getByTestId('undrawn-metrics');
+    await expect(line.getByRole('button')).toHaveText([
+      'Draw on a right axis',
+      'Small multiples',
+      'Table',
+      'Remove Count',
+    ]);
+    await line.getByRole('button', { name: 'Draw on a right axis' }).click();
+    await expect(line).toHaveCount(0);
+    await expect(page.getByTestId('in-measures-orders.count')).not.toContainText('not drawn');
+    await expect.poll(() => axesOnCanvas(page)).toBeGreaterThan(0);
+  });
 });
