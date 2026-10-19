@@ -154,6 +154,8 @@ export function barOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
 export interface Canvas {
   readonly width: number;
   readonly height: number;
+  /** Whether the window is narrower than 1,024 px (direction.md §2; a combo's AC-511). */
+  readonly narrow?: boolean;
 }
 
 /** A chart drawn without being told its canvas: the headless renderer's. */

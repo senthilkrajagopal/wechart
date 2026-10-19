@@ -45,6 +45,11 @@ export interface ReferenceContext {
   readonly surface: string;
   /** A value written as its axis writes it. */
   readonly write: (reference: ComboReference, value: number | string) => string;
+  /**
+   * Below 1,024 px (T866, AC-511): each labelled by its label alone, its
+   * value in a tooltip of its own.
+   */
+  readonly narrow?: boolean;
 }
 
 const AXIS_INDEX: Record<ComboAxis, number> = { left: 0, right: 1 };
@@ -110,10 +115,24 @@ export function referenceDrawing(
     textBorderColor: context.surface,
     textBorderWidth: HALO_PX,
     formatter:
-      reference.showValue === true
+      reference.showValue === true && context.narrow !== true
         ? `${reference.label} · ${context.write(reference, value)}`
         : reference.label,
   });
+
+  /**
+   * Below 1,024 px, a mark answering the pointer with its own tooltip,
+   * "Monthly plan: $100K" (T866): a marker's tooltip is its own, triggered by
+   * the item (research/echarts-narrow-combo.md). Wider, silent, as its
+   * carrier is (`MarkLineView.js`: a marker is silent while its series is).
+   */
+  const answering = (reference: ComboReference, value: string) =>
+    context.narrow === true
+      ? {
+          silent: false,
+          tooltip: { show: true, trigger: 'item', formatter: `${reference.label}: ${value}` },
+        }
+      : { silent: true };
 
   const carrier = (reference: ComboReference, mark: Record<string, unknown>, band: boolean) => ({
     type: 'line',
@@ -123,7 +142,7 @@ export function referenceDrawing(
     data: [],
     yAxisIndex: AXIS_INDEX[reference.axis ?? 'left'],
     z: band ? Z.band : Z.line,
-    silent: true,
+    silent: context.narrow !== true,
     legendHoverLink: false,
     tooltip: { show: false },
     ...mark,
@@ -156,19 +175,15 @@ export function referenceDrawing(
         }
       }
       const key = vertical ? 'xAxis' : 'yAxis';
+      const range = `${context.write(reference, from)}–${context.write(reference, to)}`;
       series.push(
         carrier(
           reference,
           {
             markArea: {
-              silent: true,
+              ...answering(reference, range),
               itemStyle: { color: COLORS.light['bg-subtle'], borderWidth: 0 },
-              label: label(
-                reference,
-                `${context.write(reference, from)}–${context.write(reference, to)}`,
-                reference.labelAt ?? 'end',
-                [0, 0],
-              ),
+              label: label(reference, range, reference.labelAt ?? 'end', [0, 0]),
               data: [[{ [key]: from }, { [key]: to }]],
             },
           },
@@ -189,7 +204,7 @@ export function referenceDrawing(
           reference,
           {
             markLine: {
-              silent: true,
+              ...answering(reference, context.write(reference, at)),
               symbol: ['none', 'none'],
               lineStyle: { width: LINE_PX, type: DASH, color: COLORS.light['text-secondary'] },
               label: label(reference, at, reference.labelAt ?? 'end', [0, 0]),
@@ -217,7 +232,7 @@ export function referenceDrawing(
         reference,
         {
           markLine: {
-            silent: true,
+            ...answering(reference, context.write(reference, value)),
             symbol: ['none', 'none'],
             lineStyle: { width: LINE_PX, type: DASH, color: colour },
             label: label(reference, value, at, offset),

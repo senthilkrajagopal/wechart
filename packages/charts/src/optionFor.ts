@@ -31,6 +31,7 @@ import {
   withLineHalos,
   withSettledLogScale,
 } from './series/combo';
+import { withNarrowCombo } from './combo/narrow';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { countryMap } from './geo/countryMap';
 import { isMapType, mapOption } from './series/map';
@@ -190,8 +191,12 @@ export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): E
   }
   // Its lines' halos last, under the lines as drawn (§7h; T846).
   // Split, its tooltip tells a member's measures apart (T852).
+  // Below 1,024 px, its ticks compact, its labels level and its legend wrapped (T866).
   if (isComboType(spec.chartType))
-    return withComboTooltip(withLineHalos(drawn(onGrid(comboOption(spec, canvas))), spec), spec);
+    return withComboTooltip(
+      withLineHalos(withNarrowCombo(drawn(onGrid(comboOption(spec, canvas))), spec, canvas), spec),
+      spec,
+    );
   if (isBoxplotType(spec.chartType)) return drawn(onGrid(boxplotOption(spec, canvas)));
   // Its own legend and tooltip, and no axes (T398). Drawn only once its
   // boundaries are registered: the tile loads them first (`loadCountryMap`).

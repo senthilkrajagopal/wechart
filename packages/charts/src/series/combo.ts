@@ -41,6 +41,7 @@ import {
   type AxisRange,
   type LogRange,
 } from '../combo/alignedAxes';
+import { compactTicks } from '../combo/narrow';
 import { referenceDrawing } from '../combo/references';
 import { axisTitle } from '../combo/axisTitles';
 import { colourFor } from '../colours';
@@ -436,8 +437,12 @@ function axesAndReferences(
       if (reference.direction === 'vertical')
         return writeCategory === undefined ? String(value) : writeCategory(value);
       const measure = reference.series ?? firstOn(reference.axis ?? 'left');
-      return measure === undefined ? String(value) : formatterFor(measure, spec.formats ?? {})(value);
+      if (measure === undefined) return String(value);
+      const write = formatterFor(measure, spec.formats ?? {});
+      // Below 1,024 px, compact as the ticks are (T866).
+      return canvas.narrow === true ? compactTicks(spec, measure, write)(value) : write(value);
     },
+    narrow: canvas.narrow === true,
   });
   return { axes, references };
 }

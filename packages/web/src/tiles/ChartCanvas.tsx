@@ -41,6 +41,7 @@ import {
   clickedName,
   type ClickedItem,
 } from '../dashboard/crossfilter/clicked';
+import { useNarrowWindow } from '../dashboard/useNarrowWindow';
 import { StateLine } from '../shell/StatusIcon';
 import { useThemeName } from '../shell/ThemeProvider';
 
@@ -162,6 +163,7 @@ export function ChartCanvas({
   const overlaid = legendOverlay !== undefined;
   const isCombo = spec.chartType === 'combo';
   const [canvas, setCanvas] = useState<Canvas | null>(null);
+  const narrow = useNarrowWindow();
   /**
    * A map's boundaries, registered before its first option is set, which
    * ECharts throws on without them (T398; research/country-map.md): fetched
@@ -592,7 +594,8 @@ export function ChartCanvas({
     // the same (T954): the dashboard draws its tiles afresh as it renders.
     const option = withScrollKept(
       drawnOption.current,
-      themed(optionFor(spec, canvas), theme),
+      // Below 1,024 px, drawn for the narrow window (a combo's AC-511, T866).
+      themed(optionFor(spec, narrow ? { ...canvas, narrow } : canvas), theme),
       ((chart.getOption() as { dataZoom?: unknown } | undefined)?.dataZoom ?? []) as {
         start?: unknown;
         end?: unknown;
@@ -620,7 +623,7 @@ export function ChartCanvas({
       chart.dispatchAction({ type: 'hideTip' });
       tipShown.current = false;
     }
-  }, [spec, theme, canvas, isMap, mapReady]);
+  }, [spec, theme, canvas, narrow, isMap, mapReady]);
 
   /**
    * A combo's hovered series, or its hovered legend entry, emphasises its

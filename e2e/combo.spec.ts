@@ -16,20 +16,26 @@ const API = 'http://localhost:4100/api';
 const TEXT_PRIMARY = '#1f1f1e';
 const TEXT_SECONDARY = '#5c5b57';
 
-/** A dashboard of one combo: total amount as bars on the left, the count as points on the right. */
-async function comboDashboard(request: APIRequestContext) {
+/**
+ * A dashboard of one combo: total amount as bars on the left, the count as
+ * points on the right, unless `chart` gives it other fields and options.
+ */
+async function comboDashboard(
+  request: APIRequestContext,
+  chart: { wells?: object; options?: object; granularities?: object } = {},
+) {
   const title = `Combo ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
       data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
-  const chart = (await (
+  const made = (await (
     await request.post(`${API}/documents`, {
       data: { kind: 'chart', title: 'Amount and orders', ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
-  const saved = await request.put(`${API}/documents/chart/${chart.id}`, {
+  const saved = await request.put(`${API}/documents/chart/${made.id}`, {
     data: {
       version: 1,
       body: {
@@ -39,13 +45,16 @@ async function comboDashboard(request: APIRequestContext) {
         localToDashboardId: dashboard.id,
         chart: {
           source: { cube: 'orders' },
-          wells: {
+          wells: chart.wells ?? {
             measures: ['orders.total_amount', 'orders.count'],
             dimensions: ['products.category'],
             timeDimensions: [],
           },
+          ...(chart.granularities === undefined ? {} : { granularities: chart.granularities }),
           chartType: 'combo',
-          options: { series: { 'orders.count': { mark: 'point', axis: 'right' } } },
+          options: chart.options ?? {
+            series: { 'orders.count': { mark: 'point', axis: 'right' } },
+          },
         },
       },
     },
@@ -64,7 +73,7 @@ async function comboDashboard(request: APIRequestContext) {
           {
             id: 'only',
             title: 'Only',
-            items: [{ id: 'tile-combo', kind: 'chart', w: 12, h: 60, chartId: chart.id }],
+            items: [{ id: 'tile-combo', kind: 'chart', w: 12, h: 60, chartId: made.id }],
           },
         ],
       },
@@ -804,4 +813,115 @@ test('adds, lists and deletes a combo’s reference lines in Customize, with Und
   await expect(rows.nth(0).getByTestId('reference-outside')).toHaveCount(0);
   await expect.poll(dashed).toBe(2);
   await expect.poll(() => canvas.locator('svg text').allTextContents()).not.toContain('Far away');
+});
+
+/**
+ * T866 (AC-511; design 20 state I): below 1,024 px, a combo tile keeps its
+ * axis titles above their axes, writes its ticks compact, thins its category
+ * labels so none meet, wraps its legend under the title, and labels a
+ * reference by its label alone, its value in its tooltip; the page doesn't
+ * scroll sideways.
+ */
+test.describe('a combo tile at 390 px (T866)', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('keeps its axis titles above their axes, thins its category labels, and puts a reference’s value in its tooltip', async ({
+    page,
+    request,
+  }) => {
+    const { id, title } = await comboDashboard(request, {
+      wells: {
+        measures: ['orders.total_amount', 'orders.count'],
+        dimensions: [],
+        timeDimensions: ['orders.ordered_at'],
+      },
+      granularities: { 'orders.ordered_at': 'month' },
+      options: {
+        series: { 'orders.count': { mark: 'line', axis: 'right' } },
+        // Room on the left axis for the plan, above every month's amount.
+        axes: { y: { max: 140000 } },
+        references: [
+          {
+            id: 'plan',
+            kind: 'line',
+            direction: 'horizontal',
+            axis: 'left',
+            value: 100000,
+            label: 'Monthly plan',
+            showValue: true,
+          },
+        ],
+      },
+    });
+    await page.goto(`/explore/dashboards/${id}`);
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    const tile = page.locator('[data-tile="tile-combo"]');
+    await expect.poll(async () => (await textsIn(page)).map((one) => one.text)).toContain('(right)');
+    const plot = (await tile.locator('svg').first().boundingBox())!;
+
+    // Each axis's title above its ticks, level, not turned beside them.
+    const texts = await textsIn(page);
+    const leftTicks = texts.filter((one) => /^\$\d/.test(one.text) && one.x < plot.x + plot.width / 2);
+    const rightTicks = texts.filter(
+      (one) => /^\d/.test(one.text) && one.x > plot.x + plot.width * 0.8,
+    );
+    expect(leftTicks.length).toBeGreaterThan(1);
+    expect(rightTicks.length).toBeGreaterThan(1);
+    for (const [name, ticks] of [
+      ['$', leftTicks],
+      ['Count', rightTicks],
+    ] as const) {
+      const titles = texts.filter((one) => one.text === name);
+      expect(titles).toHaveLength(1);
+      expect(titles[0]!.y).toBeLessThan(Math.min(...ticks.map((one) => one.y)));
+    }
+    const turned = await tile
+      .locator('svg text')
+      .evaluateAll((nodes) =>
+        nodes
+          .filter((node) => ['$', 'Count'].includes(node.textContent ?? ''))
+          .map((node) => node.getAttribute('transform') ?? ''),
+      );
+    expect(turned.every((transform) => !/rotate|matrix\(0/.test(transform))).toBe(true);
+
+    // Compact ticks: "$100K", not "$100,000".
+    expect(leftTicks.every((one) => !one.text.includes(','))).toBe(true);
+    expect(leftTicks.map((one) => one.text)).toContain('$100K');
+
+    // The category labels under the plot: thinned, no two boxes meeting.
+    const zero = Math.max(...leftTicks.map((one) => one.y));
+    const categories = await tile.locator('svg text').evaluateAll(
+      (nodes, below) =>
+        nodes
+          .map((node) => node.getBoundingClientRect())
+          .filter((box) => box.top > below + 4 && box.width > 0)
+          .map((box) => ({ left: box.left, right: box.right, top: box.top, bottom: box.bottom })),
+      zero,
+    );
+    expect(categories.length).toBeGreaterThan(1);
+    for (const [at, one] of categories.entries())
+      for (const other of categories.slice(at + 1))
+        expect(
+          one.left < other.right &&
+            other.left < one.right &&
+            one.top < other.bottom &&
+            other.top < one.bottom,
+        ).toBe(false);
+
+    // The reference labelled by its label alone, its value in its tooltip.
+    const label = (await textsIn(page)).filter((one) => one.text.includes('Monthly plan'));
+    expect(label.map((one) => one.text)).toEqual(['Monthly plan']);
+    await page.mouse.move(label[0]!.x, label[0]!.y);
+    const tip = tile.locator('div').filter({ hasText: /^Monthly plan/ });
+    await expect(tip.last()).toBeVisible();
+    await expect(tip.last()).toContainText('$100K');
+
+    // The page doesn't scroll sideways.
+    expect(
+      await page.evaluate(() => {
+        const root = document.scrollingElement!;
+        return root.scrollWidth - root.clientWidth;
+      }),
+    ).toBe(0);
+  });
 });

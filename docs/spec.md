@@ -1605,7 +1605,7 @@ Traces to: §P2.6 O, `[R80]`, `docs/inputs/2026-10-18-phase-3-advanced-analytics
       Fails when: the text alternative or a column head lacks a series' mark, axis or unit, or the text alternative omits a reference line; or a split chart's table has one header row.
 - [x] AC-510 WHILE a combo the author chose draws a second value axis, THE SYSTEM SHALL recommend as AC-029 and AC-030 say, unchanged by that axis, and the "Why this recommendation?" checklist SHALL read, on its one-value-axis rule, "You drew a second axis by hand; the recommender never does" (`[R80]`; design 20 state L).
       Fails when: the recommendation or its runners-up change because the author drew a second axis, or that line reads otherwise.
-- [ ] AC-511 WHILE the window is narrower than 1,024 px, THE SYSTEM SHALL draw a combo tile with its axis titles above their axes, compact tick labels, category labels thinned so that none overlap, the legend wrapped under the title, and each reference line labelled by its label alone, its value in its tooltip (`[R80]`; design 20 state I; AC-304).
+- [x] AC-511 WHILE the window is narrower than 1,024 px, THE SYSTEM SHALL draw a combo tile with its axis titles above their axes, compact tick labels, category labels thinned so that none overlap, the legend wrapped under the title, and each reference line labelled by its label alone, its value in its tooltip (`[R80]`; design 20 state I; AC-304).
       Fails when: at 390 px an axis title sits beside its axis, two category labels overlap, a reference label shows its value, or the page scrolls sideways.
 
 ## F45. The Text tile

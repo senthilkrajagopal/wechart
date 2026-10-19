@@ -1842,10 +1842,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T865 (AC-510) Keep the recommendation as it is when the author draws a second axis, and say so in "Why this recommendation?"
 
-- [ ] T866 (AC-511) Below 1,024 px, keep axis titles above their axes, compact ticks, thinned category labels, a wrapped legend and reference labels without values
-  - Files: `packages/charts/src/series/combo.ts`, `packages/charts/src/combo/references.ts`, `e2e/combo.spec.ts`.
-  - Failing test: the e2e at 390 px: a combo tile's axis titles sit above their axes; no two category labels' boxes overlap; the reference label reads "Monthly plan" alone and its tooltip "$100K"; the document doesn't scroll sideways (AC-511).
-  - Depends on: T848, T863
+- [x] T866 (AC-511) Below 1,024 px, keep axis titles above their axes, compact ticks, thinned category labels, a wrapped legend and reference labels without values
 
 - [ ] T867 (AC-037, AC-497, AC-499) A combo of three measures on two axes, made in the editor, saved, reopened and drawn the same on its dashboard
   - Files: `e2e/combo.spec.ts`.

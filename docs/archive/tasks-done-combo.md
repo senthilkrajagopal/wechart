@@ -106,3 +106,8 @@ Lane COMBO's ticked tasks from `docs/tasks.md` §P2.26 (F44), their sub-lines wo
   - Files: `packages/charts/src/combo/describe.ts` (+ test), `packages/web/src/tiles/DataTable.tsx` (+ test), `packages/web/src/tiles/ChartCanvas.tsx`.
   - Failing test: `describe.test.ts`: the split example reads "Combo, by quarter, split by Region. Revenue: bars, left axis, dollars. Margin %: line, right axis, percent. Axes aligned at zero. 8 series." and adds "Monthly plan: line at $100K, left axis"; `DataTable.test.tsx`: a split combo's table has two header rows, the first "Revenue · bars, left · $" (AC-509).
   - Depends on: T852, T863
+
+- [x] T866 (AC-511) Below 1,024 px, keep axis titles above their axes, compact ticks, thinned category labels, a wrapped legend and reference labels without values
+  - Files: `packages/charts/src/series/combo.ts`, `packages/charts/src/combo/references.ts`, `e2e/combo.spec.ts`.
+  - Failing test: the e2e at 390 px: a combo tile's axis titles sit above their axes; no two category labels' boxes overlap; the reference label reads "Monthly plan" alone and its tooltip "$100K"; the document doesn't scroll sideways (AC-511).
+  - Depends on: T848, T863
