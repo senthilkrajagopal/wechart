@@ -1,6 +1,6 @@
-import { isDrawable } from '@wechart/charts';
+import { describeChart, isDrawable } from '@wechart/charts';
 import { CHART_TYPE_NAMES, type ChartType, type RenderSpec } from '@wechart/core';
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 import type { AnswerMeta } from '../query/answerMeta';
@@ -171,6 +171,7 @@ function ChartBody({
   rowMarking,
   kpiSolo,
 }: ChartBodyProps) {
+  const describedId = useId();
   // A KPI alone, at text-kpi-solo (T683; design 06 state B).
   if (spec.chartType === 'kpi')
     return <Kpi spec={spec} {...(kpiSolo === true ? { solo: true } : {})} />;
@@ -196,16 +197,30 @@ function ChartBody({
     );
   }
 
+  /**
+   * The chart's text alternative, where its type has one (direction.md rule
+   * 166; T958, AC-585): read with the chart by a screen reader, which can't
+   * read a canvas, and not drawn, the chart being its picture.
+   */
+  const described = describeChart(spec);
   return (
-    <ChartCanvas
-      spec={spec}
-      {...(height === undefined ? {} : { height })}
-      {...(onItemClick === undefined ? {} : { onItemClick })}
-      {...(onShapeMark === undefined ? {} : { onShapeMark })}
-      {...(onAxisRange === undefined ? {} : { onAxisRange })}
-      {...(rangeStripes === undefined ? {} : { rangeStripes })}
-      {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
-    />
+    <>
+      <ChartCanvas
+        spec={spec}
+        {...(height === undefined ? {} : { height })}
+        {...(onItemClick === undefined ? {} : { onItemClick })}
+        {...(onShapeMark === undefined ? {} : { onShapeMark })}
+        {...(onAxisRange === undefined ? {} : { onAxisRange })}
+        {...(rangeStripes === undefined ? {} : { rangeStripes })}
+        {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
+        {...(described === undefined ? {} : { describedBy: describedId })}
+      />
+      {described === undefined ? null : (
+        <p id={describedId} className="visually-hidden" data-testid="chart-text-alternative">
+          {described}
+        </p>
+      )}
+    </>
   );
 }
 

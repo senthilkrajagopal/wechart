@@ -13,6 +13,8 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
 
+import { addedColumnsOf } from './tableView';
+
 /**
  * The table (AC-037), and the table view every chart can switch to (AC-178).
  *
@@ -151,6 +153,12 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
     );
   }, [spec]);
 
+  /**
+   * What a chart's table view adds after its columns: a 100 % stack's shares
+   * (T958, AC-585). Once per answer, not once per scroll.
+   */
+  const added = useMemo(() => addedColumnsOf(spec), [spec]);
+
   if (rows.length === 0) {
     return (
       <div className="data-table" data-testid="data-table">
@@ -162,6 +170,7 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
   // The columns its CSV heads too (T177): one definition for both, in the
   // wells' order (T393, AC-301).
   const columns = tableColumnsOf(rows, spec.fields);
+  const width = columns.length + added.length;
 
   /**
    * Rows marked from the keyboard (T405, AC-176; AC-092), where they can be
@@ -270,12 +279,17 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
                 {columnTitleOf(column, spec.titles)}
               </th>
             ))}
+            {added.map((column) => (
+              <th scope="col" key={`added:${column.title}`} className="num">
+                {column.title}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
           {above > 0 ? (
             <tr data-testid="table-spacer-top" aria-hidden="true">
-              <td colSpan={columns.length} style={{ height: `${String(above)}px`, padding: 0 }} />
+              <td colSpan={width} style={{ height: `${String(above)}px`, padding: 0 }} />
             </tr>
           ) : null}
 
@@ -324,13 +338,18 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
                     </td>
                   );
                 })}
+                {added.map((column) => (
+                  <td key={`added:${column.title}`} className="num">
+                    {column.cells[item.index] ?? ''}
+                  </td>
+                ))}
               </tr>
             );
           })}
 
           {below > 0 ? (
             <tr data-testid="table-spacer-bottom" aria-hidden="true">
-              <td colSpan={columns.length} style={{ height: `${String(below)}px`, padding: 0 }} />
+              <td colSpan={width} style={{ height: `${String(below)}px`, padding: 0 }} />
             </tr>
           ) : null}
         </tbody>

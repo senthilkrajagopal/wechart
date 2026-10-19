@@ -2339,10 +2339,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T957 (AC-584, AC-037) Customize › Stack, Sum or 100 %, on stacked bar and area, with the two gallery presets, only for summed measures, folding before shares, on a fixed 0–100 % axis
 
-- [ ] T958 (AC-585) Mark a 100 % segment as its tuple, draw a marked share as a fraction of the segment, and add the share to the text alternative and table
-  - Files: `packages/charts/src/marking/partial.ts`, `packages/charts/src/describe/stack100.ts` (+ test), `packages/web/src/tiles/tableView/stack100.ts` (+ test), `packages/charts/src/series/stack100Marking.test.ts`.
-  - Failing test: `stack100Marking.test.ts`: a segment marks (Region, Channel); a legend entry marks its Channel; with a marking covering half of EMEA · Web, the drawn marked part is half the segment's height from its own base; (describe) "Web's share is largest in APAC (62 %) and smallest in LATAM (38 %)."; (table view) a "Share of Region" column (AC-585).
-  - Depends on: T957, T935
+- [x] T958 (AC-585) Mark a 100 % segment as its tuple, draw a marked share as a fraction of the segment, and add the share to the text alternative and table
 
 ### Lane CHARTS-A: the recommender, saved charts, the keyboard and the e2e
 

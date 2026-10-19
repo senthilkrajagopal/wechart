@@ -55,7 +55,8 @@ export function markedValuesTsv(
  * graphical table's cells, a waterfall's steps, a histogram's bins — rather
  * than marking items whole (AC-098; design 23 screen 2 pin 12). While their
  * items are all only partly marked, their badge says whose share they show
- * in place of a count. 100 % stacking joins them with its Stack setting (T957).
+ * in place of a count. A stack drawn at 100 % joins them (T958, T935-1): its
+ * segments draw the marked share as a fraction of themselves.
  */
 const SHARE_SHOWN_TYPES: ReadonlySet<string> = new Set([
   'graphicalTable',
@@ -69,8 +70,13 @@ const SHARE_SHOWN_TYPES: ReadonlySet<string> = new Set([
  * by none of what the marking names, so its marked share is asked of Cube
  * (`needsMarkedShare`).
  */
-export function showsShareOnly(chartType: string, partlyMarked: boolean): boolean {
-  return partlyMarked && SHARE_SHOWN_TYPES.has(chartType);
+export function showsShareOnly(
+  chartType: string,
+  partlyMarked: boolean,
+  /** Drawn as a stack at 100 % (`isPercentStack`). */
+  percentStack = false,
+): boolean {
+  return partlyMarked && (percentStack || SHARE_SHOWN_TYPES.has(chartType));
 }
 
 /**

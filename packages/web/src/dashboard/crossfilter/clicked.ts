@@ -1,4 +1,13 @@
-import { distinctValues, memberOn, onOneScale, seriesOf, type RenderSpec } from '@wechart/core';
+import {
+  distinctValues,
+  isPercentStack,
+  memberOn,
+  onOneScale,
+  OTHER_LABEL,
+  seriesOf,
+  type MarkedItem,
+  type RenderSpec,
+} from '@wechart/core';
 
 /**
  * Which member value a click on a chart item stands for (AC-117).
@@ -148,4 +157,28 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
   // drawn from no dimension at all, such as a KPI — selects nothing.
   if (member === undefined || value === undefined || value === '') return undefined;
   return { member, value };
+}
+
+/**
+ * The item a click marks (AC-087): what `clickedValue` names, as a one-member
+ * item; but a segment of a stack drawn at 100 % marks its (category, colour
+ * member) tuple — EMEA's Web segment, not every Web segment (T958, AC-585;
+ * design 23 sheet 9) — while its legend entry still marks the colour member
+ * (AC-090). A stack at Sum marks its segment's series, as it did.
+ */
+export function clickedMarkItem(spec: RenderSpec, item: ClickedItem): MarkedItem | undefined {
+  const clicked = clickedValue(spec, item);
+  if (clicked === undefined) return undefined;
+  const category = memberOn(spec.encoding, 'x');
+  const tuple =
+    isPercentStack(spec) &&
+    item.legend === undefined &&
+    item.panelIndex === undefined &&
+    category !== undefined &&
+    item.name !== undefined &&
+    item.name !== '' &&
+    // "Other (n)" past 8 series is no member of anything: no tuple of it
+    // (T958's review), as the tile's items leave it out.
+    !clicked.value.startsWith(`${OTHER_LABEL} (`);
+  return tuple ? [{ member: category, value: item.name ?? '' }, clicked] : [clicked];
 }

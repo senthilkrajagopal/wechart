@@ -137,6 +137,14 @@ describe('a tile that only shows a marking’s share (AC-098, R81)', () => {
     expect(showsShareOnly('bar', true)).toBe(false);
     expect(showsShareOnly('kpi', true)).toBe(false);
   });
+
+  /** T935-1: 100 % stacking joins them, at 100 % only (T958, AC-585). */
+  it('shows the share on a stack drawn at 100 %, and keeps the count at Sum', () => {
+    expect(showsShareOnly('stackedBar', true, true)).toBe(true);
+    expect(showsShareOnly('stackedArea', true, true)).toBe(true);
+    expect(showsShareOnly('stackedBar', false, true)).toBe(false);
+    expect(showsShareOnly('stackedBar', true)).toBe(false);
+  });
 });
 
 describe('the chip for a non-empty marking', () => {

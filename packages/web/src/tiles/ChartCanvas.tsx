@@ -74,6 +74,8 @@ export interface ChartCanvasProps {
    * pointer, and the browser's own menu does not. Absent, the browser's does.
    */
   readonly onContextMenuAt?: ((x: number, y: number) => void) | undefined;
+  /** The id of the chart's text alternative, where its type has one (T958; rule 166). */
+  readonly describedBy?: string | undefined;
 }
 
 const DEFAULT_HEIGHT = 320;
@@ -98,6 +100,7 @@ export function ChartCanvas({
   onAxisRange,
   rangeStripes,
   onContextMenuAt,
+  describedBy,
 }: ChartCanvasProps) {
   /** The page's theme, which the chart is drawn in (AC-211). */
   const theme = useThemeName();
@@ -638,6 +641,7 @@ export function ChartCanvas({
       className="chart-canvas"
       data-testid="chart-canvas"
       data-chart-type={spec.chartType}
+      aria-describedby={describedBy}
       // What it is highlighting, where a tile pair asks for one (AC-117).
       data-highlight={
         spec.highlight === undefined

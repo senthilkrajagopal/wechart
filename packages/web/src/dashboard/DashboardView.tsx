@@ -14,6 +14,7 @@ import {
   applyItemClick,
   applyToggleOrAdd,
   isItemMarked,
+  isPercentStack,
   markingModeOf,
   rangeFromDrag,
   matchesPredicate,
@@ -140,6 +141,7 @@ import { chartTilesOf, scopeOf } from '../filters/scope';
 import { effectsOn, type CrossEffects, type CrossSelection } from './crossfilter/apply';
 import { CrossFilterChips } from './crossfilter/CrossFilterChip';
 import {
+  clickedMarkItem,
   clickedValue,
   clickMarksCategory,
   membersDrawn,
@@ -3259,9 +3261,17 @@ export function DashboardView({
                   { member: clicked.member, value: clicked.value },
                   { add: toggle },
                 )
-            : applyItemClick(before, [{ member: clicked.member, value: clicked.value }], {
-                toggle,
-              });
+            : // A 100 % segment as its (category, colour member) tuple (T958,
+              // AC-585), read from the spec as drawn, with its measures' aggregations.
+              applyItemClick(
+                before,
+                (spec === undefined
+                  ? undefined
+                  : clickedMarkItem(formatted[chartId] ?? spec, item)) ?? [
+                  { member: clicked.member, value: clicked.value },
+                ],
+                { toggle },
+              );
     if (after === before) return;
 
     setMarks((now) => withMarking(now, markingId, after));
@@ -3303,8 +3313,9 @@ export function DashboardView({
 
     const enclosed: MarkedItem[] = [];
     for (const item of items) {
-      const value = clickedValue(spec, item);
-      if (value !== undefined) enclosed.push([{ member: value.member, value: value.value }]);
+      // A 100 % segment as its tuple, as its click marks it (T958).
+      const value = clickedMarkItem(formatted[chartId] ?? spec, item);
+      if (value !== undefined) enclosed.push(value);
     }
     if (enclosed.length === 0) {
       // A plain shape over nothing replaces the marking with nothing — "marks
@@ -4582,7 +4593,13 @@ export function DashboardView({
             const chartId = element.chartId;
             const shareShown =
               chartId !== undefined &&
-              showsShareOnly(drawn.specs[chartId]?.chartType ?? '', chartId in markedShareReached)
+              showsShareOnly(
+                drawn.specs[chartId]?.chartType ?? '',
+                chartId in markedShareReached,
+                // A stack at 100 % shows the share too (T958), read as drawn,
+                // with its measures' aggregations.
+                formatted[chartId] !== undefined && isPercentStack(formatted[chartId]),
+              )
                 ? shareShownOf(predicate)
                 : undefined;
             return {

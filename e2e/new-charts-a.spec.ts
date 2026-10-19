@@ -1,9 +1,10 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
 import { cubePicker } from './cubePicker';
+import { viewAs } from './tileMenu';
 import { wellPicker } from './wells';
-import { newInMyWorkspace } from './workspace';
+import { IN_MY_WORKSPACE, newInMyWorkspace } from './workspace';
 
 /**
  * Lane CHARTS-A's types, on the running app (docs/tasks.md §P2.27; T972
@@ -366,4 +367,173 @@ test('the 100 % stacked bar card opens Stacked bar at 100 % on a 0–100 % axis,
     'Orders Average Amount is an average, so its shares of a total wouldn’t mean anything. 100 % takes a summed measure.',
   );
   await expect.poll(async () => (await ticks()).filter((t) => t.endsWith(' %'))).toEqual([]);
+});
+
+const API = 'http://localhost:4100/api';
+
+/**
+ * A dashboard in Markings mode with a 100 % stacked bar of orders by status
+ * and product category on a 5-column tile, and a bar of orders by country
+ * beside it, which marks what the stacked bar doesn't group by.
+ */
+async function mixDashboard(request: APIRequestContext) {
+  const title = `Mix ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const chartOn = async (
+    chartTitle: string,
+    dimensions: readonly string[],
+    chartType: string,
+    options?: Record<string, unknown>,
+  ) => {
+    const chart = (await (
+      await request.post(`${API}/documents`, {
+        data: { kind: 'chart', title: chartTitle, ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`${API}/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: chartTitle,
+          owner: 'admin',
+          localToDashboardId: dashboard.id,
+          chart: {
+            source: { cube: 'orders' },
+            wells: { measures: ['orders.count'], dimensions, timeDimensions: [] },
+            chartType,
+            ...(options === undefined ? {} : { options }),
+          },
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    return chart.id;
+  };
+  const mix = await chartOn(
+    'Category mix by status',
+    ['orders.status', 'products.category'],
+    'stackedBar',
+    { stack: 'percent' },
+  );
+  const country = await chartOn('By country', ['customers.country'], 'bar');
+  const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed', interactions: { mode: 'markings' } },
+        markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [
+              { id: 'tile-mix', kind: 'chart', w: 5, h: 40, chartId: mix },
+              { id: 'tile-country', kind: 'chart', w: 7, h: 40, chartId: country },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  return { id: dashboard.id, title };
+}
+
+/**
+ * Clicks just above a category's axis label: its bar's lowest segment. A
+ * label turned to fit a narrow tile ends at its tick, its box's top right.
+ */
+async function clickAbove(page: Page, tile: Locator, category: string) {
+  const label = tile.locator('svg text', { hasText: category }).first();
+  await expect(label).toBeVisible();
+  let last = '';
+  let box = { x: 0, y: 0, width: 0, height: 0 };
+  await expect
+    .poll(async () => {
+      box = await label.evaluate((text) => {
+        const rect = text.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      });
+      const now = JSON.stringify(box);
+      const settled = box.width > 0 && now === last;
+      last = now;
+      return settled;
+    })
+    .toBe(true);
+  const turned = box.height > 24;
+  await page.mouse.click(turned ? box.x + box.width - 3 : box.x + box.width / 2, box.y - 10);
+}
+
+/**
+ * T958 / AC-585: THE SYSTEM SHALL mark a 100 % stacked segment as its
+ * (category, colour member) tuple …; WHILE another tile's marking covers part
+ * of a segment, it SHALL draw the marked share from the segment's own base as
+ * a fraction of the segment; its text alternative SHALL name the largest and
+ * smallest share of the first colour member …; and its table view SHALL add a
+ * "Share of ‹category›" column.
+ * `Fails when: a segment marks otherwise; a partly marked segment's share is
+ * drawn from the bar's base or as a fraction of the bar; or the text
+ * alternative or the share column is missing.` (How the share is drawn:
+ * `charts/src/series/stack100Marking.test.ts`.) On a real dashboard tile 5
+ * columns wide, as the Sales and Shipping dashboards place them.
+ */
+test('a 100 % stacked bar on a 5-column tile marks a segment as its tuple, shows another tile’s share, and says and lists its shares', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await mixDashboard(request);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const mix = page.locator('[data-tile="tile-mix"]');
+  const country = page.locator('[data-tile="tile-country"]');
+
+  // Drawn on the tile at 100 %, its axis 0–100 % every 25 %.
+  const ticks = () => mix.locator('svg text').allTextContents();
+  await expect
+    .poll(ticks)
+    .toEqual(expect.arrayContaining(['0 %', '25 %', '50 %', '75 %', '100 %']));
+
+  // Its text alternative, read with the chart.
+  const said = mix.getByTestId('chart-text-alternative');
+  await expect(said).toHaveText(
+    /^100 % stacked bar of .+ by .+ and .+\. (Components|Instruments)’s share is largest in (completed|shipped|processing) \(\d+ %\) and smallest in (completed|shipped|processing) \(\d+ %\)\.$/,
+  );
+  await expect(mix.getByTestId('chart-canvas')).toHaveAttribute(
+    'aria-describedby',
+    (await said.getAttribute('id')) ?? '',
+  );
+
+  // A segment marks its (status, category) tuple, which the chip counts as
+  // one item (a tuple across two members isn't written as one member's
+  // values, `summariseMarking`); a Sum stack's click marks the category alone.
+  await clickAbove(page, mix, 'shipped');
+  const chip = page.getByTestId('mark-chip');
+  await expect(chip).toContainText('1 item');
+  await expect(chip).not.toContainText('Category:');
+
+  // Another tile's marking, of what this one doesn't group by: its segments
+  // draw the share, and its badge says whose.
+  await clickAbove(page, country, 'Germany');
+  await expect(chip).toContainText('Germany');
+  await expect(mix.getByTestId('mark-badge')).toContainText('Germany');
+  await expect(mix.getByTestId('mark-badge')).toContainText('share shown');
+
+  // Its table view adds each row's share of its status.
+  await viewAs(mix, 'table');
+  const table = mix.getByTestId('data-table');
+  await expect(table.getByRole('columnheader').last()).toHaveText(/^Share of /);
+  const shares = await table
+    .getByTestId('table-row')
+    .evaluateAll((rows) => rows.map((row) => row.lastElementChild?.textContent ?? ''));
+  expect(shares.length).toBeGreaterThan(0);
+  expect(shares.every((share) => /^\d+\.\d%$/.test(share))).toBe(true);
 });
