@@ -107,3 +107,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/tiles/text/ElementTooltip.tsx` (+ test), `packages/web/src/tiles/text/readMapping.tsx`.
   - Failing test: `ElementTooltip.test.tsx`: a Value in a Heading large is 24 px at the heading's weight with `font-variant-numeric: tabular-nums` and no background or border; Tab reaches it; on focus it shows a dotted `text-muted` underline and a tooltip naming "Change · Revenue", "This quarter against the previous", the tile's and its own filters, "Marking: none" and "as of 14:05 · pre-aggregation", the same text as its `aria-describedby` (AC-524).
   - Depends on: T884, T873
+
+- [x] T889 (AC-525) The element states: loading, no data, error, no permission and a removed member; and the empty tile
+  - Files: `packages/web/src/tiles/text/ElementState.tsx` (+ test), `packages/web/src/tiles/text/TextTile.tsx`, `packages/web/src/dashboard/edit/Outline.tsx`.
+  - Failing test: `ElementState.test.tsx`: loading shows a skeleton the width of the last value, or 4ch, and the tile `aria-busy`; no data "—" with "No data for these filters"; an error the warning icon and "Unavailable", Details on focus; a 403 from Cube "Unavailable" with no member named, the same as a folder the groups can't reach; a removed member "Unavailable" and, in edit mode, "1 element needs fixing" with its Elements row marked; an empty tile shows the placeholder in edit mode, nothing in view mode, and "Empty text" in the Outline (AC-525).
+  - Depends on: T888

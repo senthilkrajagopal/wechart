@@ -1,7 +1,10 @@
 import { renderJSONContentToReactElement } from '@tiptap/static-renderer/json/react';
 
+import { useId, useMemo, useState } from 'react';
+
 import type { TextDocument } from '@wechart/core';
 
+import { ElementPhasesContext, type ElementPhase, type ElementPhases } from './ElementState';
 import {
   markMapping,
   nodeMapping,
@@ -41,18 +44,89 @@ type Content = Parameters<ReturnType<typeof rendererOf>>[0]['content'];
 export function TextTile({
   document,
   renderElement,
+  onRetry,
 }: {
   readonly document: TextDocument;
   /** Draws a live element or control in place; without it, elements draw nothing. */
   readonly renderElement?: ElementRender | undefined;
+  /** Asks its failed elements again: the tile's ⋯ offers it while one has failed (AC-525). */
+  readonly onRetry?: (() => void) | undefined;
 }) {
   const root = readableNode((document as { doc?: unknown } | undefined)?.doc);
+  /** Each element's phase, by its id (T889, AC-525). */
+  const [phases, setPhases] = useState<Readonly<Record<string, ElementPhase>>>({});
+  const reporter = useMemo<ElementPhases>(
+    () => ({
+      report: (id, phase) => {
+        setPhases((was) => {
+          if (was[id] === phase) return was;
+          const next = { ...was };
+          if (phase === undefined) delete next[id];
+          else next[id] = phase;
+          return next;
+        });
+      },
+    }),
+    [],
+  );
+  const said = Object.values(phases);
+  const busy = said.includes('loading');
+  const failed = said.includes('error');
+  const [menu, setMenu] = useState(false);
+  const menuId = useId();
   return (
-    <div className="text-tile">
+    <div className="text-tile" aria-busy={busy ? true : undefined}>
+      {failed && onRetry !== undefined ? (
+        <div className="text-tile__more">
+          <button
+            type="button"
+            className="icon-button text-tile__more-button"
+            aria-label="More for this text"
+            aria-haspopup="menu"
+            aria-expanded={menu}
+            aria-controls={menu ? menuId : undefined}
+            onClick={() => {
+              setMenu(!menu);
+            }}
+          >
+            ⋯
+          </button>
+          {menu ? (
+            <div
+              id={menuId}
+              role="menu"
+              aria-label="More for this text"
+              className="text-tile__menu"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="text-tile__menu-item"
+                // eslint-disable-next-line jsx-a11y/no-autofocus
+                autoFocus
+                onClick={() => {
+                  setMenu(false);
+                  onRetry();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.stopPropagation();
+                    setMenu(false);
+                  }
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {root?.type === 'doc' ? (
-        <TextElementsContext value={renderElement}>
-          {rendererOf()({ content: root as Content })}
-        </TextElementsContext>
+        <ElementPhasesContext value={reporter}>
+          <TextElementsContext value={renderElement}>
+            {rendererOf()({ content: root as Content })}
+          </TextElementsContext>
+        </ElementPhasesContext>
       ) : null}
     </div>
   );

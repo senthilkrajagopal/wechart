@@ -1,6 +1,7 @@
 import type { IconRule } from '@wechart/core';
 
 import { StatusIcon, type StateKind } from '../../../shell/StatusIcon';
+import { ElementSkeleton, ElementUnavailable } from '../ElementState';
 import { useElementAnswer } from './useElementAnswer';
 
 /** The first rule the value meets, in order (AC-522), or undefined. */
@@ -87,14 +88,10 @@ export function IconElement({
 }) {
   const answer = useElementAnswer(query, context);
   const rules = Array.isArray(attrs['rules']) ? (attrs['rules'] as unknown[]).filter(isRule) : [];
-  if (answer.pending)
-    return (
-      <span className="text-value text-value--waiting" aria-busy="true">
-        …
-      </span>
-    );
+  // Its states (T889, AC-525).
+  if (answer.pending) return <ElementSkeleton />;
   if (answer.error !== undefined)
-    return <span className="text-value text-value--unavailable">Unavailable</span>;
+    return <ElementUnavailable measure={member} error={answer.error} />;
   const row = answer.rows[0] ?? {};
   const value = numberOf(row[member]);
   const of = typeof attrs['of'] === 'string' ? numberOf(row[attrs['of']]) : undefined;

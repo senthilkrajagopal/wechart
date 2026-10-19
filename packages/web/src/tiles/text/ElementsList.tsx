@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 
 import { TEXT_ELEMENT_LIMIT, type TextNode } from '@wechart/core';
 
+import { StatusIcon } from '../../shell/StatusIcon';
 import { elementName, elementParts, type ElementNames } from './elementName';
 import { rangesProblem } from './elements/BulletGraph';
 import type { InsertSources } from './InsertMenu';
@@ -17,6 +18,7 @@ export function ElementsList({
   names,
   markings = [],
   sources,
+  broken,
   onSelect,
   onChange,
 }: {
@@ -29,6 +31,8 @@ export function ElementsList({
   readonly markings?: readonly { readonly name: string }[];
   /** The measures and fields an element's settings choose among (checkpoint 2). */
   readonly sources?: InsertSources | undefined;
+  /** Whether an element names a member no longer in the model: its row is marked (AC-525). */
+  readonly broken?: ((element: TextNode) => boolean) | undefined;
   readonly onSelect: (index: number) => void;
   /** Settings changed for the element at this place; a null takes one away (T884). */
   readonly onChange?: ((index: number, settings: Record<string, unknown>) => void) | undefined;
@@ -50,6 +54,7 @@ export function ElementsList({
       <ul aria-label="Elements" aria-describedby={heading} className="text-elements__list">
         {elements.map((element, index) => {
           const { kind, source } = elementParts(element, names);
+          const fix = broken?.(element) === true;
           return (
             // Keyed by place: two elements may be the same in every setting.
             <li key={index}>
@@ -57,6 +62,7 @@ export function ElementsList({
                 type="button"
                 className="text-elements__row"
                 aria-current={index === selected ? true : undefined}
+                data-state={fix ? 'needs-fixing' : undefined}
                 // A press keeps focus where it is — in the text, while it's
                 // edited — as browsers that don't focus a pressed button
                 // would otherwise leave focus nowhere (T882's review).
@@ -69,6 +75,11 @@ export function ElementsList({
               >
                 <span className="text-elements__kind">{kind}</span>
                 <span className="text-elements__source">{source}</span>
+                {fix ? (
+                  <span className="text-elements__fix">
+                    <StatusIcon kind="warn" /> Needs fixing
+                  </span>
+                ) : null}
               </button>
             </li>
           );

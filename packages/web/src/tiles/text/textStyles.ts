@@ -107,6 +107,47 @@ export const TEXT_CSS = `
   white-space: normal;
 }
 .text-element-tip[hidden] { display: none; }
+/* An element's states (T889, AC-525; rule 134): a skeleton where the value
+   will be, its line's height; Unavailable in muted ink, an error's with the
+   warning icon; the tile's ⋯ for Retry; and, in edit mode, what needs fixing. */
+.text-element-skeleton {
+  display: inline-block;
+  height: 0.9em;
+  vertical-align: -0.1em;
+  border-radius: 3px;
+  background: var(--wc-bg-subtle);
+}
+.text-value--failed { display: inline-flex; align-items: center; gap: 4px; color: var(--wc-text-muted); }
+.text-value--failed [data-icon='warn'] { color: var(--wc-status-warning); }
+.text-tile { position: relative; }
+.text-tile__more { position: absolute; top: 0; right: 0; z-index: 2; }
+.text-tile__menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 120px;
+  padding: 4px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-raised, var(--wc-bg-surface));
+  box-shadow: var(--wc-shadow-pop);
+}
+.text-tile__menu-item {
+  display: block;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: var(--wc-text-sm-size);
+  text-align: left;
+  color: var(--wc-text-primary);
+}
+.text-tile__menu-item:is(:hover, :focus-visible) { background: var(--wc-bg-hover); }
+.text-tile__fix { display: inline-flex; align-items: center; gap: 4px; font-size: var(--wc-text-xs-size); color: var(--wc-status-warning); }
+.text-elements__fix { flex: none; display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: var(--wc-text-xs-size); color: var(--wc-status-warning); }
+.text-elements__row[data-state='needs-fixing'] { box-shadow: inset 2px 0 0 var(--wc-status-warning); }
 .text-element-tip__line:first-child { font-weight: 600; }
 /* An Icon: its status icon and its word, in the status's text (rule 3). */
 .text-icon { display: inline-flex; align-items: center; gap: 4px; vertical-align: -2px; }

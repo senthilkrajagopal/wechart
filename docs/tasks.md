@@ -1895,10 +1895,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T888 (AC-524) View mode: values as text in their sentence's type and weight, focusable, with a dotted underline and a tooltip that is their accessible description
 
-- [ ] T889 (AC-525) The element states: loading, no data, error, no permission and a removed member; and the empty tile
-  - Files: `packages/web/src/tiles/text/ElementState.tsx` (+ test), `packages/web/src/tiles/text/TextTile.tsx`, `packages/web/src/dashboard/edit/Outline.tsx`.
-  - Failing test: `ElementState.test.tsx`: loading shows a skeleton the width of the last value, or 4ch, and the tile `aria-busy`; no data "—" with "No data for these filters"; an error the warning icon and "Unavailable", Details on focus; a 403 from Cube "Unavailable" with no member named, the same as a folder the groups can't reach; a removed member "Unavailable" and, in edit mode, "1 element needs fixing" with its Elements row marked; an empty tile shows the placeholder in edit mode, nothing in view mode, and "Empty text" in the Outline (AC-525).
-  - Depends on: T888
+- [x] T889 (AC-525) The element states: loading, no data, error, no permission and a removed member; and the empty tile
 
 - [ ] T890 (AC-526) Below 1,024 px, a Text tile full width with stacked controls, wrapping buttons and tooltips on tap
   - Files: `packages/web/src/tiles/text/textStyles.ts`, `e2e/text-tile.spec.ts`.

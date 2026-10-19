@@ -57,6 +57,7 @@ import {
   withoutCalculations,
   TEXT_ELEMENT_LIMIT,
   elementsOf,
+  textDocumentMembers,
   type TextNode,
 } from '@wechart/core';
 import {
@@ -71,7 +72,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { measureTypesOf } from '../editor/fields';
+import { cubesFrom, measureTypesOf, membersOf } from '../editor/fields';
 import type { TileSize } from '../editor/PreviewFrame';
 import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
 import { DrillCrumb, type DrilledView } from './drill/DrillCrumb';
@@ -143,6 +144,7 @@ import { insertSourcesOf } from '../tiles/text/insertSources';
 import { copilotOfferFor } from '../tiles/text/copilotOffer';
 import type { ElementRender } from '../tiles/text/readMapping';
 import { AnsweredTooltip } from '../tiles/text/elements/AnsweredTooltip';
+import { ElementUnavailable } from '../tiles/text/ElementState';
 import { AsOfElement } from '../tiles/text/elements/AsOfElement';
 import { FilterValueText, filterValueWords } from '../tiles/text/elements/FilterValueElement';
 import { IconElement } from '../tiles/text/elements/IconElement';
@@ -691,9 +693,15 @@ function TileBody({
   notes,
   tokens,
   elements,
+  textBroken = 0,
+  onTextRetry,
   rowsTotal,
 }: {
   tile: Tile;
+  /** How many of a Text tile's elements name a member no longer in the model (AC-525). */
+  textBroken?: number | undefined;
+  /** Asks a Text tile's failed elements again: its ⋯'s Retry (AC-525). */
+  onTextRetry?: (() => void) | undefined;
   /** A drafted box plot's rows in all, from its draft (T401's review, AC-315). */
   rowsTotal?: number | undefined;
   /** A text tile's live values, drawn for its tokens (T389, AC-116). */
@@ -939,6 +947,8 @@ function TileBody({
             const token = tokenOfElement(node);
             return token === undefined ? null : tokens?.(token, key);
           }}
+          // Not while editing, where the text is arranged, not read.
+          onRetry={editing ? undefined : onTextRetry}
         />
       );
       /**
@@ -959,6 +969,13 @@ function TileBody({
                   data-state={count > TEXT_ELEMENT_LIMIT ? 'warning' : 'normal'}
                 >
                   {`${String(count)} / ${String(TEXT_ELEMENT_LIMIT)} elements`}
+                </span>
+              ) : null}
+              {/* A member gone from the model (AC-525): its row is marked in Properties. */}
+              {textBroken > 0 ? (
+                <span className="text-tile__fix" data-testid="text-needs-fixing">
+                  <StatusIcon kind="warn" />
+                  {` ${String(textBroken)} ${textBroken === 1 ? 'element needs' : 'elements need'} fixing`}
                 </span>
               ) : null}
             </KindHead>
@@ -1159,6 +1176,10 @@ interface TileCharts {
    * AC-520, AC-116), or undefined for a kind still drawn as its token.
    */
   readonly textElementsOf?: ((tileId: string) => ElementRender) | undefined;
+  /** How many of a Text tile's elements name a member no longer in the model (AC-525). */
+  readonly textBrokenOf?: ((tileId: string) => number) | undefined;
+  /** Asks the Text tiles' failed elements again (AC-525). */
+  readonly onTextRetry?: (() => void) | undefined;
   /** Each drafted chart's rows in all, where its query asked (T401's review, AC-315). */
   readonly draftTotals?: Readonly<Record<string, number>> | undefined;
   /** The marking a tile shows, its colour and how many items it holds (AC-098). */
@@ -1312,8 +1333,7 @@ interface Affordances {
    * Opening a chart tile's chart in the editor, from its pencil (T032), or
    * at Customize › Axes from its ⚠ (T861, AC-218).
    */
-  readonly onEditChart?:
-    ((tileId: string, chartId: string, openAt?: 'axes') => void) | undefined;
+  readonly onEditChart?: ((tileId: string, chartId: string, openAt?: 'axes') => void) | undefined;
   /** Deleting one tab of a tab group, the fourth thing AC-060 names. */
   readonly onDeleteTab?: ((groupId: string, tabId: string) => void) | undefined;
   /**
@@ -1836,6 +1856,8 @@ function Elements({
               memberTitle={charts.memberTitle}
               tokens={charts.textTokensOf?.(element.id)}
               elements={charts.textElementsOf?.(element.id)}
+              textBroken={charts.textBrokenOf?.(element.id)}
+              onTextRetry={charts.onTextRetry}
               rowsTotal={drill === undefined ? charts.draftTotals?.[chartId] : undefined}
               // A drilled view's own answer, so its own freshness (AC-238).
               answered={drill === undefined ? charts.answered?.[chartId] : drill.answered}
@@ -4460,6 +4482,31 @@ export function DashboardView({
    * The filters in effect on a Text tile's value, in words, for its tooltip
    * (T888, AC-524): the tile's, then the element's own.
    */
+  /**
+   * The model's members, once it has loaded, to tell an element naming a
+   * member no longer in it (T889, AC-525); undefined until then, when none
+   * is judged gone.
+   */
+  const modelMembers = useMemo(() => {
+    const cubes = cubesFrom(model);
+    if (cubes.length === 0) return undefined;
+    return new Set(cubes.flatMap((cube) => membersOf(model, cube.name).map((one) => one.name)));
+  }, [model]);
+  /** Whether a Text element names a member no longer in the model (AC-525). */
+  const brokenElement = (node: TextNode): boolean =>
+    modelMembers !== undefined &&
+    textDocumentMembers({
+      version: 1,
+      doc: { type: 'doc', content: [{ type: 'paragraph', content: [node] }] },
+    }).some((member) => !modelMembers.has(member));
+  /** The Text tiles' elements asked again, those that failed (AC-525, the ⋯'s Retry). */
+  const elementQueries = useContext(QueryClientContext);
+  const retryTextElements = () => {
+    void elementQueries?.refetchQueries({
+      queryKey: ['text-element'],
+      predicate: (query) => query.state.status === 'error',
+    });
+  };
   const textFilterWords = (tileId: string, own: unknown): string[] => {
     const titled = (member: string | undefined) =>
       member === undefined ? 'Value' : (shortTitles?.[member] ?? memberTitle?.(member) ?? member);
@@ -4499,6 +4546,8 @@ export function DashboardView({
     const measure = typeof attrs['measure'] === 'string' ? attrs['measure'] : undefined;
     const { named, found, predicate } = markingNamed(attrs);
     if (measure === undefined || (named !== undefined && found === undefined)) return undefined;
+    // One naming a member gone from the model asks nothing, nor fails its batch (AC-525).
+    if (brokenElement(node)) return undefined;
     const filters = textFiltersOf(tileId);
     if (node.type === 'asOf') {
       const asked = valueQueryOf({ attrs: { measure } }, undefined);
@@ -5128,9 +5177,18 @@ export function DashboardView({
      * along its time dimension. Other kinds are drawn as their tokens were,
      * until their own drawing (T885, T886).
      */
+    textBrokenOf: (tileId: string) => {
+      const tile = elementAt(live, tileId);
+      return tile !== null && isTile(tile) && tile.kind === 'text' && tile.document !== undefined
+        ? elementsOf(tile.document).filter(brokenElement).length
+        : 0;
+    },
+    onTextRetry: retryTextElements,
     textElementsOf: (tileId: string) => (node, key) => {
       const sentFor = textBatchOf(tileId);
       const attrs = node.attrs ?? {};
+      // A member gone from the model: "Unavailable", naming nothing (AC-525).
+      if (brokenElement(node)) return <ElementUnavailable key={key} />;
       // A Filter value (T886, AC-522): what its dashboard filter is set to,
       // "all ‹values›" while unset; "Unavailable" for a filter gone (G5).
       if (node.type === 'filterValue') {
@@ -5238,8 +5296,15 @@ export function DashboardView({
             query={'query' in asked ? asked.query : undefined}
             context={preview}
             facts={facts('value')}
+            member={measure}
           >
-            <ValueElement asked={asked} member={measure} formats={formats} context={preview} />
+            <ValueElement
+              asked={asked}
+              member={measure}
+              title={title}
+              formats={formats}
+              context={preview}
+            />
           </AnsweredTooltip>
         );
       }
@@ -5254,6 +5319,7 @@ export function DashboardView({
             <ChangeElement
               query={query}
               member={measure}
+              title={title}
               attrs={attrs}
               formats={formats}
               context={preview}
@@ -6551,6 +6617,7 @@ export function DashboardView({
                       selected={live?.selected ?? null}
                       names={namesFrom(textSources)}
                       sources={textSources}
+                      broken={brokenElement}
                       onSelect={(index) => {
                         if (session.saving) return;
                         if (editingText !== tile.id) {

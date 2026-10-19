@@ -1,5 +1,6 @@
 import type { MemberFormats } from '@wechart/core';
 
+import { ElementSkeleton, ElementUnavailable } from '../ElementState';
 import { shortValues } from './shortNumbers';
 import { useElementAnswer } from './useElementAnswer';
 
@@ -112,14 +113,10 @@ export function SparklineElement({
 }) {
   const answer = useElementAnswer(query, context);
   if (query === undefined) return <span className="text-value">—</span>;
-  if (answer.pending)
-    return (
-      <span className="text-value text-value--waiting" aria-busy="true">
-        …
-      </span>
-    );
+  // Its states (T889, AC-525): a skeleton its own width.
+  if (answer.pending) return <ElementSkeleton pixels={WIDTH} />;
   if (answer.error !== undefined)
-    return <span className="text-value text-value--unavailable">Unavailable</span>;
+    return <ElementUnavailable measure={title} error={answer.error} />;
   const values = answer.rows
     .map((row) => Number(row[member]))
     .filter((value) => Number.isFinite(value))

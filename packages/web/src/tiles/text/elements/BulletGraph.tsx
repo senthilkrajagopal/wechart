@@ -1,5 +1,6 @@
 import { formatValue, type MemberFormats } from '@wechart/core';
 
+import { ElementSkeleton, ElementUnavailable } from '../ElementState';
 import { useElementAnswer } from './useElementAnswer';
 
 /** 96 × 16: six of a word's height wide (direction §7h). */
@@ -136,14 +137,10 @@ export function BulletGraphElement({
   readonly context?: Readonly<Record<string, unknown>> | undefined;
 }) {
   const answer = useElementAnswer(query, context);
-  if (answer.pending)
-    return (
-      <span className="text-value text-value--waiting" aria-busy="true">
-        …
-      </span>
-    );
+  // Its states (T889, AC-525): a skeleton its own width.
+  if (answer.pending) return <ElementSkeleton pixels={WIDTH} />;
   if (answer.error !== undefined)
-    return <span className="text-value text-value--unavailable">Unavailable</span>;
+    return <ElementUnavailable measure={title} error={answer.error} />;
   const row = answer.rows[0] ?? {};
   const value = numberOf(row[member]);
   if (value === undefined) return <span className="text-value">—</span>;

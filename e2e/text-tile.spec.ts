@@ -1038,6 +1038,118 @@ test('an Icon’s share of a measure and a Value’s own filter are set in Prope
 });
 
 /**
+ * T889 / AC-525: an element loading is a skeleton, 4ch with no value yet,
+ * its tile aria-busy; one Cube refuses shows the warning icon and
+ * "Unavailable", Details on focus, and the tile's ⋯ Retry asks it again; one
+ * naming a member gone from the model reads "Unavailable", naming nothing,
+ * and in edit mode "1 element needs fixing", its row marked; an empty Text
+ * tile shows its placeholder in edit mode and nothing in view mode.
+ */
+test('an element’s loading, failed and removed states, Retry, and an empty tile', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWithText(
+    request,
+    [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'value', attrs: { measure: 'orders.count' } },
+          { type: 'text', text: ' and ' },
+          {
+            type: 'value',
+            attrs: {
+              measure: 'orders.average_amount',
+              filters: [{ member: 'orders.status', operator: 'equals', values: ['shipped'] }],
+            },
+          },
+          { type: 'text', text: ' and ' },
+          { type: 'value', attrs: { measure: 'orders.no_such_measure' } },
+        ],
+      },
+    ],
+    [],
+    [
+      {
+        id: 'tile-empty',
+        kind: 'text',
+        w: 6,
+        h: 6,
+        document: { version: 1, doc: { type: 'doc', content: [{ type: 'paragraph' }] } },
+      },
+    ],
+  );
+  const measuresOf = (body: string | null) =>
+    (
+      (JSON.parse(body ?? '{}') as { query?: { measures?: string[] } }).query?.measures ?? []
+    ).join();
+  // The count answers late, so its skeleton shows; the average fails.
+  let release: () => void = () => undefined;
+  const late = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/load', async (route) => {
+    const measures = measuresOf(route.request().postData());
+    if (measures === 'orders.count') {
+      await late;
+      await route.continue();
+    } else if (measures === 'orders.average_amount') {
+      await route.fulfill({ status: 400, json: { error: 'Cube said no' } });
+    } else await route.continue();
+  });
+
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const text = page.locator('[data-tile="tile-text"] .text-tile');
+  const skeleton = text.locator('.text-element-skeleton').first();
+  await expect(skeleton).toBeVisible();
+  await expect(skeleton).toHaveAttribute('style', /width: 4ch/);
+  await expect(text).toHaveAttribute('aria-busy', 'true');
+  // Each element where it stands in the sentence.
+  const slot = (at: number) => text.locator('p > *').nth(at);
+  release();
+  await expect(slot(0)).toHaveText('240');
+  await expect(text).not.toHaveAttribute('aria-busy', 'true', { timeout: 15_000 });
+
+  // Refused by Cube: the warning icon, Unavailable, and Details on focus.
+  await expect(slot(1)).toHaveText('Unavailable', { timeout: 20_000 });
+  await expect(slot(1).locator('[data-icon="warn"]')).toHaveCount(1);
+  await slot(1).focus();
+  const details = page.getByRole('tooltip').filter({ visible: true });
+  await expect(details).toHaveText('Details Average Amount: Cube said no');
+
+  // Gone from the model: Unavailable, naming nothing.
+  await expect(slot(2)).toHaveText('Unavailable');
+  await expect(text).not.toContainText('no_such');
+  await expect(slot(2).locator('[data-icon]')).toHaveCount(0);
+
+  // The tile's ⋯ asks the failed one again.
+  await page.unroute('**/api/load');
+  await text.getByRole('button', { name: 'More for this text' }).click();
+  await page.getByRole('menuitem', { name: 'Retry' }).click();
+  await expect(slot(1)).toHaveText(/^\$?[\d,.]+$/, { timeout: 20_000 });
+
+  // An empty Text tile draws nothing in view mode.
+  await expect(page.locator('[data-tile="tile-empty"] .text-tile')).toHaveText('');
+
+  // In edit mode: what needs fixing, its row marked; the empty tile's placeholder.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const tile = page.locator('[data-tile="tile-text"]');
+  await expect(tile.getByTestId('text-needs-fixing')).toHaveText('1 element needs fixing');
+  await expect(page.locator('[data-tile="tile-empty"]')).toContainText(
+    'Type, or press / to insert a live value',
+  );
+  await tile.locator('.tile-head__kind').click();
+  const rows = page
+    .getByRole('complementary', { name: 'Edit sidebar' })
+    .getByRole('list', { name: 'Elements' })
+    .getByRole('button');
+  await expect(rows.nth(2)).toHaveAttribute('data-state', 'needs-fixing');
+  await expect(rows.nth(0)).not.toHaveAttribute('data-state', 'needs-fixing');
+});
+
+/**
  * T877 / AC-514: a dashboard of two Text tiles opened in view mode requests
  * no script of the editor's chunk (`text-editor-…`, named in
  * `vite.config.ts`), and none of the scripts it loads holds ProseMirror's

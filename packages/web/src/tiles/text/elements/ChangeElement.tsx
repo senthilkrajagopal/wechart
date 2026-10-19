@@ -1,6 +1,7 @@
 import { formatValue, type MemberFormats } from '@wechart/core';
 
 import { changeOf, type Change } from '../elementQueries';
+import { ElementSkeleton, ElementUnavailable } from '../ElementState';
 import { kindOfFormat } from './shortNumbers';
 import { useElementAnswer } from './useElementAnswer';
 
@@ -47,6 +48,27 @@ export function ChangeText({
   readonly show?: 'percent' | 'amount';
   readonly direction?: Direction;
 }) {
+  const words = changeWordsOf(change, member, formats, show);
+  if (change === undefined || words === undefined)
+    return (
+      <span className="text-change" data-tone="neutral">
+        —
+      </span>
+    );
+  return (
+    <span className="text-change" data-tone={toneOf(change.delta, direction)}>
+      {words}
+    </span>
+  );
+}
+
+/** A change in words, "▲ 4.2%" or "▼ $50K", or undefined with nothing to compare. */
+function changeWordsOf(
+  change: Change | undefined,
+  member: string,
+  formats: MemberFormats | undefined,
+  show: 'percent' | 'amount',
+): string | undefined {
   const size =
     change === undefined
       ? undefined
@@ -55,18 +77,9 @@ export function ChangeText({
         : change.ratio === undefined
           ? undefined
           : `${Math.abs(change.ratio * 100).toFixed(1)}%`;
-  if (change === undefined || size === undefined)
-    return (
-      <span className="text-change" data-tone="neutral">
-        —
-      </span>
-    );
+  if (change === undefined || size === undefined) return undefined;
   const sign = change.delta > 0 ? '▲ ' : change.delta < 0 ? '▼ ' : '';
-  return (
-    <span className="text-change" data-tone={toneOf(change.delta, direction)}>
-      {`${sign}${size}`}
-    </span>
-  );
+  return `${sign}${size}`;
 }
 
 const DIRECTIONS: readonly Direction[] = ['higher', 'lower', 'neutral'];
@@ -75,6 +88,7 @@ const DIRECTIONS: readonly Direction[] = ['higher', 'lower', 'neutral'];
 export function ChangeElement({
   query,
   member,
+  title,
   attrs,
   formats,
   context,
@@ -82,27 +96,32 @@ export function ChangeElement({
   /** Its query, or undefined where its measure has no time dimension to compare along. */
   readonly query: Readonly<Record<string, unknown>> | undefined;
   readonly member: string;
+  /** Its measure's title, for an error's Details (AC-525). */
+  readonly title?: string | undefined;
   readonly attrs: Readonly<Record<string, unknown>>;
   readonly formats?: MemberFormats | undefined;
   readonly context?: Readonly<Record<string, unknown>> | undefined;
 }) {
   const answer = useElementAnswer(query, context);
   if (query === undefined) return <ChangeText change={undefined} member={member} />;
-  if (answer.pending)
-    return (
-      <span className="text-value text-value--waiting" aria-busy="true">
-        …
-      </span>
-    );
+  // Its states (T889, AC-525).
+  if (answer.pending) return <ElementSkeleton />;
   if (answer.error !== undefined)
-    return <span className="text-value text-value--unavailable">Unavailable</span>;
+    return <ElementUnavailable measure={title ?? member} error={answer.error} />;
+  const show = attrs['show'] === 'amount' ? 'amount' : 'percent';
+  if (answer.busy)
+    return (
+      <ElementSkeleton
+        width={changeWordsOf(changeOf(answer.rows, member), member, formats, show)?.length}
+      />
+    );
   const direction = DIRECTIONS.find((one) => one === attrs['direction']) ?? 'higher';
   return (
     <ChangeText
       change={changeOf(answer.rows, member)}
       member={member}
       formats={formats}
-      show={attrs['show'] === 'amount' ? 'amount' : 'percent'}
+      show={show}
       direction={direction}
     />
   );

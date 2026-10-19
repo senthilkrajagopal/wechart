@@ -1,5 +1,6 @@
 import { clockTimeOf } from '../../../dashboard/dataAsOf';
 import { accelerationOf } from '../../../tiles/AccelerationBadge';
+import { ElementSkeleton, ElementUnavailable } from '../ElementState';
 import { useElementAnswer } from './useElementAnswer';
 
 /**
@@ -41,14 +42,9 @@ export function AsOfElement({
   readonly context?: Readonly<Record<string, unknown>> | undefined;
 }) {
   const answer = useElementAnswer(query, context);
-  if (answer.pending)
-    return (
-      <span className="text-value text-value--waiting" aria-busy="true">
-        …
-      </span>
-    );
-  if (answer.error !== undefined)
-    return <span className="text-value text-value--unavailable">Unavailable</span>;
+  // Its states (T889, AC-525): "as of 14:05" is about 11 characters.
+  if (answer.pending) return <ElementSkeleton width={11} />;
+  if (answer.error !== undefined) return <ElementUnavailable error={answer.error} />;
   const refreshed = (answer.result as { lastRefreshTime?: unknown } | undefined)?.lastRefreshTime;
   const acceleration = accelerationOf(answer.result);
   return (

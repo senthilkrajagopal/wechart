@@ -25,6 +25,8 @@ export interface ElementFacts {
   readonly marking?: string | undefined;
   /** When its answer was refreshed, and the pre-aggregation that answered, if one did. */
   readonly data?: { readonly at?: Date | undefined; readonly preAggregation?: string | undefined };
+  /** Answered, with nothing for these filters (AC-525). */
+  readonly noData?: boolean | undefined;
   readonly now?: Date;
 }
 
@@ -35,6 +37,7 @@ export function describeElement(facts: ElementFacts): string[] {
   const at = facts.data?.at;
   return [
     `${KINDS[facts.kind]} · ${facts.measure}`,
+    ...(facts.noData === true ? ['No data for these filters'] : []),
     ...(facts.kind === 'change' ? [`This ${facts.period ?? 'month'} against the previous`] : []),
     `Filters: ${facts.filters.length === 0 ? 'none' : facts.filters.join(' · ')}`,
     `Marking: ${facts.marking ?? 'none'}`,

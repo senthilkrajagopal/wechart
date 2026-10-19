@@ -1,5 +1,6 @@
 import { formatValue, type MemberFormats } from '@wechart/core';
 
+import { ElementSkeleton, ElementUnavailable } from '../ElementState';
 import { useElementAnswer } from './useElementAnswer';
 
 /**
@@ -36,30 +37,24 @@ export function ValueText({
 export function ValueElement({
   asked,
   member,
+  title,
   formats,
   context,
 }: {
   readonly asked: { readonly query: Readonly<Record<string, unknown>> } | { readonly none: true };
   readonly member: string;
+  /** Its measure's title, for an error's Details (AC-525). */
+  readonly title?: string | undefined;
   readonly formats?: MemberFormats | undefined;
   readonly context?: Readonly<Record<string, unknown>> | undefined;
 }) {
   const answer = useElementAnswer('query' in asked ? asked.query : undefined, context);
   if ('none' in asked) return <ValueText none member={member} />;
-  if (answer.pending)
-    return (
-      <span className="text-value text-value--waiting" aria-busy="true">
-        …
-      </span>
-    );
+  // Its states (T889, AC-525): a skeleton while asked, the width of what it last read.
+  if (answer.pending) return <ElementSkeleton />;
   if (answer.error !== undefined)
-    return <span className="text-value text-value--unavailable">Unavailable</span>;
-  return (
-    <ValueText
-      value={answer.rows[0]?.[member]}
-      member={member}
-      formats={formats}
-      busy={answer.busy}
-    />
-  );
+    return <ElementUnavailable measure={title ?? member} error={answer.error} />;
+  const value = answer.rows[0]?.[member];
+  if (answer.busy) return <ElementSkeleton width={formatValue(value, member, formats).length} />;
+  return <ValueText value={value} member={member} formats={formats} />;
 }
