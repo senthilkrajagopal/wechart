@@ -45,6 +45,8 @@ import {
   withMemberLabels,
   withoutCalculations,
   TEXT_ELEMENT_LIMIT,
+  elementsOf,
+  type TextNode,
 } from '@wechart/core';
 import {
   Suspense,
@@ -126,6 +128,8 @@ import { TextTile } from '../tiles/text/TextTile';
 import { LazyTextEditor, TextEditingContext, type TextEditing } from '../tiles/text/textEditing';
 import type { CopilotOffer, InsertSources } from '../tiles/text/InsertMenu';
 import { insertSourcesOf } from '../tiles/text/insertSources';
+import { namesFrom } from '../tiles/text/elementName';
+import { ElementsList } from '../tiles/text/ElementsList';
 import { QueryClientContext } from '@tanstack/react-query';
 import type { Me } from '../shell/AccountMenu';
 import { ME_QUERY } from '../shell/me';
@@ -907,6 +911,10 @@ function TileBody({
                   name={textEditing.nameOf(tile.id)}
                   sources={textEditing.sources}
                   copilot={textEditing.copilot}
+                  selectElement={textEditing.selectElement}
+                  onElements={(elements, selected) => {
+                    textEditing.onElements?.(tile.id, elements, selected);
+                  }}
                   onLeave={(next, how) => {
                     textEditing.leave(tile.id, next, how);
                   }}
@@ -5187,6 +5195,34 @@ export function DashboardView({
    * text is left.
    */
   const [editingText, setEditingText] = useState<string | null>(null);
+  /**
+   * The edited text's elements, in order, and the selected one (T882,
+   * AC-519), as its editor tells them, for Properties' Elements list; and a
+   * row's ask to select one there.
+   */
+  const [textElements, setTextElements] = useState<{
+    readonly tileId: string;
+    readonly elements: readonly TextNode[];
+    readonly selected: number | null;
+  } | null>(null);
+  const [elementAsk, setElementAsk] = useState<{ index: number; ask: number } | undefined>(
+    undefined,
+  );
+  const onTextElements = useCallback(
+    (tileId: string, elements: TextNode[], selected: number | null) => {
+      setTextElements({ tileId, elements, selected });
+    },
+    [],
+  );
+  /**
+   * A text starts or stops being edited: what an earlier one told, and a
+   * row's ask for it, go with it.
+   */
+  const editText = useCallback((tileId: string | null) => {
+    setEditingText(tileId);
+    setTextElements(null);
+    setElementAsk(undefined);
+  }, []);
   /** What a Text tile's insert menu offers: the dashboard's measures, markings, filters (T881). */
   const textSources = useMemo(
     () => insertSourcesOf({ model, dashboard: live, documents, memberTitle }),
@@ -5968,7 +6004,35 @@ export function DashboardView({
                   if (session.saving) return;
                   setSelected(tileId);
                   setAddTarget(null);
-                  setEditingText(tileId);
+                  editText(tileId);
+                }}
+                /**
+                 * Its Elements (T882, AC-519): the edited text's, as its
+                 * editor tells them, else the stored document's; a row
+                 * selects its element in the text, opening the text first.
+                 */
+                textProperties={(tile) => {
+                  const live =
+                    editingText === tile.id && textElements?.tileId === tile.id
+                      ? textElements
+                      : undefined;
+                  const stored = (readAsText(tile) as Tile).document;
+                  return (
+                    <ElementsList
+                      elements={live?.elements ?? (stored === undefined ? [] : elementsOf(stored))}
+                      selected={live?.selected ?? null}
+                      names={namesFrom(textSources)}
+                      onSelect={(index) => {
+                        if (session.saving) return;
+                        if (editingText !== tile.id) {
+                          setSelected(tile.id);
+                          setAddTarget(null);
+                          editText(tile.id);
+                        }
+                        setElementAsk((was) => ({ index, ask: (was?.ask ?? 0) + 1 }));
+                      }}
+                    />
+                  );
                 }}
                 // Whose its chart is, and "Save to folders…" (T133, AC-127).
                 chartProperties={(tile) => (
@@ -6375,9 +6439,11 @@ export function DashboardView({
               onStartedEditing={onStartedEditing}
               editorOpenFor={editingChart?.tileId}
               editingText={editingText}
-              onEditingText={setEditingText}
+              onEditingText={editText}
               textSources={textSources}
               copilot={copilot}
+              onTextElements={onTextElements}
+              elementAsk={elementAsk}
               where={where}
               onAim={(next) => {
                 setSelected(next.selected);
@@ -6580,6 +6646,8 @@ function DashboardPages({
   onEditingText,
   textSources,
   copilot,
+  onTextElements,
+  elementAsk,
   where,
   onAim,
   deleted,
@@ -6663,6 +6731,9 @@ function DashboardPages({
   /** What a Text tile's insert menu offers (T881, AC-517), and its Copilot group (AC-535). */
   textSources?: InsertSources | undefined;
   copilot?: CopilotOffer;
+  /** The edited text's elements, for Properties' Elements list, and a row's ask to select one (AC-519). */
+  onTextElements?: TextEditing['onElements'];
+  elementAsk?: TextEditing['selectElement'];
   /** Where the next insert is aimed, owned above so the sidebar agrees. */
   where: { selected: string | null; addTarget: string | null; pageId: string };
   onAim: (next: { selected: string | null; addTarget: string | null }) => void;
@@ -6785,6 +6856,8 @@ function DashboardPages({
     nameOf: tileName,
     sources: textSources,
     copilot,
+    onElements: onTextElements,
+    selectElement: elementAsk,
   };
 
   const drag = useTileDrag({

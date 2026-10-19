@@ -8,11 +8,12 @@ import {
   elementAttributeNames,
   TEXT_DOCUMENT_VERSION,
   textLinkProblem,
-  type ElementKind,
   type TextDocument,
   type TextMark,
   type TextNode,
 } from '@wechart/core';
+
+import { ElementKeys, elementNodes } from './nodes/elementNodes';
 
 /**
  * The Text tile's editor schema (T876; decision T868-1): Tiptap's own names
@@ -66,84 +67,6 @@ const LargeValue = Node.create({
     return ['p', { class: 'text-tile__large', 'data-type': 'text-kpi' }, 0];
   },
 });
-
-/** What an element reads as in the editor until each kind has its own (T882). */
-const ELEMENT_WORDS: Readonly<Record<ElementKind, string>> = {
-  value: 'Value',
-  change: 'Change',
-  sparkline: 'Sparkline',
-  icon: 'Icon',
-  bulletGraph: 'Bullet graph',
-  marking: 'Marking',
-  filterValue: 'Filter value',
-  asOf: 'As of',
-  filterControl: 'Filter control',
-  parameterControl: 'Parameter control',
-  actionButton: 'Button',
-};
-
-/**
- * One element kind: an inline atom, which may be bold or italic and never a
- * link (decision T868-1), declaring exactly the attributes the schema gives
- * its kind, none of them drawn onto the DOM.
- */
-const elementNode = (kind: ElementKind) =>
-  Node.create({
-    name: kind,
-    group: 'inline',
-    inline: true,
-    atom: true,
-    selectable: true,
-    marks: 'bold italic',
-    addAttributes() {
-      return Object.fromEntries(
-        elementAttributeNames(kind).map((name) => [name, { default: null, rendered: false }]),
-      );
-    },
-    /**
-     * Read back from the clipboard: ProseMirror pastes through the HTML a
-     * copy or cut wrote, so an element's settings travel in `data-attrs`
-     * (T876's review). Only what its kind declares is taken; the stored
-     * schema's check still judges the values (T868, AC-513).
-     */
-    parseHTML() {
-      return [
-        {
-          tag: `span[data-element="${kind}"]`,
-          getAttrs: (element) => settingsOf(kind, element.getAttribute('data-attrs')),
-        },
-      ];
-    },
-    renderHTML({ node }) {
-      const source = ['measure', 'marking', 'filter', 'parameter', 'label']
-        .map((name) => node.attrs[name] as unknown)
-        .find((value): value is string => typeof value === 'string');
-      const settings = Object.fromEntries(
-        Object.entries(node.attrs).filter(([, value]) => value !== null && value !== undefined),
-      );
-      return [
-        'span',
-        { class: 'text-element', 'data-element': kind, 'data-attrs': JSON.stringify(settings) },
-        source === undefined ? ELEMENT_WORDS[kind] : `${ELEMENT_WORDS[kind]} · ${source}`,
-      ];
-    },
-  });
-
-/** An element's settings as its copy wrote them: only the ones its kind declares. */
-function settingsOf(kind: ElementKind, written: string | null): Record<string, unknown> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(written ?? '{}');
-  } catch {
-    return {};
-  }
-  if (!isRecord(parsed)) return {};
-  return Object.fromEntries(
-    elementAttributeNames(kind).flatMap((name) =>
-      Object.hasOwn(parsed, name) ? [[name, parsed[name]]] : [],
-    ),
-  );
-}
 
 /** What the insert menu's two triggers tell the editor (T881, AC-517). */
 export interface InsertBridge {
@@ -241,7 +164,8 @@ export function textEditorExtensions(bridge?: InsertBridge): Extensions {
     }),
     Heading,
     LargeValue,
-    ...ELEMENT_KINDS.map(elementNode),
+    ...elementNodes(),
+    ElementKeys,
   ];
 }
 
@@ -307,4 +231,9 @@ function nodeOf(input: JSONContent, parent?: string): TextNode {
  */
 export function storedDocumentOf(json: JSONContent): TextDocument {
   return { version: TEXT_DOCUMENT_VERSION, doc: nodeOf(json) };
+}
+
+/** One node of the editor's JSON as stored: an element, for the Elements list (T882). */
+export function storedNodeOf(json: JSONContent): TextNode {
+  return nodeOf(json);
 }

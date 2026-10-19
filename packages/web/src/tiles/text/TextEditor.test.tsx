@@ -74,7 +74,8 @@ describe('a Text tile’s text, edited in place (T876, AC-302)', () => {
       expect(textbox.contains(document.activeElement)).toBe(true);
     });
     const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    fireEvent.blur(textbox, { relatedTarget: null });
+    fireEvent.focusOut(textbox, { relatedTarget: null });
+    await new Promise((settled) => setTimeout(settled, 10));
     hasFocus.mockRestore();
     expect(onLeave).not.toHaveBeenCalled();
   });

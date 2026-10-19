@@ -1,15 +1,20 @@
 import type { Editor, JSONContent, Range } from '@tiptap/core';
+import { NodeSelection } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import type { TextDocument } from '@wechart/core';
+import { ELEMENT_KINDS, type TextDocument, type TextNode } from '@wechart/core';
 
 import {
   insertMenuOpen,
   storedDocumentOf,
+  storedNodeOf,
   textEditorExtensions,
   type InsertBridge,
 } from './editorExtensions';
+import { namesFrom } from './elementName';
+import { ElementNamesContext } from './nodes/ElementView';
 import {
   insertGroups,
   InsertMenu,
@@ -51,7 +56,50 @@ export interface TextEditorProps {
   readonly sources?: InsertSources | undefined;
   /** The insert menu's Copilot group (AC-535). */
   readonly copilot?: CopilotOffer;
+  /**
+   * The text's elements in order, as stored, and the selected one's place,
+   * or null — told whenever either changes, for Properties' Elements list
+   * (AC-519).
+   */
+  readonly onElements?: ((elements: TextNode[], selected: number | null) => void) | undefined;
+  /** Select the element at this place, asked anew by `ask` (a row of the Elements list). */
+  readonly selectElement?: { readonly index: number; readonly ask: number } | undefined;
 }
+
+const ELEMENT_TYPES = new Set<string>(ELEMENT_KINDS);
+
+/** The editor's elements in text order, as stored, and the selected one's place. */
+function elementsIn(editor: Editor): { elements: TextNode[]; selected: number | null } {
+  const elements: TextNode[] = [];
+  let selected: number | null = null;
+  const { selection } = editor.state;
+  editor.state.doc.descendants((node, pos) => {
+    if (!ELEMENT_TYPES.has(node.type.name)) return;
+    if (selection instanceof NodeSelection && selection.from === pos) selected = elements.length;
+    elements.push(storedNodeOf(node.toJSON() as JSONContent));
+  });
+  return { elements, selected };
+}
+
+/** Where the element at this place starts, or undefined. */
+function elementAt(editor: Editor, index: number): number | undefined {
+  let seen = 0;
+  let found: number | undefined;
+  editor.state.doc.descendants((node, pos) => {
+    if (found !== undefined) return false;
+    if (!ELEMENT_TYPES.has(node.type.name)) return undefined;
+    if (seen === index) found = pos;
+    seen += 1;
+    return undefined;
+  });
+  return found;
+}
+
+/**
+ * Where focus may go without leaving the text: Properties' Elements list and
+ * its element's settings, which work on the text being edited (AC-519).
+ */
+const KEEPS_EDITING = '[data-keeps-text-editing]';
 
 /**
  * A Text tile's text, editable in place on the canvas (T876, AC-302; design
@@ -69,7 +117,10 @@ export default function TextEditor({
   onLeave,
   sources = NO_SOURCES,
   copilot,
+  onElements,
+  selectElement,
 }: TextEditorProps) {
+  const names = useMemo(() => namesFrom(sources), [sources]);
   /** The insert menu, while open: what's typed, where, and which row (AC-517). */
   const [menu, setMenu] = useState<MenuState | null>(null);
   const menuId = useId();
@@ -165,13 +216,26 @@ export default function TextEditor({
     leaveWith.current(JSON.stringify(now) === opening.current ? undefined : now, how);
   };
 
-  const editor = useEditor({
-    extensions,
-    content: document.doc as JSONContent,
-    immediatelyRender: true,
-    // Focus in the text, at its end (AC-302).
-    autofocus: 'end',
-    editorProps: {
+  /**
+   * The view's props, made anew only when what they say changes: Tiptap
+   * hands any new object to ProseMirror on the next render, and a render
+   * from the dashboard around the text — the Elements list it tells, a
+   * refresh — then reset ProseMirror's selection, dropping a selected
+   * element.
+   */
+  const leaveRef = useRef(leave);
+  useEffect(() => {
+    leaveRef.current = leave;
+  });
+  /**
+   * Focus in the text, at its end (AC-302) — unless it's opened to select an
+   * element from the Elements list, where focus stays (AC-519). As it opened.
+   */
+  const [autofocus] = useState<'end' | false>(selectElement === undefined ? 'end' : false);
+  const active = menu === null || rows.length === 0 ? undefined : rowId(menuId, menu.active);
+  const open = menu !== null;
+  const editorProps = useMemo(
+    () => ({
       // Tiptap sets no role; the accessibility guide asks for `textbox`
       // (research §1, Gotchas: "The ARIA role must be set by us").
       attributes: {
@@ -182,21 +246,29 @@ export default function TextEditor({
         // While the insert menu is open, the text is its combobox: focus
         // stays here and the active row is named (AC-517). Not
         // aria-expanded, which a textbox doesn't take.
-        ...(menu === null
-          ? {}
-          : {
+        ...(open
+          ? {
               'aria-autocomplete': 'list',
               'aria-controls': menuId,
-              ...(rows.length === 0 ? {} : { 'aria-activedescendant': rowId(menuId, menu.active) }),
-            }),
+              ...(active === undefined ? {} : { 'aria-activedescendant': active }),
+            }
+          : {}),
       },
-      handleKeyDown: (view, event) => {
+      handleKeyDown: (view: EditorView, event: KeyboardEvent) => {
         // The insert menu's Esc closes only the menu.
         if (event.key !== 'Escape' || insertMenuOpen(view.state)) return false;
-        leave('escape');
+        leaveRef.current('escape');
         return true;
       },
-    },
+    }),
+    [name, open, menuId, active],
+  );
+  const editor = useEditor({
+    extensions,
+    content: document.doc as JSONContent,
+    immediatelyRender: true,
+    autofocus,
+    editorProps,
     // Tiptap calls it once the editor exists, never during render.
     onCreate: ({ editor: created }) => {
       // eslint-disable-next-line react-hooks/immutability
@@ -209,11 +281,96 @@ export default function TextEditor({
     editorOf.current = editor;
   }, [editor]);
 
+  /** The elements and the selected one, told to Properties as they change (AC-519). */
+  const reported = useRef('');
+  useEffect(() => {
+    if (onElements === undefined) return undefined;
+    const report = () => {
+      const now = elementsIn(editor);
+      const said = JSON.stringify(now);
+      if (said === reported.current) return;
+      reported.current = said;
+      onElements(now.elements, now.selected);
+    };
+    /**
+     * Told once ProseMirror has finished with the transaction: told during
+     * it, the dashboard's render ran inside ProseMirror's own update, as an
+     * element's node view was selected, and the selection was lost.
+     */
+    let pending = false;
+    const later = () => {
+      if (pending) return;
+      pending = true;
+      queueMicrotask(() => {
+        pending = false;
+        if (!editor.isDestroyed) report();
+      });
+    };
+    report();
+    editor.on('transaction', later);
+    return () => {
+      editor.off('transaction', later);
+    };
+  }, [editor, onElements]);
+
+  /** A row of the Elements list selects its element in the text (AC-519). */
+  useEffect(() => {
+    if (selectElement === undefined) return;
+    const at = elementAt(editor, selectElement.index);
+    if (at !== undefined) editor.commands.setNodeSelection(at);
+  }, [editor, selectElement]);
+
+  /**
+   * Leaving the text (AC-302): focus going anywhere but the text, its toolbar
+   * and menus, or Properties' Elements list and settings, which work on the
+   * text (AC-519). Tab from the text always leaves it, wherever it lands.
+   * The window losing focus — another app, another tab — isn't leaving: the
+   * text is still being edited when the author comes back.
+   */
+  const box = useRef<HTMLDivElement>(null);
+  const tabbing = useRef(false);
+  useEffect(() => {
+    const inBox = (node: EventTarget | null) =>
+      node instanceof Node && box.current?.contains(node) === true;
+    const ours = (node: EventTarget | null) =>
+      inBox(node) || (node instanceof Element && node.closest(KEEPS_EDITING) !== null);
+    const onFocusOut = (event: FocusEvent) => {
+      if (!ours(event.target)) return;
+      const to = event.relatedTarget;
+      const byTab = tabbing.current;
+      tabbing.current = false;
+      if (inBox(to)) return;
+      if (!byTab && ours(to)) return;
+      if (to !== null) {
+        leave('away');
+        return;
+      }
+      if (!window.document.hasFocus()) return;
+      /**
+       * Focus going nowhere: a click on something that takes none — or the
+       * element that had it being removed, as a closing menu's row is, while
+       * the editor takes focus back, which isn't leaving. Judged once the
+       * removal is done.
+       */
+      const from = event.target;
+      setTimeout(() => {
+        if (from instanceof Node && !from.isConnected) return;
+        if (ours(window.document.activeElement)) return;
+        leave('nowhere');
+      }, 0);
+    };
+    window.document.addEventListener('focusout', onFocusOut);
+    return () => {
+      window.document.removeEventListener('focusout', onFocusOut);
+    };
+  });
+
   return (
     // Not a control: its handlers only see keys and focus leave the text,
     // the toolbar and the editor's menus inside it, which are the controls.
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
+      ref={box}
       className="text-editor"
       /**
        * Tab leaves the text for the next control (AC-302): stopped here, on
@@ -221,8 +378,10 @@ export default function TextEditor({
        * and the browser moves focus as it does anywhere else.
        */
       onKeyDownCapture={(event) => {
-        if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey)
+        if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey) {
           event.stopPropagation();
+          tabbing.current = true;
+        }
       }}
       /**
        * A press on a part of it that takes no focus — the toolbar's strip,
@@ -246,14 +405,6 @@ export default function TextEditor({
         event.preventDefault();
         leave('escape');
       }}
-      onBlur={(event) => {
-        const to = event.relatedTarget;
-        if (to !== null && event.currentTarget.contains(to)) return;
-        // The window losing focus — another app, another tab — isn't leaving
-        // the text: it's still being edited when the author comes back.
-        if (to === null && !window.document.hasFocus()) return;
-        leave(to === null ? 'nowhere' : 'away');
-      }}
     >
       {/* Above the text (AC-515). */}
       <TextToolbar
@@ -264,7 +415,10 @@ export default function TextEditor({
           editor.chain().focus().insertContent('{{').run();
         }}
       />
-      <EditorContent editor={editor} className="text-editor__content" />
+      {/* Its elements' names, for their node views, which are portals in it. */}
+      <ElementNamesContext value={names}>
+        <EditorContent editor={editor} className="text-editor__content" />
+      </ElementNamesContext>
       {menu === null ? null : (
         <InsertMenu
           id={menuId}

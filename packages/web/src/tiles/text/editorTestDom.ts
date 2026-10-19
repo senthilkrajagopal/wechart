@@ -13,4 +13,11 @@ if (typeof range['getBoundingClientRect'] !== 'function')
     return new DOMRect();
   };
 
+/** And what it reads where a click lands: nothing there, as off-screen. */
+const page = Document.prototype as unknown as Record<string, unknown>;
+if (typeof page['elementFromPoint'] !== 'function')
+  page['elementFromPoint'] = function elementFromPoint() {
+    return null;
+  };
+
 export {};

@@ -56,3 +56,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/tiles/text/InsertMenu.tsx` (+ test; on `@tiptap/suggestion`), `packages/web/src/tiles/text/editorExtensions.ts`.
   - Failing test: `InsertMenu.test.tsx`: `/` at a line's start, after a space, `{{` and Insert each open a 320 px listbox with Live values (8 kinds), Controls (3) and Copilot groups in that order, focus staying in the text with `aria-activedescendant`; typing "marg" lists Margin % under Orders; Enter on it inserts a Value of it; → on it lists Value, Change, Sparkline, Icon, Bullet graph and As of; Esc closes it and leaves "{{marg" as text; `/` inside a word opens nothing (AC-517).
   - Depends on: T878
+
+- [x] T882 (AC-519) Live elements as atoms in edit mode, controls inert, and the Elements list in Properties
+  - Files: `packages/web/src/tiles/text/nodes/*.ts` (one node per kind, inline atoms with `ReactNodeViewRenderer`), `packages/web/src/tiles/text/ElementsList.tsx` (+ test), `packages/web/src/tiles/text/elementName.ts` (+ test).
+  - Failing test: `ElementsList.test.tsx`: elements listed in text order with kind and source and "3 of 10"; choosing a row selects that element and opens its settings; `elementName.test.ts`: "Change, Revenue against previous quarter"; a node test: → steps over an element as one character and selects it; Backspace after it removes it whole; a filter control in edit mode ignores a click's change (AC-519).
+  - Depends on: T881

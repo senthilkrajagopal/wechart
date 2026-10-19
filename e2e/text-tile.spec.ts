@@ -350,3 +350,69 @@ test('the insert menu opens by /, {{ and Insert, finds a measure by cube, and in
   await page.keyboard.press('Escape');
   await expect(tile.locator('.text-tile p')).toHaveText(/^Orders 240 so far \D*\d/);
 });
+
+/**
+ * T882 / AC-519: in the text being edited, an element is an atom named by
+ * its kind and source, which ← and → step over as one character, selecting
+ * it on the way, and Backspace removes whole; selected, by a key or by its
+ * row in Properties' Elements list ("1 of 10"), its settings open there.
+ */
+test('an element is an atom: stepped over and selected by the arrows, removed whole, and listed in Properties', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWith(request, 'Orders {{measure:orders.count}} so far');
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+
+  const tile = page.locator('[data-tile="tile-text"]');
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await tile.locator('.text-tile').dblclick();
+  const textbox = tile.getByRole('textbox');
+  await expect(textbox).toBeFocused();
+
+  const element = textbox.getByRole('img', { name: 'Value, Count' });
+  await expect(element).toBeVisible();
+  const list = sidebar.getByRole('list', { name: 'Elements' });
+  await expect(sidebar.getByText('1 of 10')).toBeVisible();
+  await expect(list.getByRole('button')).toHaveText(['ValueCount']);
+  const selected = textbox.locator('.ProseMirror-selectednode');
+  const settings = sidebar.getByRole('region', { name: 'Value, Count: settings' });
+
+  // From the end, past " so far", then onto the element: selected, its settings open.
+  for (let step = 0; step < ' so far'.length; step += 1) await page.keyboard.press('ArrowLeft');
+  await expect(selected).toHaveCount(0);
+  await page.keyboard.press('ArrowLeft');
+  await expect(selected).toHaveCount(1);
+  await expect(list.getByRole('button')).toHaveAttribute('aria-current', 'true');
+  await expect(settings).toContainText('Orders › Count');
+  // One more is past it, as past one character.
+  await page.keyboard.press('ArrowLeft');
+  await expect(selected).toHaveCount(0);
+  await expect(settings).toHaveCount(0);
+
+  // → selects it, → is past it, Backspace takes it whole.
+  await page.keyboard.press('ArrowRight');
+  await expect(selected).toHaveCount(1);
+  await page.keyboard.press('ArrowRight');
+  await expect(selected).toHaveCount(0);
+  await page.keyboard.press('Backspace');
+  await expect(textbox.locator('[data-element]')).toHaveCount(0);
+  await expect(textbox).toHaveText('Orders  so far');
+  await expect(list).toHaveCount(0);
+  // ⌘Z inside the text brings it back.
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(element).toBeVisible();
+
+  // Its row in Properties selects it, and the text stays being edited.
+  await list.getByRole('button', { name: /Value/ }).click();
+  await expect(selected).toHaveCount(1);
+  await expect(textbox).toHaveCount(1);
+  await expect(settings).toBeVisible();
+
+  // Left, it draws its value.
+  await tile.locator('.tile-head__kind').click();
+  await expect(textbox).toHaveCount(0);
+  await expect(tile.locator('.text-tile p')).toHaveText('Orders 240 so far');
+});

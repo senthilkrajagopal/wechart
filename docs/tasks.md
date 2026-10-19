@@ -1933,10 +1933,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T881 (AC-517) The insert menu, opened by `/`, `{{` or Insert: a combobox of kinds in three groups, then measures by cube
 
-- [ ] T882 (AC-519) Live elements as atoms in edit mode, controls inert, and the Elements list in Properties
-  - Files: `packages/web/src/tiles/text/nodes/*.ts` (one node per kind, inline atoms with `ReactNodeViewRenderer`), `packages/web/src/tiles/text/ElementsList.tsx` (+ test), `packages/web/src/tiles/text/elementName.ts` (+ test).
-  - Failing test: `ElementsList.test.tsx`: elements listed in text order with kind and source and "3 of 10"; choosing a row selects that element and opens its settings; `elementName.test.ts`: "Change, Revenue against previous quarter"; a node test: → steps over an element as one character and selects it; Backspace after it removes it whole; a filter control in edit mode ignores a click's change (AC-519).
-  - Depends on: T881
+- [x] T882 (AC-519) Live elements as atoms in edit mode, controls inert, and the Elements list in Properties
 
 - [ ] T883 (AC-518) Hold a Text tile to 10 elements in the editor: the count, the disabled menu and Insert with the reason, and a refused paste
   - Files: `packages/web/src/tiles/text/elementLimit.ts` (+ test), `packages/web/src/tiles/text/InsertMenu.tsx`, `packages/web/src/tiles/text/TextToolbar.tsx`.

@@ -1,6 +1,6 @@
 import { createContext, lazy } from 'react';
 
-import type { TextDocument } from '@wechart/core';
+import type { TextDocument, TextNode } from '@wechart/core';
 
 import type { CopilotOffer, InsertSources } from './InsertMenu';
 import type { LeftBy } from './TextEditor';
@@ -23,6 +23,11 @@ export interface TextEditing {
   readonly sources?: InsertSources | undefined;
   /** The insert menu's Copilot group (AC-535). */
   readonly copilot?: CopilotOffer;
+  /** The text's elements and the selected one, for Properties' Elements list (AC-519). */
+  readonly onElements?:
+    ((tileId: string, elements: TextNode[], selected: number | null) => void) | undefined;
+  /** An element to select, asked from the Elements list (AC-519). */
+  readonly selectElement?: { readonly index: number; readonly ask: number } | undefined;
 }
 
 export const TextEditingContext = createContext<TextEditing | undefined>(undefined);

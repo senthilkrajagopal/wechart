@@ -188,13 +188,81 @@ export const TEXT_CSS = `
   border-radius: 4px;
   outline: none;
 }
-/* An element in the editor, at the text's own size (rule 130). */
+/* An element in the editor, at the text's own size (rule 130; direction §7h):
+   bg-subtle, a 1 px border-subtle, radius 4, padding 0 4; selected, the
+   accent border and its 3 px ring. */
 .text-element {
   padding: 0 4px;
   border: 1px solid var(--wc-border-subtle);
   border-radius: 4px;
   background: var(--wc-bg-subtle);
+  color: var(--wc-text-primary);
+  font-variant-numeric: tabular-nums;
 }
+.ProseMirror-selectednode > .text-element,
+.text-element.ProseMirror-selectednode {
+  border-color: var(--wc-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wc-accent) 35%, transparent);
+}
+.text-element-view { white-space: nowrap; }
+.text-element--control { display: inline-block; padding: 2px; vertical-align: middle; }
+/* A control as itself, inert while editing (state L). */
+.text-element__pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 999px;
+  background: var(--wc-bg-surface);
+  font-size: var(--wc-text-xs-size);
+}
+.text-element__button {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  font-size: var(--wc-text-sm-size);
+}
+.text-element__button--primary { border-color: var(--wc-accent); background: var(--wc-accent); color: var(--wc-text-on-accent); }
+.text-element__button--text { border-color: transparent; background: transparent; color: var(--wc-accent); text-decoration: underline; }
+/* Properties' Elements list and the chosen element's settings (pin 13). */
+.text-elements { margin-top: 12px; }
+.text-elements__head {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 4px;
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
+  color: var(--wc-text-secondary);
+}
+.text-elements__count { font-weight: normal; color: var(--wc-text-muted); font-variant-numeric: tabular-nums; }
+.text-elements__list { margin: 0; padding: 0; list-style: none; }
+.text-elements__row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  font-size: var(--wc-text-sm-size);
+  color: var(--wc-text-primary);
+}
+.text-elements__row:hover { background: var(--wc-bg-hover); }
+.text-elements__row[aria-current='true'] { background: var(--wc-bg-accent-soft); }
+.text-elements__kind { flex: none; font-weight: 600; }
+.text-elements__source { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--wc-text-secondary); }
+.text-element-settings { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--wc-border-subtle); }
+.text-element-settings dl { margin: 0; }
+.text-element-settings__line { display: grid; grid-template-columns: 72px 1fr; gap: 8px; font-size: var(--wc-text-sm-size); }
+.text-element-settings dt { color: var(--wc-text-secondary); }
+.text-element-settings dd { margin: 0; }
 /* Under its kind head in edit mode, the text fills the rest, as the markdown
    tile's did. */
 .grid-tile > .tile-head--kind ~ .text-tile { flex: 1 1 0; min-height: 0; height: auto; }

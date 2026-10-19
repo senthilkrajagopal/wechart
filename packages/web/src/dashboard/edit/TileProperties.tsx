@@ -25,6 +25,7 @@ export function TileProperties({
   onChange,
   chartProperties,
   onEditText,
+  textProperties,
 }: {
   dashboardId: string;
   document: DashboardDocument;
@@ -38,6 +39,8 @@ export function TileProperties({
   chartProperties?: ((tile: Tile) => ReactNode) | undefined;
   /** A Text tile's text, made editable on the canvas (AC-302). */
   onEditText?: ((tileId: string) => void) | undefined;
+  /** A Text tile's Elements and its selected element's settings, from above (AC-519). */
+  textProperties?: ((tile: Tile) => ReactNode) | undefined;
 }) {
   const element = selected === null ? null : elementAt(document, selected);
   if (element === null || !isTile(element))
@@ -63,11 +66,14 @@ export function TileProperties({
       case 'markdown':
       case 'text':
         return (
-          <TextProperties
-            onEdit={() => {
-              onEditText?.(element.id);
-            }}
-          />
+          <>
+            <TextProperties
+              onEdit={() => {
+                onEditText?.(element.id);
+              }}
+            />
+            {textProperties?.(element)}
+          </>
         );
       case 'chart':
         return chartProperties?.(element) ?? <Note>This tile has no properties to set here.</Note>;
