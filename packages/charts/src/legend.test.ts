@@ -252,4 +252,24 @@ describe('a combo’s legend', () => {
     expect(new Set(icons).size).toBe(2);
     expect(icons?.[1]).toBe(icons?.[2]);
   });
+
+  /**
+   * AC-505: a series with no data still counts and keeps its legend entry,
+   * saying "No data for these filters" in text-secondary.
+   */
+  it('keeps an empty series’ entry, saying "No data for these filters"', () => {
+    const empty: RenderSpec = {
+      ...combo,
+      rows: combo.rows.map((row) => ({ ...row, [COUNT]: null })),
+    };
+    const legend = legendOf(empty);
+
+    expect(legend.data?.map((one) => one.name)).toEqual([AMOUNT, COUNT, MARGIN]);
+    expect(legend.formatter?.(COUNT)).toBe(`${COUNT} {none|· No data for these filters}`);
+    expect(legend.formatter?.(AMOUNT)).toBe(AMOUNT);
+    expect(legend.textStyle?.rich?.['none']?.color).toBe(COLORS.light['text-secondary']);
+    expect(labelsOf(renderToSvg(optionFor(empty))).map((label) => label.text)).toContain(
+      '· No data for these filters',
+    );
+  });
 });

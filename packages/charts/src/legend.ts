@@ -98,20 +98,36 @@ function comboLegendOf(
   const resolved = new Map(
     comboSeriesOf(membersOn(spec.encoding, 'y'), spec.options).map((one) => [one.measure, one]),
   );
+  const drawn = seriesOf(spec).series;
   const names = inSeriesOrder(
-    seriesOf(spec).series.filter((one) => settings[one.name]?.hidden !== true),
+    drawn.filter((one) => settings[one.name]?.hidden !== true),
     seriesOrderOf(spec),
   ).map((one) => one.name);
+  /** A series with no value at all keeps its entry, saying so (AC-505). */
+  const empty = new Set(
+    drawn.filter((one) => one.values.every((value) => value === null)).map((one) => one.name),
+  );
   const named = (name: string) => (write === undefined ? name : write(name));
   return {
     data: names.map((name) => ({ name, icon: GLYPH_PATHS[resolved.get(name)?.mark ?? 'line'] })),
     itemWidth: 12,
     itemHeight: 8,
-    formatter: (name: string) =>
-      resolved.get(name)?.axis === 'right'
-        ? `${named(name).replace(/[{}]/g, '')} {right|(right)}`
-        : named(name),
-    textStyle: { rich: { right: { color: COLORS.light['text-secondary'] } } },
+    formatter: (name: string) => {
+      const right = resolved.get(name)?.axis === 'right';
+      const none = empty.has(name);
+      if (!right && !none) return named(name);
+      return [
+        named(name).replace(/[{}]/g, ''),
+        ...(right ? ['{right|(right)}'] : []),
+        ...(none ? ['{none|· No data for these filters}'] : []),
+      ].join(' ');
+    },
+    textStyle: {
+      rich: {
+        right: { color: COLORS.light['text-secondary'] },
+        none: { color: COLORS.light['text-secondary'] },
+      },
+    },
   };
 }
 
