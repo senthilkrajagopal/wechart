@@ -1807,7 +1807,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T847 (AC-499) Align a combo's two value axes: one zero height, the right axis's ticks on the left's gridlines, include zero forced while bars are drawn, and no right gridlines
 
-- [x] T848 (AC-500) Title each value axis above itself with its measures' glyphs and its unit, keep ticks `text-secondary`, give legend entries their glyphs and "(right)", and emphasise a hovered series' axis
+- [x] T848 (AC-500) Title each value axis above itself with its unit alone, no glyphs (R82; built with glyphs, amended by the R82 fix), keep ticks `text-secondary`, give legend entries their glyphs and "(right)", and emphasise a hovered series' axis
 
 - [x] T849 (AC-501) Synchronize a combo's two axes into one scale, labelled on both sides, only while both share a format
 

@@ -363,7 +363,7 @@ The user: these "will be deferred and not done in this phase". No task builds th
   - a read-only login per data source;
   - the refresh worker's build history;
   - xcube's slice 7;
-  - the 4 Northwind bugs.
+  - 3 of the 4 Northwind bugs (colours past 8 series is decided as is, R82).
 - **Parked: R81's chart types not started (the user, 2026-10-18: "any of the charts that you have not started implmentation put them in the parking lot for now... whatever is started see them through the completion").** Their tasks are kept unticked in `docs/tasks.md` §P2.27 "Parked (user, 2026-10-18)", and their criteria stay in `docs/spec.md`, each group marked parked:
 
   | Type | Criteria | Tasks |

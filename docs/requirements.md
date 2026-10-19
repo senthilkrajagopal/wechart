@@ -749,7 +749,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - The refresh worker's build history `[R41]`.
 - xcube's slice 7.
 - The phase 3 keyboard items (backlog §7).
-- The four Northwind demo bugs: colours past 8 series, marked pivot overflow, pivot column order, and the single-level treemap.
+- Three Northwind demo bugs: marked pivot overflow, pivot column order, and the single-level treemap. The fourth, colours past 8 series, is decided as is ("Keep as is", R82): past 8 coloured series on a page, later series draw the neutral.
 
 No criteria are written for these yet. Each gets its own questions where it is open.
 
@@ -768,7 +768,7 @@ No criteria are written for these yet. Each gets its own questions where it is o
 - **The request,** in the user's words: "let us work on combo charts and rich text charts... make it modern.. use the best technologies available. start working on this on priority..use ui/visualization/bi expert as well as spotfire expert." `[R80]`
 - **Combo charts** (design 20):
   - each measure its own series, with its own mark (bar, line, area or point) and value axis (left or right), set in Customize › Series, the Metrics pill's menu and, in the chart editor only, the legend (20-Q5) `[R80]`;
-  - **two value axes at most**, left and right ("2: left and right (Recommended)"); a second axis only by the author's explicit choice, never by Auto or the recommender (AC-030 holds); when drawn, zero and ticks aligned, each axis titled with its measures' mark glyphs `[R80]`;
+  - **two value axes at most**, left and right ("2: left and right (Recommended)"); a second axis only by the author's explicit choice, never by Auto or the recommender (AC-030 holds); when drawn, zero and ticks aligned `[R80]`; each axis titled with its unit only ("$", "Orders"), no glyphs, the legend keeping the glyphs and "(right)" ("Legend + unit-only axis titles (Recommended)") `[R82]`;
   - **Synchronize axes**, offered only when both axes share a format (20-Q12); **log scale** per axis, the same on both, unavailable with bars (20-Q3); **reference lines and bands**, horizontal and vertical, labelled in the chart, from a fixed value or a drawn series' average, median, minimum or maximum, no set limit (20-Q7 … 20-Q9); stacking chart-wide, never across axes (20-Q11) `[R80]`;
   - **split by one dimension across every measure** ("One dimension, all measures"): series are measure × member, colour the member, each split measure its own mark (20-Q1); **at most 8 series**, folding members to the top *k* + Other first, then leaving whole measures not drawn (20-Q2) `[R80]`;
   - **the AC-218 warning** only while two unsynchronized axes are drawn, for authors only, stronger when both share a format (20-Q4, 20-Q6); inside a combo, R67's first offer is "Draw on a right axis" `[R80]`.

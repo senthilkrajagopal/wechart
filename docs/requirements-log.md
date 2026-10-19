@@ -223,6 +223,18 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R82 — scope, the Cube group, colours and the combo key** (2026-10-18, the user; asked by the coordinator after the standing instruction "complete all things that you have started.. and deploy it.. and dont start anything new")
+- Q: The Text tile's group: which of its started parts are finished? A: "Finish all of them"
+  - *Read as: controls and dashboard parameters (F46), AI summaries (F47) and Security › AI (F48) count as started and are finished with the Text tile (F45).*
+  - The user, after that answer: "you cN PARK THESE │ AI summaries (F47) + Security › AI (F48)". *F47 and F48 are parked; F46 (controls and dashboard parameters) is still finished. Lane AI writes the parking into `docs/tasks.md`, `docs/spec.md` and the backlog.*
+- Q: The SQL runner's Cube group (Cube's semantic SQL API): finish it, and how? A: "Finish via xcube"
+  - *The Cube-expert session is asked for Cube's SQL interface without the Postgres-wire port. Ctrl+Q (T827) is built too.*
+- Q: Colours past 8 series (the Northwind bug: on a dashboard, series past the palette's 8 coloured slots draw the neutral, so a combo tile can come out grey). A: "Keep as is"
+  - *Decided: past 8 coloured series on a page, later series draw the neutral. The open item "colours past 8 series" is closed.*
+- Q: A combo's key: it has both axis titles with mark glyphs (AC-500, rule 119) and a legend (rule 120), read on the deployed build as a "double legend". A: "Legend + unit-only axis titles (Recommended)"
+  - *The legend stays, a right-axis series still adding "(right)". Each value axis's title shows its unit only ("$", "Orders"), with no glyphs. AC-500 and rule 119 are amended to match.*
+  - *The coordinator's reading, overturnable: an axis whose format has a unit (a currency's symbol, "%") is titled with that unit alone; one whose format has none, a plain number, is titled with its measures' names, as "Orders" is.*
+
 **R81 — new chart components** (2026-10-18, the user)
 - **Sources.** Study: `docs/design/references-new-chart-components.md` (the visualization and BI expert; its §4 ranking, §5 spec sketches and §7 questions). Design: 23 in `docs/design/reviews/2026-10-18/designs/` (`23-new-chart-types.html`).
 - **Questions and answers** (about the study):

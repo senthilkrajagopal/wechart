@@ -147,6 +147,6 @@ Phase 3 starts with a project-interview round on those questions.
 
 ## Waiting on the user
 
-- **Northwind:** log its 4 bugs (colours past 8 series, marked pivot overflow, pivot column order, single-level treemap), and decide whether to copy its exports into the repo.
+- **Northwind:** log its 3 remaining bugs (marked pivot overflow, pivot column order, single-level treemap), and decide whether to copy its exports into the repo. Colours past 8 series is closed: "Keep as is" (R82), later series draw the neutral.
 - **Housekeeping:** add `graphify-out/` to `.gitignore`, and delete `.claude/settings.json.graphify-bak`.
 - **Leftover worktrees:** decide what to do with the 6 that hold unpicked commits: export-import, group3-verify-2, t331, group4-close-2, and two agent branches.
