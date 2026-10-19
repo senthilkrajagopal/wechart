@@ -98,6 +98,8 @@ export function undrawnOf({
   if (first === undefined) return [];
   // Every metric, as numbers: in its rows and columns.
   if (chartType === 'table' || chartType === 'pivot') return [];
+  // Every metric, each on an axis of its own and its own scale (AC-597).
+  if (chartType === 'parallel') return [];
   // A panel per metric, each on its own scale; panelled by a member, the first in each.
   if (chartType === 'trellis') return split ? past(1) : [];
   // Two, one on each axis.

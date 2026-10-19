@@ -89,6 +89,12 @@ test('parallel coordinates take their wells, refuse Shared across formats, and d
     "Each axis runs from its own minimum to its maximum. Don't compare a line's height on one axis with its height on another.",
   );
   await expect(shared).toBeDisabled();
+
+  // Every metric has an axis of its own, so none is called undrawn, though
+  // their formats differ (the coordinator's fix: three of four axes were
+  // "not drawn", with Remove).
+  await expect(page.getByTestId('undrawn-metrics')).toHaveCount(0);
+  await expect(page.locator('.wells .pill__off')).toHaveCount(0);
 });
 
 /**

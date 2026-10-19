@@ -134,6 +134,20 @@ describe('the metrics a form leaves undrawn (T510)', () => {
       { member: COUNT, reason: 'form' },
     ]);
   });
+
+  /**
+   * AC-597: parallel coordinates draw every metric on an axis of its own, so
+   * none is undrawn, whatever its scale, and split by Colour or not (the
+   * coordinator's Sales dashboard: three of four axes were called "not drawn").
+   */
+  it('names none on parallel coordinates: one axis per metric, each on its own scale', () => {
+    const four = [AMOUNT, COUNT, SHARE, 'orders.items'];
+    expect(undrawnMeasures(spec('parallel', four))).toEqual([]);
+    expect(undrawnMeasures(spec('parallel', four, { color: [REGION] }))).toEqual([]);
+    // Nor is any taken off its axis to hold the first's scale.
+    const drawn = spec('parallel', four);
+    expect(onOneScale(drawn)).toBe(drawn);
+  });
 });
 
 describe('an unsplit bar, line or area drawn on its first metric’s scale (T510; R67)', () => {
