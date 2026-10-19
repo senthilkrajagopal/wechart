@@ -477,6 +477,102 @@ async function dashboardWithText(
 }
 
 /**
+ * AC-208 (amended 2026-10-18, R80; design 21, rule 127): in view mode a Text
+ * tile draws its paragraphs, its three heading styles as heading elements,
+ * Large value, bold, italic, both lists, line breaks, links, a live element
+ * and a control, at §3's sizes (direction.md §7h), and no raw HTML and no
+ * script: tags in its text are that text.
+ * `Fails when: a heading, emphasis, list or link is shown as markup
+ * characters such as "##" or "**"; a heading style isn't a heading element;
+ * or an HTML tag in the text renders as HTML.`
+ */
+test('a Text tile reads its block styles as elements at §3’s sizes, its emphasis, lists, breaks, link, value and control, and no HTML', async ({
+  page,
+  request,
+}) => {
+  const text = (value: string, marks?: unknown[]) => ({
+    type: 'text',
+    text: value,
+    ...(marks === undefined ? {} : { marks }),
+  });
+  const paragraph = (...content: unknown[]) => ({ type: 'paragraph', content });
+  const item = (value: string) => ({ type: 'listItem', content: [paragraph(text(value))] });
+  const { id, title } = await dashboardWithText(
+    request,
+    [
+      { type: 'heading', attrs: { level: 1 }, content: [text('Heading large')] },
+      { type: 'heading', attrs: { level: 2 }, content: [text('Heading medium')] },
+      { type: 'heading', attrs: { level: 3 }, content: [text('Heading small')] },
+      { type: 'largeValue', content: [{ type: 'value', attrs: { measure: 'orders.count' } }] },
+      paragraph(
+        text('Orders '),
+        text('by status', [{ type: 'bold' }]),
+        text(' and '),
+        text('this quarter', [{ type: 'italic' }]),
+        { type: 'hardBreak' },
+        text('on two lines, from '),
+        text('the sample', [{ type: 'link', attrs: { href: 'https://example.com/sample' } }]),
+        text('.'),
+      ),
+      { type: 'bulletList', content: [item('shipped'), item('completed')] },
+      { type: 'orderedList', content: [item('first'), item('second')] },
+      paragraph(text('<b>not bold</b> <script>window.ranScript = true</script> ## ** _x_')),
+      paragraph(text('Country: '), { type: 'filterControl', attrs: { filter: 'f-country' } }),
+    ],
+    [{ id: 'f-country', widget: 'list', member: 'customers.country' }],
+  );
+  let dialogs = 0;
+  page.on('dialog', (dialog) => {
+    dialogs += 1;
+    void dialog.dismiss();
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-text"] .text-tile');
+  const size = (locator: ReturnType<typeof tile.locator>) =>
+    locator.evaluate((element) => getComputedStyle(element).fontSize);
+
+  // The three heading styles: heading elements, h3, h4 and h5, at 24, 20 and 16 px.
+  for (const [level, name, px] of [
+    [3, 'Heading large', '24px'],
+    [4, 'Heading medium', '20px'],
+    [5, 'Heading small', '16px'],
+  ] as const) {
+    const heading = tile.getByRole('heading', { level, name });
+    await expect(heading).toBeVisible();
+    expect(await size(heading), name).toBe(px);
+  }
+  // Large value at text-kpi, its live value in it.
+  const large = tile.locator('[data-type="text-kpi"]');
+  await expect(large.locator('.text-value')).toHaveText('240');
+  expect(await size(large)).toBe('32px');
+  // A paragraph at text-sm: bold, italic, a break and a link.
+  const body = tile.locator('p').filter({ hasText: 'Orders by status' });
+  expect(await size(body)).toBe('14px');
+  await expect(body.locator('strong')).toHaveText('by status');
+  await expect(body.locator('em')).toHaveText('this quarter');
+  await expect(body.locator('br')).toHaveCount(1);
+  const link = body.getByRole('link', { name: 'the sample' });
+  await expect(link).toHaveAttribute('href', 'https://example.com/sample');
+  // Both lists, as lists.
+  await expect(tile.locator('ul > li')).toHaveText(['shipped', 'completed']);
+  await expect(tile.locator('ol > li')).toHaveText(['first', 'second']);
+  // The control, the bar's widget in compact form (AC-529's 28 px).
+  const control = tile.getByTestId('filter-control-f-country');
+  await expect(control).toBeVisible();
+  expect((await control.boundingBox())?.height).toBe(28);
+
+  // No markup shown but the text that is markup-like, and no HTML from the text.
+  await expect(tile).toContainText('<b>not bold</b> <script>window.ranScript = true</script>');
+  await expect(tile.locator('b, script, iframe, img')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as { ranScript?: boolean }).ranScript)).toBeUndefined();
+  expect(dialogs).toBe(0);
+  const shown = (await tile.innerText()).replace('<b>not bold</b> <script>window.ranScript = true</script> ## ** _x_', '');
+  expect(shown).not.toContain('##');
+  expect(shown).not.toContain('**');
+});
+
+/**
  * T884 / AC-520, AC-116: a Value reads in its model's format, and one
  * limited by a marking with nothing marked shows "—" when the author chose
  * so; a Change reads ▲ or ▼ and its size, in the status its direction
