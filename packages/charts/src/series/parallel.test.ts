@@ -315,7 +315,9 @@ describe('parallel coordinates’ titles on a tile (AC-598)', () => {
     });
 
   it('titles each axis by its short title where the chart is one cube’s', () => {
-    const names = axesOf(parallelOption(sales(FULL, SHORT), TILE)).map(
+    // On a 6-column tile, where every short title has its room beside the
+    // lines' names (on a 4-column one, "Avg Order Value" is cut short).
+    const names = axesOf(parallelOption(sales(FULL, SHORT), { width: 580, height: 260 })).map(
       (axis) => axis.name.split('\n')[0],
     );
     expect(names).toEqual(['Revenue', 'Units Sold', 'Avg Order Value', 'Discount Rate']);
@@ -332,19 +334,106 @@ describe('parallel coordinates’ titles on a tile (AC-598)', () => {
     }
   });
 
+  /** A text's box, down the canvas: its centre as the SSR string places it. */
+  const placedText = (svg: string, text: string) => {
+    const found = new RegExp(`<text ([^>]*)>${text.replace(/[$.()/]/g, '\\$&')}</text>`).exec(svg);
+    if (found === null) return undefined;
+    const attributes = found[1] ?? '';
+    const [, x = 'NaN', y = 'NaN'] = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(attributes) ?? [];
+    const dy = Number(/ y="([-\d.]+)"/.exec(attributes)?.[1] ?? 0);
+    const anchor = /text-anchor="(\w+)"/.exec(attributes)?.[1] ?? 'start';
+    const width = format.getTextRect(text, `12px ${CHART_FONT}`).width;
+    const left =
+      anchor === 'middle'
+        ? Number(x) - width / 2
+        : anchor === 'end'
+          ? Number(x) - width
+          : Number(x);
+    return { left, right: left + width, y: Number(y) + dy };
+  };
+  /** Each line's last point as drawn: a polyline in the SSR string. */
+  const lineEndsOf = (svg: string) =>
+    [...svg.matchAll(/<polyline points="([^"]+)"[^>]*stroke-width="1.5"/g)].map(
+      ([, points = '']) => {
+        const numbers = points
+          .trim()
+          .split(/[\s,]+/)
+          .map(Number);
+        return { x: numbers[numbers.length - 2]!, y: numbers[numbers.length - 1]! };
+      },
+    );
+
+  /**
+   * The user, 2026-10-18 ("Label line ends (Recommended)"; AC-598 amended):
+   * every line was the same grey, with no legend or label, so only the
+   * tooltip said which category a line was. Where 10 or fewer lines are
+   * drawn, each is named at its right end, beside the last axis, inside the
+   * tile, and no two names overlap; past 10, none is (the tooltip and the
+   * table view name them).
+   */
+  it('names each of 10 or fewer lines at its right end, beside the last axis, inside the tile', () => {
+    const svg = renderToSvg(optionFor(sales(FULL, SHORT), TILE), TILE);
+    const ends = lineEndsOf(svg);
+    expect(ends).toHaveLength(4);
+    const lastAxis = Math.max(...ends.map((end) => end.x));
+    const names = ['Beverages', 'Condiments', 'Confections', 'Dairy Products'];
+    const labels = names.map((name) => ({ name, at: placedText(svg, name) }));
+    for (const { name, at } of labels) {
+      expect(at, `${name} is named`).toBeDefined();
+      expect(at!.left, `${name} is right of the last axis`).toBeGreaterThan(lastAxis);
+      expect(at!.right, `${name} ends inside the tile`).toBeLessThanOrEqual(TILE.width);
+    }
+    // Each beside its own line's end: the lines end in the rows' order, the
+    // first lowest (its values least).
+    const byEnd = [...ends].sort((a, b) => b.y - a.y);
+    const byLabel = [...labels].sort((a, b) => b.at!.y - a.at!.y).map((one) => one.name);
+    expect(byLabel).toEqual(names);
+    for (const [at, end] of byEnd.entries())
+      expect(Math.abs(labels[at]!.at!.y - end.y)).toBeLessThanOrEqual(16);
+  });
+
+  it('keeps the names of lines ending together apart, and inside the tile', () => {
+    const together = sales(FULL, SHORT);
+    const rows = together.rows.map((row) => ({ ...row, 'sales_lines.discount_rate': '0.05' }));
+    const svg = renderToSvg(optionFor({ ...together, rows }, TILE), TILE);
+    const ys = ['Beverages', 'Condiments', 'Confections', 'Dairy Products']
+      .map((name) => placedText(svg, name))
+      .map((at) => {
+        expect(at).toBeDefined();
+        return at!.y;
+      })
+      .sort((a, b) => a - b);
+    for (let at = 1; at < ys.length; at += 1)
+      expect(ys[at]! - ys[at - 1]!, 'two names a line apart').toBeGreaterThanOrEqual(14);
+    expect(ys[0]!).toBeGreaterThanOrEqual(6);
+    expect(ys[ys.length - 1]!).toBeLessThanOrEqual(TILE.height - 6);
+  });
+
+  it('names no line where more than 10 are drawn', () => {
+    const svg = renderToSvg(optionFor(spec(rowsOf(11))));
+    expect(svg).not.toContain('>Product 1<');
+    expect(svg).not.toContain('>Product 11<');
+    const ten = renderToSvg(optionFor(spec(rowsOf(10))));
+    expect(ten).toContain('>Product 10<');
+  });
+
   it('cuts a title too long for its axis’s room short with “…”, inside the tile and clear of its neighbours', () => {
     const texts = textsOf(renderToSvg(optionFor(sales(FULL), TILE), TILE));
     const titles = texts.filter((one) => one.text.startsWith('Sales lines'));
     expect(titles).toHaveLength(4);
-    expect(titles.some((one) => one.text.endsWith('…'))).toBe(true);
+    expect(
+      titles.some((one) => one.text.endsWith('…')),
+      titles.map((one) => one.text).join(' | '),
+    ).toBe(true);
     for (const one of titles) {
       expect(one.left, `${one.text} starts inside the tile`).toBeGreaterThanOrEqual(0);
       expect(one.right, `${one.text} ends inside the tile`).toBeLessThanOrEqual(TILE.width);
     }
     const across = [...titles].sort((a, b) => a.left - b.left);
     for (let at = 1; at < across.length; at += 1)
-      expect(across[at]!.left, `${across[at]!.text} clears ${across[at - 1]!.text}`).toBeGreaterThan(
-        across[at - 1]!.right,
-      );
+      expect(
+        across[at]!.left,
+        `${across[at]!.text} clears ${across[at - 1]!.text}`,
+      ).toBeGreaterThan(across[at - 1]!.right);
   });
 });

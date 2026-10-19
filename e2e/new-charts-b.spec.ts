@@ -103,6 +103,25 @@ test('parallel coordinates take their wells, refuse Shared across formats, and d
         .map((text) => text.textContent);
     });
   expect(outside).toEqual([]);
+
+  // Three lines, so each is named at its right end, beside the last axis
+  // (the user, 2026-10-18, "Label line ends"; AC-598): inside the chart, as
+  // just checked, and each right of every line.
+  expect(titles).toEqual(expect.arrayContaining(['completed', 'processing', 'shipped']));
+  const named = await canvas
+    .locator('svg')
+    .first()
+    .evaluate((svg) => {
+      const lineRight = Math.max(
+        ...[...svg.querySelectorAll('path[stroke-width="1.5"][fill="none"]')].map(
+          (line) => line.getBoundingClientRect().right,
+        ),
+      );
+      return [...svg.querySelectorAll('text')]
+        .filter((text) => ['completed', 'processing', 'shipped'].includes(text.textContent ?? ''))
+        .map((text) => text.getBoundingClientRect().left > lineRight);
+    });
+  expect(named).toEqual([true, true, true]);
   await expect(page.getByTestId('parallel-scale-warning')).toHaveText(
     "Each axis runs from its own minimum to its maximum. Don't compare a line's height on one axis with its height on another.",
   );

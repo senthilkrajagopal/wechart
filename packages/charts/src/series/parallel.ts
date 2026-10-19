@@ -22,6 +22,7 @@ import {
   type ParallelScale,
   type RenderSpec,
 } from '@wechart/core';
+import { COLORS } from '@wechart/ui';
 import { format } from 'echarts/core';
 
 import { colourFor } from '../colours';
@@ -136,7 +137,51 @@ const TITLE_GAP_PX = 8;
 /** The room kept between the outer axes' widest text and the tile's edge. */
 const EDGE_PX = 4;
 
+/** The plot's room above for the axes' two-line titles, and below for their minimums. */
+const PLOT_TOP_PX = 56;
+const PLOT_BOTTOM_PX = 32;
+
+/**
+ * The most lines named at their right ends (the user, 2026-10-18, "Label
+ * line ends (Recommended)"; AC-598): past it, the tooltip and the table view
+ * name them.
+ */
+export const MOST_NAMED_LINES = 10;
+/** A name's gap from the last axis, as a line's end label has (`directLabels`' 8). */
+const NAME_GAP_PX = 8;
+/** The widest a name may be before it is cut short with "…", as a direct label's (120). */
+const MOST_NAME_PX = 120;
+/** The least distance between two names' centres: a 12 px name and a 2 px gap. */
+const NAME_LINE_PX = 14;
+/**
+ * In the legend's ink, as direct labels are; in-chart text, so in the light
+ * theme's ink in the dark one too, as the box plot's notes and the map's are
+ * (a known limit, laneCHB handoff).
+ */
+const NAME_INK = COLORS.light['text-secondary'];
+
 const widthOf = (text: string): number => format.getTextRect(text, TITLE_FONT).width;
+
+/**
+ * Heights moved apart so no two are nearer than `gap`, each as near its own
+ * as that allows, within `[top, bottom]`: pushed down in order of height,
+ * then, where the last is past the bottom, back up. In the given order.
+ */
+function apartFrom(heights: readonly number[], gap: number, top: number, bottom: number): number[] {
+  const order = heights.map((y, at) => ({ y, at })).sort((a, b) => a.y - b.y || a.at - b.at);
+  const placed = order.map((one) => Math.min(Math.max(one.y, top), bottom));
+  for (let at = 1; at < placed.length; at += 1)
+    placed[at] = Math.max(placed[at]!, placed[at - 1]! + gap);
+  const lastAt = placed.length - 1;
+  if (lastAt >= 0 && placed[lastAt]! > bottom) {
+    placed[lastAt] = bottom;
+    for (let at = lastAt - 1; at >= 0; at -= 1)
+      placed[at] = Math.min(placed[at]!, placed[at + 1]! - gap);
+  }
+  const result = new Array<number>(heights.length);
+  order.forEach((one, at) => (result[one.at] = placed[at]!));
+  return result;
+}
 
 /** A title cut short with "…" to fit its room; as it is where it fits. */
 function fitted(text: string, room: number): string {
@@ -178,14 +223,25 @@ export function parallelOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS
       Math.max(widthOf(title), widthOf(write(max)), widthOf(write(min))) / 2 + EDGE_PX,
     );
   };
+  const name = lineBy === undefined ? undefined : nameWriter(spec, lineBy);
+  // The user, 2026-10-18 ("Label line ends"; AC-598): 10 or fewer lines are
+  // each named at the right, beside the last axis; their room is kept there.
+  const labelled = rows.length > 0 && rows.length <= MOST_NAMED_LINES && name !== undefined;
+  const labels = labelled
+    ? rows.map((row) => fitted(name(row[lineBy ?? '']), Math.min(MOST_NAME_PX, slot)))
+    : [];
+  const nameRoom =
+    labels.length === 0 ? 0 : NAME_GAP_PX + Math.max(...labels.map(widthOf)) + EDGE_PX;
   const left = last < 0 ? 0 : sideOf(0);
-  const right = last < 0 ? 0 : sideOf(last);
+  const right = last < 0 ? 0 : Math.max(sideOf(last), Math.ceil(nameRoom));
   const apart = last > 0 ? (canvas.width - left - right) / last : canvas.width;
+  // ECharts cuts an axis's name to the step between axes itself, with
+  // "..." (`layoutAxisWithoutExpand`'s `axisNameAvailableWidth`,
+  // research/echarts-parallel.md), so no title is let past it; the outer
+  // ones no wider than they were when their sides were set, either.
+  const between = Math.max(apart - TITLE_GAP_PX, 0);
   const titleOfAxis = (at: number) =>
-    fitted(
-      labelOf(spec, axes[at]!),
-      at === 0 || at === last ? slot : Math.max(apart - TITLE_GAP_PX, slot),
-    );
+    fitted(labelOf(spec, axes[at]!), at === 0 || at === last ? Math.min(slot, between) : between);
 
   const parallelAxis = axes.map((_member, dim) => {
     const { min, max, write } = ends[dim]!;
@@ -216,7 +272,6 @@ export function parallelOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS
     };
   });
 
-  const name = lineBy === undefined ? undefined : nameWriter(spec, lineBy);
   const lineOf = (row: Row) => ({
     name: name === undefined ? '' : name(row[lineBy ?? '']),
     value: axes.map((member) => numberOf(row[member])),
@@ -254,11 +309,47 @@ export function parallelOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS
           data: list.map(lineOf),
         }));
 
+  // Each name beside the last axis that holds its line's value, at that
+  // value's height, moved apart where two would meet and kept in the tile.
+  const plotHeight = Math.max(canvas.height - PLOT_TOP_PX - PLOT_BOTTOM_PX, 0);
+  const named = labels.flatMap((text, at) => {
+    const values = axes.map((member) => numberOf(rows[at]?.[member]));
+    let end = values.length - 1;
+    while (end >= 0 && values[end] === null) end -= 1;
+    if (end < 0) return [];
+    const { min, max } = ends[end]!;
+    const value = values[end]!;
+    const y = PLOT_TOP_PX + ((max - value) / (max - min || 1)) * plotHeight;
+    return [{ text, x: left + end * apart + NAME_GAP_PX, y }];
+  });
+  const ys = apartFrom(
+    named.map((one) => one.y),
+    NAME_LINE_PX,
+    NAME_LINE_PX / 2,
+    canvas.height - NAME_LINE_PX / 2,
+  );
+  const graphic = named.map((one, at) => ({
+    type: 'text' as const,
+    x: one.x,
+    y: ys[at] ?? one.y,
+    silent: true,
+    style: {
+      text: one.text,
+      fill: NAME_INK,
+      fontSize: 12,
+      fontFamily: CHART_FONT,
+      align: 'left' as const,
+      verticalAlign: 'middle' as const,
+    },
+  }));
+
   return {
     animation: false,
     // Room above for each axis's two-line title, below for its minimum, and
-    // at each side for half the outer axes' widest text.
-    parallel: { left, right, top: 56, bottom: 32 },
+    // at each side for half the outer axes' widest text, or at the right for
+    // the lines' names.
+    parallel: { left, right, top: PLOT_TOP_PX, bottom: PLOT_BOTTOM_PX },
+    ...(graphic.length === 0 ? {} : { graphic }),
     parallelAxis,
     series,
   };
