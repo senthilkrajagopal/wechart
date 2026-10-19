@@ -1421,11 +1421,17 @@ test('a tiled KPI on a 6-column tile marks, toggles, limits, cross-filters and h
     expect(saved.ok(), await saved.text()).toBe(true);
     return made.id;
   };
+  // With Time, so each tile draws its trend, which an unmarked tile fades.
   const tiledKpi = () =>
     chartOf({
       wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
       chartType: 'kpi',
-      options: { kpi: { tileBy: 'orders.status' } },
+      options: {
+        kpi: {
+          tileBy: 'orders.status',
+          time: { member: 'orders.ordered_at', granularity: 'month' },
+        },
+      },
     });
   const kpi = await tiledKpi();
   const limited = await tiledKpi();
@@ -1470,6 +1476,8 @@ test('a tiled KPI on a 6-column tile marks, toggles, limits, cross-filters and h
   };
   await put(1, { mode: 'markings', crossFilter: { defaultAction: 'filter' } });
 
+  // As the sample orders end in August.
+  await page.clock.setFixedTime(new Date('2026-08-20T12:00:00Z'));
   await page.goto(`/explore/dashboards/${dashboard.id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   const tiles = page.locator('[data-tile="tile-kpi"]');
@@ -1494,6 +1502,11 @@ test('a tiled KPI on a 6-column tile marks, toggles, limits, cross-filters and h
     return read;
   });
   await expect(tileOf('completed').getByTestId('kpi-tile-value')).toHaveCSS('color', secondary);
+  // Their micro-charts at 0.28, the marked tile's whole (AC-568).
+  const trendOf = (status: string) => tileOf(status).getByTestId('kpi-trend').locator('svg');
+  await expect(trendOf('completed')).toHaveCSS('opacity', '0.28');
+  await expect(trendOf('processing')).toHaveCSS('opacity', '0.28');
+  await expect(trendOf('shipped')).toHaveCSS('opacity', '1');
 
   // Ctrl/⌘ adds completed, and takes it off again.
   await tileOf('completed').click({ modifiers: ['ControlOrMeta'] });
