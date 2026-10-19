@@ -65,6 +65,14 @@ for (const chartType of CHART_TYPES.filter((type) => !AWAITING_TABLE_VIEW.has(ty
     } else {
       await openEditorWithEveryWellFilled(page, chartType);
     }
+    /**
+     * A combo split by Status is laid out by its category, Ordered at, each
+     * measure's head spanning a second row of the members, which name no
+     * dimension (T864, AC-509; design 20 state J): its grouping is its
+     * category, and its members are column heads of their own.
+     */
+    const members = chartType === 'combo' ? ['completed', 'processing', 'shipped'] : [];
+    if (chartType === 'combo') grouping = 'Orders Ordered at';
 
     if (chartType === 'table') {
       // Already a table; a control that switched it to a table would do
@@ -87,5 +95,7 @@ for (const chartType of CHART_TYPES.filter((type) => !AWAITING_TABLE_VIEW.has(ty
         ...(typeof grouping === 'string' ? { exact: true } : {}),
       }),
     ).toBeVisible();
+    for (const member of members)
+      await expect(table.getByRole('columnheader', { name: member, exact: true })).toBeVisible();
   });
 }
