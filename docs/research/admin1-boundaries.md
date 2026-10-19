@@ -68,11 +68,11 @@ Germany's 16 codes, complete: DE-BW, DE-BY, DE-BE, DE-BB, DE-HB, DE-HH, DE-HE, D
 
 None required: "All versions of Natural Earth raster + vector map data found on this website are in the public domain." The optional credit is "Made with Natural Earth." ([terms of use](https://www.naturalearthdata.com/about/terms-of-use/)).
 
-## Open questions (for the user and the spec)
+## Questions, closed (the user, 2026-10-18, round R83 in `docs/requirements-log.md`)
 
-1. **Tier policy**: does "Admin-1" mean NE's units (départements, provinces, councils) or the ISO top tier (régions, regions, autonomous communities, nations), dissolved from `region_cod` and `geonunit`?
-2. **Key formats**: ISO 3166-2 only, or also `code_hasc`, `postal`, `fips` or English names?
-3. **Stale-code aliases**: ship a table of known ISO changes, or name such values as unplaced?
-4. **Disputed units** (Crimea, Sevastopol, Kosovo, Western Sahara, the `-99` entities): which file, if any.
-5. **Duplicates**: one placed region, or all unplaceable?
-6. Lakes or plain variant; shapefile or GeoJSON as the source.
+1. **Tier policy**: "ISO top tier (Recommended)". Régions, regions, autonomous communities and nations, dissolved from `region_cod`/`geonunit` (AC-622).
+2. **Key formats**: "ISO + names (Recommended)". ISO 3166-2 codes plus English names (`name_en`, else `name`); `code_hasc`, `postal` and `fips` don't count (AC-623).
+3. **Stale-code aliases**: not asked; no alias table is shipped, and a value under an old code is named as not placed, as AC-623 says.
+4. **Disputed units**: "Natural Earth default (Recommended)". Natural Earth's default point of view, as shipped (so Crimea and Sevastopol stay in `adm0_a3 = RUS`'s file), noted in the map's text alternative (AC-629).
+5. **Duplicates**: "Not placed, named (Recommended)". A value matching more than one region is not placed and is named as matching more than one region (AC-623); each duplicate-coded feature is keyed `~adm1_code`, drawn and never placed.
+6. Lakes or plain, shapefile or GeoJSON: lane CHARTS-B's call (`docs/design/decisions-charts-b.md`, T975).

@@ -231,6 +231,18 @@ Questions are Claude's; answers are the user's, verbatim.
 - The user: "we dont need to enable the gateway now. lets assume it is claude code only for now.. we can part requirements for access from outside the cluster.."
   - *AC-476 is split: its no-host half stays; serving `/mcp` to clients outside the cluster through a Gateway becomes AC-633, parked with T795. The pick-up notes are in `docs/phase-2/backlog.md` §7. Claude Code reaches `/mcp` on the API's own address.*
 
+**R83 — Map boundaries** (2026-10-18, the user; the open questions of `docs/research/admin1-boundaries.md`, asked by the coordinator through AskUserQuestion)
+- Q: Admin-1 tier: does "Admin-1" mean Natural Earth's own units (départements, provinces, councils) or the ISO top tier? A: "ISO top tier (Recommended)"
+  - *Régions, regions, autonomous communities and nations, dissolved from Natural Earth's `region_cod`/`geonunit`.*
+- Q: Key formats: which values count as an Admin-1 region's key? A: "ISO + names (Recommended)"
+  - *ISO 3166-2 codes plus English names.*
+- Q: Disputed areas (Crimea, Sevastopol, Kosovo, Western Sahara and Natural Earth's `-99` entities): where are they drawn? A: "Natural Earth default (Recommended)"
+  - *Natural Earth's default point of view, as shipped, noted in the map's text alternative.*
+- Q: Duplicates: a value that matches more than one region? A: "Not placed, named (Recommended)"
+  - *A value matching more than one region is listed as not placed, saying it matches more than one region.*
+- *Not asked, so unchanged: no table of stale-code aliases is shipped; a value under an old ISO code is not placed and is named under the map, as AC-623 already says.*
+
+
 **R82 — scope, the Cube group, colours and the combo key** (2026-10-18, the user; asked by the coordinator after the standing instruction "complete all things that you have started.. and deploy it.. and dont start anything new")
 - Q: The Text tile's group: which of its started parts are finished? A: "Finish all of them"
   - *Read as: controls and dashboard parameters (F46), AI summaries (F47) and Security › AI (F48) count as started and are finished with the Text tile (F45).*

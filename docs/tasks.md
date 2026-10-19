@@ -2272,12 +2272,12 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [ ] T974 (AC-623) A region key for every boundary set, from its values or the model's mark, and every unplaced value named in the page's text
   - Files: `packages/core/src/geo/regionKeys.ts` (+ test), `packages/core/src/geo/iso3.ts`, `packages/web/src/workspaces/model/form/ObjectForm.tsx`, `packages/web/src/workspaces/model/form/regionKey.test.tsx`, `packages/web/src/tiles/UnplacedCodes.tsx`.
-  - Failing test: `regionKeys.test.ts`: a dimension whose values are all keys of a set is its key; `meta.wechart.regionKey` naming the set counts whatever the values, and `false` never counts; ISO-3 dimensions keep AC-313's behaviour; `regionKey.test.tsx`: the model form sets and clears the mark; `UnplacedCodes.test.tsx`: "Online" is listed under the map as "Not on the map: "Online" (no territory)" in the DOM (AC-623).
+  - Failing test: `regionKeys.test.ts`: a dimension whose values are all keys of a set is its key; `meta.wechart.regionKey` naming the set counts whatever the values, and `false` never counts; ISO-3 dimensions keep AC-313's behaviour; `regionKey.test.tsx`: the model form sets and clears the mark; `UnplacedCodes.test.tsx`: "Online" is listed under the map as "Not on the map: "Online" (no territory)" in the DOM (AC-623). Since R83: an Admin-1 region counts by its ISO 3166-2 code and by its English name ("DE-BY", "Bavaria"), and a value matching more than one region is named "(matches more than one region)" and never placed.
   - Depends on: T973
 
 - [ ] T975 (AC-624) Draw a Regions layer on the Admin-1 boundary set with the sequential ramp, the "No data" swatch and 0.5 px surface boundaries
   - Files: `packages/charts/src/geo/admin1.ts`, `packages/charts/src/geo/` (the dataset), `packages/charts/src/series/map.ts`, `packages/charts/src/series/mapRegions.test.ts`.
-  - Failing test: `mapRegions.test.ts`: German states by Revenue draw on the ramp with a legend; a state with no row takes the null neutral and the "No data" swatch shows; boundaries are 0.5 px `bg-surface`; a Countries map still draws as before (AC-624).
+  - Failing test: `mapRegions.test.ts`: German states by Revenue draw on the ramp with a legend; a state with no row takes the null neutral and the "No data" swatch shows; boundaries are 0.5 px `bg-surface`; a Countries map still draws as before (AC-624). Since R83: France draws its régions and the UK its four nations, dissolved from Natural Earth's `region_cod`/`geonunit` (AC-622).
   - Depends on: T974
   - Waits on: research: an admin-1 boundary dataset (source, licence, detail, key format) in `docs/research/`.
 
@@ -2307,7 +2307,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [ ] T980 (AC-629) The map's text alternative and table view
   - Files: `packages/charts/src/describe/map.ts` (+ test), `packages/web/src/tiles/tableView/map.ts` (+ test).
-  - Failing test: (describe) "Map of Revenue by sales territory, 6 territories: highest Atlantic $1.40M, lowest Mountain $0.20M; Islands has no data. 10 stores as points sized by Revenue."; (table view) Islands reads "No data", not 0, with its store count (AC-629).
+  - Failing test: (describe) "Map of Revenue by sales territory, 6 territories: highest Atlantic $1.40M, lowest Mountain $0.20M; Islands has no data. 10 stores as points sized by Revenue."; (table view) Islands reads "No data", not 0, with its store count (AC-629). Since R83: a map on Countries or Admin-1 adds "Borders and disputed areas as Natural Earth draws them."
   - Depends on: T976
 
 ### Lane CHARTS-B: parallel coordinates
