@@ -10,6 +10,7 @@ import {
 import { isTrellisType } from '../layout/trellis';
 import { isBarType } from '../series/bar';
 import { boxesOf, isBoxplotType } from '../series/boxplot';
+import { isBulletType } from '../series/bullet';
 import { isComboType } from '../series/combo';
 import { isHeatmapType } from '../series/heatmap';
 import { isLineType } from '../series/line';
@@ -127,7 +128,9 @@ function drawsPartly(chartType: string): boolean {
     isHeatmapType(chartType) ||
     isScatterType(chartType) ||
     isBoxplotType(chartType) ||
-    isMapType(chartType)
+    isMapType(chartType) ||
+    // Its value bar, as a bar's (T955, AC-582).
+    isBulletType(chartType)
   );
 }
 
@@ -649,7 +652,15 @@ export function withPartialMarks(option: EChartsOption, spec: RenderSpec): EChar
 
   return withSeries(
     series.flatMap((one, index) =>
-      one.type === 'bar' ? splitBar(one, index) : one.type === 'line' ? [fadeLine(one)] : [one],
+      // A bullet's bands and target are its target's, not its measure's:
+      // left as they are (T955).
+      one['markedAs'] === 'fade'
+        ? [one]
+        : one.type === 'bar'
+          ? splitBar(one, index)
+          : one.type === 'line'
+            ? [fadeLine(one)]
+            : [one],
     ),
   );
 }

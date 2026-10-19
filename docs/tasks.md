@@ -2305,10 +2305,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T954 (AC-581) Draw one bullet per member on one axis from zero: R80's greys lightest lowest, an 8 px value bar and a 2 × 32 px target
 
-- [ ] T955 (AC-582) Mark and cross-filter a bullet as its member, drawing another tile's marked share on the value bar from zero
-  - Files: `packages/charts/src/series/bullet.ts`, `packages/charts/src/series/bulletMarking.test.ts`.
-  - Failing test: `bulletMarking.test.ts`: a click marks EMEA, Ctrl toggles, a drag marks the bullets it touches; with Channel = Web marked elsewhere, EMEA's bar draws $210K from 0 at full opacity and the rest at 0.28; an average measure draws no share and its tooltip reads "Marked: 24.1%"; in cross-filter mode a bullet filters the others to its Region (AC-582).
-  - Depends on: T954
+- [x] T955 (AC-582) Mark and cross-filter a bullet as its member, drawing another tile's marked share on the value bar from zero
 
 - [ ] T956 (AC-583) Name each bullet and the chart, and give the bullet chart its table view
   - Files: `packages/charts/src/describe/bullet.ts` (+ test), `packages/web/src/tiles/tableView/bullet.ts` (+ test).

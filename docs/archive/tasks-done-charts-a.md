@@ -68,3 +68,16 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - **Dark theme:** `bg-subtle` and `text-primary` are recoloured.
     - **e2e walk:** `bullet` comes out of `e2e/r81Awaiting.ts`'s `AWAITING_SERIES`.
     - **AC-581** is ticked on `e2e/new-charts-a.spec.ts`, "bullet charts draw on dashboard tiles 4 to 6 columns wide…" (tiles 5, 6, 4 and 5 columns wide, on headless Chromium). This sits with `bullet.test.ts` (sizes, colours, order, pitch, scrolling), `bulletQuery.test.ts`, `bulletTile.test.tsx` and `scrollWindow.test.ts`.
+
+- [x] T955 (AC-582) Mark and cross-filter a bullet as its member, drawing another tile's marked share on the value bar from zero
+  - Files: `packages/charts/src/series/bullet.ts`, `packages/charts/src/series/bulletMarking.test.ts`.
+  - Failing test: `bulletMarking.test.ts`: a click marks EMEA, Ctrl toggles, a drag marks the bullets it touches; with Channel = Web marked elsewhere, EMEA's bar draws $210K from 0 at full opacity and the rest at 0.28; an average measure draws no share and its tooltip reads "Marked: 24.1%"; in cross-filter mode a bullet filters the others to its Region (AC-582).
+  - Depends on: T954
+  - Done (2026-10-18), decision T955-1:
+    - **What a bullet's marks name:** every mark names its member. The bands and the value bar get it by their member axis, and the target by its item's name. So a click, a Ctrl-click and a drag (`itemsInShape`) mark the member, and cross-filtering filters by it. This works through the same `clickedValue` path as a bar's category, now covered by `clickedBullet.test.ts`.
+    - **A marking:** it outlines the value bar. It fades an unmarked bullet's bands and target, but never outlines them (`markedAs: 'fade'`, read by `withMarks`).
+    - **A partly marked bullet:**
+      - The value bar is split as a bar's is, its marked share drawn from zero (`drawsPartly` takes the bullet).
+      - The bands and the target are left as they are.
+      - An average is hatched, with "Marked: …" in its tooltip.
+    - **AC-582** is ticked on `e2e/new-charts-a.spec.ts`, "a bullet chart on a 5-column tile marks a bullet as its member…", on headless Chromium, with the unit tests named.

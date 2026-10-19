@@ -147,6 +147,9 @@ export function bulletOption(spec: RenderSpec, canvas: Canvas): EChartsOption {
         barWidth: BAND_PX,
         z: 1,
         silent: true,
+        // A marking fades an unmarked bullet's bands and leaves a marked
+        // one's as they are: they are its target's, never its share (T955).
+        markedAs: 'fade',
         itemStyle: { color: tokens[GREYS[at] ?? 'border-strong'], borderRadius: 0 },
         data: bullets.map(({ target }) =>
           target === null ? null : ((percent - from) / 100) * target,
@@ -169,9 +172,13 @@ export function bulletOption(spec: RenderSpec, canvas: Canvas): EChartsOption {
       symbol: 'rect',
       symbolSize: TARGET_PX,
       z: 4,
+      markedAs: 'fade',
       // At full strength: a scatter point is 0.8 by default.
       itemStyle: { color: tokens['text-primary'], opacity: 1 },
-      data: bullets.flatMap(({ member, target }) => (target === null ? [] : [[target, member]])),
+      // Each named by its member, which a click on it marks (T955, AC-582).
+      data: bullets.flatMap(({ member, target }) =>
+        target === null ? [] : [{ value: [target, member], name: member }],
+      ),
     },
   ];
 

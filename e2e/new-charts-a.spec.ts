@@ -709,3 +709,105 @@ test('bullet charts draw on dashboard tiles 4 to 6 columns wide, against a value
   await expect.poll(async () => (await texts('tile-many')).join()).not.toBe(before.join());
   expect(await ticks()).toEqual(axisBefore);
 });
+
+/**
+ * T955 / AC-582: THE SYSTEM SHALL make a bullet its member: a click marks it,
+ * Ctrl/⌘ toggles it, and a drag marks the bullets it touches; WHILE another
+ * tile's marking covers part of a member, the value bar SHALL draw the marked
+ * share from zero at full strength and fade the rest, an additive measure
+ * only …; and as a cross-filter source a bullet SHALL filter the others to
+ * its member.
+ * `Fails when: a gesture marks otherwise; a non-additive bar draws a marked
+ * share; or a bullet doesn't filter.` (The drawing and an average's hatch:
+ * `charts/src/series/bulletMarking.test.ts`; the member a click or a filter
+ * takes: `clickedBullet.test.ts`.) On a 5-column tile, in Markings mode.
+ */
+test('a bullet chart on a 5-column tile marks a bullet as its member, and splits its value bar by another tile’s marking', async ({
+  page,
+  request,
+}) => {
+  const title = `Bullet marks ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const chartOf = async (chart: Record<string, unknown>) => {
+    const made = (await (
+      await request.post(`${API}/documents`, {
+        data: { kind: 'chart', title: 'chart', ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`${API}/documents/chart/${made.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: 'chart',
+          owner: 'admin',
+          localToDashboardId: dashboard.id,
+          chart: { source: { cube: 'orders' }, ...chart },
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    return made.id;
+  };
+  const bullet = await chartOf({
+    wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+    chartType: 'bullet',
+    options: { bullet: { target: { kind: 'value', value: 75 } } },
+  });
+  const country = await chartOf({
+    wells: { measures: ['orders.count'], dimensions: ['customers.country'], timeDimensions: [] },
+    chartType: 'bar',
+  });
+  const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed', interactions: { mode: 'markings' } },
+        markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [
+              { id: 'tile-bullet', kind: 'chart', w: 5, h: 40, chartId: bullet },
+              { id: 'tile-country', kind: 'chart', w: 7, h: 40, chartId: country },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+
+  await page.goto(`/explore/dashboards/${dashboard.id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-bullet"]');
+  const ink = tile.locator('svg path[fill="#1f1f1e"]');
+  // Three value bars and three targets.
+  await expect(ink).toHaveCount(6);
+
+  // A click on shipped's value bar, beside its label, marks shipped.
+  const name = tile.locator('svg text', { hasText: /^shipped$/ });
+  await expect(name).toBeVisible();
+  const label = await name.boundingBox();
+  const plot = await tile.getByTestId('chart-canvas').boundingBox();
+  if (label === null || plot === null) throw new Error('the bullet chart is not drawn');
+  // The value bar runs from zero, just right of the labels' column, centred on its row.
+  await page.mouse.click(label.x + label.width + 40, label.y + label.height + 2);
+  const chip = page.getByTestId('mark-chip');
+  await expect(chip).toContainText('shipped');
+
+  // Germany's orders, marked on the other tile: each bullet's value bar is
+  // split into its marked part from zero and the rest.
+  await clickAbove(page, page.locator('[data-tile="tile-country"]'), 'Germany');
+  await expect(chip).toContainText('Germany');
+  await expect.poll(() => ink.count()).toBeGreaterThan(6);
+});

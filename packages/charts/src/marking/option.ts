@@ -194,6 +194,21 @@ export function withMarks(option: EChartsOption, spec: RenderSpec): EChartsOptio
           grouped,
         );
         if (row === undefined) return item;
+        /**
+         * A mark that only fades with its item, never outlined: a bullet's
+         * bands and its target, around the value bar the marking outlines
+         * (T955, AC-582).
+         */
+        if (one['markedAs'] === 'fade')
+          return holdsNothing || isMarked(row)
+            ? item
+            : {
+                ...object,
+                itemStyle: {
+                  ...((object['itemStyle'] as object | undefined) ?? {}),
+                  opacity: UNMARKED_OPACITY,
+                },
+              };
         const own = (object['itemStyle'] as { color?: string } | undefined)?.color;
         const drawn = styled(item, row, own ?? colourOfSeries(one)) as Record<string, unknown>;
         if (!isLine || drawn['value'] === null || drawn['value'] === undefined) return drawn;
