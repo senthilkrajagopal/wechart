@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { headerToggle, openHeaderSheet } from './dashboardHeader';
 import { IN_MY_WORKSPACE } from './workspace';
 
 /**
@@ -1345,4 +1346,86 @@ test('view mode loads no editor code, and editing a Text tile first loads it', a
   await page.locator('[data-tile="tile-text"] .text-tile').dblclick();
   await loaded;
   await expect(page.locator('[data-tile="tile-text"]').getByRole('textbox')).toBeFocused();
+});
+
+/**
+ * T892 / AC-528: a Filter control is one of the dashboard's filters, not a
+ * copy — the bar's widget at 28 px with its scope tag. Choosing France in it
+ * shows in the bar's pill, the header's count and a tile in scope (60 of the
+ * 240 orders are France's); clearing it in the bar clears it; a second Text
+ * tile's control of the same filter agrees; deleting the filter leaves "1
+ * element needs fixing" in edit mode.
+ */
+test('a Filter control is the bar’s filter: one value in both places, and a deleted filter’s control needs fixing', async ({
+  page,
+  request,
+}) => {
+  const control = { type: 'filterControl', attrs: { filter: 'f-country' } };
+  const { id, title } = await dashboardWithText(
+    request,
+    [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Orders ' },
+          { type: 'value', attrs: { measure: 'orders.count' } },
+          { type: 'text', text: ' in ' },
+          control,
+        ],
+      },
+    ],
+    [{ id: 'f-country', widget: 'list', member: 'customers.country' }],
+    [
+      {
+        id: 'tile-text-2',
+        kind: 'text',
+        w: 6,
+        h: 24,
+        document: {
+          version: 1,
+          doc: { type: 'doc', content: [{ type: 'paragraph', content: [control] }] },
+        },
+      },
+    ],
+  );
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-text"]');
+  const mine = tile.getByTestId('filter-control-f-country');
+  const other = page.locator('[data-tile="tile-text-2"]').getByTestId('filter-control-f-country');
+  await expect(tile.locator('.text-value')).toHaveText('240');
+
+  // The bar's widget, compact, with its scope tag.
+  await expect(mine).toBeVisible();
+  expect((await mine.boundingBox())?.height).toBe(28);
+  await expect(mine.getByTestId('scope-badge')).toHaveText('Dashboard');
+  await expect(mine.getByRole('button', { expanded: false })).toContainText('All');
+
+  // Chosen in the control: in the tile in scope, the other control, the header's count and the bar.
+  await mine.getByRole('button', { expanded: false }).click();
+  await mine.getByRole('button', { name: 'France', exact: true }).click();
+  await expect(tile.locator('.text-value')).toHaveText('60');
+  await expect(mine.getByRole('button', { expanded: true })).toContainText('France');
+  await expect(other.getByRole('button', { expanded: false })).toContainText('France');
+  await expect(headerToggle(page).locator('.header-toggle__count')).toHaveText('1');
+  await page.keyboard.press('Escape');
+  await openHeaderSheet(page);
+  const bar = page.getByTestId('filter-f-country');
+  await expect(bar.getByRole('button', { expanded: false })).toContainText('France');
+
+  // Cleared in the bar: cleared in both controls, every order back.
+  await bar.getByRole('button', { name: /^Clear / }).click();
+  await expect(mine.getByRole('button', { expanded: false })).toContainText('All');
+  await expect(other.getByRole('button', { expanded: false })).toContainText('All');
+  await expect(tile.locator('.text-value')).toHaveText('240');
+
+  // The filter deleted while editing: each control needs fixing, and filters nothing.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await page.getByTestId('filter-f-country').getByRole('button', { expanded: false }).click();
+  await page
+    .getByRole('tabpanel', { name: 'Properties' })
+    .getByRole('button', { name: 'Remove List with search filter 1' })
+    .click();
+  await expect(tile.getByTestId('text-needs-fixing')).toHaveText('1 element needs fixing');
+  await expect(tile.getByTestId('filter-control-f-country')).toHaveCount(0);
 });

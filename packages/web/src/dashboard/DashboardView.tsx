@@ -170,7 +170,7 @@ import { ME_QUERY } from '../shell/me';
 import { MarkingToken, MeasureToken, UnknownMarkingToken } from './tiles/LiveToken';
 import { measureQueryOf } from './tiles/TextTokens';
 import { coverageOf, type Reach } from '../filters/coverage';
-import { chartTilesOf, scopeOf, textTilesOf } from '../filters/scope';
+import { chartTilesOf, scopeLabel, scopeOf, textTilesOf } from '../filters/scope';
 import {
   crossChipWords,
   effectsOn,
@@ -218,7 +218,8 @@ import {
 import { chartTypeText } from '../workspaces/explore/chartTypeLabels';
 import { ImageTile } from './tiles/ImageTile';
 import { LinkTile } from './tiles/LinkTile';
-import { allMembers, FilterBar } from '../filters/FilterBar';
+import { allMembers, FilterBar, filterNameOf } from '../filters/FilterBar';
+import { FilterControl } from '../tiles/text/elements/FilterControl';
 import { FilterSettings } from '../filters/FilterSettings';
 import {
   FilteredCharts,
@@ -226,7 +227,7 @@ import {
   type FilteredChartsHandle,
   type FilteredResults,
 } from '../filters/FilteredCharts';
-import { newFilter, type FilterValues } from '../filters/model';
+import { newFilter, valueKeyOf, type FilterValues } from '../filters/model';
 import { adoptValues, sameValues, type SearchFilter } from '../filters/url';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { comboWarningOf } from '../editor/combo/ComboWarning';
@@ -4497,13 +4498,18 @@ export function DashboardView({
     if (cubes.length === 0) return undefined;
     return new Set(cubes.flatMap((cube) => membersOf(model, cube.name).map((one) => one.name)));
   }, [model]);
-  /** Whether a Text element names a member no longer in the model (AC-525). */
+  /**
+   * Whether a Text element names a member no longer in the model (AC-525),
+   * or is a Filter control whose filter has been deleted (AC-528).
+   */
   const brokenElement = (node: TextNode): boolean =>
-    modelMembers !== undefined &&
-    textDocumentMembers({
-      version: 1,
-      doc: { type: 'doc', content: [{ type: 'paragraph', content: [node] }] },
-    }).some((member) => !modelMembers.has(member));
+    (node.type === 'filterControl' &&
+      !(live.filters ?? []).some((each) => each.id === node.attrs?.['filter'])) ||
+    (modelMembers !== undefined &&
+      textDocumentMembers({
+        version: 1,
+        doc: { type: 'doc', content: [{ type: 'paragraph', content: [node] }] },
+      }).some((member) => !modelMembers.has(member)));
   /** The Text tiles' elements asked again, those that failed (AC-525, the ⋯'s Retry). */
   const elementQueries = useContext(QueryClientContext);
   const retryTextElements = () => {
@@ -5210,6 +5216,32 @@ export function DashboardView({
             ? 'value'
             : (shortTitles?.[filter.member] ?? memberTitle?.(filter.member) ?? filter.member);
         return <FilterValueText key={key} words={filterValueWords(set, fieldTitle)} />;
+      }
+      // A Filter control (T892, AC-528): the bar's own pill for its filter,
+      // holding the dashboard's value and setting it as the bar does.
+      if (node.type === 'filterControl') {
+        const filters = live.filters ?? [];
+        const filter = filters.find((each) => each.id === attrs['filter']);
+        if (filter === undefined) return null;
+        const valueKey = valueKeyOf(filter);
+        return (
+          <FilterControl
+            key={key}
+            filter={filter}
+            member={allMembers(model).find((each) => each.name === filter.member)}
+            name={filterNameOf(filters, filter.id)}
+            scope={scopeLabel(filter, live, chartTitleOf)}
+            value={filterValues[valueKey]}
+            onValue={(value) => {
+              setFilterValues((current) => {
+                const next = { ...current };
+                if (value === undefined) delete next[valueKey];
+                else next[valueKey] = value;
+                return next;
+              });
+            }}
+          />
+        );
       }
       const measure = typeof attrs['measure'] === 'string' ? attrs['measure'] : undefined;
       // The marking it follows, by its name, as a token found one (AC-116).

@@ -391,4 +391,10 @@ export const TEXT_CSS = `
 /* Under its kind head in edit mode, the text fills the rest, as the markdown
    tile's did. */
 .grid-tile > .tile-head--kind ~ .text-tile { flex: 1 1 0; min-height: 0; height: auto; }
+/* A Filter control (T892, AC-528; §7h "the filter bar's widget at 28 px
+   compact"): the bar's own pill, 28 px tall, its summary 24 px, sitting in
+   the line with the text beside it. */
+.text-filter-control { display: inline-flex; vertical-align: middle; max-width: 100%; }
+.filter-pill--compact { height: 28px; line-height: normal; }
+.filter-pill--compact button.filter-pill__summary { height: 24px; }
 `;

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { DashboardDocument } from '../dashboard/model/document';
 import { cubesFrom, membersOf, type Member } from '../editor/fields';
@@ -293,169 +293,39 @@ function Filters({
    */
   const [chosenOpen, setChosenOpen] = useState<{ id: string | null }>({ id: null });
   const openId = chosenOpen.id;
-  const bar = useRef<HTMLElement>(null);
-
-  // Escape, or a press outside the open pill, closes its popover.
-  useEffect(() => {
-    if (openId === null) return undefined;
-    const pillOf = () => bar.current?.querySelector(`[data-filter-id="${CSS.escape(openId)}"]`);
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      const pill = pillOf();
-      setChosenOpen({ id: null });
-      /**
-       * Focus inside goes back to the pill's summary: left where it was, it
-       * fell to the page when the popover went (T204's review), as the ⋯
-       * menu's does not (`MoveToMenu`).
-       */
-      if (pill?.contains(document.activeElement) === true)
-        pill.querySelector<HTMLElement>('button[aria-expanded]')?.focus();
-    };
-    const onPress = (event: PointerEvent) => {
-      const pill = pillOf();
-      if (pill !== null && pill !== undefined && !pill.contains(event.target as Node))
-        setChosenOpen({ id: null });
-    };
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('pointerdown', onPress);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('pointerdown', onPress);
-    };
-  }, [openId]);
 
   return (
-    <section aria-label="Filters" className="filter-bar" ref={bar} tabIndex={-1}>
-      {filters.map((filter, index) => {
+    <section aria-label="Filters" className="filter-bar" tabIndex={-1}>
+      {filters.map((filter) => {
         const member = members.find((candidate) => candidate.name === filter.member);
-        const kind = FILTER_WIDGETS.find((entry) => entry.widget === filter.widget);
         // A filter with no field yet has nothing to show a reader.
         if (!editing && member === undefined) return null;
-        /**
-         * Each filter is a group named by its kind and place, so a reader who
-         * cannot see the bar can tell one filter from the next.
-         */
-        const name = `${kind?.label ?? 'Filter'} filter ${String(index + 1)}`;
         const key = valueKeyOf(filter);
-        const value = values[key];
-        // Only a filter with a field has a value to set.
-        const open = openId === filter.id && member !== undefined;
-        const popover = `filter-popover-${filter.id}`;
-        // Its field at 400 and what it holds at 600, as design 04 draws a
-        // pill (T683; R76 components-Q2). The words read as before.
-        const summary = (
-          <>
-            <span className="filter-pill__label">
-              {member === undefined ? (kind?.label ?? 'Filter') : member.title}:
-            </span>{' '}
-            <span className="filter-pill__value">
-              {member === undefined ? 'choose a field…' : summaryOf(filter.widget, value)}
-            </span>
-          </>
-        );
-
         return (
-          /**
-           * The prototype's filter pill (AC-187): its scope, then the field
-           * and what it holds; its value control in a popover that opens
-           * from it.
-           */
-          <div
+          <FilterPill
             key={filter.id}
-            role="group"
-            aria-label={name}
-            className="filter-pill"
-            data-testid={`filter-${filter.id}`}
-            data-filter-id={filter.id}
-            data-widget={filter.widget}
-            // Selected while editing, its settings in Properties (T468).
-            {...(editing && selected === filter.id ? { 'data-selected': 'true' } : {})}
+            filter={filter}
+            member={member}
             /**
-             * Focus moved out of the pill — Tab past the popover's last
-             * control — closes it, or focus lands on whatever it lies over
-             * (T204's review). Only a move to somewhere else: a click on a
-             * control that takes no focus, as a checkbox in Safari does not,
-             * has no next element, and must not close it.
+             * Each filter is a group named by its kind and place, so a reader
+             * who cannot see the bar can tell one filter from the next.
              */
-            onBlur={(event) => {
-              const next = event.relatedTarget;
-              if (open && next !== null && !event.currentTarget.contains(next))
-                setChosenOpen({ id: null });
+            name={filterNameOf(filters, filter.id)}
+            scope={scopeLabel(filter, dashboard, chartTitleOf)}
+            value={values[key]}
+            onValue={(next) => {
+              onValue(key, next);
             }}
-          >
-            {/* Its scope, on the widget, in either mode (direction.md rule 14):
-              cut at its width with an ellipsis, as the summary is, its whole
-              text kept and in its tooltip (the user, 2026-10-18). */}
-            <span
-              className="filter-pill__scope"
-              data-testid="scope-badge"
-              title={scopeLabel(filter, dashboard, chartTitleOf)}
-            >
-              {scopeLabel(filter, dashboard, chartTitleOf)}
-            </span>
-            <button
-              type="button"
-              className="filter-pill__summary"
-              aria-expanded={open}
-              // Only while there is a popover for it to name.
-              {...(open ? { 'aria-controls': popover } : {})}
-              onClick={() => {
-                /**
-                 * While editing, a press on a filter not yet selected selects
-                 * it: its field, scope and Remove in Properties, with focus in
-                 * its field picker (T468, UX-031). Pressed again, selected, it
-                 * opens its value, as a reader's press does.
-                 */
-                if (editing && selected !== filter.id) {
-                  setChosenOpen({ id: null });
-                  onSelect?.(filter.id);
-                  return;
-                }
-                if (member !== undefined) setChosenOpen({ id: open ? null : filter.id });
-              }}
-            >
-              {summary}
-              <span aria-hidden="true" className="filter-pill__caret">
-                ▾
-              </span>
-            </button>
-            {/*
-              Clearing puts every tile it reaches back to its unfiltered result
-              (AC-080) in one step, whatever the widget — offered only while
-              there is something to clear.
-            */}
-            {member === undefined || value === undefined ? null : (
-              <button
-                type="button"
-                className="filter-pill__clear icon-button"
-                aria-label={`Clear ${member.title}`}
-                title={`Clear ${member.title}`}
-                onClick={(event) => {
-                  // The × goes with the value; focus stays on the filter
-                  // rather than falling to the page (T182, AC-176).
-                  event.currentTarget.parentElement
-                    ?.querySelector<HTMLElement>('button[aria-expanded]')
-                    ?.focus();
-                  onValue(key, undefined);
-                }}
-              >
-                ×
-              </button>
-            )}
-            {/* Its value control alone (T468, UX-031); none until it has a field. */}
-            {open && member !== undefined ? (
-              <div id={popover} className="filter-popover">
-                <FilterWidgetFor
-                  filter={filter}
-                  member={member}
-                  value={value}
-                  onValue={(next) => {
-                    onValue(key, next);
-                  }}
-                />
-              </div>
-            ) : null}
-          </div>
+            open={openId === filter.id}
+            onOpen={(open) => {
+              setChosenOpen({ id: open ? filter.id : null });
+            }}
+            editing={editing}
+            selected={editing && selected === filter.id}
+            onSelect={() => {
+              onSelect?.(filter.id);
+            }}
+          />
         );
       })}
       {chips === undefined ? null : (
@@ -467,5 +337,191 @@ function Filters({
         </>
       )}
     </section>
+  );
+}
+
+export interface FilterPillProps {
+  readonly filter: DashboardFilter;
+  /** Its field in the model; none while it has no field, or one the model lacks. */
+  readonly member: Member | undefined;
+  /** Its group's name: "List with search filter 2" (`filterNameOf`). */
+  readonly name: string;
+  /** Its scope tag's words (`scopeLabel`, AC-077). */
+  readonly scope: string;
+  readonly value: FilterValue | undefined;
+  /** Its value changed; `undefined` is no filter. */
+  readonly onValue: (value: FilterValue | undefined) => void;
+  /** Whether its popover is open, and a press asking it opened or closed. */
+  readonly open: boolean;
+  readonly onOpen: (open: boolean) => void;
+  readonly editing?: boolean | undefined;
+  readonly selected?: boolean | undefined;
+  readonly onSelect?: (() => void) | undefined;
+  /**
+   * At 28 px, as a Text tile's Filter control draws it (T892, AC-528;
+   * direction.md §7h, "the filter bar's widget at 28 px compact").
+   */
+  readonly compact?: boolean | undefined;
+}
+
+/**
+ * One filter's pill, the bar's widget (F9; AC-187): its scope, then the
+ * field and what it holds, and its value control in a popover that opens
+ * from it. The filter bar draws one per filter, and a Text tile's Filter
+ * control draws the same one for its filter (T892, AC-528) — the same value,
+ * state and popover, never a copy.
+ */
+export function FilterPill({
+  filter,
+  member,
+  name,
+  scope,
+  value,
+  onValue,
+  open: asked,
+  onOpen,
+  editing = false,
+  selected = false,
+  onSelect,
+  compact = false,
+}: FilterPillProps) {
+  const pill = useRef<HTMLDivElement>(null);
+  const kind = FILTER_WIDGETS.find((entry) => entry.widget === filter.widget);
+  // Only a filter with a field has a value to set.
+  const open = asked && member !== undefined;
+
+  // Escape, or a press outside the open pill, closes its popover.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const here = pill.current;
+      onOpen(false);
+      /**
+       * Focus inside goes back to the pill's summary: left where it was, it
+       * fell to the page when the popover went (T204's review), as the ⋯
+       * menu's does not (`MoveToMenu`).
+       */
+      if (here?.contains(document.activeElement) === true)
+        here.querySelector<HTMLElement>('button[aria-expanded]')?.focus();
+    };
+    const onPress = (event: PointerEvent) => {
+      const here = pill.current;
+      if (here !== null && !here.contains(event.target as Node)) onOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPress);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPress);
+    };
+  }, [open, onOpen]);
+
+  // A control's popover is its own element, apart from the bar's pill of the same filter.
+  const own = useId();
+  const popover = compact ? `filter-popover-${filter.id}-${own}` : `filter-popover-${filter.id}`;
+  // Its field at 400 and what it holds at 600, as design 04 draws a
+  // pill (T683; R76 components-Q2). The words read as before.
+  const summary = (
+    <>
+      <span className="filter-pill__label">
+        {member === undefined ? (kind?.label ?? 'Filter') : member.title}:
+      </span>{' '}
+      <span className="filter-pill__value">
+        {member === undefined ? 'choose a field…' : summaryOf(filter.widget, value)}
+      </span>
+    </>
+  );
+
+  return (
+    /**
+     * The prototype's filter pill (AC-187): its scope, then the field
+     * and what it holds; its value control in a popover that opens
+     * from it.
+     */
+    <div
+      ref={pill}
+      role="group"
+      aria-label={name}
+      className={compact ? 'filter-pill filter-pill--compact' : 'filter-pill'}
+      data-testid={compact ? `filter-control-${filter.id}` : `filter-${filter.id}`}
+      data-filter-id={filter.id}
+      data-widget={filter.widget}
+      // Selected while editing, its settings in Properties (T468).
+      {...(editing && selected ? { 'data-selected': 'true' } : {})}
+      /**
+       * Focus moved out of the pill — Tab past the popover's last
+       * control — closes it, or focus lands on whatever it lies over
+       * (T204's review). Only a move to somewhere else: a click on a
+       * control that takes no focus, as a checkbox in Safari does not,
+       * has no next element, and must not close it.
+       */
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (open && next !== null && !event.currentTarget.contains(next)) onOpen(false);
+      }}
+    >
+      {/* Its scope, on the widget, in either mode (direction.md rule 14):
+        cut at its width with an ellipsis, as the summary is, its whole
+        text kept and in its tooltip (the user, 2026-10-18). */}
+      <span className="filter-pill__scope" data-testid="scope-badge" title={scope}>
+        {scope}
+      </span>
+      <button
+        type="button"
+        className="filter-pill__summary"
+        aria-expanded={open}
+        // Only while there is a popover for it to name.
+        {...(open ? { 'aria-controls': popover } : {})}
+        onClick={() => {
+          /**
+           * While editing, a press on a filter not yet selected selects
+           * it: its field, scope and Remove in Properties, with focus in
+           * its field picker (T468, UX-031). Pressed again, selected, it
+           * opens its value, as a reader's press does.
+           */
+          if (editing && !selected) {
+            onOpen(false);
+            onSelect?.();
+            return;
+          }
+          if (member !== undefined) onOpen(!open);
+        }}
+      >
+        {summary}
+        <span aria-hidden="true" className="filter-pill__caret">
+          ▾
+        </span>
+      </button>
+      {/*
+        Clearing puts every tile it reaches back to its unfiltered result
+        (AC-080) in one step, whatever the widget — offered only while
+        there is something to clear.
+      */}
+      {member === undefined || value === undefined ? null : (
+        <button
+          type="button"
+          className="filter-pill__clear icon-button"
+          aria-label={`Clear ${member.title}`}
+          title={`Clear ${member.title}`}
+          onClick={(event) => {
+            // The × goes with the value; focus stays on the filter
+            // rather than falling to the page (T182, AC-176).
+            event.currentTarget.parentElement
+              ?.querySelector<HTMLElement>('button[aria-expanded]')
+              ?.focus();
+            onValue(undefined);
+          }}
+        >
+          ×
+        </button>
+      )}
+      {/* Its value control alone (T468, UX-031); none until it has a field. */}
+      {open && member !== undefined ? (
+        <div id={popover} className="filter-popover">
+          <FilterWidgetFor filter={filter} member={member} value={value} onValue={onValue} />
+        </div>
+      ) : null}
+    </div>
   );
 }
