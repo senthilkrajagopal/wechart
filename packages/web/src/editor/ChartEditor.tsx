@@ -1098,6 +1098,8 @@ function EditorBody({
                           add?.click();
                         });
                       }}
+                      // The query it asked: a KPI's trend asks it by Time's grain (T938).
+                      query={query}
                       // A KPI's + Time takes the reader to its Time well (T939, AC-566).
                       onAddTime={() => {
                         setInspector('data');

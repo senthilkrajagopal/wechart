@@ -237,11 +237,15 @@ export function kpiQueries(
   kpi: KpiOptions,
   now: Date,
 ): KpiQueries {
-  const { compareTo, time } = kpi;
+  const { compareTo, target, time } = kpi;
   const measures = (query['measures'] as readonly string[] | undefined) ?? [];
   const next: Record<string, unknown> = { ...query };
-  if (compareTo?.kind === 'measure')
-    next['measures'] = [...new Set([...measures, compareTo.member])].sort();
+  // Another measure compared with, and a Target measure (T938), beside the value.
+  const beside = [
+    ...(compareTo?.kind === 'measure' ? [compareTo.member] : []),
+    ...(target?.kind === 'measure' ? [target.member] : []),
+  ];
+  if (beside.length > 0) next['measures'] = [...new Set([...measures, ...beside])].sort();
   if (time !== undefined) {
     const periods = kpiPeriodOf(time.granularity, now);
     const compared =
@@ -261,6 +265,40 @@ export function kpiQueries(
     ];
   }
   return { value: next };
+}
+
+/** How many of Time's periods a KPI's trend covers, the current one last (design 23 sheet 1). */
+export const KPI_TREND_PERIODS = 12;
+
+/**
+ * A KPI's trend (T938, AC-565): its value's own query — its filters, the
+ * dashboard's and a marking's limit kept — asking its measure alone by
+ * Time's grain over the last 12 periods, the current one last, oldest first.
+ */
+export function kpiTrendQuery(
+  query: Readonly<Record<string, unknown>>,
+  measure: string,
+  time: KpiTime,
+  now: Date,
+): Record<string, unknown> {
+  const current = startOf(time.granularity, now);
+  const first = rangeOf(
+    time.granularity,
+    shifted(time.granularity, current, 1 - KPI_TREND_PERIODS),
+  )[0];
+  const last = rangeOf(time.granularity, current)[1];
+  const others = (
+    (query['timeDimensions'] as readonly { readonly dimension?: unknown }[] | undefined) ?? []
+  ).filter((entry) => entry.dimension !== time.member);
+  return {
+    ...query,
+    measures: [measure],
+    timeDimensions: [
+      ...others,
+      { dimension: time.member, granularity: time.granularity, dateRange: [first, last] },
+    ],
+    order: { [time.member]: 'asc' },
+  };
 }
 
 /** A chart's KPI settings, from its options. */

@@ -287,6 +287,31 @@ describe('a KPI compared (T937, AC-565)', () => {
   });
 });
 
+// T938 / AC-565: its target, a value or a Target measure on its row.
+describe('a KPI with a target (T938, AC-565)', () => {
+  it('says its share of a target value, and of a Target measure', () => {
+    const { unmount } = render(
+      <Kpi
+        spec={spec({
+          rows: [{ [COUNT]: '29' }],
+          options: { kpi: { target: { kind: 'value', value: 30 } } },
+        })}
+      />,
+    );
+    expect(screen.getByTestId('kpi-target').textContent).toBe('97% of 30');
+    unmount();
+    render(
+      <Kpi
+        spec={spec({
+          rows: [{ [COUNT]: '29', 'orders.target_count': '40' }],
+          options: { kpi: { target: { kind: 'measure', member: 'orders.target_count' } } },
+        })}
+      />,
+    );
+    expect(screen.getByTestId('kpi-target').textContent).toBe('73% of 40');
+  });
+});
+
 describe('a KPI with none of R81’s settings (AC-564)', () => {
   const marked: Partial<RenderSpec> = {
     marking: {

@@ -9,6 +9,7 @@ import {
   kpiModule,
   kpiPeriodOf,
   kpiQueries,
+  kpiTrendQuery,
   withKpiOptions,
 } from './kpi';
 
@@ -222,6 +223,50 @@ describe('a KPI’s comparison, asked of Cube (AC-565)', () => {
       '2026-02-01',
       '2026-02-28',
     ]);
+  });
+
+  /**
+   * T938 / AC-565: … its trend as R80's sparkline … over Time at its
+   * granularity; and its target as R80's bullet graph …: a Target measure is
+   * asked with the value, and the trend is the value's own query by Time's
+   * grain over the last 12 periods, its filters kept.
+   */
+  it('asks a Target measure beside the value', () => {
+    const { value } = kpiQueries(
+      base,
+      { target: { kind: 'measure', member: 'orders.revenue_target' }, direction: 'higher' },
+      now,
+    );
+    expect(value['measures']).toEqual(['orders.revenue', 'orders.revenue_target']);
+  });
+
+  it('asks the trend over Ordered at by month, the last 12 months to October 2026, under the value’s filters', () => {
+    const asked = {
+      ...kpiQueries(
+        base,
+        {
+          compareTo: { kind: 'measure', member: 'orders.revenue_last_year' },
+          target: { kind: 'measure', member: 'orders.revenue_target' },
+          time,
+          direction: 'higher',
+        },
+        now,
+      ).value,
+      filters: [{ member: 'orders.status', operator: 'equals', values: ['shipped'] }],
+    };
+    expect(kpiTrendQuery(asked, 'orders.revenue', time, now)).toEqual({
+      measures: ['orders.revenue'],
+      dimensions: [],
+      timeDimensions: [
+        {
+          dimension: 'orders.ordered_at',
+          granularity: 'month',
+          dateRange: ['2025-11-01', '2026-10-31'],
+        },
+      ],
+      filters: [{ member: 'orders.status', operator: 'equals', values: ['shipped'] }],
+      order: { 'orders.ordered_at': 'asc' },
+    });
   });
 
   it('is asked so wherever a KPI’s query is made, and for no other type', () => {

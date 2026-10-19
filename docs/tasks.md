@@ -2218,10 +2218,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T937 (AC-565) A KPI's comparison through `compareDateRange`, another measure or a value, and its change line coloured by Direction
 
-- [ ] T938 (AC-565) A KPI's trend as R80's sparkline at the content width × 32, and its target as R80's bullet graph at the content width × 16 with "‹p›% of ‹target›"
-  - Files: `packages/web/src/tiles/kpi/KpiTrend.tsx` (+ test), `packages/web/src/tiles/kpi/KpiTarget.tsx` (+ test), `packages/web/src/tiles/Kpi.tsx`.
-  - Failing test: `KpiTrend.test.tsx`: in a 280 px tile the sparkline is R80's `Sparkline` at 256 × 32, over Ordered at by month; `KpiTarget.test.tsx`: $1.35M against $1.40M draws R80's `BulletGraph` 16 px tall and "97% of $1.40M" in `text-xs` `text-secondary` (AC-565).
-  - Depends on: T937, T885
+- [x] T938 (AC-565) A KPI's trend as R80's sparkline at the content width × 32, and its target as R80's bullet graph at the content width × 16 with "‹p›% of ‹target›"
 
 - [x] T939 (AC-566) A KPI comparing periods with no Time says it needs one, and a compared period with no data reads "— vs ‹period› · No data for the comparison period"
 

@@ -4,8 +4,8 @@ import { shortValues } from './shortNumbers';
 import { useElementAnswer } from './useElementAnswer';
 
 /** 64 × 16: a word's height (`text-xs`'s line), four of them wide (direction §7h). */
-const WIDTH = 64;
-const HEIGHT = 16;
+const WORD_WIDTH = 64;
+const WORD_HEIGHT = 16;
 /** Room for the 2 px line, and the last point's radius, inside the box. */
 const INSET = 2;
 
@@ -25,7 +25,12 @@ export function SparklineSvg({
   last = values.length,
   lastPoint = false,
   colour,
+  width: WIDTH = WORD_WIDTH,
+  height: HEIGHT = WORD_HEIGHT,
 }: {
+  /** Its size where it isn't a word's: a KPI's trend, the content width × 32 (T938). */
+  readonly width?: number;
+  readonly height?: number;
   /** Oldest first. */
   readonly values: readonly number[];
   /** The measure's title, which names it. */

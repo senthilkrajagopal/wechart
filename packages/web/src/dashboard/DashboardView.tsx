@@ -650,6 +650,7 @@ function TileBody({
   chartType = tile.chartType,
   canEditChart = false,
   onAddTarget,
+  query,
   onItemClick,
   onShapeMark,
   onAxisRange,
@@ -712,6 +713,8 @@ function TileBody({
   canEditChart?: boolean;
   /** A bullet chart's + Target: its chart opened, where the tile can open it (T954). */
   onAddTarget?: (() => void) | undefined;
+  /** The query the tile asks, for a KPI's trend (T938). */
+  query?: Record<string, unknown> | undefined;
   /** A filtered answer is on its way (AC-078): what is drawn stays, marked busy. */
   busy?: boolean;
   /** The filters in effect on it, in words (AC-043). */
@@ -884,6 +887,7 @@ function TileBody({
           {...(onAddTarget === undefined ? {} : { onAddTarget })}
           // A KPI's + Time opens its chart too, as + Target does (T939).
           {...(onAddTarget === undefined ? {} : { onAddTime: onAddTarget })}
+          {...(query === undefined ? {} : { query })}
         />
       );
     case 'markdown':
@@ -1038,6 +1042,8 @@ interface TileCharts {
     | undefined;
   /** Show a chart's SQL as the previewed security context (T174); only while previewing. */
   readonly onShowSql?: ((chartId: string, tileId: string) => void) | undefined;
+  /** The query a chart's tile asks, filters and limits in: a KPI's trend asks it by month (T938). */
+  readonly queryOf?: ((chartId: string) => Record<string, unknown> | undefined) | undefined;
   /**
    * A click on a tile's chart, while the dashboard cross-filters (AC-117).
    * Absent in Markings mode and while editing, where a click selects the tile.
@@ -1804,6 +1810,8 @@ function Elements({
                       affordances.onEditChart?.(element.id, chartId);
                     }
               }
+              // The query it asks, for a KPI's trend (T938); a drill's is its own.
+              query={drill === undefined ? charts.queryOf?.(chartId) : undefined}
               /**
                * What this tile is marking, in words and a count (AC-098),
                * beside its title (AC-201) — a chart tile's only: a text tile
@@ -4981,6 +4989,8 @@ export function DashboardView({
      * answer, so they cannot disagree; the query otherwise the tile's own,
      * asked as its context asks, previewed or not.
      */
+    // The query each tile asks, for a KPI's trend (T938, AC-565).
+    queryOf: (chartId: string) => queryOf(chartId),
     countRows: async (chartId: string, signal: AbortSignal) => {
       const query = queryOf(chartId);
       if (query === undefined) return undefined;

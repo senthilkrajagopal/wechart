@@ -3,13 +3,20 @@ import {
   formatValue,
   kpiOptionsOf,
   kpiPeriodOf,
+  kpiTrendQuery,
   memberOn,
   type KpiOptions,
   type KpiTime,
   type RenderSpec,
 } from '@wechart/core';
+import { useContext, useLayoutEffect, useState } from 'react';
 
+import { colourOfMember } from '../dashboard/colours';
+import { SecurityPreview } from '../query/securityPreview';
 import { KpiChange, type KpiCompared } from './kpi/KpiChange';
+import { KpiTarget } from './kpi/KpiTarget';
+import { KpiTrend } from './kpi/KpiTrend';
+import { useElementAnswer } from './text/elements/useElementAnswer';
 
 /**
  * The KPI tile (AC-037).
@@ -33,6 +40,11 @@ export interface KpiProps {
    * the editor. Absent, the tile says what it needs without one.
    */
   readonly onAddTime?: (() => void) | undefined;
+  /**
+   * The query the tile asked, its filters and limits in (T938): its trend is
+   * the same question by Time's grain. Absent, no trend is drawn.
+   */
+  readonly query?: Readonly<Record<string, unknown>> | undefined;
 }
 
 /**
@@ -132,7 +144,68 @@ function needsTimeOf(kpi: KpiOptions): string | undefined {
   return choice === undefined ? undefined : `Compare to: ${choice} needs a time dimension in Time.`;
 }
 
-export function Kpi({ spec, solo = false, onAddTime }: KpiProps) {
+/**
+ * The KPI's content width, for its trend and target (AC-565): the element's
+ * own, kept as the tile is resized; 0 until it is laid out.
+ */
+function useContentWidth(): [(element: HTMLDivElement | null) => void, number] {
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    if (element === null || typeof ResizeObserver === 'undefined') return undefined;
+    // Called once on observing, then on every resize.
+    const observer = new ResizeObserver(() => {
+      setWidth(element.clientWidth);
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [element]);
+  return [setElement, width];
+}
+
+/** A KPI's trend asked of Cube (T938): its value's own query by Time's grain. */
+function KpiTrendLoaded({
+  query,
+  spec,
+  measure,
+  time,
+  width,
+}: {
+  readonly query: Readonly<Record<string, unknown>>;
+  readonly spec: RenderSpec;
+  readonly measure: string;
+  readonly time: KpiTime;
+  readonly width: number;
+}) {
+  // Asked as the tile's own query is: its dashboard, and a previewed context.
+  const context = useContext(SecurityPreview);
+  const answer = useElementAnswer(query, context);
+  const values = answer.rows.flatMap((row) => numberOf(row[measure]) ?? []);
+  return (
+    <KpiTrend
+      values={values}
+      title={labelOf(spec, measure)}
+      member={measure}
+      formats={spec.formats}
+      granularity={time.granularity}
+      // The measure's dashboard colour (AC-039), as R80's sparkline takes it.
+      colour={spec.colours?.[measure] ?? spec.palette?.[0] ?? colourOfMember({}, measure)}
+      width={width}
+    />
+  );
+}
+
+/** Its target's figure: a value, or a Target measure on the value's row (T938). */
+function targetOf(spec: RenderSpec, kpi: KpiOptions): number | undefined {
+  const { target } = kpi;
+  if (target === undefined) return undefined;
+  return target.kind === 'value' ? target.value : numberOf(spec.rows[0]?.[target.member]);
+}
+
+export function Kpi({ spec, solo = false, onAddTime, query }: KpiProps) {
+  const [measured, width] = useContentWidth();
   const kpi = kpiOptionsOf(spec.options);
   // With any of R81's settings, standing alone, its value in text-kpi-solo (AC-565).
   const detailed =
@@ -175,10 +248,17 @@ export function Kpi({ spec, solo = false, onAddTime }: KpiProps) {
     </p>
   );
 
+  const goal = targetOf(spec, kpi);
+  // Its trend: the tile's own query by Time's grain, the last 12 periods (T938).
+  const trend =
+    query === undefined || kpi.time === undefined || measure === undefined
+      ? undefined
+      : kpiTrendQuery(query, measure, kpi.time, new Date());
+
   // Its name above its value, as the prototype's kpiHtml has them (T300),
   // and under it the marked share, as its renderMarked has it (T453).
   return (
-    <div className={className} data-testid="kpi">
+    <div className={className} data-testid="kpi" ref={measured}>
       {period === undefined ? (
         name
       ) : (
@@ -203,6 +283,19 @@ export function Kpi({ spec, solo = false, onAddTime }: KpiProps) {
           member={measure}
           formats={spec.formats}
           direction={kpi.direction}
+        />
+      )}
+      {trend === undefined || measure === undefined || kpi.time === undefined ? null : (
+        <KpiTrendLoaded query={trend} spec={spec} measure={measure} time={kpi.time} width={width} />
+      )}
+      {goal === undefined || measure === undefined ? null : (
+        <KpiTarget
+          value={value}
+          target={goal}
+          title={labelOf(spec, measure)}
+          member={measure}
+          formats={spec.formats}
+          width={width}
         />
       )}
       {needsTime === undefined ? null : (

@@ -3,8 +3,8 @@ import { formatValue, type MemberFormats } from '@wechart/core';
 import { useElementAnswer } from './useElementAnswer';
 
 /** 96 × 16: six of a word's height wide (direction §7h). */
-const WIDTH = 96;
-const HEIGHT = 16;
+const WORD_WIDTH = 96;
+const WORD_HEIGHT = 16;
 /** The ranges' greys, low to high (§5 roles). */
 const GREYS = ['var(--wc-bg-subtle)', 'var(--wc-border-subtle)', 'var(--wc-border-strong)'];
 
@@ -42,7 +42,12 @@ export function BulletGraphSvg({
   title,
   member,
   formats,
+  width: WIDTH = WORD_WIDTH,
+  height: HEIGHT = WORD_HEIGHT,
 }: {
+  /** Its size where it isn't a word's: a KPI's target, the content width × 16 (T938). */
+  readonly width?: number;
+  readonly height?: number;
   readonly value: number;
   readonly target?: number | undefined;
   readonly ranges?: readonly number[];

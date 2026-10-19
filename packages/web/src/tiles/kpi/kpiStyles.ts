@@ -23,6 +23,19 @@ export const KPI_CSS = `
 }
 .kpi__vs { color: var(--wc-text-secondary); }
 .kpi__no-data { color: var(--wc-text-muted); }
+/* Its trend, the content width × 32, and its target, × 16 with its words
+   beside it (T938; design 23 sheet 1's 10 px gaps). */
+.kpi__trend { margin-top: 10px; line-height: 0; }
+.kpi__trend svg,
+.kpi__target svg { display: block; flex: none; }
+.kpi__target { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.kpi__target-of {
+  font-size: var(--wc-text-xs-size);
+  line-height: 16px;
+  color: var(--wc-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 /* A period comparison with no Time (T939, AC-566): said in the warning ink,
    with + Time beside it. */
 .kpi__needs {

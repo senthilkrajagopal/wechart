@@ -987,7 +987,8 @@ async function kpiDashboard(
       },
     });
     expect(saved.ok(), await saved.text()).toBe(true);
-    items.push({ id: tile, kind: 'chart', w, h: 24, chartId: chart.id });
+    // Tall enough for value, change, trend and target together.
+    items.push({ id: tile, kind: 'chart', w, h: 32, chartId: chart.id });
   }
   const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
     data: {
@@ -1089,7 +1090,7 @@ test('KPIs on 4- to 6-column tiles compare this month with the last through comp
 
   // More spent, Lower is better: ▲ for the value, status-error for Direction.
   const amount = page.locator('[data-tile="kpi-amount"]').getByTestId('kpi-change');
-  await expect(amount).toHaveText(/^▲ \+7\.4% vs Jul 2026 \(\$?47\.12K\) · lower is better$/);
+  await expect(amount).toHaveText(/^▲ \+7\.4% vs Jul 2026 \(\$?47\.1K\) · lower is better$/);
   await expect(amount.locator('.text-change')).toHaveAttribute('data-tone', 'error');
 
   // Against a value, Neutral: text-secondary whichever way it went.
@@ -1102,6 +1103,70 @@ test('KPIs on 4- to 6-column tiles compare this month with the last through comp
     ['2026-08-01', '2026-08-31'],
     ['2026-07-01', '2026-07-31'],
   ]);
+});
+
+/**
+ * T938 / AC-565: … its trend as R80's sparkline at the tile's content width
+ * × 32 px over Time at its granularity; and its target as R80's bullet graph
+ * at the content width × 16 px with "‹p›% of ‹target›".
+ * `Fails when: … the sparkline isn't 32 px tall or isn't R80's; the target
+ * line lacks its percentage …`
+ *
+ * On a fixed clock of 20 August 2026: the last 12 months to August, of which
+ * the sample orders fill January to August; 29 orders in August against a
+ * target of 30.
+ */
+test('KPIs on 4- to 6-column tiles draw their trend at the content width × 32 and their target × 16 with its share', async ({
+  page,
+  request,
+}) => {
+  const time = { member: 'orders.ordered_at', granularity: 'month' };
+  const kpi = { compareTo: { kind: 'previousPeriod' }, time, target: { kind: 'value', value: 30 } };
+  const { id, title } = await kpiDashboard(
+    request,
+    [4, 5, 6].map((w) => ({ tile: `kpi-${String(w)}`, w, measure: 'orders.count', kpi })),
+  );
+  const trends: unknown[] = [];
+  page.on('request', (sent) => {
+    if (!sent.url().endsWith('/api/load') || sent.method() !== 'POST') return;
+    const query = (sent.postDataJSON() as { query?: { timeDimensions?: unknown[] } } | null)?.query;
+    for (const entry of query?.timeDimensions ?? [])
+      if (typeof entry === 'object' && entry !== null && 'granularity' in entry) trends.push(entry);
+  });
+  await page.clock.setFixedTime(new Date('2026-08-20T12:00:00Z'));
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  for (const w of [4, 5, 6]) {
+    const tile = page.locator(`[data-tile="kpi-${String(w)}"]`);
+    const content = await tile.getByTestId('kpi').evaluate((element) => element.clientWidth);
+    // The trend: R80's sparkline, the content width × 32, its words R80's,
+    // the measure named as the KPI names it, by its short title.
+    const sparkline = tile.getByTestId('kpi-trend').locator('svg.text-sparkline');
+    await expect(sparkline).toHaveAttribute('height', '32');
+    await expect(sparkline).toHaveAttribute('width', String(Math.round(content)));
+    await expect(sparkline).toHaveAttribute('role', 'img');
+    await expect(sparkline).toHaveAttribute(
+      'aria-label',
+      /^Count by month, last 12 months: from \d+ to 29, low \d+, high \d+$/,
+    );
+    // The target: R80's bullet graph, 16 px tall, and its share in words.
+    const target = tile.getByTestId('kpi-target');
+    await expect(target.locator('svg.text-bullet')).toHaveAttribute('height', '16');
+    await expect(target.locator('.kpi__target-of')).toHaveText('97% of 30');
+    // Both inside the tile, nothing cut.
+    const tileBox = await tile.boundingBox();
+    const targetBox = await target.boundingBox();
+    if (tileBox === null || targetBox === null) throw new Error('the KPI is not drawn');
+    expect(targetBox.x + targetBox.width).toBeLessThanOrEqual(tileBox.x + tileBox.width);
+    expect(targetBox.y + targetBox.height).toBeLessThanOrEqual(tileBox.y + tileBox.height);
+  }
+  // The trend asked of Cube: Ordered at by month, September 2025 to August 2026.
+  expect(trends).toContainEqual({
+    dimension: 'orders.ordered_at',
+    granularity: 'month',
+    dateRange: ['2025-09-01', '2026-08-31'],
+  });
 });
 
 /**

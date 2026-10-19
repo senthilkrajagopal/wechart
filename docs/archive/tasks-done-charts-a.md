@@ -30,6 +30,16 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - **Tile:** `tiles/kpi/KpiChange.tsx` draws R80's Change classes and tones, then "vs ‹period› (‹value›)"; `Kpi.tsx` names Time's period beside the measure and draws the value at 40/52 (`kpi--detailed`); the CSS is `tiles/kpi/kpiStyles.ts`, in lane A's `CHARTS_A_CSS`.
     - **Tests:** `kpi.test.ts`, `client.test.ts` (api), `loadTile.test.ts`, `KpiChange.test.tsx` and `Kpi.test.tsx` seen red, then green; e2e `new-charts-a.spec.ts`, "KPIs on 4- to 6-column tiles compare this month with the last…" (a fixed clock in August 2026), on headless Chromium. AC-565 stays open for T938's trend and target.
 
+- [x] T938 (AC-565) A KPI's trend as R80's sparkline at the content width × 32, and its target as R80's bullet graph at the content width × 16 with "‹p›% of ‹target›"
+  - Files: `packages/web/src/tiles/kpi/KpiTrend.tsx` (+ test), `packages/web/src/tiles/kpi/KpiTarget.tsx` (+ test), `packages/web/src/tiles/Kpi.tsx`.
+  - Failing test: `KpiTrend.test.tsx`: in a 280 px tile the sparkline is R80's `Sparkline` at 256 × 32, over Ordered at by month; `KpiTarget.test.tsx`: $1.35M against $1.40M draws R80's `BulletGraph` 16 px tall and "97% of $1.40M" in `text-xs` `text-secondary` (AC-565).
+  - Depends on: T937, T885
+  - Done (2026-10-18), decision T938-1:
+    - **Trend:** core `kpiTrendQuery` asks the tile's own query, its filters and limits in, for the measure by Time's grain over the last 12 periods. The tile's query reaches the KPI through `ChartTile`'s new `query` prop (`DashboardView`'s `queryOf`, the editor's query, the chart page's). `KpiTrend` draws R80's `SparklineSvg`, which now takes a size, at the content width × 32.
+    - **Target:** `kpiQueries` asks a Target measure beside the value. `KpiTarget` draws R80's `BulletGraphSvg`, which also takes a size now, 16 px tall, its ranges the bullet chart's 80, 100 and 120 %, with "‹p›% of ‹target›" beside it.
+    - **Figures:** `kpi/kpiNumbers.ts`'s `kpiShort` writes the compared value and the target to three significant digits ("$1.40M").
+    - **Tests:** `kpi.test.ts` (core), `KpiTrend.test.tsx`, `KpiTarget.test.tsx` and `Kpi.test.tsx` seen red, then green; e2e `new-charts-a.spec.ts`, "KPIs on 4- to 6-column tiles draw their trend…", on headless Chromium. AC-565 is left for T940, which draws the tiled value at `text-kpi`.
+
 - [x] T939 (AC-566) A KPI comparing periods with no Time says it needs one, and a compared period with no data reads "— vs ‹period› · No data for the comparison period"
   - Files: `packages/web/src/tiles/kpi/KpiChange.tsx`, `packages/web/src/tiles/kpi/KpiEmpty.test.tsx`.
   - Failing test: `KpiEmpty.test.tsx`: Previous period with Time empty shows "Compare to: Previous period needs a time dimension in Time." with a Time action that opens the Time well; a compared period of no rows reads "— vs Sep 2026 · No data for the comparison period" and no 0 % (AC-566).

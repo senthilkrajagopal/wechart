@@ -151,6 +151,11 @@ export interface ChartTileProps {
    * the chart's editor from a dashboard, the Time well in the editor.
    */
   readonly onAddTime?: (() => void) | undefined;
+  /**
+   * The query the tile asked, its filters and limits in: a KPI asks its
+   * trend as the same question by Time's grain (T938, AC-565).
+   */
+  readonly query?: Readonly<Record<string, unknown>> | undefined;
 }
 
 interface ChartBodyProps {
@@ -175,6 +180,8 @@ interface ChartBodyProps {
   readonly onAddTarget?: (() => void) | undefined;
   /** A KPI's + Time (T939). */
   readonly onAddTime?: (() => void) | undefined;
+  /** The tile's query, for a KPI's trend (T938). */
+  readonly query?: Readonly<Record<string, unknown>> | undefined;
 }
 
 /** Types wechart draws as DOM rather than handing to ECharts. */
@@ -197,6 +204,7 @@ function ChartBody({
   kpiSolo,
   onAddTarget,
   onAddTime,
+  query,
 }: ChartBodyProps) {
   const describedId = useId();
   /**
@@ -227,6 +235,7 @@ function ChartBody({
         spec={spec}
         {...(kpiSolo === true ? { solo: true } : {})}
         {...(onAddTime === undefined ? {} : { onAddTime })}
+        {...(query === undefined ? {} : { query })}
       />
     );
   const DomChart = DOM_TYPES[spec.chartType];
@@ -306,6 +315,7 @@ export function ChartTile({
   kind,
   onAddTarget,
   onAddTime,
+  query,
 }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
@@ -515,6 +525,7 @@ export function ChartTile({
           {...(kpiSolo === true ? { kpiSolo } : {})}
           {...(onAddTarget === undefined ? {} : { onAddTarget })}
           {...(onAddTime === undefined ? {} : { onAddTime })}
+          {...(query === undefined ? {} : { query })}
         />
       )}
       {/* A map's codes it can't place, named under it (T398, rule 87). */}

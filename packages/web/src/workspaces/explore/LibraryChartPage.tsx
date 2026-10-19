@@ -812,6 +812,8 @@ export function LibraryChartPage({ chartId, panel }: LibraryChartPageProps) {
                     height={360}
                     asOf={drawn.data?.answered?.lastRefreshTime}
                     served={drawn.data?.answered}
+                    // Its query, which a KPI's trend asks by Time's grain (T938).
+                    query={chartQuery}
                     // A KPI alone on its page, at text-kpi-solo (T683; design 06 state B).
                     kpiSolo
                     // Its rows in its head, whatever its type (T686, DSH-14; design 06 pin 3).

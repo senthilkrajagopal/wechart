@@ -47,6 +47,8 @@ export {
   kpiOptionsOf,
   kpiPeriodOf,
   kpiQueries,
+  kpiTrendQuery,
+  KPI_TREND_PERIODS,
   withKpiOptions,
   type KpiCompareTo,
   type KpiDirection,

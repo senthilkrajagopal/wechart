@@ -1,6 +1,7 @@
 import type { KpiDirection, MemberFormats } from '@wechart/core';
 
-import { kindOfFormat, shortValues } from '../text/elements/shortNumbers';
+import { kindOfFormat } from '../text/elements/shortNumbers';
+import { kpiShort } from './kpiNumbers';
 
 /** What a KPI's value is compared with: its value, and the period or measure it is, if named. */
 export interface KpiCompared {
@@ -34,8 +35,7 @@ function sizeOf(
   const delta = current - compared;
   if (kindOfFormat(member, formats).kind === 'percent') return signed(delta * 100, ' pts');
   if (compared === 0) {
-    const [amount = ''] = shortValues([Math.abs(delta)], member, formats);
-    return `${delta < 0 ? '−' : '+'}${amount}`;
+    return `${delta < 0 ? '−' : '+'}${kpiShort(Math.abs(delta), member, formats)}`;
   }
   return signed((delta / Math.abs(compared)) * 100, '%');
 }
@@ -72,7 +72,7 @@ export function KpiChange({
     );
   const delta = current - compared.value;
   const glyph = delta > 0 ? '▲ ' : delta < 0 ? '▼ ' : '';
-  const [value = ''] = shortValues([compared.value], member, formats);
+  const value = kpiShort(compared.value, member, formats);
   const against = compared.against === undefined ? value : `${compared.against} (${value})`;
   return (
     <p className="kpi__change" data-testid="kpi-change">
