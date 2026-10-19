@@ -13,11 +13,13 @@ import {
   textEditorExtensions,
   type InsertBridge,
 } from './editorExtensions';
+import { elementCountOf, insertRefusal, limitedGroups } from './elementLimit';
 import { namesFrom } from './elementName';
 import { ElementNamesContext } from './nodes/ElementView';
 import {
   insertGroups,
   InsertMenu,
+  noteId,
   rowId,
   type CopilotOffer,
   type InsertRow,
@@ -138,7 +140,15 @@ export default function TextEditor({
   const menuId = useId();
   /** Opened by Insert, which typed its `{{` for it: Esc takes that back. */
   const byInsert = useRef(false);
-  const groups = menu === null ? [] : insertGroups(menu.query, menu.step, sources, copilot);
+  /** How many elements the text holds, kept as it changes: at 10, nothing more goes in (AC-518). */
+  const [count, setCount] = useState(() => elementCountOf(document));
+  /** Why the last paste or drop was refused, until the text next changes (AC-518). */
+  const [refused, setRefused] = useState<string | null>(null);
+  const full = insertRefusal(count);
+  const groups =
+    menu === null
+      ? []
+      : limitedGroups(insertGroups(menu.query, menu.step, sources, copilot), count);
   const rows = groups.flatMap((group) => group.rows);
   /** The active row, held to the rows there are: they change under it as sources load. */
   const at = menu === null ? 0 : Math.max(0, Math.min(menu.active, rows.length - 1));
@@ -212,7 +222,7 @@ export default function TextEditor({
   );
   // The bridge's refs are read only when ProseMirror calls it, after render.
   // eslint-disable-next-line react-hooks/refs
-  const extensions = useMemo(() => textEditorExtensions(bridge), [bridge]);
+  const extensions = useMemo(() => textEditorExtensions(bridge, setRefused), [bridge]);
   const leaveWith = useRef(onLeave);
   useEffect(() => {
     leaveWith.current = onLeave;
@@ -265,6 +275,8 @@ export default function TextEditor({
               'aria-autocomplete': 'list',
               'aria-controls': menuId,
               ...(active === undefined ? {} : { 'aria-activedescendant': active }),
+              // Why every row is disabled, at 10 elements (AC-518).
+              ...(full === undefined ? {} : { 'aria-describedby': noteId(menuId) }),
             }
           : {}),
       },
@@ -275,7 +287,7 @@ export default function TextEditor({
         return true;
       },
     }),
-    [name, open, menuId, active],
+    [name, open, menuId, active, full],
   );
   const editor = useEditor({
     extensions,
@@ -293,6 +305,18 @@ export default function TextEditor({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/immutability
     editorOf.current = editor;
+  }, [editor]);
+
+  /** The count kept, and a refusal's reason cleared, as the text changes (AC-518). */
+  useEffect(() => {
+    const changed = () => {
+      setCount(elementCountOf(storedDocumentOf(editor.getJSON())));
+      setRefused(null);
+    };
+    editor.on('update', changed);
+    return () => {
+      editor.off('update', changed);
+    };
   }, [editor]);
 
   /** The elements and the selected one, told to Properties as they change (AC-519). */
@@ -463,11 +487,17 @@ export default function TextEditor({
       <ElementNamesContext value={names}>
         <EditorContent editor={editor} className="text-editor__content" />
       </ElementNamesContext>
+      {refused === null ? null : (
+        <p role="alert" className="text-editor__refused">
+          {refused}
+        </p>
+      )}
       {menu === null ? null : (
         <InsertMenu
           id={menuId}
           groups={groups}
           active={at}
+          note={full}
           at={menu.rect === null ? null : { left: menu.rect.left, bottom: menu.rect.bottom }}
           onChoose={(row) => {
             choose(menu, row, menu.range);

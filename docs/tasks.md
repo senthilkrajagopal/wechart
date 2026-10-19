@@ -1901,10 +1901,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T882 (AC-519) Live elements as atoms in edit mode, controls inert, and the Elements list in Properties
 
-- [ ] T883 (AC-518) Hold a Text tile to 10 elements in the editor: the count, the disabled menu and Insert with the reason, and a refused paste
-  - Files: `packages/web/src/tiles/text/elementLimit.ts` (+ test), `packages/web/src/tiles/text/InsertMenu.tsx`, `packages/web/src/tiles/text/TextToolbar.tsx`.
-  - Failing test: `elementLimit.test.ts`: at 10 elements Insert and every menu row are disabled with "This tile holds 10 elements, the most a Text tile can. Remove one, or add another Text tile."; pasting text holding 2 elements into a tile of 9 is refused with that reason and changes nothing; a filter control and a button count (AC-518).
-  - Depends on: T882
+- [x] T883 (AC-518) Hold a Text tile to 10 elements in the editor: the count, the disabled menu and Insert with the reason, and a refused paste
 
 - [x] T884 (AC-520, AC-116) The Value and Change elements: their settings, model formats, marking limits, own filters, and Change's triangle, sign and direction colour
 

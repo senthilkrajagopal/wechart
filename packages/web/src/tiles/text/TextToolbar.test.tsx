@@ -277,3 +277,81 @@ describe('the Text tile’s toolbar (T878, AC-515)', () => {
     expect(count.getAttribute('data-state')).toBe('warning');
   });
 });
+
+/**
+ * T883 / AC-518, in the editor: at 10 elements Insert is disabled with the
+ * reason and opens nothing, the menu `{{` opens has every row disabled and
+ * says why, and a paste that would pass 10 is refused with the reason and
+ * changes nothing.
+ */
+describe('a Text tile held to 10 elements in the editor (T883, AC-518)', () => {
+  const REASON =
+    'This tile holds 10 elements, the most a Text tile can. Remove one, or add another Text tile.';
+  const holding = (n: number): TextDocument => ({
+    version: 1,
+    doc: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Values ' },
+            ...Array.from({ length: n }, () => value('orders.count')),
+          ],
+        },
+      ],
+    },
+  });
+
+  it('disables Insert at 10 with the reason, and Insert opens no menu', async () => {
+    const { toolbar } = await opened(holding(10));
+    const insert = within(toolbar).getByRole('button', { name: 'Insert' });
+    expect(insert.getAttribute('aria-disabled')).toBe('true');
+    const described = insert.getAttribute('aria-describedby') ?? '';
+    expect(window.document.getElementById(described)?.textContent).toBe(REASON);
+    await userEvent.click(insert);
+    expect(screen.queryByRole('listbox', { name: 'Insert' })).toBeNull();
+  });
+
+  it('leaves Insert enabled at 9', async () => {
+    const { toolbar } = await opened(holding(9));
+    const insert = within(toolbar).getByRole('button', { name: 'Insert' });
+    expect(insert.getAttribute('aria-disabled')).toBeNull();
+    await userEvent.click(insert);
+    expect(screen.getByRole('listbox', { name: 'Insert' }).getAttribute('aria-label')).toBe(
+      'Insert',
+    );
+  });
+
+  it('disables every row of the menu {{ opens at 10, saying why, and Enter inserts nothing', async () => {
+    const { textbox } = await opened(holding(10));
+    await userEvent.keyboard('{{{{');
+    const menu = screen.getByRole('listbox', { name: 'Insert' });
+    const rows = within(menu).getAllByRole('option');
+    expect(rows.map((row) => row.getAttribute('aria-disabled'))).toEqual(rows.map(() => 'true'));
+    expect(within(menu).getByText(REASON).textContent).toBe(REASON);
+    await userEvent.keyboard('{Enter}');
+    expect(textbox.querySelectorAll('.text-element-view')).toHaveLength(10);
+  });
+
+  it('refuses a paste of 2 elements into a tile of 9, with the reason, changing nothing', async () => {
+    const { textbox, onLeave } = await opened(holding(9));
+    const html =
+      '<p>two <span data-element="value" data-attrs=\'{"measure":"orders.count"}\'>a</span>' +
+      '<span data-element="value" data-attrs=\'{"measure":"orders.count"}\'>b</span></p>';
+    const paste = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, 'clipboardData', {
+      value: {
+        types: ['text/html', 'text/plain'],
+        getData: (type: string) => (type === 'text/html' ? html : 'two a b'),
+      },
+    });
+    textbox.dispatchEvent(paste);
+    expect(paste.defaultPrevented).toBe(true);
+    expect((await screen.findByRole('alert')).textContent).toBe(REASON);
+    expect(textbox.querySelectorAll('.text-element-view')).toHaveLength(9);
+    await userEvent.keyboard('{Escape}');
+    // Nothing changed: the text hands back no document.
+    expect(onLeave).toHaveBeenCalledWith(undefined, 'escape');
+  });
+});

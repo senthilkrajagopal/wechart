@@ -115,6 +115,8 @@ export const TEXT_CSS = `
 }
 .text-toolbar__button:hover { background: var(--wc-bg-hover); }
 .text-toolbar__button[aria-pressed='true'] { background: var(--wc-bg-accent-soft); color: var(--wc-accent); }
+.text-toolbar__button[aria-disabled='true'] { color: var(--wc-text-muted); cursor: default; }
+.text-toolbar__button[aria-disabled='true']:hover { background: none; }
 .text-toolbar__block { width: 128px; justify-content: space-between; }
 .text-toolbar__block-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .text-toolbar__count { margin-left: auto; padding: 0 4px; white-space: nowrap; }
@@ -191,6 +193,18 @@ export const TEXT_CSS = `
   font-size: var(--wc-text-xs-size);
   color: var(--wc-text-muted);
 }
+/* At 10 elements, why nothing can be chosen, and a refused paste's reason
+   under the text (AC-518; design 21 state E). */
+.insert-menu__note,
+.text-editor__refused {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-status-warning);
+}
+.insert-menu__note { border-bottom: 1px solid var(--wc-border-subtle); }
+.text-editor__refused { flex: none; }
 /* Link's address, under the toolbar. */
 .text-link-form { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .text-link-form label { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }

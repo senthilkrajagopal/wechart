@@ -252,6 +252,9 @@ function sourceGroups(kind: ElementKind, sources: InsertSources): InsertGroup[] 
 /** A row's id, which the text's `aria-activedescendant` names. */
 export const rowId = (menuId: string, index: number) => `${menuId}-row-${String(index)}`;
 
+/** The id of the menu's note, which describes the text while it's shown (AC-518). */
+export const noteId = (menuId: string) => `${menuId}-note`;
+
 /**
  * The listbox, at the cursor: 320 px wide, 28 px rows (direction §7h), its
  * groups headed as the field picker heads them. A row is chosen by a click
@@ -262,11 +265,14 @@ export function InsertMenu({
   groups,
   active,
   at,
+  note,
   onChoose,
 }: {
   readonly id: string;
   readonly groups: readonly InsertGroup[];
   readonly active: number;
+  /** Why nothing in it can be chosen: the text holds 10 elements (AC-518). */
+  readonly note?: string | undefined;
   /** The cursor's box, which the menu opens under. */
   readonly at: { readonly left: number; readonly bottom: number } | null;
   readonly onChoose: (row: InsertRow) => void;
@@ -295,6 +301,12 @@ export function InsertMenu({
           : { left: `${String(at.left)}px`, top: `${String(at.bottom + 4)}px` }
       }
     >
+      {note === undefined ? null : (
+        // The text, the combobox, is described by it while the menu is open.
+        <p id={noteId(id)} className="insert-menu__note" aria-hidden="true">
+          {note}
+        </p>
+      )}
       {groups.map((group, groupAt) => (
         <div key={group.label} role="group" aria-label={group.label} className="insert-menu__group">
           <div className="insert-menu__heading" aria-hidden="true">

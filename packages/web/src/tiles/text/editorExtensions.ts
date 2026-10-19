@@ -7,7 +7,9 @@ import {
   type JSONContent,
   type Range,
 } from '@tiptap/core';
+import type { Fragment, Node as PMNode, Slice } from '@tiptap/pm/model';
 import { Plugin, PluginKey, type EditorState } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import Suggestion, { type SuggestionKeyDownProps, type SuggestionProps } from '@tiptap/suggestion';
 
@@ -21,6 +23,7 @@ import {
   type TextNode,
 } from '@wechart/core';
 
+import { pasteRefusal } from './elementLimit';
 import { ElementKeys, elementNodes } from './nodes/elementNodes';
 
 /**
@@ -164,6 +167,59 @@ const OnlyTheTextKeys = Extension.create({
   },
 });
 
+/** The elements in a fragment: what a paste or a drop would bring (AC-518). */
+function elementsIn(fragment: Fragment): number {
+  let count = 0;
+  fragment.descendants((node) => {
+    if (ELEMENTS.has(node.type.name)) count += 1;
+  });
+  return count;
+}
+
+/** The elements between two places of the document: what a paste over a selection takes away. */
+function elementsBetween(doc: PMNode, from: number, to: number): number {
+  let count = 0;
+  if (from < to)
+    doc.nodesBetween(from, to, (node) => {
+      if (ELEMENTS.has(node.type.name)) count += 1;
+    });
+  return count;
+}
+
+/**
+ * A paste, or a drop from outside the text, that would take it past 10
+ * elements is refused, changing nothing, and the editor is told why
+ * (AC-518; design 21 state E). A drop that moves what's already in the text
+ * changes no count.
+ */
+const elementLimit = (onRefused: (why: string) => void) =>
+  Extension.create({
+    name: 'elementLimit',
+    addProseMirrorPlugins() {
+      const refuses = (view: EditorView, slice: Slice, from: number, to: number) => {
+        const why = pasteRefusal(
+          elementsIn(view.state.doc.content),
+          elementsBetween(view.state.doc, from, to),
+          elementsIn(slice.content),
+        );
+        if (why === undefined) return false;
+        onRefused(why);
+        return true;
+      };
+      return [
+        new Plugin({
+          key: new PluginKey('elementLimit'),
+          props: {
+            handlePaste: (view, _event, slice) =>
+              refuses(view, slice, view.state.selection.from, view.state.selection.to),
+            handleDrop: (view, _event, slice, moved) =>
+              !moved && refuses(view, slice, view.state.selection.from, view.state.selection.from),
+          },
+        }),
+      ];
+    },
+  });
+
 /** What the insert menu's two triggers tell the editor (T881, AC-517). */
 export interface InsertBridge {
   /** Opened, or what's typed after its trigger changed. */
@@ -258,9 +314,14 @@ const insertMenu = (bridge: InsertBridge) =>
   });
 
 /** The editor's extensions: the stored schema's nodes and marks, and nothing else. */
-export function textEditorExtensions(bridge?: InsertBridge): Extensions {
+export function textEditorExtensions(
+  bridge?: InsertBridge,
+  /** Told why a paste or a drop was refused (AC-518). */
+  onRefused?: (why: string) => void,
+): Extensions {
   return [
     OnlyTheTextKeys,
+    ...(onRefused === undefined ? [] : [elementLimit(onRefused)]),
     ...(bridge === undefined ? [] : [insertMenu(bridge)]),
     StarterKit.configure({
       blockquote: false,

@@ -4,6 +4,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 
 import { ELEMENT_KINDS, TEXT_ELEMENT_LIMIT, textLinkProblem } from '@wechart/core';
 
+import { insertRefusal } from './elementLimit';
+
 /**
  * The Text tile's toolbar (T878, AC-515; design 21 pins 2–5, state A): a
  * `toolbar`, one Tab stop with ← and → along it (APG toolbar), holding the
@@ -74,7 +76,7 @@ export function TextToolbar({
   const [at, setAt] = useState(0);
   const [menu, setMenu] = useState(false);
   const [linking, setLinking] = useState(false);
-  const ids = { menu: useId(), button: useId() };
+  const ids = { menu: useId(), button: useId(), full: useId() };
 
   const focusAt = (index: number) => {
     const all = controls.current.filter((control) => control !== null);
@@ -126,6 +128,13 @@ export function TextToolbar({
         : { 'aria-haspopup': props.popup, 'aria-expanded': props.expanded ?? false })}
       {...(props.controls === undefined ? {} : { 'aria-controls': props.controls })}
       {...(props.id === undefined ? {} : { id: props.id })}
+      {...(props.disabled === undefined
+        ? {}
+        : {
+            'aria-disabled': true,
+            'aria-describedby': props.disabled.id,
+            title: props.disabled.why,
+          })}
       onMouseDown={(event) => {
         event.preventDefault();
       }}
@@ -139,7 +148,7 @@ export function TextToolbar({
          * held it (T878's review). From the text, it stays there.
          */
         if (!editor.view.dom.contains(window.document.activeElement)) event.currentTarget.focus();
-        props.run();
+        if (props.disabled === undefined) props.run();
       }}
     >
       {props.children}
@@ -148,6 +157,8 @@ export function TextToolbar({
 
   const current = BLOCK_STYLES.find((style) => style.key === state.block) ?? BLOCK_STYLES[0];
   const over = state.count > TEXT_ELEMENT_LIMIT;
+  /** Why Insert is off: the text holds 10 elements (AC-518). */
+  const full = insertRefusal(state.count);
 
   return (
     <>
@@ -217,6 +228,7 @@ export function TextToolbar({
         {control(6, 'Insert', {
           className: 'text-toolbar__button text-toolbar__insert',
           popup: 'listbox',
+          disabled: full === undefined ? undefined : { why: full, id: ids.full },
           run: () => onInsert?.(),
           children: (
             <>
@@ -231,6 +243,11 @@ export function TextToolbar({
         >
           {`${String(state.count)} / ${String(TEXT_ELEMENT_LIMIT)} elements`}
         </span>
+        {full === undefined ? null : (
+          <span id={ids.full} className="visually-hidden">
+            {full}
+          </span>
+        )}
       </div>
       {menu ? (
         <BlockStyleMenu
@@ -269,6 +286,8 @@ interface ControlProps {
   readonly id?: string;
   /** The popup it opens, while open. */
   readonly controls?: string | undefined;
+  /** Why it can't be used now, its description; absent, it can (AC-518). */
+  readonly disabled?: { readonly why: string; readonly id: string } | undefined;
 }
 
 /**

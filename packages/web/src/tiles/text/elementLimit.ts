@@ -7,6 +7,42 @@ import {
   type Element_,
 } from '../../dashboard/model/document';
 
+/** Why no element can be added to a tile at its limit (AC-518; design 21 state E). */
+export const ELEMENT_LIMIT_REASON = `This tile holds ${String(TEXT_ELEMENT_LIMIT)} elements, the most a Text tile can. Remove one, or add another Text tile.`;
+
+/** Why Insert is disabled for a text holding this many elements, or undefined (AC-518). */
+export function insertRefusal(count: number): string | undefined {
+  return count >= TEXT_ELEMENT_LIMIT ? ELEMENT_LIMIT_REASON : undefined;
+}
+
+/**
+ * The insert menu's groups for a text holding this many elements: at the
+ * limit, every row disabled with the reason (AC-518); otherwise the same.
+ */
+export function limitedGroups<Group extends { readonly rows: readonly object[] }>(
+  groups: readonly Group[],
+  count: number,
+): readonly Group[] {
+  const why = insertRefusal(count);
+  if (why === undefined) return groups;
+  return groups.map((group) => ({
+    ...group,
+    rows: group.rows.map((row) => ({ ...row, disabled: why })),
+  }));
+}
+
+/**
+ * Why a paste is refused, or undefined (AC-518): the text holds `count`
+ * elements, the paste replaces a selection holding `removed` and brings
+ * `added`. Refused when it would pass 10 and add to the count; a converted
+ * tile already past 10 (decision T875-1) may still take a paste that adds
+ * none.
+ */
+export function pasteRefusal(count: number, removed: number, added: number): string | undefined {
+  const after = count - removed + added;
+  return after > TEXT_ELEMENT_LIMIT && added > removed ? ELEMENT_LIMIT_REASON : undefined;
+}
+
 /** How many elements a Text tile holds: what counts toward its 10 (AC-518). */
 export function elementCountOf(document: TextDocument | undefined): number {
   return document === undefined ? 0 : elementsOf(document).length;

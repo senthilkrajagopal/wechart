@@ -782,6 +782,84 @@ test('a pasted image, script, iframe and javascript: link run nothing and leave 
 });
 
 /**
+ * T883 / AC-518: a tile of 10 elements — a filter control and a button
+ * among them — counts "10 / 10 elements"; Insert is disabled with the
+ * reason; `{{` opens the menu with every row disabled and the reason; a
+ * paste of an element is refused with the reason, and the text keeps 10.
+ */
+test('a Text tile of 10 elements: Insert, the menu and a paste each refuse an eleventh, saying why', async ({
+  page,
+  request,
+}) => {
+  const reason =
+    'This tile holds 10 elements, the most a Text tile can. Remove one, or add another Text tile.';
+  const { id, title } = await dashboardWithText(
+    request,
+    [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Ten ' },
+          ...Array.from({ length: 8 }, () => ({
+            type: 'value',
+            attrs: { measure: 'orders.count' },
+          })),
+          { type: 'filterControl', attrs: { filter: 'f-status' } },
+          { type: 'actionButton', attrs: { label: 'Go' } },
+        ],
+      },
+    ],
+    [{ id: 'f-status', widget: 'list', member: 'orders.status' }],
+  );
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const tile = page.locator('[data-tile="tile-text"]');
+  await tile.locator('.text-tile').dblclick();
+  const textbox = tile.getByRole('textbox');
+  await expect(textbox).toBeFocused();
+
+  const bar = tile.getByRole('toolbar', { name: 'Text formatting' });
+  await expect(bar.getByTestId('text-toolbar-count')).toHaveText('10 / 10 elements');
+  const insert = bar.getByRole('button', { name: 'Insert' });
+  await expect(insert).toHaveAttribute('aria-disabled', 'true');
+  await expect(insert).toHaveAccessibleDescription(reason);
+  // Pressed anyway (Playwright waits on an aria-disabled control), it opens nothing.
+  await insert.click({ force: true });
+  await expect(page.getByRole('listbox', { name: 'Insert' })).toHaveCount(0);
+
+  await textbox.focus();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' {{');
+  const menu = page.getByRole('listbox', { name: 'Insert' });
+  await expect(menu).toBeVisible();
+  await expect(menu).toContainText(reason);
+  const rows = menu.getByRole('option');
+  expect(await rows.count()).toBeGreaterThan(0);
+  expect(
+    await rows.evaluateAll((all) => all.map((row) => row.getAttribute('aria-disabled'))),
+  ).toEqual(Array(await rows.count()).fill('true'));
+  await expect(textbox).toHaveAccessibleDescription(reason);
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(bar.getByTestId('text-toolbar-count')).toHaveText('10 / 10 elements');
+
+  await textbox.evaluate((element) => {
+    const data = new DataTransfer();
+    data.setData(
+      'text/html',
+      '<p><span data-element="value" data-attrs=\'{"measure":"orders.count"}\'>x</span></p>',
+    );
+    element.dispatchEvent(
+      new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
+    );
+  });
+  await expect(tile.getByRole('alert')).toHaveText(reason);
+  await expect(bar.getByTestId('text-toolbar-count')).toHaveText('10 / 10 elements');
+});
+
+/**
  * T877 / AC-514: a dashboard of two Text tiles opened in view mode requests
  * no script of the editor's chunk (`text-editor-…`, named in
  * `vite.config.ts`), and none of the scripts it loads holds ProseMirror's
