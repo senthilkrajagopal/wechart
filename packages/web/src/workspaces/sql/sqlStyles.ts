@@ -57,6 +57,17 @@ main:has(.sql-workspace) {
    right, and under its button the chosen one's folder and state. */
 .cube-picker__pop.sql-picker__pop { width: min(360px, calc(100vw - 32px)); }
 .sql-picker .cube-picker__button { width: 100%; }
+/* The pane's head already says "Data source": the picker's own label is hidden
+   from sight as .visually-hidden hides, and still names its button through
+   aria-labelledby (the user's report on the deployed build). */
+.sql-picker .cube-picker__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
 .sql-picker__state {
   display: inline-flex;
   align-items: center;

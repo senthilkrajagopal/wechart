@@ -9,6 +9,7 @@ import { ME_QUERY } from '../../shell/me';
 import { forgetLiveTabs } from './liveTabs';
 import { editorShare, LEFT_PANE, paneWidth, RIGHT_PANE, roomFor, SPLIT } from './panes';
 import { SqlWorkspace } from './SqlWorkspace';
+import { SQL_CSS } from './sqlStyles';
 
 /**
  * T796 (AC-446): WHEN a Super-Admin or a read-write member opens SQL runner,
@@ -121,6 +122,46 @@ const drag = (grip: Element, { dx = 0, dy = 0 }: { dx?: number; dy?: number }) =
   fireEvent.pointerMove(grip, { clientX: 500 + dx, clientY: 300 + dy, pointerId: 1 });
   fireEvent.pointerUp(grip, { clientX: 500 + dx, clientY: 300 + dy, pointerId: 1 });
 };
+
+/**
+ * The user's report on the deployed build: the left pane read "Data source"
+ * twice, the pane's own head and the picker's label under it. The head
+ * stays; the picker's label is hidden from sight and still names its button.
+ */
+describe('the left pane’s data source head (AC-386)', () => {
+  it('shows the words “Data source” once, the picker still named by them', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response('[]', { status: 200 }))),
+    );
+    windowOf(1440);
+    const style = document.createElement('style');
+    style.textContent = SQL_CSS;
+    document.head.append(style);
+    try {
+      renderAs(writer);
+      const left = leftPane();
+      const picker = await within(left).findByRole('button', { name: /^Data source / });
+      /** Hidden from sight as the app's `.visually-hidden` hides: by clip-path, every ancestor read. */
+      const seen = (element: Element | null): boolean => {
+        for (let at = element; at !== null; at = at.parentElement)
+          if (getComputedStyle(at).clipPath === 'inset(50%)') return false;
+        return true;
+      };
+      const shown = [...left.querySelectorAll('*')].filter(
+        (element) =>
+          [...element.childNodes].some(
+            (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.includes('Data source'),
+          ) && seen(element),
+      );
+      expect(shown.map((element) => element.textContent)).toEqual(['Data source']);
+      expect(shown[0]?.tagName).toBe('H2');
+      expect(picker.getAttribute('aria-labelledby')).not.toBeNull();
+    } finally {
+      style.remove();
+    }
+  });
+});
 
 describe('the workspace’s three panes (T797, rule 91)', () => {
   it('lays out the left pane, the centre and the right pane, in that order', () => {
