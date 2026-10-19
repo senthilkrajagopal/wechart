@@ -2674,7 +2674,7 @@ The chart types not started are parked: the waterfall (T948–T952), the histogr
 | AC-503 | T851, T859 | AC-504 | T852, T855, T860 | AC-505 | T853, T860 |
 | AC-506 | T854 | AC-507 | T862 | AC-508 | T863 |
 | AC-509 | T864 | AC-510 | T865 | AC-511 | T866 |
-| AC-037 (again, the combo, `[R80]`) | T845, T846, T867 | AC-218 (again, two unsynchronized axes, `[R80]`) | T861 | AC-219 (again, the combo's settings, `[R80]`) | T855, T858 |
+| AC-037 (again, the combo, `[R80]`) | T845, T846, T867 | AC-218 (again, two unsynchronized axes, `[R80]`) | T861 | AC-219 (again, the combo's settings, `[R80]`) | T855, T858, T862 |
 | AC-512 | T869, T872, T875 | AC-513 | T868, T871, T873, T880 | AC-514 | T877 |
 | AC-515 | T878 | AC-516 | T879 | AC-517 | T881 |
 | AC-518 | T868, T871, T883 | AC-519 | T882 | AC-520 | T884 |
