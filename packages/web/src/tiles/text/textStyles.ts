@@ -497,4 +497,15 @@ button.parameters-settings__name {
 .parameter-form__ask p { flex-basis: 100%; margin: 0; }
 .parameter-form__problems { margin: 0; padding-left: 20px; color: var(--wc-status-error); font-size: var(--wc-text-xs-size); }
 .parameter-dialog { max-width: calc(100vw - 32px); }
+/* A chart following a dashboard parameter says so beside its title (T898,
+   AC-533; design 21 pin 7), in view mode. */
+.tile-head__set-by {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--wc-text-xs-size);
+  color: var(--wc-text-secondary);
+}
 `;

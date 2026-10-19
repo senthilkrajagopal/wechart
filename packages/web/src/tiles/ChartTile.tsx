@@ -100,6 +100,12 @@ export interface ChartTileProps {
    */
   readonly title?: string | undefined;
   /**
+   * The dashboard parameters a dashboard-local chart follows, by name (T898,
+   * AC-533): said beside its title in view mode, "· set by Metric to show",
+   * so a reader knows what changed it.
+   */
+  readonly setBy?: readonly string[] | undefined;
+  /**
    * When the data is from — Cube's `lastRefreshTime` — shown in the head
    * (T154, AC-148). Absent where Cube gave none.
    */
@@ -348,6 +354,7 @@ function Tile({
   busy,
   inEffect,
   title,
+  setBy,
   asOf,
   served,
   rowsTotal,
@@ -443,7 +450,13 @@ function Tile({
 
   const heading =
     title === undefined || title.trim() === '' ? null : (
-      <h3 className="tile-head__title">{title}</h3>
+      <>
+        <h3 className="tile-head__title">{title}</h3>
+        {/* What sets it, beside its title, for a reader (AC-533). */}
+        {editing || setBy === undefined || setBy.length === 0 ? null : (
+          <span className="tile-head__set-by">{` · set by ${setBy.join(' and ')}`}</span>
+        )}
+      </>
     );
   // Where the answer came from, then when its data is from — and, while it is
   // being asked again, that it is: in words with its icon, not only by the

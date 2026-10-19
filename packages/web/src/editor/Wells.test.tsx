@@ -1,10 +1,17 @@
-import { emptySpec, undrawnMeasures, type ChartSpec, type RenderSpec } from '@wechart/core';
+import {
+  emptySpec,
+  undrawnMeasures,
+  type ChartSpec,
+  type DashboardParameter,
+  type RenderSpec,
+} from '@wechart/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ParametersContext } from '../dashboard/parameters/ParametersContext';
 import { WELLS, Wells, rejectionReason, type WellsProps } from './Wells';
 import { addToWellAs } from './combo/comboWells';
 import { undrawnWell } from './combo/undrawnWell';
@@ -1494,5 +1501,104 @@ describe("a combo's Split by well (T860)", () => {
         .getAllByRole('button')
         .map((one) => one.textContent),
     ).toEqual(['Small multiples by Region', 'Table', 'Remove Orders']);
+  });
+});
+
+/**
+ * T898 / AC-533: WHEN the author binds a dashboard parameter in a
+ * dashboard-local chart's editor, from its well picker's "Parameters of this
+ * dashboard" group, listed first and holding the parameters of that well's
+ * role, THE SYSTEM SHALL show the pill as "‹parameter› · now ‹label›", with
+ * the tooltip "Follows the dashboard parameter ‹parameter›: ‹choices›"; …
+ * a chart from folders SHALL list no Parameters group.
+ */
+describe('a dashboard parameter in a well (T898, AC-533)', () => {
+  const metric: DashboardParameter = {
+    id: 'p-metric',
+    name: 'Metric to show',
+    kind: 'fieldSwitch',
+    role: 'measure',
+    choices: [
+      { member: 'orders.count', label: 'Orders' },
+      { member: 'orders.total', label: 'Revenue' },
+      { member: 'orders.margin', label: 'Margin %' },
+    ],
+    default: 'orders.total',
+  };
+  const breakdown: DashboardParameter = {
+    id: 'p-break',
+    name: 'Break down by',
+    kind: 'fieldSwitch',
+    role: 'dimension',
+    choices: [{ member: 'orders.status', label: 'Status' }],
+    default: 'orders.status',
+  };
+  const status: Member = {
+    name: 'orders.status',
+    title: 'Orders Status',
+    shortTitle: 'Status',
+    kind: 'dimension',
+    type: 'string',
+    cube: 'orders',
+  };
+
+  function wells(bindable: boolean, spec = emptySpec('orders'), onAdd = vi.fn()) {
+    render(
+      <ParametersContext.Provider
+        value={{ parameters: [metric, breakdown], values: {}, bindable, onCreate: vi.fn() }}
+      >
+        <Wells
+          spec={spec}
+          available={[measure, status, timeDimension]}
+          cubeTitles={{ orders: 'Orders' }}
+          onAdd={onAdd}
+          onRemove={vi.fn()}
+        />
+      </ParametersContext.Provider>,
+    );
+    return onAdd;
+  }
+  const groupsIn = () =>
+    within(screen.getByRole('listbox', { name: 'Fields' }))
+      .getAllByRole('group')
+      .map((group) => [
+        group.getAttribute('aria-label'),
+        within(group)
+          .getAllByRole('option')
+          .map((option) => option.querySelector('.cube-picker__title')?.textContent),
+      ]);
+
+  it('lists "Parameters of this dashboard" first, with only the well’s role, in a local chart', async () => {
+    const onAdd = wells(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Add to Metrics' }));
+    expect(groupsIn()).toEqual([
+      ['Parameters of this dashboard', ['Metric to show', 'New parameter…']],
+      ['Orders', ['Orders Count']],
+    ]);
+    await userEvent.click(screen.getByRole('option', { name: /Metric to show/ }));
+    expect(onAdd).toHaveBeenCalledWith('measures', 'parameter:p-metric');
+    await userEvent.click(screen.getByRole('button', { name: 'Add to Dimensions' }));
+    expect(groupsIn()[0]).toEqual([
+      'Parameters of this dashboard',
+      ['Break down by', 'New parameter…'],
+    ]);
+  });
+
+  it('lists no Parameters group for a chart from folders', async () => {
+    wells(false);
+    await userEvent.click(screen.getByRole('button', { name: 'Add to Metrics' }));
+    expect(groupsIn().map(([label]) => label)).toEqual(['Orders']);
+  });
+
+  it('reads its pill "Metric to show · now Revenue", its tooltip naming the choices', () => {
+    wells(true, { ...emptySpec('orders'), measures: ['parameter:p-metric'] });
+    const pill = screen.getByTestId('in-measures-parameter:p-metric');
+    expect(pill.querySelector('.pill__title')?.textContent).toBe('Metric to show · now Revenue');
+    expect(pill.getAttribute('title')).toBe(
+      'Follows the dashboard parameter Metric to show: Orders, Revenue or Margin %',
+    );
+    expect(
+      within(pill).getByRole('button', { name: 'Remove Metric to show from Metrics' }).textContent,
+    ).toBe('×');
   });
 });

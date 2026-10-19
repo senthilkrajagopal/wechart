@@ -11,6 +11,9 @@
  * both have to agree on what a well-formed one is.
  */
 
+import type { ChartDocument } from './chart-document';
+import type { ChartSpec } from './chart-spec';
+
 /** R80's "1,000 values", Spotfire's and Power BI's cap (design 21 S3 pin 5). */
 export const PARAMETER_CHOICE_LIMIT = 1000;
 
@@ -156,6 +159,124 @@ export function parameterRef(id: string): string {
 /** The parameter a well's entry follows, or none for a member. */
 export function parameterIdOf(entry: string): string | undefined {
   return entry.startsWith(REF) && entry.length > REF.length ? entry.slice(REF.length) : undefined;
+}
+
+/** The reader's choice for each parameter, by its id: a member among its choices. */
+export type ParameterValues = Readonly<Record<string, string>>;
+
+/** The parameters a chart's wells follow, by id, each once. */
+export function chartParameterIds(document: ChartDocument): string[] {
+  const { wells } = document.chart;
+  return [
+    ...new Set(
+      [...wells.measures, ...wells.dimensions, ...wells.timeDimensions].flatMap(
+        (entry) => parameterIdOf(entry) ?? [],
+      ),
+    ),
+  ];
+}
+
+/**
+ * A dashboard-local chart as asked and drawn now (T898, AC-533): each
+ * `parameter:‹id›` in its wells — and in its pinned channels, its quick
+ * calculations and its grains, which name it the same way — the member the
+ * parameter stands for (`parameterValueOf`). Its type, its title and
+ * everything else stay as its author set them; Cube then names, formats and
+ * titles the member it is asked, so its axis and format follow. An entry
+ * whose parameter is gone is left out rather than asked of Cube. A chart
+ * that follows no parameter is handed back as it is.
+ */
+export function resolveChartParameters(
+  document: ChartDocument,
+  parameters: readonly DashboardParameter[],
+  values: ParameterValues,
+): ChartDocument {
+  if (chartParameterIds(document).length === 0) return document;
+  const memberOf = (entry: string): string | undefined => {
+    const id = parameterIdOf(entry);
+    if (id === undefined) return entry;
+    const parameter = parameters.find((each) => each.id === id);
+    return parameter === undefined ? undefined : parameterValueOf(parameter, values[id]);
+  };
+  const list = (entries: readonly string[]) => entries.flatMap((entry) => memberOf(entry) ?? []);
+  const keyed = <T>(record: Readonly<Record<string, T>> | undefined) =>
+    record === undefined
+      ? undefined
+      : Object.fromEntries(
+          Object.entries(record).flatMap(([key, value]) => {
+            const member = memberOf(key);
+            return member === undefined ? [] : [[member, value] as const];
+          }),
+        );
+  const { chart } = document;
+  const encoding =
+    chart.encoding === undefined
+      ? undefined
+      : Object.fromEntries(
+          Object.entries(chart.encoding).map(([channel, members]) => [
+            channel,
+            list(members ?? []),
+          ]),
+        );
+  const calculations = keyed(chart.calculations);
+  const granularities = keyed(chart.granularities);
+  return {
+    ...document,
+    chart: {
+      ...chart,
+      wells: {
+        ...chart.wells,
+        measures: list(chart.wells.measures),
+        dimensions: list(chart.wells.dimensions),
+        timeDimensions: list(chart.wells.timeDimensions),
+      },
+      ...(encoding === undefined ? {} : { encoding }),
+      ...(calculations === undefined ? {} : { calculations }),
+      ...(granularities === undefined ? {} : { granularities }),
+    },
+  };
+}
+
+/**
+ * A chart spec as the editor asks and previews it (T898, AC-533): its wells'
+ * parameters as their members now, as `resolveChartParameters` reads a
+ * stored chart; the spec itself, unchanged, where it follows none.
+ */
+export function resolveSpecParameters(
+  spec: ChartSpec,
+  parameters: readonly DashboardParameter[],
+  values: ParameterValues,
+): ChartSpec {
+  const followed = [...spec.measures, ...spec.dimensions, ...spec.timeDimensions].some(
+    (entry) => parameterIdOf(entry) !== undefined,
+  );
+  if (!followed) return spec;
+  const memberOf = (entry: string): string | undefined => {
+    const id = parameterIdOf(entry);
+    if (id === undefined) return entry;
+    const parameter = parameters.find((each) => each.id === id);
+    return parameter === undefined ? undefined : parameterValueOf(parameter, values[id]);
+  };
+  const list = (entries: readonly string[]) => entries.flatMap((entry) => memberOf(entry) ?? []);
+  const keyed = <T>(record: Readonly<Record<string, T>> | undefined) =>
+    record === undefined
+      ? undefined
+      : Object.fromEntries(
+          Object.entries(record).flatMap(([key, value]) => {
+            const member = memberOf(key);
+            return member === undefined ? [] : [[member, value] as const];
+          }),
+        );
+  const calculations = keyed(spec.calculations);
+  const granularities = keyed(spec.granularities);
+  return {
+    ...spec,
+    measures: list(spec.measures),
+    dimensions: list(spec.dimensions),
+    timeDimensions: list(spec.timeDimensions),
+    ...(calculations === undefined ? {} : { calculations }),
+    ...(granularities === undefined ? {} : { granularities }),
+  };
 }
 
 /** The choice a parameter stands for now, with its label. */

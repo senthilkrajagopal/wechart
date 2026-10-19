@@ -42,6 +42,11 @@ function tokenOf(node: TextNode): string {
   };
   switch (node.type) {
     case 'value':
+      // A Value of a dashboard parameter (T898, AC-533), by the parameter's id.
+      if (attrs.parameter !== undefined)
+        return attrs.marking === undefined
+          ? `{{measure-parameter:${said('parameter')}}}`
+          : `{{measure-parameter:${said('parameter')} | marking:${said('marking')}}}`;
       return attrs.marking === undefined
         ? `{{measure:${said('measure')}}}`
         : `{{measure:${said('measure')} | marking:${said('marking')}}}`;

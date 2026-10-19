@@ -76,6 +76,17 @@ function exportedElementOf(inside: string): TextNode | undefined {
       ? { type: 'change', attrs: { measure } }
       : undefined;
   }
+  if (kind === 'measure-parameter') {
+    // A Value of a dashboard parameter (T898, AC-533), limited by a marking where it says so.
+    const limited = /^(.*?\S)\s*\|\s*marking:\s*(\S(?:.*\S)?)$/.exec(source);
+    return {
+      type: 'value',
+      attrs:
+        limited === null
+          ? { parameter: source }
+          : { parameter: limited[1] ?? '', marking: limited[2] ?? '' },
+    };
+  }
   const byMeasure = BY_MEASURE[kind];
   if (byMeasure !== undefined)
     return MEMBER_NAME.test(source) ? { type: byMeasure, attrs: { measure: source } } : undefined;

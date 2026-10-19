@@ -128,6 +128,8 @@ export function textLinkProblem(href: string): string | undefined {
 
 interface AttrSpec {
   readonly required?: boolean;
+  /** Not needed where this other attribute is set: a Value's measure, by its parameter (AC-533). */
+  readonly unless?: string;
   readonly check: (value: unknown) => boolean;
   /** What a value of the wrong shape must be, completing "A ‹node›’s "‹attr›" must be …". */
   readonly mustBe: string;
@@ -278,7 +280,9 @@ const NODES: Readonly<Record<string, NodeSpec>> = {
   hardBreak: { content: [], attrs: {}, marks: TEXT_MARKS },
 
   value: element({
-    measure: requiredMember,
+    // Or a Measure parameter of the dashboard, by its id, in its place (T898, AC-533).
+    measure: { ...requiredMember, unless: 'parameter' },
+    parameter: name(false),
     ...followed,
     /** With a marking and nothing marked: all data (AC-116's default), or "—". */
     whenUnmarked: { check: oneOf('all', 'none'), mustBe: '"all" or "none"' },
@@ -380,7 +384,11 @@ function attrProblems(
       problems.push(`${a(type)}’s "${key}" must be ${spec.mustBe}.`);
   }
   for (const [key, spec] of Object.entries(specs))
-    if (spec.required === true && attrs[key] === undefined)
+    if (
+      spec.required === true &&
+      attrs[key] === undefined &&
+      (spec.unless === undefined || attrs[spec.unless] === undefined)
+    )
       problems.push(`${a(type)} needs its "${key}".`);
   return problems;
 }

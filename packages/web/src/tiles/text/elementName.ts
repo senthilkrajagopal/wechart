@@ -61,7 +61,14 @@ export function elementParts(
   const kind = KIND_NAMES[node.type as ElementKind] ?? node.type;
   const attrs = node.attrs ?? {};
   const measure = text(attrs['measure']);
-  const measureName = measure === undefined ? 'no measure yet' : names.measure(measure);
+  // A Value of a dashboard parameter is named by it (T898, AC-533).
+  const parameter = text(attrs['parameter']);
+  const measureName =
+    parameter !== undefined
+      ? (names.parameter(parameter) ?? 'a parameter no longer on this dashboard')
+      : measure === undefined
+        ? 'no measure yet'
+        : names.measure(measure);
   switch (node.type) {
     case 'change':
       return {

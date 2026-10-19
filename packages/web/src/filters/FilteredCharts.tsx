@@ -165,14 +165,20 @@ export async function filteredChart(
   limit?: CubeFilter,
   /** The item its queries serve: the dashboard (T340, AC-268). */
   item?: QueryItem,
+  /**
+   * Asked as it reads even once no filter is left (T898): a chart following
+   * a parameter set away from its default, whose own question changed.
+   */
+  always = false,
 ): Promise<{ chart: TileChart | undefined; uncovered: string[]; answered?: AnswerMeta }> {
   const source = document.chart.source.cube;
   let asked = [...applied];
   const uncovered: string[] = [];
   // A tile limited by a marking is asked even when no filter reaches it — the
   // limit is the question — and goes on being asked once every filter has
-  // been dropped, so the limit is never what gets dropped.
-  while (asked.length > 0 || limit !== undefined) {
+  // been dropped, so the limit is never what gets dropped. So is a chart
+  // following a parameter (`always`).
+  while (asked.length > 0 || limit !== undefined || always) {
     const current = asked;
     let answered: AnswerMeta | undefined;
     const chart = await tileChartOf(document, async (query) => {
@@ -230,6 +236,7 @@ export function FilteredCharts({
   ref,
   context,
   limits,
+  asks,
 }: {
   reached: Readonly<Record<string, readonly ActiveFilter[]>>;
   documents: Readonly<Record<string, ChartDocument>> | undefined;
@@ -244,15 +251,31 @@ export function FilteredCharts({
    * it, so `reached` need not carry an empty entry for it.
    */
   limits?: Readonly<Record<string, CubeFilter>> | undefined;
+  /**
+   * Charts asked as their documents now read even with no filter or limit:
+   * one following a dashboard parameter set away from its default (T898,
+   * AC-533), which the page loaded at its default.
+   */
+  asks?: ReadonlySet<string> | undefined;
 }) {
   // The dashboard every filtered chart is asked for (T340, AC-268).
   const item = useQueryItem();
-  const ids = [...new Set([...Object.keys(reached), ...Object.keys(limits ?? {})])];
+  const ids = [
+    ...new Set([...Object.keys(reached), ...Object.keys(limits ?? {}), ...(asks ?? [])]),
+  ];
   const charts = ids.flatMap((chartId) => {
     const document = documents?.[chartId];
     return document === undefined
       ? []
-      : [{ chartId, document, applied: reached[chartId] ?? [], limit: limits?.[chartId] }];
+      : [
+          {
+            chartId,
+            document,
+            applied: reached[chartId] ?? [],
+            limit: limits?.[chartId],
+            always: asks?.has(chartId) === true,
+          },
+        ];
   });
 
   /**
@@ -271,11 +294,11 @@ export function FilteredCharts({
       refresh: async (chartId) => {
         const found = charts.find((each) => each.chartId === chartId);
         if (found === undefined) return;
-        const { document, applied, limit } = found;
+        const { document, applied, limit, always } = found;
         await queryClient.fetchQuery({
           queryKey: filteredQueryKey(chartId, document, applied, context, limit),
           queryFn: ({ signal }) =>
-            filteredChart(document, applied, signal, 'no-cache', context, limit, item),
+            filteredChart(document, applied, signal, 'no-cache', context, limit, item, always),
           staleTime: 0,
         });
       },
@@ -284,10 +307,10 @@ export function FilteredCharts({
   );
 
   const answers = useQueries({
-    queries: charts.map(({ chartId, document, applied, limit }) => ({
+    queries: charts.map(({ chartId, document, applied, limit, always }) => ({
       queryKey: filteredQueryKey(chartId, document, applied, context, limit),
       queryFn: ({ signal }: { signal: AbortSignal }) =>
-        filteredChart(document, applied, signal, undefined, context, limit, item),
+        filteredChart(document, applied, signal, undefined, context, limit, item, always),
     })),
   });
 

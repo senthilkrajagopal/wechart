@@ -203,6 +203,19 @@ describe('a Text tile’s stored document (T868, AC-513, AC-518)', () => {
     ).toEqual(['Unknown mark "textStyle".']);
   });
 
+  // T898 / AC-533: "a Value element SHALL accept a Measure parameter as its measure".
+  it('takes a Value whose measure is a dashboard parameter, and still needs one or the other', () => {
+    expect(
+      textDocumentProblems(docOf(paragraph({ type: 'value', attrs: { parameter: 'p-metric' } }))),
+    ).toEqual([]);
+    expect(textDocumentProblems(docOf(paragraph({ type: 'value', attrs: {} })))).toEqual([
+      'A value needs its "measure".',
+    ]);
+    expect(
+      textDocumentProblems(docOf(paragraph({ type: 'change', attrs: { parameter: 'p-metric' } }))),
+    ).toEqual(['A change has no attribute "parameter".', 'A change needs its "measure".']);
+  });
+
   it('refuses an attribute the schema doesn’t declare, naming it and its node', () => {
     expect(
       textDocumentProblems(docOf({ type: 'paragraph', attrs: { onclick: 'alert(1)' } })),
@@ -467,6 +480,8 @@ describe('a Text document’s elements (T868, AC-518)', () => {
   it('names the attributes each kind declares, for the editor to declare the same (T876)', () => {
     expect(elementAttributeNames('value')).toEqual([
       'measure',
+      // A Measure parameter in its measure's place (T898, AC-533).
+      'parameter',
       'filters',
       'marking',
       'whenUnmarked',

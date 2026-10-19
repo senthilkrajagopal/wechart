@@ -1921,10 +1921,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `parameterUses.test.ts`: uses list the chart's Metrics well, a parameter control and a Value; a choice from a cube the bound chart doesn't join holds Save settings with "Revenue by month can't query Products › Margin target"; deleting the parameter asks, then each use keeps the current choice as a fixed field and its tile says so (AC-532).
   - Depends on: T896
 
-- [ ] T898 (AC-533) Bind a parameter from a local chart's well, follow it in the chart and in Value elements, and say "set by ‹parameter›" in view mode
-  - Files: `packages/web/src/editor/Wells.tsx` (the Parameters group), `packages/core/src/chart-spec.ts` (a parameter in a well; + test), `packages/web/src/dashboard/chartSpec.ts` (resolving it; + test), `packages/web/src/tiles/ChartTile.tsx` ("set by").
-  - Failing test: `chartSpec.test.ts`: a local chart whose Metrics well holds "Metric to show" queries Revenue, then Orders when the parameter changes, its title and format following; its pinned type stays; `Wells.test.tsx`: the picker lists "Parameters of this dashboard" first with Metric to show only in Metrics; the pill reads "Metric to show · now Revenue" with its tooltip; a chart from folders lists no Parameters group; the tile's head shows "· set by Metric to show" in view mode (AC-533).
-  - Depends on: T895
+- [x] T898 (AC-533) Bind a parameter from a local chart's well, follow it in the chart and in Value elements, and say "set by ‹parameter›" in view mode
 
 - [ ] T899 (AC-534) The Parameter control in a Text tile: segments for up to 5 choices, a listbox beyond, the default at open, applied at once and announced once
   - Files: `packages/web/src/tiles/text/elements/ParameterControl.tsx` (+ test), `packages/web/src/dashboard/parameters/useParameters.ts` (+ test).

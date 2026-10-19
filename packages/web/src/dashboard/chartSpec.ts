@@ -1,11 +1,14 @@
 import {
   compile,
   isEmpty,
+  resolveChartParameters,
   toChartSpec,
   toCubeQuery,
   withMemberLabels,
   type ChartDocument,
+  type DashboardParameter,
   type MemberFormats,
+  type ParameterValues,
   type RenderSpec,
 } from '@wechart/core';
 
@@ -133,6 +136,22 @@ export function pickedWithFormats(
   return picked === null || picked === spec.chartType
     ? spec
     : compile(document, { rows, chartType: picked });
+}
+
+/**
+ * A tile's chart under the dashboard's parameters (T898, AC-533): a local
+ * chart's wells that follow a parameter ask the member it stands for now —
+ * the reader's choice, or its default — and draw as `tileChartOf` draws any
+ * chart; one that follows none, as it is.
+ */
+export function tileChartFollowing(
+  document: ChartDocument,
+  parameters: readonly DashboardParameter[],
+  values: ParameterValues,
+  load: LoadRows,
+  formats?: MemberFormats,
+): Promise<TileChart> {
+  return tileChartOf(resolveChartParameters(document, parameters, values), load, formats);
 }
 
 export async function tileChartOf(

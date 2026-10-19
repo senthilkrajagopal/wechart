@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ChartDocument } from './chart-document';
 import {
   PARAMETER_CHOICE_LIMIT,
+  chartParameterIds,
+  resolveChartParameters,
+  resolveSpecParameters,
   dashboardParameterProblems,
   dashboardParametersProblems,
   parameterIdOf,
@@ -132,6 +136,70 @@ describe('a parameter in a well (AC-533)', () => {
     expect(parameterIdOf('parameter:p1')).toBe('p1');
     expect(parameterIdOf('orders.revenue')).toBeUndefined();
     expect(parameterIdOf('parameter:')).toBeUndefined();
+  });
+});
+
+/**
+ * T898 / AC-533: a bound chart's "title, axis and format following the
+ * chosen member and its type staying as its author pinned it".
+ */
+describe('a chart bound to a parameter, resolved (T898, AC-533)', () => {
+  const chart: ChartDocument = {
+    schemaVersion: 2,
+    title: 'Revenue by month',
+    localToDashboardId: 'd1',
+    chart: {
+      source: { cube: 'orders' },
+      wells: {
+        measures: ['parameter:p1'],
+        dimensions: ['orders.status'],
+        timeDimensions: [],
+      },
+      chartType: 'bar',
+      encoding: { y: ['parameter:p1'] },
+      calculations: { 'parameter:p1': { kind: 'percentOfTotal' } as never },
+    },
+  };
+
+  it('asks the default member until another is chosen, then the chosen one', () => {
+    const atDefault = resolveChartParameters(chart, [metric], {});
+    expect(atDefault.chart.wells.measures).toEqual(['orders.revenue']);
+    expect(atDefault.chart.encoding).toEqual({ y: ['orders.revenue'] });
+    expect(Object.keys(atDefault.chart.calculations ?? {})).toEqual(['orders.revenue']);
+    const orders = resolveChartParameters(chart, [metric], { p1: 'orders.count' });
+    expect(orders.chart.wells.measures).toEqual(['orders.count']);
+    // Its pinned type, its other wells and its title stay.
+    expect(orders.chart.chartType).toBe('bar');
+    expect(orders.chart.wells.dimensions).toEqual(['orders.status']);
+    expect(orders.title).toBe('Revenue by month');
+  });
+
+  it('names the parameters it follows, and leaves a chart that follows none as it is', () => {
+    expect(chartParameterIds(chart)).toEqual(['p1']);
+    const plain = {
+      ...chart,
+      chart: { ...chart.chart, wells: { ...chart.chart.wells, measures: ['orders.count'] } },
+    };
+    expect(chartParameterIds(plain)).toEqual([]);
+    expect(resolveChartParameters(plain, [metric], {})).toBe(plain);
+  });
+
+  it('drops a well’s entry whose parameter is gone, rather than ask Cube for it', () => {
+    expect(resolveChartParameters(chart, [], {}).chart.wells.measures).toEqual([]);
+  });
+
+  it('reads an editor’s spec the same way, and hands back one that follows none', () => {
+    const spec = {
+      cube: 'orders',
+      measures: ['parameter:p1'],
+      dimensions: ['orders.status'],
+      timeDimensions: [],
+    };
+    expect(resolveSpecParameters(spec, [metric], { p1: 'orders.count' }).measures).toEqual([
+      'orders.count',
+    ]);
+    const plain = { ...spec, measures: ['orders.count'] };
+    expect(resolveSpecParameters(plain, [metric], {})).toBe(plain);
   });
 });
 

@@ -36,9 +36,11 @@ import {
   toUnderlyingQuery,
   undrawnMeasures,
   wellFor,
+  resolveSpecParameters,
   type ChartSpec,
   type SortSettings,
 } from '@wechart/core';
+import { useDashboardParameters } from '../dashboard/parameters/ParametersContext';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
@@ -305,7 +307,28 @@ function EditorBody({
   const [history, setHistory] = useState(() => historyOf(initial));
   /** The measure a calculation is being requested on (T383, AC-050), while its dialog is open. */
   const [requesting, setRequesting] = useState<string | undefined>(undefined);
-  const { cubeName, spec, chartType: chartTypeState, options, title } = history.present;
+  const {
+    cubeName,
+    spec: authoredSpec,
+    chartType: chartTypeState,
+    options,
+    title,
+  } = history.present;
+  /**
+   * The chart as asked and previewed (T898, AC-533): a well's dashboard
+   * parameter as the member it stands for now. The wells show, and every
+   * change is made to, the chart as written (`authoredSpec`).
+   */
+  const dashboardParameters = useDashboardParameters();
+  const spec = useMemo(
+    () =>
+      resolveSpecParameters(
+        authoredSpec,
+        dashboardParameters.parameters,
+        dashboardParameters.values,
+      ),
+    [authoredSpec, dashboardParameters.parameters, dashboardParameters.values],
+  );
   /** The title as being typed, until it is set down (null: not being typed). */
   const [typedTitle, setTypedTitle] = useState<string | null>(null);
   const commitTitle = () => {
@@ -1437,7 +1460,8 @@ function EditorBody({
               </div>
               <div className="inspector-section" data-testid="inspector-wells">
                 <Wells
-                  spec={spec}
+                  // As written: a parameter's pill, not its member (T898).
+                  spec={authoredSpec}
                   available={available}
                   cubeTitles={cubeTitles}
                   joined={joined}

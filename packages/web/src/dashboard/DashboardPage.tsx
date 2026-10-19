@@ -1,6 +1,11 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { readChartDocument, type ChartDocument, type RenderSpec } from '@wechart/core';
+import {
+  readChartDocument,
+  type ChartDocument,
+  type DashboardParameter,
+  type RenderSpec,
+} from '@wechart/core';
 
 import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
 import { loadTile } from '../query/loadTile';
@@ -9,7 +14,7 @@ import { reachFrom } from '../filters/coverage';
 import { primaryKeyOf } from './markings/primaryKey';
 import { allMembers } from '../filters/FilterBar';
 import type { FilterValues } from '../filters/model';
-import { CHART_MISSING, formatsFrom, tileChartOf, type TileChart } from './chartSpec';
+import { CHART_MISSING, formatsFrom, tileChartFollowing, type TileChart } from './chartSpec';
 import { StateLine } from '../shell/StatusIcon';
 import { DashboardLoading } from './DashboardLoading';
 import { ROOT_FOLDERS, SHARED_ROOT } from '../workspaces/explore/roots';
@@ -708,7 +713,14 @@ function LoadedDashboard({
    * tiles meanwhile (`placeholderData`), so they do not flash.
    */
   const chartsKeyOf = (id: string) =>
-    ['dashboard-charts', id, preview ?? null, chartIdsOf(document)] as const;
+    [
+      'dashboard-charts',
+      id,
+      preview ?? null,
+      chartIdsOf(document),
+      // A bound chart is loaded at its parameters' defaults (T898, AC-534).
+      document.parameters ?? [],
+    ] as const;
   const [saveFailed, setSaveFailed] = useState('');
   /**
    * Where the charts this save put in folders went (T133, AC-127): each by
@@ -899,7 +911,13 @@ function LoadedDashboard({
           async (id) =>
             [
               id,
-              await specFor(id, undefined, preview, { kind: 'dashboard', id: dashboardId }),
+              await specFor(
+                id,
+                undefined,
+                preview,
+                { kind: 'dashboard', id: dashboardId },
+                queryKey[4],
+              ),
             ] as const,
         ),
       );
@@ -937,10 +955,13 @@ function LoadedDashboard({
         chart,
         document: read,
         answered: meta,
-      } = await specFor(chartId, 'no-cache', preview, {
-        kind: 'dashboard',
-        id: dashboardId,
-      });
+      } = await specFor(
+        chartId,
+        'no-cache',
+        preview,
+        { kind: 'dashboard', id: dashboardId },
+        document.parameters,
+      );
       // The charts were loaded again, or saved, while this was out: what
       // they hold now is newer than what this asked (T154's review).
       if (chartsGeneration.current !== began) return;
@@ -1114,6 +1135,8 @@ export async function specFor(
   context?: Readonly<Record<string, unknown>>,
   /** The item its query serves: its dashboard's, or the chart's own (T340, AC-268). */
   item: QueryItem = { kind: 'chart', id: chartId },
+  /** Its dashboard's parameters: a bound well is asked at its default (T898, AC-534). */
+  parameters?: readonly DashboardParameter[],
 ): Promise<{ chart: TileChart; document: ChartDocument | undefined; answered?: AnswerMeta }> {
   let stored;
   try {
@@ -1141,7 +1164,7 @@ export async function specFor(
     };
   }
 
-  return drawChartBody(stored.body, cache, context, item);
+  return drawChartBody(stored.body, cache, context, item, parameters);
 }
 
 /**
@@ -1154,6 +1177,11 @@ export async function drawChartBody(
   context?: Readonly<Record<string, unknown>>,
   /** The item its query serves (T340, AC-268): a dashboard, a chart or a proposal. */
   item?: QueryItem,
+  /**
+   * Its dashboard's parameters (T898, AC-534): a bound well asked at its
+   * default; the document handed back is the chart as its author wrote it.
+   */
+  parameters: readonly DashboardParameter[] = [],
 ): Promise<{ chart: TileChart; document: ChartDocument | undefined; answered?: AnswerMeta }> {
   let document;
   try {
@@ -1170,7 +1198,7 @@ export async function drawChartBody(
   // What Cube says of its answer besides the rows: when the data is from, and
   // whether a pre-aggregation served it (T154, T014).
   let answered: AnswerMeta | undefined;
-  const chart = await tileChartOf(document, async (query) => {
+  const chart = await tileChartFollowing(document, parameters, {}, async (query) => {
     const result = (await loadTile({
       query,
       ...(cache === undefined ? {} : { cache }),

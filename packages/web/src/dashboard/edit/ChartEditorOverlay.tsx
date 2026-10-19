@@ -1,4 +1,4 @@
-import type { ChartDocument, MemberFormats } from '@wechart/core';
+import { resolveChartParameters, type ChartDocument, type MemberFormats } from '@wechart/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
@@ -20,9 +20,18 @@ import { loadTile } from '../../query/loadTile';
 import { metaQueryOf, useWorkspaceItem } from '../../query/meta';
 import { StateLine } from '../../shell/StatusIcon';
 import { formatsFrom, tileChartOf } from '../chartSpec';
+import { ParametersContext, type DashboardParametersState } from '../parameters/ParametersContext';
 import type { ChartDraft } from './chartDrafts';
 
+/** None: what a dashboard with no parameters gives the editor. */
+const NO_PARAMETERS: DashboardParametersState = { parameters: [], values: {}, bindable: false };
+
 export interface ChartEditorOverlayProps {
+  /**
+   * The dashboard's parameters (T898, AC-533): bindable in the chart's wells
+   * when it is local to this dashboard, and what a bound well stands for now.
+   */
+  readonly parameters?: DashboardParametersState | undefined;
   readonly chartId: string;
   readonly dashboardTitle: string;
   /** The dashboard it is opened over, counted among a shared chart's users (T134). */
@@ -81,10 +90,12 @@ async function drawnForDraft(
   item: QueryItem | undefined,
   /** The model's formats, picked with as the editor picked (T510, R67). */
   formats: MemberFormats | undefined,
+  /** The dashboard's parameters, a bound well asked as its member now (T898). */
+  parameters: DashboardParametersState,
 ): Promise<{ drawn: ChartDraft['drawn']; total?: number }> {
   let total: number | undefined;
   const drawn = await tileChartOf(
-    edited,
+    resolveChartParameters(edited, parameters.parameters, parameters.values),
     async (query) => {
       const result = (await loadTile({ query, item })) as {
         data?: Record<string, unknown>[];
@@ -114,6 +125,7 @@ async function drawnForDraft(
  * Back asks before losing work — here, going back *is* keeping it.
  */
 export function ChartEditorOverlay({
+  parameters = NO_PARAMETERS,
   chartId,
   dashboardTitle,
   dashboardId = '',
@@ -231,7 +243,7 @@ export function ChartEditorOverlay({
       const edited = chartDocumentWith(opened.document, state);
       // Drawn by the very function every tile uses, so an emptied chart reads
       // "no fields yet" rather than the tile keeping its old chart.
-      const { drawn, total } = await drawnForDraft(edited, item, formatsNow());
+      const { drawn, total } = await drawnForDraft(edited, item, formatsNow(), parameters);
       // And what it was drawn as recorded, for Explore to name it by (AC-193).
       then({
         document: withDrawnAs(edited, drawn),
@@ -240,7 +252,7 @@ export function ChartEditorOverlay({
         ...(total === undefined ? {} : { total }),
       });
     },
-    [opened, item, formatsNow],
+    [opened, item, formatsNow, parameters],
   );
   const back = useCallback(() => leave(onBack), [leave, onBack]);
 
@@ -263,14 +275,14 @@ export function ChartEditorOverlay({
     setApplying(true);
     try {
       const edited = chartDocumentWith(opened.document, latest.current ?? opened.state);
-      const { drawn } = await drawnForDraft(edited, item, formatsNow());
+      const { drawn } = await drawnForDraft(edited, item, formatsNow(), parameters);
       setCopied(true);
       onMakeLocalCopy({ document: withDrawnAs(edited, drawn), drawn });
     } finally {
       leaving.current = false;
       setApplying(false);
     }
-  }, [opened, onMakeLocalCopy, item, formatsNow]);
+  }, [opened, onMakeLocalCopy, item, formatsNow, parameters]);
   /** Focus on what was done, once said: the button pressed has gone with the offer. */
   const copiedNote = useRef<HTMLDivElement>(null);
   const localNow = opened?.document.localToDashboardId !== undefined;
@@ -461,24 +473,26 @@ export function ChartEditorOverlay({
               goes on through a local copy's new chart id (T135's review).
               Its one header row carries the way back, whose the chart is and
               Save dashboard (AC-214). */}
-          <ChartEditor
-            key={tileId ?? chartId}
-            // What a calculation request carries (T383, AC-050): a stored chart,
-            // never a draft the dashboard hasn't saved yet.
-            chartId={requestableChartId(chartId, opened?.version)}
-            initial={view.initial}
-            tile={tile}
-            openAt={openAt}
-            onChange={onChange}
-            busy={applying}
-            head={{ start: backControl, badges: ownership, end: saveControls }}
-            // A library chart's own folder; a local chart's, its dashboard's (T429).
-            folderId={
-              opened?.document.localToDashboardId === undefined
-                ? opened?.document.folderId
-                : dashboardFolderId
-            }
-          />
+          <ParametersContext.Provider value={parameters}>
+            <ChartEditor
+              key={tileId ?? chartId}
+              // What a calculation request carries (T383, AC-050): a stored chart,
+              // never a draft the dashboard hasn't saved yet.
+              chartId={requestableChartId(chartId, opened?.version)}
+              initial={view.initial}
+              tile={tile}
+              openAt={openAt}
+              onChange={onChange}
+              busy={applying}
+              head={{ start: backControl, badges: ownership, end: saveControls }}
+              // A library chart's own folder; a local chart's, its dashboard's (T429).
+              folderId={
+                opened?.document.localToDashboardId === undefined
+                  ? opened?.document.folderId
+                  : dashboardFolderId
+              }
+            />
+          </ParametersContext.Provider>
         </div>
       ) : (
         <>

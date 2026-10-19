@@ -242,6 +242,10 @@ export {
 
 export {
   PARAMETER_CHOICE_LIMIT,
+  chartParameterIds,
+  resolveChartParameters,
+  resolveSpecParameters,
+  type ParameterValues,
   dashboardParameterProblems,
   dashboardParametersProblems,
   parameterChoiceOf,

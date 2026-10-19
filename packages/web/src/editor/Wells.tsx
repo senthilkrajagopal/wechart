@@ -1,6 +1,7 @@
 import type {
   ChartFilter,
   ChartSpec,
+  DashboardParameter,
   QuickCalc,
   QuickCalcKind,
   TimeGranularity,
@@ -8,9 +9,18 @@ import type {
   WellName,
 } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
-import { QUERY_GRANULARITY, quickCalcName, undrawnOffers } from '@wechart/core';
+import {
+  QUERY_GRANULARITY,
+  parameterChoiceOf,
+  parameterIdOf,
+  parameterRef,
+  quickCalcName,
+  undrawnOffers,
+} from '@wechart/core';
 import { Fragment, useId, useRef, useState, type ReactNode } from 'react';
 
+import { choicesSaid, useDashboardParameters } from '../dashboard/parameters/ParametersContext';
+import { ParameterDialog } from '../dashboard/settings/ParameterForm';
 import { useQueryItem } from '../query/item';
 import { loadTile } from '../query/loadTile';
 import { MenuButton, type MenuItem } from '../shell/MenuButton';
@@ -66,6 +76,9 @@ export const WELLS: {
   { name: 'timeDimensions', label: 'Time', accepts: 'timeDimension', adds: 'time dimension' },
 ];
 
+/** The picker's New parameter… row (T898), which no member or parameter can be. */
+const NEW_PARAMETER = 'new-parameter:';
+
 /** What the fields' picker says of its keys, as design 01 state A writes it (EDI-11). */
 const PICKER_KEYS = '↑ ↓ move · Enter adds · Esc closes';
 
@@ -88,6 +101,7 @@ function FieldPicker({
   disabled,
   describedBy,
   onPick,
+  parameters,
 }: {
   well: string;
   label: string;
@@ -101,7 +115,62 @@ function FieldPicker({
   disabled: boolean;
   describedBy: string | undefined;
   onPick: (member: Member) => void;
+  /**
+   * A dashboard-local chart's "Parameters of this dashboard" (T898, AC-533;
+   * design 21 F): listed first, the parameters of this well's role, then
+   * New parameter…; none for a chart from folders.
+   */
+  parameters?:
+    | {
+        readonly listed: readonly DashboardParameter[];
+        readonly onBind: (ref: string) => void;
+        readonly onNew?: (() => void) | undefined;
+      }
+    | undefined;
 }) {
+  const parameterGroup =
+    parameters === undefined
+      ? []
+      : [
+          {
+            label: 'Parameters of this dashboard',
+            rows: [
+              ...parameters.listed.map((parameter) => ({
+                key: parameterRef(parameter.id),
+                value: parameterRef(parameter.id),
+                title: parameter.name,
+                kind: 'cube' as const,
+                path: `${String(parameter.choices.length)} ${parameter.choices.length === 1 ? 'choice' : 'choices'}`,
+                icon: (
+                  <span className="cube-picker__kind" aria-hidden="true">
+                    P
+                  </span>
+                ),
+                ...(held.includes(parameterRef(parameter.id))
+                  ? { disabled: true, chip: '✓ in chart' }
+                  : {}),
+                data: { parameter: parameter.id },
+              })),
+              ...(parameters.onNew === undefined
+                ? []
+                : [
+                    {
+                      key: NEW_PARAMETER,
+                      value: NEW_PARAMETER,
+                      title: 'New parameter…',
+                      kind: 'cube' as const,
+                      path: '',
+                      icon: (
+                        <span className="cube-picker__kind" aria-hidden="true">
+                          +
+                        </span>
+                      ),
+                      data: { new: 'parameter' },
+                    },
+                  ]),
+            ],
+          },
+        ];
   const cubes = [...new Set(candidates.map((member) => member.cube))];
   // Its title, or its name in words, never the identifier (T229's review).
   const titleOfCube = (name: string) =>
@@ -118,25 +187,36 @@ function FieldPicker({
       noMatch={(typed) =>
         typed === '' ? 'Nothing to add from this cube.' : `No field matches “${typed}”.`
       }
-      groups={cubes.map((name) => ({
-        label: titleOfCube(name),
-        aside: joined.includes(name) ? '· via join' : undefined,
-        rows: candidates
-          .filter((member) => member.cube === name)
-          .map((member) => ({
-            key: member.name,
-            value: member.name,
-            title: member.title,
-            kind: 'cube' as const,
-            path: fieldMetaOf(member),
-            icon: <FieldIcon member={member} />,
-            ...(held.includes(member.name) ? { disabled: true, chip: '✓ in chart' } : {}),
-            data: { testid: `pick-${member.name}` },
-          })),
-      }))}
+      groups={[
+        ...parameterGroup,
+        ...cubes.map((name) => ({
+          label: titleOfCube(name),
+          aside: joined.includes(name) ? '· via join' : undefined,
+          rows: candidates
+            .filter((member) => member.cube === name)
+            .map((member) => ({
+              key: member.name,
+              value: member.name,
+              title: member.title,
+              kind: 'cube' as const,
+              path: fieldMetaOf(member),
+              icon: <FieldIcon member={member} />,
+              ...(held.includes(member.name) ? { disabled: true, chip: '✓ in chart' } : {}),
+              data: { testid: `pick-${member.name}` },
+            })),
+        })),
+      ]}
       value=""
       valueTitle={undefined}
       onChoose={(name) => {
+        if (name === NEW_PARAMETER) {
+          parameters?.onNew?.();
+          return;
+        }
+        if (parameterIdOf(name) !== undefined) {
+          parameters?.onBind(name);
+          return;
+        }
         const member = candidates.find((each) => each.name === name);
         if (member !== undefined) onPick(member);
       }}
@@ -405,7 +485,31 @@ export function Wells({
     ...(spec.filters ?? []).map((filter) => filter.member),
     ...(eachPointIs?.member === undefined ? [] : [eachPointIs.member]),
   ];
-  const sources = new Set(held.map((name) => name.split('.')[0]));
+  // A parameter in a well is no cube's (T898).
+  const sources = new Set(
+    held.filter((name) => parameterIdOf(name) === undefined).map((name) => name.split('.')[0]),
+  );
+  /** The dashboard's parameters, bindable here only in a dashboard-local chart (AC-533). */
+  const dashboardParameters = useDashboardParameters();
+  /** The well a New parameter… from its picker is for, while its dialog is open (AC-531). */
+  const [creating, setCreating] = useState<WellName | null>(null);
+  const parametersFor = (well: WellName) => {
+    if (!dashboardParameters.bindable) return undefined;
+    const role = well === 'measures' ? 'measure' : 'dimension';
+    const { onCreate } = dashboardParameters;
+    return {
+      listed: dashboardParameters.parameters.filter((parameter) => parameter.role === role),
+      onBind: (ref: string) => {
+        onAdd(well, ref);
+      },
+      onNew:
+        onCreate === undefined
+          ? undefined
+          : () => {
+              setCreating(well);
+            },
+    };
+  };
   // A field of a cube the chart holds nothing of — a joined cube's — is
   // named in full: its source isn't evident (AC-220; T688's review).
   const titleOf = (name: string) =>
@@ -606,6 +710,22 @@ export function Wells({
 
   return (
     <div className="wells" ref={root}>
+      {/* New parameter… from a well's picker (AC-531): its role the well's,
+          added to the dashboard, then bound here. */}
+      {creating === null || dashboardParameters.onCreate === undefined ? null : (
+        <ParameterDialog
+          existing={dashboardParameters.parameters}
+          role={creating === 'measures' ? 'measure' : 'dimension'}
+          onCancel={() => {
+            setCreating(null);
+          }}
+          onCreate={(parameter) => {
+            dashboardParameters.onCreate?.(parameter);
+            onAdd(creating, parameterRef(parameter.id));
+            setCreating(null);
+          }}
+        />
+      )}
       {noSource ? (
         <p className="wells__note" id={noSourceId} data-testid="wells-no-source">
           Choose a cube or view first.
@@ -650,6 +770,43 @@ export function Wells({
             >
               <ul aria-labelledby={`well-${well.name}-label`} className="well__pills">
                 {held.map((member) => {
+                  // A dashboard parameter (T898, AC-533): its name, its current
+                  // choice, and the choices it switches among, in its tooltip.
+                  const followed = parameterIdOf(member);
+                  if (followed !== undefined) {
+                    const parameter = dashboardParameters.parameters.find(
+                      (each) => each.id === followed,
+                    );
+                    const name = parameter?.name ?? 'A parameter no longer on this dashboard';
+                    const now =
+                      parameter === undefined
+                        ? undefined
+                        : parameterChoiceOf(parameter, dashboardParameters.values[parameter.id]);
+                    return (
+                      <li
+                        key={member}
+                        className={`${pillClass(well.name)} pill--parameter`}
+                        data-testid={`in-${well.name}-${member}`}
+                        title={
+                          parameter === undefined
+                            ? name
+                            : `Follows the dashboard parameter ${parameter.name}: ${choicesSaid(parameter)}`
+                        }
+                      >
+                        <span className="pill__title">
+                          {now === undefined ? name : `${name} · now ${now.label}`}
+                        </span>
+                        <button
+                          type="button"
+                          className="pill__remove"
+                          onClick={() => onRemove(well.name, member)}
+                          aria-label={`Remove ${name} from ${well.label}`}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    );
+                  }
                   const known = available.find((each) => each.name === member);
                   const title = titleOf(member);
                   const grain = spec.granularities?.[member] ?? QUERY_GRANULARITY;
@@ -771,6 +928,7 @@ export function Wells({
                 disabled={noSource}
                 describedBy={noSource ? noSourceId : undefined}
                 onPick={(member) => onAdd(well.name, member.name)}
+                parameters={parametersFor(well.name)}
               />
             </div>
 

@@ -215,6 +215,21 @@ describe('a Text document written as markdown (T870, AC-527)', () => {
     expect(roundTrip(odd)).toEqual(odd);
   });
 
+  // T898 / AC-533: a Value may take a Measure parameter as its measure.
+  it('writes a Value of a parameter as {{measure-parameter:…}} and reads it back', () => {
+    const following = doc(
+      p(
+        el('value', { parameter: 'p-metric' }),
+        text(' and '),
+        el('value', { parameter: 'p-metric', marking: 'Picks' }),
+      ),
+    );
+    expect(textDocumentToMarkdown(following)).toBe(
+      '{{measure-parameter:p-metric}} and {{measure-parameter:p-metric | marking:Picks}}',
+    );
+    expect(roundTrip(following)).toEqual(following);
+  });
+
   it('keeps every element in the markdown, and its kind and source when read back as text', () => {
     const markdown = textDocumentToMarkdown(everything);
     for (const token of [

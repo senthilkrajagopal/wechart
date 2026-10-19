@@ -1,9 +1,20 @@
-import { chartDocumentOf, emptySpec, type ChartDocument } from '@wechart/core';
+import {
+  chartDocumentOf,
+  emptySpec,
+  type ChartDocument,
+  type DashboardParameter,
+} from '@wechart/core';
 import { describe, expect, it } from 'vitest';
 
 import { TileLoadError } from '../query/loadTile';
 import { recommendedTypeOf } from '../query/signature';
-import { formatsFrom, pickedWithFormats, tileChartOf, withFormats } from './chartSpec';
+import {
+  formatsFrom,
+  pickedWithFormats,
+  tileChartFollowing,
+  tileChartOf,
+  withFormats,
+} from './chartSpec';
 import { NOTHING_CHOSEN } from './edit/templates';
 
 /**
@@ -455,5 +466,59 @@ describe('when drawing the result throws', () => {
     );
 
     expect('error' in chart).toBe(true);
+  });
+});
+
+/**
+ * T898 / AC-533: a dashboard-local chart whose Metrics well holds the
+ * parameter Metric to show asks Revenue, then Orders once the parameter is
+ * set to it, its axis and format following the member; its pinned type
+ * stays.
+ */
+describe('a local chart bound to a dashboard parameter (T898, AC-533)', () => {
+  const metric: DashboardParameter = {
+    id: 'p-metric',
+    name: 'Metric to show',
+    kind: 'fieldSwitch',
+    role: 'measure',
+    choices: [
+      { member: 'orders.revenue', label: 'Revenue' },
+      { member: 'orders.count', label: 'Orders' },
+    ],
+    default: 'orders.revenue',
+  };
+  const bound: ChartDocument = {
+    schemaVersion: 2,
+    title: 'Revenue by status',
+    localToDashboardId: 'd1',
+    chart: {
+      source: { cube: 'orders' },
+      wells: {
+        measures: ['parameter:p-metric'],
+        dimensions: ['orders.status'],
+        timeDimensions: [],
+      },
+      chartType: 'line',
+    },
+  };
+  const formats = { 'orders.revenue': 'currency' as const, 'orders.count': 'number' as const };
+
+  it('asks the parameter’s member, then the one chosen, and keeps its pinned type', async () => {
+    const first = loading([{ 'orders.status': 'paid', 'orders.revenue': 10 }]);
+    const atDefault = await tileChartFollowing(bound, [metric], {}, first.load);
+    expect((first.asked[0] as { measures: string[] }).measures).toEqual(['orders.revenue']);
+    const then = loading([{ 'orders.status': 'paid', 'orders.count': 3 }]);
+    const chosen = await tileChartFollowing(
+      bound,
+      [metric],
+      { 'p-metric': 'orders.count' },
+      then.load,
+    );
+    expect((then.asked[0] as { measures: string[] }).measures).toEqual(['orders.count']);
+    if (!('spec' in atDefault) || !('spec' in chosen)) throw new Error('not drawn');
+    expect([atDefault.spec.chartType, chosen.spec.chartType]).toEqual(['line', 'line']);
+    // Its value axis is the member asked, so its title and format are that member's.
+    expect(chosen.spec.measures).toEqual(['orders.count']);
+    expect(withFormats({ c: chosen.spec }, formats)['c']?.formats?.['orders.count']).toBe('number');
   });
 });

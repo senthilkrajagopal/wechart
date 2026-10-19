@@ -48,5 +48,7 @@ export function insertSourcesOf({
         ? []
         : [{ id: filter.id, name: memberTitle?.(filter.member) ?? filter.member }],
     ),
+    // Its parameters, by name (F46): a Parameter control's, and a Value's in a measure's place.
+    parameters: (dashboard.parameters ?? []).map(({ id, name }) => ({ id, name })),
   };
 }

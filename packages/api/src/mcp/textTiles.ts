@@ -82,7 +82,8 @@ const SOURCE: Readonly<Record<ElementKind, string>> = {
  * stored marking).
  */
 const SAID: Readonly<Record<ElementKind, readonly string[]>> = {
-  value: ['measure', 'marking'],
+  // A Value's measure, or the parameter in its place (T898).
+  value: ['measure', 'parameter', 'marking'],
   change: ['measure'],
   sparkline: ['measure'],
   icon: ['measure'],
@@ -105,7 +106,10 @@ function mergedAttrs(stored: TextNode, read: TextNode): Record<string, unknown> 
 }
 
 const keyOf = (node: TextNode) =>
-  `${node.type}\u0000${String(node.attrs?.[SOURCE[node.type as ElementKind]] ?? '')}`;
+  `${node.type}\u0000${String(
+    // A Value of a parameter is matched by its parameter (T898).
+    node.attrs?.[SOURCE[node.type as ElementKind]] ?? node.attrs?.['parameter'] ?? '',
+  )}`;
 
 /** The document's elements in text order. */
 function elementsIn(node: TextNode, into: TextNode[] = []): TextNode[] {

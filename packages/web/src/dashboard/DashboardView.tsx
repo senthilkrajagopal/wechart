@@ -59,6 +59,11 @@ import {
   elementsOf,
   textDocumentMembers,
   type TextNode,
+  chartParameterIds,
+  parameterValueOf,
+  resolveChartParameters,
+  type DashboardParameter,
+  type ParameterValues,
 } from '@wechart/core';
 import {
   Suspense,
@@ -683,6 +688,7 @@ function TileBody({
   editing = false,
   carried,
   title,
+  setBy,
   answered,
   chartType = tile.chartType,
   canEditChart = false,
@@ -771,6 +777,8 @@ function TileBody({
   carried?: readonly SearchFilter[] | undefined;
   /** A chart tile's heading: its chart's title (AC-187). */
   title?: string | undefined;
+  /** The dashboard parameters its chart follows, said beside its title (AC-533). */
+  setBy?: readonly string[] | undefined;
   /** What Cube said of its answer: when from, and from what (T154, T014). */
   answered?: AnswerMeta | undefined;
 }) {
@@ -911,6 +919,7 @@ function TileBody({
           busy={busy}
           inEffect={inEffect}
           title={title}
+          setBy={setBy}
           asOf={answered?.lastRefreshTime}
           served={answered}
           // A drafted chart's from its draft, whose answer is not otherwise known (T401's review).
@@ -1072,6 +1081,8 @@ interface TileCharts {
   readonly carried?: readonly SearchFilter[] | undefined;
   /** A chart's title, which heads its tile (AC-187). */
   readonly titleOf?: ((chartId: string) => string | undefined) | undefined;
+  /** The dashboard parameters a chart follows, by name (T898, AC-533). */
+  readonly setByOf?: ((chartId: string) => readonly string[] | undefined) | undefined;
   /** A member's title from the model, for what a tile says of one (AC-220). */
   readonly memberTitle?: ((member: string) => string | undefined) | undefined;
   /** A chart's own type, from its document (T132). */
@@ -1866,6 +1877,7 @@ function Elements({
               editing={editing}
               carried={charts.carried}
               title={charts.titleOf?.(chartId)}
+              setBy={charts.setByOf?.(chartId)}
               memberTitle={charts.memberTitle}
               tokens={charts.textTokensOf?.(element.id)}
               elements={charts.textElementsOf?.(element.id)}
@@ -2332,6 +2344,8 @@ function interactionHint(
 
 /** One empty list, so "nothing selected" is the same value on every render. */
 const NO_SELECTIONS: readonly CrossSelection[] = [];
+/** A dashboard with no parameters: one list, so what follows them isn't redone each render. */
+const NO_PARAMETERS: readonly DashboardParameter[] = [];
 
 /**
  * A highlight's share asked of Cube as filters (checkpoint 3's review): its
@@ -2501,11 +2515,46 @@ export function DashboardView({
    * would recolour every member from scratch.
    */
   const [drafts, setDrafts] = useState<DashboardDocument['chartDrafts']>(undefined);
+  /**
+   * The dashboard as the session has it, mirrored up (`SessionMirror`): its
+   * filters and scopes may be edits not yet saved, and a filter set while
+   * editing reaches the tiles as they are being edited. Its parameters too,
+   * which the charts below follow (T898).
+   */
+  const [live, setLive] = useState<DashboardDocument>(document);
+  /**
+   * Each dashboard parameter's value as the reader has set it (F46, AC-534):
+   * the reader's, not the dashboard's, as a filter's is; absent is its
+   * default (`parameterValueOf`).
+   */
+  const [parameterValues] = useState<ParameterValues>({});
+  const liveParameters = live.parameters ?? NO_PARAMETERS;
+  /**
+   * The charts as drawn and asked (T898, AC-533): a local chart's wells that
+   * follow a parameter hold the member it stands for now. What its author
+   * wrote is `authored`, which the editor and "set by" read.
+   */
+  const authored = useMemo(
+    () =>
+      drawnWithDrafts(
+        { specs, errors: errors ?? {}, documents, answered },
+        { ...document, ...(drafts === undefined ? {} : { chartDrafts: drafts }) },
+      ),
+    [specs, errors, documents, answered, document, drafts],
+  );
   const drawn = useMemo(() => {
-    const withDrafts = drawnWithDrafts(
-      { specs, errors: errors ?? {}, documents, answered },
-      { ...document, ...(drafts === undefined ? {} : { chartDrafts: drafts }) },
-    );
+    const withDrafts =
+      authored.documents === undefined
+        ? authored
+        : {
+            ...authored,
+            documents: Object.fromEntries(
+              Object.entries(authored.documents).map(([id, chart]) => [
+                id,
+                resolveChartParameters(chart, liveParameters, parameterValues),
+              ]),
+            ),
+          };
     /**
      * Picked again with the model's formats (T510; R67, the user: "Pass
      * formats to dashboards"): a chart following the recommender whose
@@ -2524,8 +2573,31 @@ export function DashboardView({
             ]),
           ),
         };
-  }, [specs, errors, documents, answered, document, drafts, formats]);
+  }, [authored, liveParameters, parameterValues, formats]);
   const chartTitleOf = (chartId: string) => drawn.documents?.[chartId]?.title;
+  /** The parameters a chart's author bound it to, by name (AC-533's "set by"). */
+  const setByOf = (chartId: string): readonly string[] | undefined => {
+    const chart = authored.documents?.[chartId];
+    if (chart === undefined) return undefined;
+    const names = chartParameterIds(chart).flatMap(
+      (id) => liveParameters.find((parameter) => parameter.id === id)?.name ?? [],
+    );
+    return names.length === 0 ? undefined : names;
+  };
+  /**
+   * The charts whose wells follow a parameter now set away from its default
+   * (T898, AC-533): asked again as they now read, as a filtered chart is,
+   * since the page loaded each at its parameters' defaults.
+   */
+  const followingNow = useMemo(() => {
+    const asked = new Set<string>();
+    for (const [id, chart] of Object.entries(authored.documents ?? {})) {
+      if (chartParameterIds(chart).length === 0) continue;
+      const atDefault = resolveChartParameters(chart, liveParameters, {});
+      if (JSON.stringify(atDefault) !== JSON.stringify(drawn.documents?.[id])) asked.add(id);
+    }
+    return asked;
+  }, [authored.documents, drawn.documents, liveParameters]);
   /**
    * The rows behind a chart, ungrouped, carry no quick calculation (AC-048):
    * each measure is written and named as the model has it, never as its
@@ -2580,12 +2652,6 @@ export function DashboardView({
     if (urlFilterValues === undefined || onFilterValues === undefined) return;
     if (!sameValues(urlFilterValues, filterValues)) onFilterValues(filterValues);
   }, [urlFilterValues, filterValues, onFilterValues]);
-  /**
-   * The dashboard as the session has it, mirrored up (`SessionMirror`): its
-   * filters and scopes may be edits not yet saved, and a filter set while
-   * editing reaches the tiles as they are being edited.
-   */
-  const [live, setLive] = useState<DashboardDocument>(document);
   /**
    * Below 1,024 px a dashboard is for reading (T250, direction.md §2): no
    * Edit, no ✎, and its tiles stacked by the stylesheet. An edit session
@@ -3160,9 +3226,10 @@ export function DashboardView({
   const withFiltered = useMemo(() => {
     // A tile limited by a marking, or reached by a filter made from one,
     // draws a filtered answer too, even with no dashboard filter reaching it.
-    const ids = [...new Set([...Object.keys(reached), ...Object.keys(asked)])].filter(
-      (id) => drawn.documents?.[id] !== undefined,
-    );
+    // And a chart following a parameter set away from its default (T898).
+    const ids = [
+      ...new Set([...Object.keys(reached), ...Object.keys(asked), ...followingNow]),
+    ].filter((id) => drawn.documents?.[id] !== undefined);
     if (ids.length === 0) return { ...drawn, pending: new Set<string>() };
     const shown: Record<string, RenderSpec> = { ...drawn.specs };
     const failed: Record<string, unknown> = { ...drawn.errors };
@@ -3197,7 +3264,7 @@ export function DashboardView({
       else said[id] = result.answered;
     }
     return { specs: shown, errors: failed, answered: said, pending };
-  }, [drawn, reached, filtered, asked, formats]);
+  }, [drawn, reached, filtered, asked, formats, followingNow]);
 
   /**
    * "Refresh now" on a tile (T154, AC-148) asks again what the tile draws: a
@@ -5169,6 +5236,7 @@ export function DashboardView({
     inEffect,
     carried,
     titleOf: chartTitleOf,
+    setByOf,
     memberTitle,
     /**
      * A text tile's tokens (T389, AC-116; direction.md, "Markdown tokens"):
@@ -5223,8 +5291,28 @@ export function DashboardView({
         : 0;
     },
     onTextRetry: retryTextElements,
-    textElementsOf: (tileId: string) => (node, key) => {
+    textElementsOf: (tileId: string) => (stored, key) => {
       const sentFor = textBatchOf(tileId);
+      // A Value of a dashboard parameter (T898, AC-533): the member it stands for now.
+      const followed = stored.type === 'value' ? stored.attrs?.['parameter'] : undefined;
+      const parameter =
+        typeof followed === 'string'
+          ? liveParameters.find((each) => each.id === followed)
+          : undefined;
+      if (typeof followed === 'string' && parameter === undefined)
+        return <ElementUnavailable key={key} />;
+      const node: TextNode =
+        parameter === undefined
+          ? stored
+          : {
+              ...stored,
+              attrs: {
+                ...Object.fromEntries(
+                  Object.entries(stored.attrs ?? {}).filter(([name]) => name !== 'parameter'),
+                ),
+                measure: parameterValueOf(parameter, parameterValues[parameter.id]),
+              },
+            };
       const attrs = node.attrs ?? {};
       // A member gone from the model: "Unavailable", naming nothing (AC-525).
       if (brokenElement(node)) return <ElementUnavailable key={key} />;
@@ -6250,13 +6338,17 @@ export function DashboardView({
           onClose={closeSql}
         />
       )}
-      {Object.keys(reached).length === 0 && Object.keys(asked).length === 0 ? null : (
+      {Object.keys(reached).length === 0 &&
+      Object.keys(asked).length === 0 &&
+      followingNow.size === 0 ? null : (
         <FilteredCharts
           ref={filteredCharts}
           reached={reached}
           // What each limited tile's markings add to its query (AC-107): a
           // tile listed here is asked even when no filter reaches it.
           limits={asked}
+          // A chart following a parameter set away from its default (T898).
+          asks={followingNow}
           documents={drawn.documents}
           onResults={onFiltered}
           context={preview}
@@ -6578,6 +6670,26 @@ export function DashboardView({
              * back with none records nothing.
              */
             <ChartEditorOverlay
+              /**
+               * The dashboard's parameters, bindable in a dashboard-local
+               * chart's wells only (T898, AC-533; 21-Q5 (a)); one made from
+               * a well's picker is added to the dashboard as one change.
+               */
+              parameters={{
+                parameters: session.document.parameters ?? NO_PARAMETERS,
+                values: parameterValues,
+                bindable:
+                  (
+                    session.document.chartDrafts?.[editingChart.chartId]?.document ??
+                    authored.documents?.[editingChart.chartId]
+                  )?.localToDashboardId === dashboardId,
+                onCreate: (parameter) => {
+                  session.update((current) => ({
+                    ...current,
+                    parameters: [...(current.parameters ?? []), parameter],
+                  }));
+                },
+              }}
               chartId={editingChart.chartId}
               dashboardTitle={session.document.title}
               dashboardId={dashboardId}
