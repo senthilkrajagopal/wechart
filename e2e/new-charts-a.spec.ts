@@ -287,3 +287,83 @@ test('a bullet chart is drawable only with a Target, takes 2 or 3 bands from 80,
   await expect(reopened.nth(0)).toHaveValue('90');
   await expect(reopened.nth(1)).toHaveValue('100');
 });
+
+/**
+ * T957 / AC-584: THE SYSTEM SHALL offer Customize › Stack, Sum or 100 %, on
+ * Stacked bar and Stacked area, the gallery's 100 % stacked bar and 100 %
+ * stacked area cards opening them at 100 %; WHILE the measure isn't summed,
+ * 100 % SHALL be disabled with "‹measure› is an average, so its shares of a
+ * total wouldn't mean anything. 100 % takes a summed measure."; at 100 %, the
+ * value axis SHALL be fixed at 0–100 % with ticks every 25 %, include zero
+ * and log scale not offered; …
+ * `Fails when: a 100 % card opens at Sum; 100 % can be chosen for an average;
+ * the axis passes 100 % or isn't in steps of 25 %; …` (the shares, folding
+ * and tooltips: `charts/src/series/stack100.test.ts`). And AC-037 (R81): the
+ * chart, saved and reopened, is the same.
+ */
+test('the 100 % stacked bar card opens Stacked bar at 100 % on a 0–100 % axis, Stack switches it, and an average refuses it', async ({
+  page,
+}) => {
+  const ticks = () => page.getByTestId('chart-canvas').locator('svg text').allTextContents();
+  const percentTicks = ['0 %', '25 %', '50 %', '75 %', '100 %'];
+
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+  await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
+  const id = /\/explore\/charts\/([^/]+)\/edit/.exec(page.url())?.[1] ?? '';
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await expect(page.getByTestId('member-orders.count')).toBeVisible();
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await wellPicker(page, 'dimensions').selectOption('customers.country');
+
+  await chooseChartType(page, 'stackedBar100');
+  await expectChartType(page, 'stackedBar');
+  await expect.poll(ticks).toEqual(expect.arrayContaining(percentTicks));
+  // Never past 100 %, and every tick a step of 25.
+  const shown = (await ticks())
+    .filter((text) => text.endsWith(' %'))
+    .map((text) => parseFloat(text));
+  expect(Math.max(...shown)).toBe(100);
+  expect(shown.every((value) => value % 25 === 0)).toBe(true);
+
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  const stack = page.getByRole('radiogroup', { name: 'Stack' });
+  await expect(stack.getByRole('radio', { name: '100 %' })).toBeChecked();
+  const y = page.getByTestId('axis-panel-y');
+  await expect(y).toContainText('0–100 %, a tick every 25 %');
+  for (const gone of ['Logarithmic scale', 'Include zero', 'Minimum', 'Maximum'])
+    await expect(y.getByLabel(gone)).toHaveCount(0);
+
+  // Sum, the same chart stacked by its values; then 100 % again.
+  await stack.getByRole('radio', { name: 'Sum' }).check();
+  await expect.poll(async () => (await ticks()).filter((t) => t.endsWith(' %'))).toEqual([]);
+  await expect(y.getByLabel('Logarithmic scale')).toHaveCount(1);
+  await stack.getByRole('radio', { name: '100 %' }).check();
+  await expect.poll(ticks).toEqual(expect.arrayContaining(percentTicks));
+
+  const head = page.getByTestId('editor-bar');
+  await head.getByLabel('Chart title').fill(`Mix ${String(Date.now())}`);
+  await head.getByRole('button', { name: '← Back to Explore' }).click();
+  await expect(page).toHaveURL(new RegExp(`/explore/charts/${id}$`));
+  await page.goto(`/explore/charts/${id}/edit`);
+  await expectChartType(page, 'stackedBar');
+  await expect.poll(ticks).toEqual(expect.arrayContaining(percentTicks));
+
+  // An average: 100 % refused, with the reason, and the chart at Sum.
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await expect(page.getByTestId('member-orders.average_amount')).toBeVisible();
+  await wellPicker(page, 'measures').selectOption('orders.average_amount');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await wellPicker(page, 'dimensions').selectOption('customers.country');
+  await chooseChartType(page, 'stackedBar100');
+  await expectChartType(page, 'stackedBar');
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  const refused = page.getByRole('radiogroup', { name: 'Stack' });
+  await expect(refused.getByRole('radio', { name: '100 %' })).toBeDisabled();
+  await expect(refused.getByRole('radio', { name: 'Sum' })).toBeChecked();
+  await expect(page.getByTestId('stack-section')).toContainText(
+    'Orders Average Amount is an average, so its shares of a total wouldn’t mean anything. 100 % takes a summed measure.',
+  );
+  await expect.poll(async () => (await ticks()).filter((t) => t.endsWith(' %'))).toEqual([]);
+});

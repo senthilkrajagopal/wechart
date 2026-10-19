@@ -18,13 +18,25 @@ export interface AxisPanelProps {
   readonly onChange: (next: AxisSettings) => void;
   /** Whether this axis carries values, which "include zero" is about (AC-219). */
   readonly values?: boolean;
+  /**
+   * A 100 % stack's value axis (T957, AC-584): fixed at 0–100 %, a tick every
+   * 25 %, so its minimum, maximum, log scale, zero and format aren't offered.
+   */
+  readonly share?: boolean;
 }
 
 const FORMATS: readonly NumberFormat[] = ['auto', 'compact', 'full', 'percent', 'currency'];
 /** direction.md offers exactly these three. */
 const ROTATIONS = [0, 45, 90] as const;
 
-export function AxisPanel({ axis, label, settings, onChange, values = true }: AxisPanelProps) {
+export function AxisPanel({
+  axis,
+  label,
+  settings,
+  onChange,
+  values = true,
+  share = false,
+}: AxisPanelProps) {
   const id = (name: string) => `axis-${axis}-${name}`;
 
   /** Absent rather than zero: an empty box means "leave it to the data". */
@@ -60,37 +72,43 @@ export function AxisPanel({ axis, label, settings, onChange, values = true }: Ax
         }}
       />
 
-      <label htmlFor={id('min')}>Minimum</label>
-      <input
-        id={id('min')}
-        type="number"
-        value={settings.min ?? ''}
-        onChange={(event) => {
-          set({ min: numberOrNothing(event.target.value) });
-        }}
-      />
+      {share ? (
+        <p className="panel-section__note">0–100 %, a tick every 25 %</p>
+      ) : (
+        <>
+          <label htmlFor={id('min')}>Minimum</label>
+          <input
+            id={id('min')}
+            type="number"
+            value={settings.min ?? ''}
+            onChange={(event) => {
+              set({ min: numberOrNothing(event.target.value) });
+            }}
+          />
 
-      <label htmlFor={id('max')}>Maximum</label>
-      <input
-        id={id('max')}
-        type="number"
-        value={settings.max ?? ''}
-        onChange={(event) => {
-          set({ max: numberOrNothing(event.target.value) });
-        }}
-      />
+          <label htmlFor={id('max')}>Maximum</label>
+          <input
+            id={id('max')}
+            type="number"
+            value={settings.max ?? ''}
+            onChange={(event) => {
+              set({ max: numberOrNothing(event.target.value) });
+            }}
+          />
 
-      <label htmlFor={id('log')}>
-        <input
-          id={id('log')}
-          type="checkbox"
-          checked={settings.log ?? false}
-          onChange={(event) => {
-            set({ log: event.target.checked ? true : undefined });
-          }}
-        />
-        Logarithmic scale
-      </label>
+          <label htmlFor={id('log')}>
+            <input
+              id={id('log')}
+              type="checkbox"
+              checked={settings.log ?? false}
+              onChange={(event) => {
+                set({ log: event.target.checked ? true : undefined });
+              }}
+            />
+            Logarithmic scale
+          </label>
+        </>
+      )}
 
       <label htmlFor={id('gridlines')}>
         <input
@@ -106,7 +124,7 @@ export function AxisPanel({ axis, label, settings, onChange, values = true }: Ax
 
       {/* On unless turned off (AC-219): off, the axis spans only the data.
           Only on an axis of values: a category axis has no zero. */}
-      {values ? (
+      {values && !share ? (
         <label htmlFor={id('zero')}>
           <input
             id={id('zero')}
@@ -142,21 +160,25 @@ export function AxisPanel({ axis, label, settings, onChange, values = true }: Ax
         ))}
       </select>
 
-      <label htmlFor={id('format')}>Number format</label>
-      <select
-        id={id('format')}
-        value={settings.numberFormat ?? 'auto'}
-        onChange={(event) => {
-          const value = event.target.value as NumberFormat;
-          set({ numberFormat: value === 'auto' ? undefined : value });
-        }}
-      >
-        {FORMATS.map((format) => (
-          <option key={format} value={format}>
-            {format}
-          </option>
-        ))}
-      </select>
+      {share ? null : (
+        <>
+          <label htmlFor={id('format')}>Number format</label>
+          <select
+            id={id('format')}
+            value={settings.numberFormat ?? 'auto'}
+            onChange={(event) => {
+              const value = event.target.value as NumberFormat;
+              set({ numberFormat: value === 'auto' ? undefined : value });
+            }}
+          >
+            {FORMATS.map((format) => (
+              <option key={format} value={format}>
+                {format}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
     </fieldset>
   );
 }

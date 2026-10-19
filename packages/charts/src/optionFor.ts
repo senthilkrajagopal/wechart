@@ -10,7 +10,7 @@
  * than saying so: the caller can show the failure, and AC-033 already expects
  * the editor to explain when a chart cannot be drawn.
  */
-import { onOneScale, type ChartType, type RenderSpec } from '@wechart/core';
+import { foldForShares, onOneScale, type ChartType, type RenderSpec } from '@wechart/core';
 
 import { barOption, DEFAULT_CANVAS, isBarType, type Canvas } from './series/bar';
 import { withHighlight } from './crossfilter/highlight';
@@ -35,6 +35,7 @@ import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { countryMap } from './geo/countryMap';
 import { isMapType, mapOption } from './series/map';
 import { SERIES } from './series/registry';
+import { withShares } from './series/stack100';
 import { lineOption, isLineType } from './series/line';
 import { fitPieLabels, pieOption, isPieType } from './series/pie';
 import { scatterOption, isScatterType } from './series/scatter';
@@ -105,8 +106,9 @@ export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): E
    * axis then wears the first's format; the editor's pill names the rest.
    */
   // A combo's log scale as it can be drawn: never with bars, on both axes
-  // or neither (AC-502), before the axis settings read it.
-  const spec = withSettledLogScale(onOneScale(given));
+  // or neither (AC-502), before the axis settings read it. At 100 %, past 8
+  // series the smallest fold into "Other (n)" first (T957).
+  const spec = foldForShares(withSettledLogScale(onOneScale(given)));
   // The legend is decided once, here, rather than in each renderer. AC-038 is
   // a rule about charts, not about bar charts, and a renderer that forgot it
   // would be a chart type quietly exempt from it.
@@ -164,9 +166,11 @@ export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): E
 
   // Bars, lines and areas of 2 to 4 series name each where it ends, last, on
   // the series and grid as drawn (T681's follow-up; R76 dashboard-Q1).
+  // A stacked bar or area at 100 % drawn as shares last (T957).
   if (isBarType(spec.chartType))
-    return withDirectLabels(drawn(onGrid(barOption(spec, canvas))), spec);
-  if (isLineType(spec.chartType)) return withDirectLabels(drawn(onGrid(lineOption(spec))), spec);
+    return withShares(withDirectLabels(drawn(onGrid(barOption(spec, canvas))), spec), spec);
+  if (isLineType(spec.chartType))
+    return withShares(withDirectLabels(drawn(onGrid(lineOption(spec))), spec), spec);
   if (isScatterType(spec.chartType)) return drawn(onGrid(scatterOption(spec)));
   // Its labels laid out last, for the box Customize's legend leaves it (T395).
   if (isPieType(spec.chartType)) return fitPieLabels(drawn(pieOption(spec)), canvas);

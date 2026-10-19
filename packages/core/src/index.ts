@@ -418,4 +418,16 @@ export {
   type BulletSettings,
   type BulletTarget,
 } from './chart-types/bullet';
+export {
+  foldForShares,
+  isPercentStack,
+  percentRefusal,
+  SHARE_SERIES_CAP,
+  sharesOf,
+  shareText,
+  STACKED_TYPES,
+  stackOf,
+  withStack,
+  type Stack,
+} from './chart-types/stack100';
 export { sealSecretV1, type XcubeKey } from './data-sources/seal';

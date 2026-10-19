@@ -2363,10 +2363,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 ### Lane CHARTS-A: 100 % stacking
 
-- [ ] T957 (AC-584, AC-037) Customize › Stack, Sum or 100 %, on stacked bar and area, with the two gallery presets, only for summed measures, folding before shares, on a fixed 0–100 % axis
-  - Files: `packages/core/src/chart-types/stack100.ts` (+ test), `packages/charts/src/series/bar.ts`, `packages/charts/src/series/line.ts`, `packages/web/src/editor/wells/stack.tsx` (+ test), `packages/web/src/editor/chartTypeCatalog.ts` (the presets' cards).
-  - Failing test: `stack100.test.ts`: Revenue by Region and Channel at 100 % gives each Region's drawn shares summing to 100 within 1e-9, with 12 channels folded to 7 and "Other (5)" before shares are taken; the value axis is 0–100 % with interval 25 and no log or include-zero option; the tooltip reads "Web: $210K · 51 % of EMEA"; `stack.test.tsx`: Margin % disables 100 % with "Margin % is an average, so its shares of a total wouldn't mean anything. 100 % takes a summed measure."; the 100 % stacked bar card opens Stacked bar at 100 % (AC-584, AC-037).
-  - Depends on: T934
+- [x] T957 (AC-584, AC-037) Customize › Stack, Sum or 100 %, on stacked bar and area, with the two gallery presets, only for summed measures, folding before shares, on a fixed 0–100 % axis
 
 - [ ] T958 (AC-585) Mark a 100 % segment as its tuple, draw a marked share as a fraction of the segment, and add the share to the text alternative and table
   - Files: `packages/charts/src/marking/partial.ts`, `packages/charts/src/describe/stack100.ts` (+ test), `packages/web/src/tiles/tableView/stack100.ts` (+ test), `packages/charts/src/series/stack100Marking.test.ts`.

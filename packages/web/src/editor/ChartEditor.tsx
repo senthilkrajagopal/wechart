@@ -13,6 +13,7 @@ import {
   removeFromWell,
   swapMeasure,
   targetCount,
+  withStack,
   granularitiesOf,
   seriesOf,
   toCubeQuery,
@@ -66,6 +67,7 @@ import { countryMarkingsOf, signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { CubeSourcePicker, FieldList, membersWithJoins, useJoined } from './FieldList';
 import { Wells } from './Wells';
+import { stackChoice, stackCustomize } from './wells/stack';
 import { requestCalculation } from './calcRequests';
 import { RequestCalcDialog } from './RequestCalcDialog';
 import {
@@ -1289,6 +1291,12 @@ function EditorBody({
               eachPointIs={spec.eachPointIs !== undefined}
               sankey={shownType === 'sankey'}
               {...(comboRows === undefined ? {} : { combo: comboRows })}
+              {...stackCustomize(shownType, {
+                options,
+                onOptions: setOptions,
+                measureTitle: titles[spec.measures[0] ?? ''] ?? spec.measures[0] ?? '',
+                aggType: measureTypes[spec.measures[0] ?? ''],
+              })}
             />
           )}
         </div>
@@ -1302,9 +1310,17 @@ function EditorBody({
           suggested={suggested}
           counts={counts}
           // A greyed card's well highlighted (AC-217, T934). A 100 % card's
-          // stacking is Customize's Stack, which T957 adds (AC-584).
+          // stacking is Customize's Stack: the card opens its type at 100 %,
+          // as one change with the type (T957, AC-584).
           onChoose={(type, extras) => {
-            setChartTypeState(chooseType(type));
+            const stack = stackChoice(type, extras);
+            if (stack === undefined) setChartTypeState(chooseType(type));
+            else
+              change((current) => ({
+                ...current,
+                chartType: chooseType(type),
+                options: withStack(current.options, stack),
+              }));
             setHighlighted(
               extras?.highlight === undefined ? undefined : { well: extras.highlight, spec, type },
             );

@@ -5,7 +5,7 @@ import {
   type LegendPosition,
   type SeriesSettings,
 } from '@wechart/charts';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import { AxisPanel } from './AxisPanel';
 import { ColourSetting } from './ColourSetting';
@@ -50,6 +50,10 @@ export interface CustomizeTabProps {
    * is then a row per series with its mark and axis (T855, AC-497).
    */
   readonly combo?: Pick<SeriesRowsProps, 'measures' | 'split'>;
+  /** Customize › Stack, Sum or 100 %, on a stacked bar or area (T957, AC-584). */
+  readonly stack?: ReactNode;
+  /** At 100 %, the value axis is 0–100 %, every 25 %, and nothing else of it is set (AC-584). */
+  readonly shareAxis?: boolean;
 }
 
 const POSITIONS: readonly [LegendPosition, string][] = [
@@ -92,6 +96,8 @@ export function CustomizeTab({
   eachPointIs = false,
   sankey = false,
   combo,
+  stack,
+  shareAxis = false,
 }: CustomizeTabProps) {
   const ids = useId();
   const axes = record(options['axes']) as AxesSettings;
@@ -196,11 +202,18 @@ export function CustomizeTab({
               label="Y axis"
               settings={axes.y ?? {}}
               values={valueAxes.includes('y')}
+              share={shareAxis}
               onChange={(next) => setAxis('y', next)}
             />
           </div>
         </details>
       ) : null}
+
+      {stack === undefined ? null : (
+        <section className="customize-tab__section" data-testid="stack-section">
+          {stack}
+        </section>
+      )}
 
       {drawn ? (
         <details className="customize-tab__section" open aria-labelledby={`${ids}-legend`}>
