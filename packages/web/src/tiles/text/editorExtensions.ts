@@ -1,5 +1,7 @@
-import { Node, type Extensions, type JSONContent } from '@tiptap/core';
+import { Extension, Node, type Extensions, type JSONContent, type Range } from '@tiptap/core';
+import { PluginKey, type EditorState } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
+import Suggestion, { type SuggestionKeyDownProps, type SuggestionProps } from '@tiptap/suggestion';
 
 import {
   ELEMENT_KINDS,
@@ -143,9 +145,80 @@ function settingsOf(kind: ElementKind, written: string | null): Record<string, u
   );
 }
 
+/** What the insert menu's two triggers tell the editor (T881, AC-517). */
+export interface InsertBridge {
+  /** Opened, or what's typed after its trigger changed. */
+  readonly open: (at: {
+    readonly query: string;
+    readonly range: Range;
+    readonly rect: DOMRect | null;
+    readonly started: boolean;
+  }) => void;
+  readonly close: () => void;
+  /** A key while it's open; true when the menu took it. */
+  readonly key: (event: KeyboardEvent, range: Range) => boolean;
+}
+
+const SLASH = new PluginKey('insertMenuSlash');
+const BRACES = new PluginKey('insertMenuBraces');
+
+/** Whether the insert menu is open, so Esc is the menu's, not the text's. */
+export function insertMenuOpen(state: EditorState): boolean {
+  return [SLASH, BRACES].some(
+    (key) => (key.getState(state) as { active?: boolean } | undefined)?.active === true,
+  );
+}
+
+/**
+ * The insert menu's triggers, on `@tiptap/suggestion` (research §1): `/` at a
+ * line's start or after a space, and `{{` — today's token syntax — anywhere.
+ * Before the editor's own keys, so ↑ ↓ Enter → and Esc are the menu's while
+ * it's open.
+ */
+const insertMenu = (bridge: InsertBridge) =>
+  Extension.create({
+    name: 'insertMenu',
+    priority: 1000,
+    addProseMirrorPlugins() {
+      const render = () => ({
+        onStart: (props: SuggestionProps) => {
+          bridge.open({
+            query: props.query,
+            range: props.range,
+            rect: props.clientRect?.() ?? null,
+            started: true,
+          });
+        },
+        onUpdate: (props: SuggestionProps) => {
+          bridge.open({
+            query: props.query,
+            range: props.range,
+            rect: props.clientRect?.() ?? null,
+            started: false,
+          });
+        },
+        onExit: () => {
+          bridge.close();
+        },
+        onKeyDown: ({ event, range }: SuggestionKeyDownProps) => bridge.key(event, range),
+      });
+      return [
+        Suggestion({ editor: this.editor, pluginKey: SLASH, char: '/', render }),
+        Suggestion({
+          editor: this.editor,
+          pluginKey: BRACES,
+          char: '{{',
+          allowedPrefixes: null,
+          render,
+        }),
+      ];
+    },
+  });
+
 /** The editor's extensions: the stored schema's nodes and marks, and nothing else. */
-export function textEditorExtensions(): Extensions {
+export function textEditorExtensions(bridge?: InsertBridge): Extensions {
   return [
+    ...(bridge === undefined ? [] : [insertMenu(bridge)]),
     StarterKit.configure({
       blockquote: false,
       code: false,

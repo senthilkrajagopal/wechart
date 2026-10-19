@@ -123,6 +123,57 @@ export const TEXT_CSS = `
 .text-style-menu__item[data-type='text-kpi'] { font-variant-numeric: tabular-nums; }
 .text-style-menu__item:is(:hover, :focus-visible) { background: var(--wc-bg-hover); }
 .text-style-menu__item[aria-checked='true'] { color: var(--wc-accent); }
+/* The insert menu, at the cursor (AC-517; direction §7h): 320 px wide, 28 px
+   rows, bg-raised, group headings text-xs-strong in text-muted. Fixed, so a
+   tile's clipped edge never cuts it. */
+.insert-menu {
+  position: fixed;
+  z-index: 20;
+  width: 320px;
+  max-height: 336px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-raised);
+  box-shadow: var(--wc-shadow-pop);
+}
+.insert-menu__heading {
+  padding: 6px 8px 2px;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+  color: var(--wc-text-muted);
+}
+.insert-menu__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 4px;
+  color: var(--wc-text-primary);
+  font-size: var(--wc-text-sm-size);
+  cursor: default;
+}
+.insert-menu__row[aria-selected='true'] { background: var(--wc-bg-hover); }
+.insert-menu__row[aria-disabled='true'] { color: var(--wc-text-muted); }
+.insert-menu__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.insert-menu__hint {
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--wc-text-xs-size);
+  color: var(--wc-text-muted);
+}
+.insert-menu__foot {
+  margin: 4px 0 0;
+  padding: 6px 8px 2px;
+  border-top: 1px solid var(--wc-border-subtle);
+  font-size: var(--wc-text-xs-size);
+  color: var(--wc-text-muted);
+}
 /* Link's address, under the toolbar. */
 .text-link-form { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .text-link-form label { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }

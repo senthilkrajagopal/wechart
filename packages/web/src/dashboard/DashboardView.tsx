@@ -124,6 +124,11 @@ import {
 import { elementCountOf, whyTextUnsaveable } from '../tiles/text/elementLimit';
 import { TextTile } from '../tiles/text/TextTile';
 import { LazyTextEditor, TextEditingContext, type TextEditing } from '../tiles/text/textEditing';
+import type { CopilotOffer, InsertSources } from '../tiles/text/InsertMenu';
+import { insertSourcesOf } from '../tiles/text/insertSources';
+import { QueryClientContext } from '@tanstack/react-query';
+import type { Me } from '../shell/AccountMenu';
+import { ME_QUERY } from '../shell/me';
 import { MarkingToken, MeasureToken, UnknownMarkingToken } from './tiles/LiveToken';
 import { measureQueryOf } from './tiles/TextTokens';
 import { coverageOf, type Reach } from '../filters/coverage';
@@ -900,6 +905,8 @@ function TileBody({
                 <LazyTextEditor
                   document={document ?? emptyTextDocument()}
                   name={textEditing.nameOf(tile.id)}
+                  sources={textEditing.sources}
+                  copilot={textEditing.copilot}
                   onLeave={(next, how) => {
                     textEditing.leave(tile.id, next, how);
                   }}
@@ -5180,6 +5187,19 @@ export function DashboardView({
    * text is left.
    */
   const [editingText, setEditingText] = useState<string | null>(null);
+  /** What a Text tile's insert menu offers: the dashboard's measures, markings, filters (T881). */
+  const textSources = useMemo(
+    () => insertSourcesOf({ model, dashboard: live, documents, memberTitle }),
+    [model, live, documents, memberTitle],
+  );
+  /**
+   * The insert menu's Copilot group (AC-535; decision T881-1): AI isn't set up
+   * in wechart yet (AC-547), so a Super-Admin sees Summarize… disabled with
+   * where to set it up, and anyone else no group.
+   */
+  const queries = useContext(QueryClientContext);
+  const copilot: CopilotOffer =
+    queries?.getQueryData<Me>(ME_QUERY.queryKey)?.superAdmin === true ? 'setup' : undefined;
   /**
    * The filter selected while editing, its field, scope and Remove in
    * Properties (T468, UX-031); and whether focus is asked for in its field
@@ -6356,6 +6376,8 @@ export function DashboardView({
               editorOpenFor={editingChart?.tileId}
               editingText={editingText}
               onEditingText={setEditingText}
+              textSources={textSources}
+              copilot={copilot}
               where={where}
               onAim={(next) => {
                 setSelected(next.selected);
@@ -6556,6 +6578,8 @@ function DashboardPages({
   editorOpenFor,
   editingText = null,
   onEditingText,
+  textSources,
+  copilot,
   where,
   onAim,
   deleted,
@@ -6636,6 +6660,9 @@ function DashboardPages({
    */
   editingText?: string | null;
   onEditingText?: ((tileId: string | null) => void) | undefined;
+  /** What a Text tile's insert menu offers (T881, AC-517), and its Copilot group (AC-535). */
+  textSources?: InsertSources | undefined;
+  copilot?: CopilotOffer;
   /** Where the next insert is aimed, owned above so the sidebar agrees. */
   where: { selected: string | null; addTarget: string | null; pageId: string };
   onAim: (next: { selected: string | null; addTarget: string | null }) => void;
@@ -6756,6 +6783,8 @@ function DashboardPages({
       if (how !== 'away') tileNode(tileId)?.focus();
     },
     nameOf: tileName,
+    sources: textSources,
+    copilot,
   };
 
   const drag = useTileDrag({

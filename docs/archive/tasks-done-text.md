@@ -51,3 +51,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/tiles/text/TextToolbar.tsx` (+ test).
   - Failing test: `TextToolbar.test.tsx`: a `toolbar` with one Tab stop and ← → along it, holding in order the block-style menu button, Bold, Italic, Bulleted list, Numbered list, Link, Insert and "3 / 10 elements"; the block-style menu lists Paragraph, Heading small, Heading medium, Heading large and Large value, each in its own size; choosing Heading medium makes the line an `h4` at 20 px (AC-515).
   - Depends on: T876
+
+- [x] T881 (AC-517) The insert menu, opened by `/`, `{{` or Insert: a combobox of kinds in three groups, then measures by cube
+  - Files: `packages/web/src/tiles/text/InsertMenu.tsx` (+ test; on `@tiptap/suggestion`), `packages/web/src/tiles/text/editorExtensions.ts`.
+  - Failing test: `InsertMenu.test.tsx`: `/` at a line's start, after a space, `{{` and Insert each open a 320 px listbox with Live values (8 kinds), Controls (3) and Copilot groups in that order, focus staying in the text with `aria-activedescendant`; typing "marg" lists Margin % under Orders; Enter on it inserts a Value of it; → on it lists Value, Change, Sparkline, Icon, Bullet graph and As of; Esc closes it and leaves "{{marg" as text; `/` inside a word opens nothing (AC-517).
+  - Depends on: T878

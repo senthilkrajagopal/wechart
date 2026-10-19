@@ -286,3 +286,67 @@ test('the Text tile’s toolbar: its controls in order, and each block style at 
   await page.keyboard.press('Escape');
   await expect(tile.locator('.text-tile h4')).toContainText('Orders');
 });
+
+/**
+ * T881 / AC-517: `/` after a space, `{{` and Insert each open the insert
+ * menu at the cursor — a 320 px listbox of 28 px rows, Live values then
+ * Controls, focus staying in the text with `aria-activedescendant` — and
+ * typing narrows it to the dashboard's measures by cube; Enter inserts a
+ * Value of one, which the tile then shows; Esc leaves what was typed.
+ */
+test('the insert menu opens by /, {{ and Insert, finds a measure by cube, and inserts its Value', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWith(request, 'Orders {{measure:orders.count}} so far');
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+
+  const tile = page.locator('[data-tile="tile-text"]');
+  await tile.locator('.text-tile').dblclick();
+  const textbox = tile.getByRole('textbox');
+  await expect(textbox).toBeFocused();
+  const menu = page.getByRole('listbox', { name: 'Insert' });
+
+  // `/` after a space.
+  await page.keyboard.type(' /');
+  await expect(menu).toBeVisible();
+  await expect(textbox).toBeFocused();
+  const box = await menu.boundingBox();
+  expect(box?.width).toBe(320);
+  expect((await menu.getByRole('option').first().boundingBox())?.height).toBe(28);
+  expect(
+    await menu
+      .getByRole('group')
+      .evaluateAll((groups) => groups.map((group) => group.getAttribute('aria-label'))),
+  ).toEqual(expect.arrayContaining(['Live values', 'Controls']));
+  const active = await textbox.getAttribute('aria-activedescendant');
+  await expect(page.locator(`[id="${active ?? ''}"]`)).toHaveAttribute('data-name', 'Value');
+  // Esc closes it, the `/` staying as typed.
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(textbox).toBeFocused();
+  await expect(textbox).toContainText('so far /');
+  await page.keyboard.press('Backspace');
+
+  // Insert, on the toolbar.
+  await tile.getByRole('button', { name: 'Insert' }).click();
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+
+  // `{{`, then what's typed finds the dashboard's measures by cube.
+  await page.keyboard.type('{{tot');
+  await expect(menu.getByRole('group', { name: 'Orders' }).getByRole('option')).toHaveText([
+    /Total Amount/,
+  ]);
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveCount(0);
+  await expect(textbox).not.toContainText('{{');
+  await expect(textbox.locator('[data-element="value"]')).toHaveCount(2);
+
+  // Left, the tile shows both values.
+  await page.keyboard.press('Escape');
+  await expect(tile.locator('.text-tile p')).toHaveText(/^Orders 240 so far \D*\d/);
+});

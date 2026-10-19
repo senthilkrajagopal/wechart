@@ -2,6 +2,7 @@ import { createContext, lazy } from 'react';
 
 import type { TextDocument } from '@wechart/core';
 
+import type { CopilotOffer, InsertSources } from './InsertMenu';
 import type { LeftBy } from './TextEditor';
 
 /**
@@ -18,6 +19,10 @@ export interface TextEditing {
   readonly leave: (tileId: string, document: TextDocument | undefined, how: LeftBy) => void;
   /** A tile's name, which names its text (AC-515). */
   readonly nameOf: (tileId: string) => string;
+  /** What the insert menu offers elements of (AC-517). */
+  readonly sources?: InsertSources | undefined;
+  /** The insert menu's Copilot group (AC-535). */
+  readonly copilot?: CopilotOffer;
 }
 
 export const TextEditingContext = createContext<TextEditing | undefined>(undefined);

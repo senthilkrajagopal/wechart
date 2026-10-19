@@ -1931,10 +1931,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `text-tile.spec.ts`: pasting `<img src=x onerror="window.__xss=1"><script>window.__xss=2</script><iframe src="https://x.example"></iframe><a href="javascript:window.__xss=3">a</a>` leaves `window.__xss` undefined in edit mode and after saving and reloading in view mode; the tile's DOM holds no `img`, `script`, `iframe`, `on…` attribute or `javascript:` address; the text "a" remains (AC-513).
   - Depends on: T876, T871
 
-- [ ] T881 (AC-517) The insert menu, opened by `/`, `{{` or Insert: a combobox of kinds in three groups, then measures by cube
-  - Files: `packages/web/src/tiles/text/InsertMenu.tsx` (+ test; on `@tiptap/suggestion`), `packages/web/src/tiles/text/editorExtensions.ts`.
-  - Failing test: `InsertMenu.test.tsx`: `/` at a line's start, after a space, `{{` and Insert each open a 320 px listbox with Live values (8 kinds), Controls (3) and Copilot groups in that order, focus staying in the text with `aria-activedescendant`; typing "marg" lists Margin % under Orders; Enter on it inserts a Value of it; → on it lists Value, Change, Sparkline, Icon, Bullet graph and As of; Esc closes it and leaves "{{marg" as text; `/` inside a word opens nothing (AC-517).
-  - Depends on: T878
+- [x] T881 (AC-517) The insert menu, opened by `/`, `{{` or Insert: a combobox of kinds in three groups, then measures by cube
 
 - [ ] T882 (AC-519) Live elements as atoms in edit mode, controls inert, and the Elements list in Properties
   - Files: `packages/web/src/tiles/text/nodes/*.ts` (one node per kind, inline atoms with `ReactNodeViewRenderer`), `packages/web/src/tiles/text/ElementsList.tsx` (+ test), `packages/web/src/tiles/text/elementName.ts` (+ test).
