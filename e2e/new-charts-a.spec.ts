@@ -1219,6 +1219,90 @@ test('a KPI on a 24-row tile drops its target, and on a 16-row tile its trend to
 });
 
 /**
+ * T940 / AC-567: WHILE a KPI has Tile by set, THE SYSTEM SHALL draw one tile
+ * per member, 8 px apart, each with its own value, change, sparkline and
+ * target, as a list whose items are named "‹member›: ‹value›, ‹up or down›
+ * ‹change› vs ‹comparison›, ‹p›% of ‹target›"; order them by value, highest
+ * first, unless the author orders them in Customize; and past 20 tiles, page
+ * them with "Tiles 1–20 of ‹n›" and ‹ › buttons.
+ * `Fails when: tiles share one value, aren't a list, or lack their names;
+ * the order isn't by value without a custom order; or more than 20 show at
+ * once.`
+ * And AC-565's value in `text-kpi` (32/40) when tiled.
+ */
+test('a KPI tiled by status draws a named tile per member by value, and one tiled by order pages past 20', async ({
+  page,
+  request,
+}) => {
+  const time = { member: 'orders.ordered_at', granularity: 'month' };
+  const kpi = {
+    compareTo: { kind: 'previousPeriod' },
+    time,
+    target: { kind: 'value', value: 10 },
+  };
+  const { id, title } = await kpiDashboard(request, [
+    {
+      tile: 'kpi-status',
+      w: 6,
+      h: 40,
+      measure: 'orders.count',
+      kpi: { ...kpi, tileBy: 'orders.status' },
+    },
+    {
+      tile: 'kpi-orders',
+      w: 5,
+      h: 40,
+      measure: 'orders.total_amount',
+      kpi: { time, tileBy: 'orders.id' },
+    },
+  ]);
+  await page.clock.setFixedTime(new Date('2026-08-20T12:00:00Z'));
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  const status = page.locator('[data-tile="kpi-status"]');
+  const list = status.getByRole('list', { name: 'Count by Status' });
+  const items = list.getByRole('listitem');
+  await expect(items).toHaveCount(3);
+  const names = await items.evaluateAll((all) => all.map((one) => one.getAttribute('aria-label')));
+  for (const name of names)
+    expect(name).toMatch(
+      /^(completed|shipped|processing): \d+, (?:(?:up|down) [\d.]+%|unchanged|no data) vs Jul 2026, \d+% of 10$/,
+    );
+  // Highest first, each its own value.
+  const values = names.map((name) => Number(/: (\d+),/.exec(name ?? '')?.[1]));
+  expect(values).toEqual([...values].sort((a, b) => b - a));
+  expect(values.reduce((sum, one) => sum + one, 0)).toBe(29);
+  // Each its own change, trend and target; its value in text-kpi, 32/40.
+  for (const part of ['kpi-change', 'kpi-trend', 'kpi-target'])
+    await expect(items.first().getByTestId(part)).toHaveCount(1);
+  const value = items.first().getByTestId('kpi-tile-value');
+  await expect(value).toHaveCSS('font-size', '32px');
+  await expect(value).toHaveCSS('line-height', '40px');
+  // 8 px apart.
+  await expect(list).toHaveCSS('column-gap', '8px');
+  await expect(list).toHaveCSS('row-gap', '8px');
+
+  // Each tile's trend and target within the tile.
+  for (const item of await items.all()) {
+    const inside = await item.evaluate((element) => {
+      const right = element.getBoundingClientRect().right;
+      return [...element.querySelectorAll('svg')].every(
+        (svg) => svg.getBoundingClientRect().right <= right + 0.5,
+      );
+    });
+    expect(inside).toBe(true);
+  }
+  // 29 orders in August: 20 on the first page, the rest on the next.
+  const orders = page.locator('[data-tile="kpi-orders"]');
+  await expect(orders.getByRole('listitem')).toHaveCount(20);
+  await expect(orders.getByTestId('kpi-tiles-page')).toHaveText('Tiles 1–20 of 29');
+  await orders.getByRole('button', { name: 'Next tiles' }).click();
+  await expect(orders.getByRole('listitem')).toHaveCount(9);
+  await expect(orders.getByTestId('kpi-tiles-page')).toHaveText('Tiles 21–29 of 29');
+});
+
+/**
  * T939 / AC-566: IF a KPI's Compare to is Previous period or Same period last
  * year and Time is empty, THEN THE SYSTEM SHALL say "Compare to: ‹choice›
  * needs a time dimension in Time." with the Time well as its action; and IF

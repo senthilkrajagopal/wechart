@@ -9,11 +9,14 @@ import {
   type KpiTime,
   type RenderSpec,
 } from '@wechart/core';
-import { useContext, useLayoutEffect, useState } from 'react';
+import { useContext } from 'react';
 
 import { SecurityPreview } from '../query/securityPreview';
-import { KpiChange, type KpiCompared } from './kpi/KpiChange';
+import { KpiChange } from './kpi/KpiChange';
+import { comparedOf, numberOf, periodLabelOf, periodStartOf, targetOf } from './kpi/kpiFigures';
 import { kpiPartsShown } from './kpi/kpiFit';
+import { KpiTiles } from './kpi/KpiTiles';
+import { useBox } from './kpi/useBox';
 import { KpiTarget } from './kpi/KpiTarget';
 import { KpiTrend } from './kpi/KpiTrend';
 import { useElementAnswer } from './text/elements/useElementAnswer';
@@ -54,12 +57,6 @@ export interface KpiProps {
  */
 const FORMAT = new Intl.NumberFormat('en-US');
 
-const numberOf = (raw: unknown): number | undefined => {
-  if (raw === null || raw === undefined || raw === '') return undefined;
-  const value = Number(raw);
-  return Number.isFinite(value) ? value : undefined;
-};
-
 /**
  * The marked share of the KPI's measure, where the marking's was answered
  * (T453, AC-097; direction.md §7a: "KPI tiles: a 'Marked $X · p%' badge (no %
@@ -87,51 +84,6 @@ function markedShareOf(
   };
 }
 
-/** The start of the period Cube tagged a compared row with ("2026-09-01T00:00:00.000 - …"). */
-function periodStartOf(row: Record<string, unknown> | undefined): string | undefined {
-  const tag = row?.['compareDateRange'];
-  return typeof tag === 'string' ? tag.split(' - ')[0] : undefined;
-}
-
-/** A period by its start, as its grain names it ("Sep 2026"). */
-function periodLabelOf(start: string, time: KpiTime, spec: RenderSpec): string {
-  return formatValue(start, time.member, spec.formats ?? {}, {
-    [time.member]: time.granularity,
-  });
-}
-
-/**
- * What the value is compared with (T937, AC-565): for a period, the second
- * period's row of Cube's `compareDateRange` answer, named by its period;
- * another measure, on the value's own row, by its title; a value, itself.
- * Nothing where there is nothing to compare with.
- */
-function comparedOf(spec: RenderSpec, kpi: KpiOptions, measure: string): KpiCompared | undefined {
-  const { compareTo, time } = kpi;
-  if (compareTo === undefined) return undefined;
-  if (compareTo.kind === 'value') return { value: compareTo.value };
-  if (compareTo.kind === 'measure') {
-    const value = numberOf(spec.rows[0]?.[compareTo.member]);
-    return value === undefined ? undefined : { value, against: labelOf(spec, compareTo.member) };
-  }
-  if (time === undefined) return undefined;
-  const row = spec.rows[1];
-  // The period compared, as Cube tagged its row, else as the value's period places it.
-  const current = periodStartOf(spec.rows[0]);
-  const periods = kpiPeriodOf(
-    time.granularity,
-    current === undefined ? new Date() : new Date(`${current}Z`),
-  );
-  const start =
-    periodStartOf(row) ??
-    (compareTo.kind === 'previousPeriod' ? periods.previous : periods.lastYear)[0];
-  const against = periodLabelOf(start, time, spec);
-  // No data then (AC-566): no value, or a count of 0, Cube's count of no rows.
-  const value = numberOf(row?.[measure]);
-  const noRows = value === 0 && spec.measureTypes?.[measure] === 'count';
-  return value === undefined || noRows ? { value: undefined, against } : { value, against };
-}
-
 /** "Compare to: ‹choice› needs a time dimension in Time." (AC-566), for a period without Time. */
 function needsTimeOf(kpi: KpiOptions): string | undefined {
   if (kpi.time !== undefined) return undefined;
@@ -144,32 +96,31 @@ function needsTimeOf(kpi: KpiOptions): string | undefined {
   return choice === undefined ? undefined : `Compare to: ${choice} needs a time dimension in Time.`;
 }
 
-/**
- * An element's size as laid out, kept as it changes: the KPI's content box,
- * for its trend's and target's width and the room under its value (AC-565,
- * T938-2); 0 × 0 until it is laid out.
- */
-function useBox(): [
-  (element: HTMLDivElement | null) => void,
-  { readonly width: number; readonly height: number },
-] {
-  const [element, setElement] = useState<HTMLDivElement | null>(null);
-  const [box, setBox] = useState({ width: 0, height: 0 });
-  useLayoutEffect(() => {
-    if (element === null || typeof ResizeObserver === 'undefined') return undefined;
-    // Called once on observing, then on every resize.
-    const observer = new ResizeObserver(() => {
-      setBox({ width: element.clientWidth, height: element.clientHeight });
-    });
-    observer.observe(element);
-    return () => {
-      observer.disconnect();
-    };
-  }, [element]);
-  return [setElement, box];
+/** A KPI's trend asked of Cube (T938): its value's own query by Time's grain. */
+/** A tiled KPI with its members' trends asked of Cube (T940): one query, by member and Time. */
+function KpiTilesLoaded({
+  query,
+  spec,
+  measure,
+  tileBy,
+}: {
+  readonly query: Readonly<Record<string, unknown>>;
+  readonly spec: RenderSpec;
+  readonly measure: string;
+  readonly tileBy: string;
+}) {
+  const context = useContext(SecurityPreview);
+  const answer = useElementAnswer(query, context);
+  const trends = new Map<string, number[]>();
+  for (const row of answer.rows) {
+    const value = numberOf(row[measure]);
+    if (value === undefined) continue;
+    const member = String(row[tileBy] ?? '');
+    trends.set(member, [...(trends.get(member) ?? []), value]);
+  }
+  return <KpiTiles spec={spec} measure={measure} trends={trends} />;
 }
 
-/** A KPI's trend asked of Cube (T938): its value's own query by Time's grain. */
 function KpiTrendLoaded({
   query,
   spec,
@@ -205,13 +156,6 @@ function KpiTrendLoaded({
   );
 }
 
-/** Its target's figure: a value, or a Target measure on the value's row (T938). */
-function targetOf(spec: RenderSpec, kpi: KpiOptions): number | undefined {
-  const { target } = kpi;
-  if (target === undefined) return undefined;
-  return target.kind === 'value' ? target.value : numberOf(spec.rows[0]?.[target.member]);
-}
-
 export function Kpi({ spec, solo = false, onAddTime, query }: KpiProps) {
   const [measured, box] = useBox();
   const [measuredCore, core] = useBox();
@@ -227,6 +171,23 @@ export function Kpi({ spec, solo = false, onAddTime, query }: KpiProps) {
   // By its title from the model (AC-220), never "orders.count": its short
   // one, as a KPI's one measure makes its cube evident (T403).
   const label = measure === undefined ? undefined : labelOf(spec, measure);
+
+  // Tiled by a dimension: one tile per member (T940, AC-567).
+  if (kpi.tileBy !== undefined && measure !== undefined) {
+    const trend =
+      query === undefined || kpi.time === undefined
+        ? undefined
+        : kpiTrendQuery(query, measure, kpi.time, new Date());
+    return (
+      <div className={`${className} kpi--tiled`} data-testid="kpi">
+        {trend === undefined ? (
+          <KpiTiles spec={spec} measure={measure} />
+        ) : (
+          <KpiTilesLoaded query={trend} spec={spec} measure={measure} tileBy={kpi.tileBy} />
+        )}
+      </div>
+    );
+  }
 
   if (!Number.isFinite(value)) {
     // An empty result is not zero, and a value that will not parse is not
@@ -257,7 +218,7 @@ export function Kpi({ spec, solo = false, onAddTime, query }: KpiProps) {
     </p>
   );
 
-  const goal = targetOf(spec, kpi);
+  const goal = targetOf(kpi, row);
   // Its trend: the tile's own query by Time's grain, the last 12 periods (T938).
   const trend =
     query === undefined || kpi.time === undefined || measure === undefined

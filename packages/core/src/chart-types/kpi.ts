@@ -26,11 +26,25 @@ export interface KpiTime {
 /** Higher is better by default (the coordinator's call, R81). */
 export type KpiDirection = 'higher' | 'lower' | 'neutral';
 
+/**
+ * How a tiled KPI's tiles are ordered (T940, AC-567): by value, highest
+ * first, unless the author chooses otherwise in Customize.
+ */
+export type KpiTileOrder = 'value' | 'valueAscending' | 'name';
+
+export const KPI_TILE_ORDERS: readonly { readonly value: KpiTileOrder; readonly label: string }[] =
+  [
+    { value: 'value', label: 'By value, highest first' },
+    { value: 'valueAscending', label: 'By value, lowest first' },
+    { value: 'name', label: 'By name' },
+  ];
+
 export interface KpiOptions {
   readonly compareTo?: KpiCompareTo;
   readonly target?: KpiTarget;
   readonly time?: KpiTime;
   readonly tileBy?: string;
+  readonly tileOrder?: KpiTileOrder;
   readonly direction: KpiDirection;
 }
 
@@ -111,11 +125,13 @@ function parse(stored: unknown): KpiOptions {
   const target = targetRaw === undefined ? undefined : measureOrValue(targetRaw);
   const time = timeOf(raw['time']);
   const tileBy = text(raw['tileBy']);
+  const tileOrder = KPI_TILE_ORDERS.find((one) => one.value === raw['tileOrder'])?.value;
   return {
     ...(compareTo === undefined ? {} : { compareTo }),
     ...(target === undefined ? {} : { target }),
     ...(time === undefined ? {} : { time }),
     ...(tileBy === undefined ? {} : { tileBy }),
+    ...(tileOrder === undefined ? {} : { tileOrder }),
     direction: directionOf(raw['direction']),
   };
 }
@@ -127,6 +143,9 @@ function save(options: KpiOptions): Readonly<Record<string, unknown>> {
     ...(options.target === undefined ? {} : { target: options.target }),
     ...(options.time === undefined ? {} : { time: options.time }),
     ...(options.tileBy === undefined ? {} : { tileBy: options.tileBy }),
+    ...(options.tileOrder === undefined || options.tileOrder === 'value'
+      ? {}
+      : { tileOrder: options.tileOrder }),
     ...(options.direction === 'higher' ? {} : { direction: options.direction }),
   };
 }
@@ -246,6 +265,11 @@ export function kpiQueries(
     ...(target?.kind === 'measure' ? [target.member] : []),
   ];
   if (beside.length > 0) next['measures'] = [...new Set([...measures, ...beside])].sort();
+  // Tiled, one tile per member of Tile by (T940): asked by it.
+  if (kpi.tileBy !== undefined) {
+    const dimensions = (query['dimensions'] as readonly string[] | undefined) ?? [];
+    next['dimensions'] = [...new Set([...dimensions, kpi.tileBy])].sort();
+  }
   if (time !== undefined) {
     const periods = kpiPeriodOf(time.granularity, now);
     const compared =

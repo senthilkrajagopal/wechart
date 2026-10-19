@@ -48,6 +48,7 @@ export {
   kpiPeriodOf,
   kpiQueries,
   kpiTrendQuery,
+  KPI_TILE_ORDERS,
   KPI_TREND_PERIODS,
   withKpiOptions,
   type KpiCompareTo,
@@ -57,6 +58,7 @@ export {
   type KpiQueries,
   type KpiRange,
   type KpiTarget,
+  type KpiTileOrder,
   type KpiTime,
 } from './chart-types/kpi';
 export {

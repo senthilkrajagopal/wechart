@@ -2216,10 +2216,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T939 (AC-566) A KPI comparing periods with no Time says it needs one, and a compared period with no data reads "— vs ‹period› · No data for the comparison period"
 
-- [ ] T940 (AC-567) Tile a KPI by a dimension: one tile per member as a list, ordered by value unless the author orders them, paged past 20
-  - Files: `packages/web/src/tiles/kpi/KpiTiles.tsx` (+ test), `packages/web/src/editor/wells/kpi.tsx` (Customize's tile order).
-  - Failing test: `KpiTiles.test.tsx`: Revenue tiled by 4 regions draws a `list` of 4 items in value order, EMEA's named "EMEA: $412K, up 4.2% vs Sep 2026, 92% of $450K"; a custom order is kept; 32 members show 20 with "Tiles 1–20 of 32" and ‹ › (AC-567).
-  - Depends on: T938
+- [x] T940 (AC-567) Tile a KPI by a dimension: one tile per member as a list, ordered by value unless the author orders them, paged past 20
 
 - [ ] T941 (AC-568) A KPI tile marks and cross-filters its member, the marked tile outlined and the others dimmed, every tile recomputing when limited
   - Files: `packages/web/src/tiles/kpi/KpiTiles.tsx`, `packages/web/src/tiles/kpi/kpiMarking.test.tsx`.

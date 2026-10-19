@@ -49,6 +49,16 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - **No data:** `KpiChange` reads "— vs ‹period› · No data for the comparison period" where the compared period's value is empty, its row is missing, or its count is 0 (Cube's count of no rows); the period is named from Cube's tag, else from the value's own period.
     - **AC-566** is ticked on `e2e/new-charts-a.spec.ts`, "a KPI says a period comparison needs Time…" (dashboard tiles 4 and 5 columns wide on a fixed clock of January 2026, and the editor's + Time), on headless Chromium, with `KpiEmpty.test.tsx` seen red, then green.
 
+- [x] T940 (AC-567) Tile a KPI by a dimension: one tile per member as a list, ordered by value unless the author orders them, paged past 20
+  - Files: `packages/web/src/tiles/kpi/KpiTiles.tsx` (+ test), `packages/web/src/editor/wells/kpi.tsx` (Customize's tile order).
+  - Failing test: `KpiTiles.test.tsx`: Revenue tiled by 4 regions draws a `list` of 4 items in value order, EMEA's named "EMEA: $412K, up 4.2% vs Sep 2026, 92% of $450K"; a custom order is kept; 32 members show 20 with "Tiles 1–20 of 32" and ‹ › (AC-567).
+  - Depends on: T938
+  - Done (2026-10-18), decision T940-1:
+    - **Query:** `kpiQueries` asks a tiled KPI by its Tile by dimension, so its compared period and its trend come back per member.
+    - **Tiles:** `tiles/kpi/KpiTiles.tsx`, drawn by `Kpi.tsx` while Tile by is set. One `list` item per member, named "‹member›: ‹value›, up ‹change› vs ‹period›, ‹p›% of ‹target›" (`changeWordsOf`), each with its value at `text-kpi` and its own change, trend and target. The tiles are 8 px apart, scroll inside the tile and page by 20 with "Tiles 1–20 of ‹n›" and ‹ ›. The figures shared with the single KPI moved to `kpi/kpiFigures.ts`; `kpi/useBox.ts` measures the content box.
+    - **Order:** by value, highest first; the KPI's Tile by well offers "Tile order" (By value, highest first; By value, lowest first; By name), stored as `tileOrder` only when not the default.
+    - **ACs:** AC-567 is ticked, and AC-565 with it (its tiled value at `text-kpi`, 32/40), on `e2e/new-charts-a.spec.ts`, "a KPI tiled by status draws a named tile per member by value…" (6- and 5-column tiles on a fixed clock), with T937–T939's KPI e2e tests, on headless Chromium; unit tests `KpiTiles.test.tsx`, `kpi.test.tsx` (wells) and `kpi.test.ts` (core) seen red, then green.
+
 - [x] T943 (AC-570, AC-037) The graphical table's spec and wells: Rows, Group rows by, and ordered columns of R80's element kinds, moved and removed from a ⋯ menu with Undo
   - Files: `packages/core/src/chart-types/graphicalTable.ts` (+ test), `packages/web/src/editor/wells/graphicalTable.tsx` (+ test).
   - Failing test: `graphicalTable.test.ts`: a spec of Category with Value, Sparkline, Bullet, Icon and Change columns parses and saves back in order; `graphicalTable.test.tsx` (wells): + Column offers the five kinds; a column's row opens its R80 element settings; its ⋯ holds Move up, Move down and Remove, Remove offering Undo; with no column the tile says "Add a column: Value, Change, Sparkline, Bullet or Icon." (AC-570, AC-037).

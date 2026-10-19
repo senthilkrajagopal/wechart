@@ -26,6 +26,49 @@ export const KPI_CSS = `
   font-variant-numeric: tabular-nums;
 }
 .kpi__vs { color: var(--wc-text-secondary); }
+/* Tiled by a dimension (T940; design 23 screen 2's top row): tiles 8 px
+   apart, each its value in text-kpi, 32/40; the list scrolls inside the tile
+   and pages past 20. */
+.kpi--tiled { min-height: 0; }
+.kpi-tiles { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; }
+.kpi-tiles__list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  align-content: start;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kpi-tile {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+}
+.kpi-tile .kpi__label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi-tile__value {
+  font-size: 32px;
+  line-height: 40px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi-tiles__pager {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--wc-text-xs-size);
+  color: var(--wc-text-secondary);
+}
 .kpi__no-data { color: var(--wc-text-muted); }
 /* Its trend, the content width × 32, and its target, × 16 with its words
    beside it (T938; design 23 sheet 1's 10 px gaps). */

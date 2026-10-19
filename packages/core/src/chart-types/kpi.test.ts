@@ -269,6 +269,35 @@ describe('a KPI’s comparison, asked of Cube (AC-565)', () => {
     });
   });
 
+  /**
+   * T940 / AC-567: WHILE a KPI has Tile by set, THE SYSTEM SHALL draw one
+   * tile per member …; order them by value, highest first, unless the author
+   * orders them in Customize.
+   */
+  it('asks a tiled KPI by its Tile by dimension, its comparison and trend per member', () => {
+    const tiled = {
+      compareTo: { kind: 'previousPeriod' },
+      time,
+      tileBy: 'orders.region',
+      direction: 'higher',
+    } as const;
+    const { value } = kpiQueries(base, tiled, now);
+    expect(value['dimensions']).toEqual(['orders.region']);
+    expect(kpiTrendQuery(value, 'orders.revenue', time, now)['dimensions']).toEqual([
+      'orders.region',
+    ]);
+  });
+
+  it('keeps the author’s tile order, and none while it is by value', () => {
+    expect(kpiModule.parse({ tileOrder: 'name' }).tileOrder).toBe('name');
+    expect(kpiModule.parse({ tileOrder: 'valueAscending' }).tileOrder).toBe('valueAscending');
+    expect(kpiModule.parse({ tileOrder: 'sideways' }).tileOrder).toBeUndefined();
+    expect(kpiModule.save({ direction: 'higher', tileOrder: 'name' })).toEqual({
+      tileOrder: 'name',
+    });
+    expect(kpiModule.save({ direction: 'higher', tileOrder: 'value' })).toEqual({});
+  });
+
   it('is asked so wherever a KPI’s query is made, and for no other type', () => {
     const kpi = (chartType: string): ChartDocument =>
       ({

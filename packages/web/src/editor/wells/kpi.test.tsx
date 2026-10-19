@@ -190,6 +190,30 @@ describe('the KPI’s wells (AC-564)', () => {
     expect((time as HTMLSelectElement).value).toBe('');
   });
 
+  /**
+   * T940 / AC-567: … order them by value, highest first, unless the author
+   * orders them in Customize.
+   */
+  it('orders a tiled KPI’s tiles by value unless the author chooses another order', async () => {
+    render(<Harness />);
+    expect(screen.queryByRole('combobox', { name: 'Tile order' })).toBeNull();
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Tile by' }),
+      'orders.region',
+    );
+    const order = screen.getByRole('combobox', { name: 'Tile order' });
+    expect([...(order as HTMLSelectElement).options].map((one) => one.text)).toEqual([
+      'By value, highest first',
+      'By value, lowest first',
+      'By name',
+    ]);
+    expect((order as HTMLSelectElement).value).toBe('value');
+    await userEvent.selectOptions(order, 'name');
+    expect(stored()).toEqual({ kpi: { tileBy: 'orders.region', tileOrder: 'name' } });
+    await userEvent.selectOptions(order, 'value');
+    expect(stored()).toEqual({ kpi: { tileBy: 'orders.region' } });
+  });
+
   it('clears a setting back to none, leaving no `kpi` key behind', async () => {
     render(<Harness />);
     const tileBy = screen.getByRole('combobox', { name: 'Tile by' });

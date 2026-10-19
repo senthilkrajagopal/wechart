@@ -41,6 +41,24 @@ function sizeOf(
 }
 
 /**
+ * The change in words, for a tile's name (T940, AC-567): "up 4.2% vs Sep
+ * 2026", "down 0.4 pts vs Sep 2026", or "no data vs Sep 2026".
+ */
+export function changeWordsOf(
+  current: number,
+  compared: KpiCompared,
+  member: string,
+  formats: MemberFormats | undefined,
+): string {
+  const against = compared.against ?? kpiShort(compared.value ?? 0, member, formats);
+  if (compared.value === undefined) return `no data vs ${against}`;
+  const delta = current - compared.value;
+  const way = delta > 0 ? 'up' : delta < 0 ? 'down' : 'unchanged';
+  const size = sizeOf(current, compared.value, member, formats).replace(/^[+−]/, '');
+  return delta === 0 ? `unchanged vs ${against}` : `${way} ${size} vs ${against}`;
+}
+
+/**
  * A KPI's change line (T937, AC-565; design 23 sheet 1): R80's Change
  * element — ▲ or ▼ by which way the value went, its sign and size, in the
  * colour Direction gives it — then "vs ‹period› (‹value›)" in `text-xs`
