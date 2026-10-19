@@ -43,7 +43,7 @@ function KpiTile({
   readonly spec: RenderSpec;
   readonly kpi: KpiOptions;
   readonly measure: string;
-  readonly trend: readonly number[] | undefined;
+  readonly trend: readonly (number | null)[] | undefined;
 }) {
   const [measured, box] = useBox();
   const compared = comparedOf(spec, kpi, measure, tile.current, tile.compared);
@@ -107,7 +107,7 @@ export function KpiTiles({
   readonly spec: RenderSpec;
   readonly measure: string;
   /** Each member's trend, oldest first, where Time is set and it is answered. */
-  readonly trends?: ReadonlyMap<string, readonly number[]> | undefined;
+  readonly trends?: ReadonlyMap<string, readonly (number | null)[]> | undefined;
 }) {
   const kpi = kpiOptionsOf(spec.options);
   const [page, setPage] = useState(0);

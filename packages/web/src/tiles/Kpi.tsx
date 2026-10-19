@@ -4,6 +4,7 @@ import {
   kpiOptionsOf,
   kpiPeriodOf,
   kpiTrendQuery,
+  kpiTrendValues,
   memberOn,
   type KpiOptions,
   type KpiTime,
@@ -96,31 +97,39 @@ function needsTimeOf(kpi: KpiOptions): string | undefined {
   return choice === undefined ? undefined : `Compare to: ${choice} needs a time dimension in Time.`;
 }
 
-/** A KPI's trend asked of Cube (T938): its value's own query by Time's grain. */
-/** A tiled KPI with its members' trends asked of Cube (T940): one query, by member and Time. */
+/**
+ * A tiled KPI with its members' trends asked of Cube (T940): one query, by
+ * member and Time, each member's rows laid on the 12 periods asked, a period
+ * with none a gap (checkpoint 2's review).
+ */
 function KpiTilesLoaded({
   query,
   spec,
   measure,
   tileBy,
+  time,
 }: {
   readonly query: Readonly<Record<string, unknown>>;
   readonly spec: RenderSpec;
   readonly measure: string;
   readonly tileBy: string;
+  readonly time: KpiTime;
 }) {
   const context = useContext(SecurityPreview);
   const answer = useElementAnswer(query, context);
-  const trends = new Map<string, number[]>();
+  const byMember = new Map<string, Record<string, unknown>[]>();
   for (const row of answer.rows) {
-    const value = numberOf(row[measure]);
-    if (value === undefined) continue;
     const member = String(row[tileBy] ?? '');
-    trends.set(member, [...(trends.get(member) ?? []), value]);
+    byMember.set(member, [...(byMember.get(member) ?? []), row]);
   }
+  const now = new Date();
+  const trends = new Map(
+    [...byMember].map(([member, rows]) => [member, kpiTrendValues(rows, measure, time, now)]),
+  );
   return <KpiTiles spec={spec} measure={measure} trends={trends} />;
 }
 
+/** A KPI's trend asked of Cube (T938): its value's own query by Time's grain. */
 function KpiTrendLoaded({
   query,
   spec,
@@ -139,7 +148,8 @@ function KpiTrendLoaded({
   // Asked as the tile's own query is: its dashboard, and a previewed context.
   const context = useContext(SecurityPreview);
   const answer = useElementAnswer(query, context);
-  const values = answer.rows.flatMap((row) => numberOf(row[measure]) ?? []);
+  // On the 12 periods asked, a period Cube left out a gap (checkpoint 2's review).
+  const values = kpiTrendValues(answer.rows, measure, time, new Date());
   return (
     <KpiTrend
       values={values}
@@ -180,10 +190,16 @@ export function Kpi({ spec, solo = false, onAddTime, query }: KpiProps) {
         : kpiTrendQuery(query, measure, kpi.time, new Date());
     return (
       <div className={`${className} kpi--tiled`} data-testid="kpi">
-        {trend === undefined ? (
+        {trend === undefined || kpi.time === undefined ? (
           <KpiTiles spec={spec} measure={measure} />
         ) : (
-          <KpiTilesLoaded query={trend} spec={spec} measure={measure} tileBy={kpi.tileBy} />
+          <KpiTilesLoaded
+            query={trend}
+            spec={spec}
+            measure={measure}
+            tileBy={kpi.tileBy}
+            time={kpi.time}
+          />
         )}
       </div>
     );

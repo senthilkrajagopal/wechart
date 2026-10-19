@@ -32,8 +32,8 @@ export function SparklineSvg({
   /** Its size where it isn't a word's: a KPI's trend, the content width × 32 (T938). */
   readonly width?: number;
   readonly height?: number;
-  /** Oldest first. */
-  readonly values: readonly number[];
+  /** Oldest first; null a period with no data, drawn as a gap (a KPI's trend, T938). */
+  readonly values: readonly (number | null)[];
   /** The measure's title, which names it. */
   readonly title: string;
   readonly member: string;
@@ -44,25 +44,39 @@ export function SparklineSvg({
   readonly lastPoint?: boolean;
   readonly colour: string;
 }) {
-  if (values.length === 0) return <span className="text-value">—</span>;
-  const low = Math.min(...values);
-  const high = Math.max(...values);
+  const present = values.filter((value): value is number => value !== null);
+  if (present.length === 0) return <span className="text-value">—</span>;
+  const low = Math.min(...present);
+  const high = Math.max(...present);
   const span = high - low;
   const step = values.length === 1 ? 0 : (WIDTH - 2 * INSET) / (values.length - 1);
-  const points = values.map((value, at) => ({
-    x: INSET + at * step,
-    // A flat series draws along the middle.
-    y: span === 0 ? HEIGHT / 2 : INSET + (1 - (value - low) / span) * (HEIGHT - 2 * INSET),
-  }));
-  const end = points.at(-1) ?? { x: WIDTH / 2, y: HEIGHT / 2 };
+  const points = values.map((value, at) =>
+    value === null
+      ? null
+      : {
+          x: INSET + at * step,
+          // A flat series draws along the middle.
+          y: span === 0 ? HEIGHT / 2 : INSET + (1 - (value - low) / span) * (HEIGHT - 2 * INSET),
+        },
+  );
+  const drawn = points.filter((point) => point !== null);
+  const end = drawn.at(-1) ?? { x: WIDTH / 2, y: HEIGHT / 2 };
+  // A gap breaks the line: each run of periods with data starts anew (T938's
+  // review); a period alone between gaps is a dot.
   const d =
-    points.length === 1
+    values.length === 1
       ? `M${String(INSET)} ${String(end.y)}H${String(WIDTH - INSET)}`
       : points
-          .map((point, at) => `${at === 0 ? 'M' : 'L'}${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+          .map((point, at) => {
+            if (point === null) return '';
+            const starts = at === 0 || points[at - 1] === null;
+            const alone = starts && (at === points.length - 1 || points[at + 1] === null);
+            const xy = `${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+            return starts ? `M${xy}${alone ? 'h0.01' : ''}` : `L${xy}`;
+          })
           .join('');
   const [first, latest, lowest, highest] = shortValues(
-    [values[0] ?? 0, values.at(-1) ?? 0, low, high],
+    [present[0] ?? 0, present.at(-1) ?? 0, low, high],
     member,
     formats,
   );
@@ -86,7 +100,7 @@ export function SparklineSvg({
         strokeLinejoin="round"
       />
       {lastPoint ? (
-        <circle cx={points.length === 1 ? WIDTH - INSET : end.x} cy={end.y} r="2" fill={colour} />
+        <circle cx={values.length === 1 ? WIDTH - INSET : end.x} cy={end.y} r="2" fill={colour} />
       ) : null}
     </svg>
   );

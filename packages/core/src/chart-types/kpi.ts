@@ -329,6 +329,41 @@ export function kpiTrendQuery(
   };
 }
 
+/** The starts of the trend's 12 periods, oldest first, as its query asks them. */
+export function kpiTrendPeriods(time: KpiTime, now: Date): string[] {
+  const current = startOf(time.granularity, now);
+  return Array.from(
+    { length: KPI_TREND_PERIODS },
+    (_, at) =>
+      rangeOf(time.granularity, shifted(time.granularity, current, at + 1 - KPI_TREND_PERIODS))[0],
+  );
+}
+
+/**
+ * A trend's rows laid on its 12 periods, oldest first (checkpoint 2's
+ * review): Cube leaves out a period with no rows, so each period takes the
+ * row whose time is its start, and one with none is a gap — no data, never
+ * a 0 it didn't measure.
+ */
+export function kpiTrendValues(
+  rows: readonly Readonly<Record<string, unknown>>[],
+  measure: string,
+  time: KpiTime,
+  now: Date,
+): (number | null)[] {
+  const at = new Map<string, number>();
+  for (const row of rows) {
+    const when = row[`${time.member}.${time.granularity}`] ?? row[time.member];
+    const raw = row[measure];
+    const value = raw === null || raw === undefined || raw === '' ? Number.NaN : Number(raw);
+    if (typeof when === 'string' && Number.isFinite(value)) at.set(when, value);
+  }
+  return kpiTrendPeriods(time, now).map((start) => {
+    const found = [...at].find(([when]) => when.startsWith(start));
+    return found === undefined ? null : found[1];
+  });
+}
+
 /** A chart's KPI settings, from its options. */
 export function kpiOptionsOf(options: Readonly<Record<string, unknown>> | undefined): KpiOptions {
   return parse(options?.['kpi']);

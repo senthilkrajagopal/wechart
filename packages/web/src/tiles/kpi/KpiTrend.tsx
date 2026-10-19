@@ -26,7 +26,7 @@ export function KpiTrend({
    */
   readonly shown?: boolean;
   /** Oldest first. */
-  readonly values: readonly number[];
+  readonly values: readonly (number | null)[];
   readonly title: string;
   readonly member: string;
   readonly formats?: MemberFormats | undefined;
@@ -35,7 +35,7 @@ export function KpiTrend({
   /** The tile's content width, in px. */
   readonly width: number;
 }) {
-  if (width <= 0 || values.length === 0) return null;
+  if (width <= 0 || values.every((value) => value === null)) return null;
   const sparkline = (
     <SparklineSvg
       values={values}

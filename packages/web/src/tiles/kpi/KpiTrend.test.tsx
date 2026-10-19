@@ -47,6 +47,30 @@ describe('a KPI’s trend (T938, AC-565)', () => {
     );
   });
 
+  // Checkpoint 2's review: a period Cube left out is a gap, never squeezed out.
+  it('draws a period with no data as a gap in the line, on its own place', () => {
+    const { container } = render(
+      <KpiTrend
+        values={[null, null, 1_060_000, 1_040_000, null, 1_100_000, 1_350_000]}
+        title="Revenue"
+        member="orders.revenue"
+        formats={{ 'orders.revenue': 'currency' }}
+        granularity="month"
+        colour="#2a6fdb"
+        width={256}
+      />,
+    );
+    const svg = container.querySelector('svg');
+    const d = svg?.querySelector('path')?.getAttribute('d') ?? '';
+    // Two runs of line: before the gap and after it.
+    expect(d.match(/M/g)).toHaveLength(2);
+    // The first run starts at the third of seven places, not at the left edge.
+    expect(Number(/^M([\d.]+)/.exec(d)?.[1])).toBeGreaterThan(256 / 4);
+    expect(svg?.getAttribute('aria-label')).toBe(
+      'Revenue by month, last 12 months: from $1.06M to $1.35M, low $1.04M, high $1.35M',
+    );
+  });
+
   // T938-2: where the tile has no room for it, its image is still named.
   it('keeps its named image, visually hidden, where the tile has no room for it', () => {
     const { container } = render(

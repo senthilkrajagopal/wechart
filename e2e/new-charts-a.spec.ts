@@ -1151,6 +1151,10 @@ test('KPIs on 4- to 6-column tiles draw their trend at the content width × 32 a
       'aria-label',
       /^Count by month, last 12 months: from \d+ to 29, low \d+, high \d+$/,
     );
+    // September to December 2025 have no orders: Cube leaves them out, and
+    // the line starts at January, a third of the way along, never squeezed.
+    const d = (await sparkline.locator('path').getAttribute('d')) ?? '';
+    expect(Number(/^M([\d.]+)/.exec(d)?.[1])).toBeGreaterThan(Math.round(content) / 3);
     // The target: R80's bullet graph, 16 px tall, and its share in words.
     const target = tile.getByTestId('kpi-target');
     await expect(target.locator('svg.text-bullet')).toHaveAttribute('height', '16');

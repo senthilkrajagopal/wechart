@@ -9,7 +9,9 @@ import {
   kpiModule,
   kpiPeriodOf,
   kpiQueries,
+  kpiTrendPeriods,
   kpiTrendQuery,
+  kpiTrendValues,
   withKpiOptions,
 } from './kpi';
 
@@ -303,6 +305,34 @@ describe('a KPI’s comparison, asked of Cube (AC-565)', () => {
       tileOrder: 'name',
     });
     expect(kpiModule.save({ direction: 'higher', tileOrder: 'value' })).toEqual({});
+  });
+
+  /**
+   * Checkpoint 2's review: Cube leaves out a period with no rows (observed on
+   * the local Cube, 2026-10-18: 8 of 12 months answered), so the trend lays
+   * its values on the 12 periods it asked for, a missing one a gap.
+   */
+  it('lays a trend’s rows on its 12 periods, oldest first, a period Cube left out a gap', () => {
+    expect(kpiTrendPeriods(time, now)).toHaveLength(12);
+    expect(kpiTrendPeriods(time, now)[0]).toBe('2025-11-01');
+    expect(kpiTrendPeriods(time, now)[11]).toBe('2026-10-01');
+    const rows = [
+      {
+        'orders.ordered_at.month': '2026-09-01T00:00:00.000',
+        'orders.ordered_at': '2026-09-01T00:00:00.000',
+        'orders.revenue': '20',
+      },
+      {
+        'orders.ordered_at.month': '2026-10-01T00:00:00.000',
+        'orders.ordered_at': '2026-10-01T00:00:00.000',
+        'orders.revenue': '30',
+      },
+    ];
+    expect(kpiTrendValues(rows, 'orders.revenue', time, now)).toEqual([
+      ...Array.from({ length: 10 }, () => null),
+      20,
+      30,
+    ]);
   });
 
   it('is asked so wherever a KPI’s query is made, and for no other type', () => {
