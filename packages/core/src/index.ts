@@ -104,13 +104,18 @@ export {
 } from './render-spec';
 
 export {
+  canSynchronize,
   COMBO_AXES,
   COMBO_MARKS,
   comboProblems,
   comboSeriesOf,
+  isSynchronized,
+  unitOfFormat,
   withComboAuto,
   withComboSeries,
+  withSynchronize,
   type ComboSeries,
+  type SynchronizeState,
 } from './combo';
 
 export { compile, defaultEncoding, type CompileOptions } from './compile';

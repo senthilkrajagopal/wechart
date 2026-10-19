@@ -1817,10 +1817,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T848 (AC-500) Title each value axis above itself with its measures' glyphs and its unit, keep ticks `text-secondary`, give legend entries their glyphs and "(right)", and emphasise a hovered series' axis
 
-- [ ] T849 (AC-501) Synchronize a combo's two axes into one scale, labelled on both sides, only while both share a format
-  - Files: `packages/core/src/combo.ts` (`canSynchronize`), `packages/charts/src/combo/alignedAxes.ts`, their tests.
-  - Failing test: `combo.test.ts`: `canSynchronize` holds for $ and $, and for $ and % fails with "Revenue is in $ and Margin % in %"; `alignedAxes.test.ts`: synchronized, both axes have the same min, max and interval, and the right axis's fixed min and max are dropped (AC-501).
-  - Depends on: T847
+- [x] T849 (AC-501) Synchronize a combo's two axes into one scale, labelled on both sides, only while both share a format
 
 - [ ] T850 (AC-502) Give both axes one scale type, refuse log scale while bars are drawn, and count the values at or below zero a log axis leaves out
   - Files: `packages/core/src/combo.ts` (`logScaleState`), `packages/charts/src/series/combo.ts`, their tests.

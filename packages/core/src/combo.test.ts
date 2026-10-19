@@ -13,12 +13,15 @@ import { describe, expect, it } from 'vitest';
 import { CHART_DOCUMENT_VERSION, chartDocumentOf, readChartDocument } from './chart-document';
 import { emptySpec } from './chart-spec';
 import {
+  canSynchronize,
   COMBO_AXES,
   COMBO_MARKS,
   comboProblems,
   comboSeriesOf,
+  isSynchronized,
   withComboAuto,
   withComboSeries,
+  withSynchronize,
 } from './combo';
 
 const REVENUE = 'orders.revenue';
@@ -252,5 +255,74 @@ describe('saved and opened again (AC-497)', () => {
     };
 
     expect(() => readChartDocument(body)).toThrow(/"pie", which isn't a combo mark/);
+  });
+});
+
+/**
+ * T849 (AC-501): Synchronize axes, offered only while both axes share a
+ * number format, and otherwise refused with a reason naming both formats.
+ */
+describe('Synchronize axes (AC-501)', () => {
+  const COST = 'orders.cost';
+  const formats = { [REVENUE]: 'currency', [COST]: 'currency', [MARGIN]: 'percent' };
+  const LABELS: Record<string, string> = {
+    [REVENUE]: 'Revenue',
+    [COST]: 'Cost',
+    [MARGIN]: 'Margin %',
+    [ORDERS]: 'Orders',
+  };
+  const label = (measure: string) => LABELS[measure] ?? measure;
+
+  it('holds for $ and $', () => {
+    const options = { series: { [COST]: { axis: 'right' } } };
+
+    expect(canSynchronize([REVENUE, COST], options, formats, label)).toEqual({ available: true });
+  });
+
+  it('fails for $ and %, naming both formats', () => {
+    expect(canSynchronize([REVENUE, MARGIN], MARGIN_ON_RIGHT, formats, label)).toEqual({
+      available: false,
+      reason: 'Revenue is in $ and Margin % in %',
+    });
+  });
+
+  it('compares each axis by its first measure, the format it is written in', () => {
+    const options = { series: { [COST]: { axis: 'right' }, [MARGIN]: { axis: 'right' } } };
+
+    expect(canSynchronize([REVENUE, COST, MARGIN], options, formats, label).available).toBe(true);
+  });
+
+  it('names a plain number as numbers', () => {
+    const options = { series: { [ORDERS]: { axis: 'right' } } };
+
+    expect(canSynchronize([REVENUE, ORDERS], options, formats, label)).toEqual({
+      available: false,
+      reason: 'Revenue is in $ and Orders in numbers',
+    });
+  });
+
+  it('is not offered while every series is on the left', () => {
+    expect(canSynchronize([REVENUE, COST], {}, formats, label).available).toBe(false);
+  });
+
+  it('is off by default, on once chosen, and off again while the formats differ', () => {
+    const right = { series: { [COST]: { axis: 'right' } } };
+
+    expect(isSynchronized([REVENUE, COST], right, formats)).toBe(false);
+    const on = withSynchronize(right, true);
+    expect(on['combo']).toEqual({ synchronize: true });
+    expect(isSynchronized([REVENUE, COST], on, formats)).toBe(true);
+    expect(isSynchronized([REVENUE, COST], on, { ...formats, [COST]: 'percent' })).toBe(false);
+  });
+
+  it("clears the right axis's fixed minimum and maximum when turned on, keeping its other settings", () => {
+    const options = {
+      series: { [COST]: { axis: 'right' } },
+      axes: { y: { max: 200_000 }, right: { min: 10, max: 90_000, title: 'Spend' } },
+    };
+
+    const on = withSynchronize(options, true);
+    expect(on['axes']).toEqual({ y: { max: 200_000 }, right: { title: 'Spend' } });
+    expect(withSynchronize(on, false)['combo']).toBeUndefined();
   });
 });

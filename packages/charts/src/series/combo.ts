@@ -18,6 +18,7 @@
 import {
   comboSeriesOf,
   formatterFor,
+  isSynchronized,
   memberOn,
   membersOn,
   seriesOf,
@@ -101,9 +102,14 @@ function valueAxes(
       max: values.length === 0 ? 0 : values.reduce((a, b) => Math.max(a, b)),
       includeZero: bars || settings?.includeZero !== false,
       wholeNumbers: allCounts(spec, measuresOn(side)),
+      // Customize's min and max end each axis as typed (decision T846-2, T849).
+      ...(typeof settings?.min === 'number' ? { fixedMin: settings.min } : {}),
+      ...(typeof settings?.max === 'number' ? { fixedMax: settings.max } : {}),
     };
   };
-  const aligned = alignedAxes(rangeOf('left'), rangeOf('right'));
+  const aligned = alignedAxes(rangeOf('left'), rangeOf('right'), {
+    synchronize: isSynchronized(membersOn(spec.encoding, 'y'), spec.options, spec.formats),
+  });
 
   return (['left', 'right'] as const).map((side) => {
     const [first] = measuresOn(side);

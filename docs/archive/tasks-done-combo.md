@@ -21,3 +21,8 @@ Lane COMBO's ticked tasks from `docs/tasks.md` §P2.26 (F44), their sub-lines wo
   - Files: `packages/charts/src/combo/axisTitles.ts` (+ test), `packages/charts/src/legend.ts` (+ test), `packages/charts/src/series/combo.ts`, `packages/charts/src/interaction/axisEmphasis.ts` (+ test).
   - Failing test: `axisTitles.test.ts`: the left axis's name is rich text with a bar glyph (8 × 8, radius 2) and a line glyph (12 × 2), each in its series' colour, then "Revenue · Target ($)", `nameRotate` 0, at the axis's top; tick labels take `text-secondary` in light and dark; `legend.test.ts`: Margin % on the right reads "Margin % (right)" with the point glyph; `axisEmphasis.test.ts`: hovering Margin % puts the right axis's name and labels in `text-primary` and the left axis's series at opacity 0.28 (AC-500).
   - Depends on: T846
+
+- [x] T849 (AC-501) Synchronize a combo's two axes into one scale, labelled on both sides, only while both share a format
+  - Files: `packages/core/src/combo.ts` (`canSynchronize`), `packages/charts/src/combo/alignedAxes.ts`, their tests.
+  - Failing test: `combo.test.ts`: `canSynchronize` holds for $ and $, and for $ and % fails with "Revenue is in $ and Margin % in %"; `alignedAxes.test.ts`: synchronized, both axes have the same min, max and interval, and the right axis's fixed min and max are dropped (AC-501).
+  - Depends on: T847

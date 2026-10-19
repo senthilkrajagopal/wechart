@@ -11,7 +11,7 @@
  * stay `text-secondary`, as ticks do (rule 2: series-coloured text fails
  * contrast).
  */
-import { scaleOf, type ComboMark, type RenderSpec } from '@wechart/core';
+import { unitOfFormat, type ComboMark, type RenderSpec } from '@wechart/core';
 
 import { labelOf } from '../modelWriter';
 import { DEFAULT_SURFACE } from '../theme';
@@ -70,21 +70,7 @@ export const GLYPH_PATHS: Readonly<Record<ComboMark, string>> = {
  * symbol, "%" for a share, nothing for a plain number (`scaleOf`).
  */
 export function unitOf(spec: RenderSpec, measure: string): string {
-  const scale = scaleOf(spec.formats?.[measure]);
-  if (scale === 'percent') return '%';
-  if (scale.startsWith('currency ')) {
-    const code = scale.slice('currency '.length);
-    try {
-      return (
-        new Intl.NumberFormat('en-US', { style: 'currency', currency: code })
-          .formatToParts(0)
-          .find((part) => part.type === 'currency')?.value ?? code
-      );
-    } catch {
-      return code;
-    }
-  }
-  return '';
+  return unitOfFormat(spec.formats?.[measure]);
 }
 
 /**

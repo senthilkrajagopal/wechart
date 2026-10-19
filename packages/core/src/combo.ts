@@ -13,7 +13,9 @@
  * Series, the Metrics pill's menu, the legend glyph) all read and write them
  * through this one module, so they can't disagree.
  */
+import type { MemberFormat, MemberFormats } from './format';
 import type { ComboAxis, ComboMark, SeriesOptions } from './render-spec';
+import { scaleOf } from './undrawn';
 
 /** The four marks a combo offers, in the order the editor lists them (AC-497). */
 export const COMBO_MARKS: readonly ComboMark[] = ['bar', 'line', 'area', 'point'];
@@ -148,6 +150,116 @@ export function withComboSeries(
     ...(choice.mark === undefined ? {} : { mark: choice.mark }),
     ...(choice.axis === undefined ? {} : { axis: choice.axis }),
   });
+}
+
+/**
+ * The unit a format writes its values in: a currency's symbol, "%" for a
+ * share, nothing for a plain number (`scaleOf`). What an axis title ends
+ * with (AC-500) and what Synchronize compares (AC-501).
+ */
+export function unitOfFormat(format: string | MemberFormat | undefined): string {
+  const scale = scaleOf(format);
+  if (scale === 'percent') return '%';
+  if (scale.startsWith('currency ')) {
+    const code = scale.slice('currency '.length);
+    try {
+      return (
+        new Intl.NumberFormat('en-US', { style: 'currency', currency: code })
+          .formatToParts(0)
+          .find((part) => part.type === 'currency')?.value ?? code
+      );
+    } catch {
+      return code;
+    }
+  }
+  return '';
+}
+
+/** Whether Synchronize axes can be turned on, and why not where it can't (AC-501). */
+export type SynchronizeState =
+  { readonly available: true } | { readonly available: false; readonly reason: string };
+
+/**
+ * Whether a combo's two axes can show one scale (AC-501, design 20 Q12 (a)):
+ * only while a series is on the right, and only while both axes share a
+ * number format. Each axis is written in its first measure's format
+ * (decision T846-2), so those are the two compared; the reason names both
+ * ("Revenue is in $ and Margin % in %").
+ */
+export function canSynchronize(
+  measures: readonly string[],
+  options: Readonly<Record<string, unknown>> | undefined,
+  formats: MemberFormats = {},
+  label: (measure: string) => string = (measure) => measure,
+): SynchronizeState {
+  const series = comboSeriesOf(measures, options);
+  const left = series.find((one) => one.axis === 'left');
+  const right = series.find((one) => one.axis === 'right');
+  if (right === undefined) {
+    return { available: false, reason: 'Every series is on the left axis.' };
+  }
+  // No series on the left: the right's scale is the only one drawn.
+  if (left === undefined) return { available: true };
+  if (scaleOf(formats[left.measure]) === scaleOf(formats[right.measure])) {
+    return { available: true };
+  }
+  const unit = (measure: string) => unitOfFormat(formats[measure]) || 'numbers';
+  return {
+    available: false,
+    reason: `${label(left.measure)} is in ${unit(left.measure)} and ${label(right.measure)} in ${unit(right.measure)}`,
+  };
+}
+
+/** The chart-wide combo settings, `options.combo`, or none (decision T845-1). */
+function comboSettingsOf(
+  options: Readonly<Record<string, unknown>> | undefined,
+): Readonly<Record<string, unknown>> {
+  const combo = options?.['combo'];
+  return isRecord(combo) ? combo : {};
+}
+
+/**
+ * Whether a combo's axes are drawn as one scale (AC-501): the author turned
+ * Synchronize on and the axes can still be synchronized. A stored choice is
+ * kept while a format change makes it unavailable, and holds again once the
+ * formats agree.
+ */
+export function isSynchronized(
+  measures: readonly string[],
+  options: Readonly<Record<string, unknown>> | undefined,
+  formats: MemberFormats = {},
+): boolean {
+  return (
+    comboSettingsOf(options)['synchronize'] === true &&
+    canSynchronize(measures, options, formats).available
+  );
+}
+
+/**
+ * Synchronize axes turned on or off (AC-501). Turned on, the right axis
+ * follows the left, so a fixed minimum or maximum it had is cleared (its
+ * other settings kept); the editor offers Undo by keeping the options it had.
+ * Off leaves no `combo` entry behind, so the saved options stay sparse.
+ */
+export function withSynchronize(
+  options: Readonly<Record<string, unknown>>,
+  on: boolean,
+): Record<string, unknown> {
+  const combo: Record<string, unknown> = { ...comboSettingsOf(options) };
+  if (on) combo['synchronize'] = true;
+  else delete combo['synchronize'];
+  const next: Record<string, unknown> = { ...options, combo };
+  if (Object.keys(combo).length === 0) delete next['combo'];
+  if (!on) return next;
+
+  const axes = isRecord(options['axes']) ? options['axes'] : undefined;
+  const right = axes !== undefined && isRecord(axes['right']) ? axes['right'] : undefined;
+  if (axes === undefined || right === undefined) return next;
+  const kept: Record<string, unknown> = { ...right };
+  delete kept['min'];
+  delete kept['max'];
+  next['axes'] = { ...axes, right: kept };
+  return next;
 }
 
 /**

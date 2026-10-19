@@ -175,6 +175,132 @@ describe('over 500 random pairs, any range, counts too', () => {
   });
 });
 
+/**
+ * T849 (AC-501): synchronized, both axes show one scale; the right's fixed
+ * minimum and maximum are dropped, since it follows the left.
+ */
+describe('two axes synchronized (AC-501)', () => {
+  const revenue = { min: 20_000, max: 155_000, includeZero: true };
+  const cost = { min: 10_000, max: 90_000, includeZero: true };
+
+  it('gives both axes the same min, max and interval, covering both ranges', () => {
+    const { left, right } = alignedAxes(revenue, cost, { synchronize: true });
+
+    expect(right).toEqual(left);
+    expect(left).toEqual({ min: 0, max: 200_000, interval: 50_000 });
+  });
+
+  it('covers the right range where it reaches beyond the left', () => {
+    const { left, right } = alignedAxes(cost, revenue, { synchronize: true });
+
+    expect(right).toEqual(left);
+    expect(left.max).toBeGreaterThanOrEqual(155_000);
+  });
+
+  it("drops the right axis's fixed min and max", () => {
+    const { left, right } = alignedAxes(
+      revenue,
+      { ...cost, fixedMin: 5_000, fixedMax: 60_000 },
+      { synchronize: true },
+    );
+
+    expect(right).toEqual(left);
+    expect(left).toEqual({ min: 0, max: 200_000, interval: 50_000 });
+  });
+
+  it("keeps the left axis's fixed max, on both sides", () => {
+    const { left, right } = alignedAxes({ ...revenue, fixedMax: 300_000 }, cost, {
+      synchronize: true,
+    });
+
+    expect(right).toEqual(left);
+    expect(left.min).toBe(0);
+    expect(left.max).toBe(300_000);
+  });
+});
+
+/**
+ * Decision T846-2 (T849): Customize's minimum and maximum apply to each of a
+ * combo's two axes, exactly as typed, the ticks still aligned and, where it
+ * can be, zero still level.
+ */
+describe("an axis's fixed minimum and maximum, unsynchronized (AC-219, AC-499)", () => {
+  it('ends the left axis at its fixed max, zero still level with the right', () => {
+    const { left, right } = alignedAxes(
+      { min: -38_000, max: 155_000, includeZero: true, fixedMax: 300_000 },
+      { min: -0.04, max: 0.38, includeZero: true },
+    );
+
+    expect(left.max).toBe(300_000);
+    expect(ticks(left)).toBe(ticks(right));
+    expect(zeroShare(left)).toBeCloseTo(zeroShare(right), 9);
+    expect(left.min).toBeLessThanOrEqual(-38_000);
+  });
+
+  it('starts the right axis at its fixed min where its data clears zero', () => {
+    const { left, right } = alignedAxes(
+      { min: 0, max: 155_000, includeZero: true },
+      { min: 0.21, max: 0.39, includeZero: false, fixedMin: 0.15 },
+    );
+
+    expect(right.min).toBe(0.15);
+    expect(right.max).toBeGreaterThanOrEqual(0.39);
+    expect(ticks(right)).toBe(ticks(left));
+  });
+
+  it("honours both of an axis's fixed ends, as many ticks as the other", () => {
+    const { left, right } = alignedAxes(
+      { min: -38_000, max: 155_000, includeZero: true },
+      { min: -0.04, max: 0.38, includeZero: true, fixedMin: -0.3, fixedMax: 0.7 },
+    );
+
+    expect(right.min).toBe(-0.3);
+    expect(right.max).toBe(0.7);
+    expect(ticks(right)).toBe(ticks(left));
+    expect(Math.abs((right.max - right.min) / right.interval - (ticks(right) - 1))).toBeLessThan(
+      1e-9,
+    );
+  });
+
+  it('over 500 random pairs with fixed ends: ends as typed, as many ticks on both', () => {
+    let seed = 849;
+    const random = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = seed;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const range = () => {
+      const scale = 10 ** Math.floor(random() * 8 - 2);
+      const min = (random() - 0.4) * scale;
+      const max = min + random() * scale * 3;
+      const fixedMin = random() < 0.4 ? min - random() * scale : undefined;
+      const fixedMax = random() < 0.4 ? max + random() * scale : undefined;
+      return {
+        min,
+        max,
+        includeZero: random() < 0.5,
+        ...(fixedMin === undefined ? {} : { fixedMin }),
+        ...(fixedMax === undefined ? {} : { fixedMax }),
+      };
+    };
+    for (let pair = 0; pair < 500; pair += 1) {
+      const [a, b] = [range(), range()];
+      const { left, right } = alignedAxes(a, b);
+
+      expect(ticks(left)).toBe(ticks(right));
+      for (const [axis, given] of [
+        [left, a],
+        [right, b],
+      ] as const) {
+        if (given.fixedMin !== undefined) expect(axis.min).toBeCloseTo(given.fixedMin, 9);
+        if (given.fixedMax !== undefined) expect(axis.max).toBeCloseTo(given.fixedMax, 9);
+      }
+    }
+  });
+});
+
 describe('a combo drawn on two axes (AC-499)', () => {
   const MONTH = 'orders.month';
   const REVENUE = 'orders.revenue';
@@ -259,5 +385,60 @@ describe('a combo drawn on two axes (AC-499)', () => {
 
     expect(ticks(extent(left))).toBe(ticks(extent(right)));
     expect(zeroShare(extent(left))).toBeCloseTo(zeroShare(extent(right)), 9);
+  });
+
+  const COST = 'orders.cost';
+  const twoInDollars = (options: Record<string, unknown>): RenderSpec => ({
+    chartType: 'combo',
+    encoding: { x: [MONTH], y: [REVENUE, COST] },
+    rows: [
+      { [MONTH]: 'Jan', [REVENUE]: 120_000, [COST]: 30_000 },
+      { [MONTH]: 'Feb', [REVENUE]: 155_000, [COST]: 42_000 },
+    ],
+    formats: { [REVENUE]: 'currency', [COST]: 'currency' },
+    options: { series: { [COST]: { axis: 'right' } }, ...options },
+  });
+
+  it('draws one scale on both sides while synchronized (AC-501)', () => {
+    const [left, right] = axesOf(
+      twoInDollars({ combo: { synchronize: true }, axes: { right: { max: 50_000 } } }),
+    );
+
+    expect({ min: right?.min, max: right?.max, interval: right?.interval }).toEqual({
+      min: left?.min,
+      max: left?.max,
+      interval: left?.interval,
+    });
+    expect(left?.max).toBeGreaterThanOrEqual(155_000);
+  });
+
+  it('labels both sides of a synchronized chart in the SVG (AC-501)', () => {
+    const labels = labelsOf(renderToSvg(optionFor(twoInDollars({ combo: { synchronize: true } }))));
+    const side = (onLeft: boolean) =>
+      labels
+        .filter((label) => /\d/.test(label.text) && (onLeft ? label.x < 100 : label.x > 540))
+        .map((label) => label.text)
+        .sort();
+
+    expect(side(true).length).toBeGreaterThan(2);
+    expect(side(false)).toEqual(side(true));
+  });
+
+  it("doesn't synchronize $ beside %, though stored on", () => {
+    const [left, right] = axesOf({
+      ...combo({ series: { [MARGIN]: { axis: 'right' } }, combo: { synchronize: true } }),
+      formats: { [REVENUE]: 'currency', [MARGIN]: 'percent' },
+    });
+
+    expect(right?.max).not.toBe(left?.max);
+  });
+
+  it('ends each axis at the max set in Customize while not synchronized (T846-2)', () => {
+    const [left, right] = axesOf(
+      twoInDollars({ axes: { y: { max: 400_000 }, right: { max: 50_000 } } }),
+    );
+
+    expect(left?.max).toBe(400_000);
+    expect(right?.max).toBe(50_000);
   });
 });
