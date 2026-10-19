@@ -497,6 +497,64 @@ button.parameters-settings__name {
 .parameter-form__ask p { flex-basis: 100%; margin: 0; }
 .parameter-form__problems { margin: 0; padding-left: 20px; color: var(--wc-status-error); font-size: var(--wc-text-xs-size); }
 .parameter-dialog { max-width: calc(100vw - 32px); }
+/* A Parameter control (T899, AC-534; §7h "a 32 px segmented control (≤ 5
+   choices) or a list"): segments joined, the chosen one in the accent. */
+.text-parameter { position: relative; display: inline-flex; vertical-align: middle; max-width: 100%; }
+.text-parameter--segments {
+  flex-wrap: wrap;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  overflow: hidden;
+}
+button.text-parameter__segment {
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-left: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font: inherit;
+  font-size: var(--wc-text-sm-size);
+  line-height: normal;
+  cursor: pointer;
+}
+button.text-parameter__segment:first-child { border-left: 0; }
+button.text-parameter__segment[aria-checked='true'] {
+  background: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+  font-weight: 600;
+}
+button.text-parameter__button {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font: inherit;
+  font-size: var(--wc-text-sm-size);
+  line-height: normal;
+  cursor: pointer;
+}
+.text-parameter__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 100%;
+  max-height: 320px;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-raised);
+  box-shadow: var(--wc-shadow-pop);
+}
+.text-parameter__option { padding: 6px 12px; line-height: 20px; cursor: pointer; white-space: nowrap; }
+.text-parameter__option[data-active='true'] { background: var(--wc-bg-subtle); }
+.text-parameter__option[aria-selected='true'] { font-weight: 600; }
 /* A chart following a dashboard parameter says so beside its title (T898,
    AC-533; design 21 pin 7), in view mode. */
 .tile-head__set-by {

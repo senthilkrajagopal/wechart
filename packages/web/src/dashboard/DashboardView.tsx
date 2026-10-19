@@ -234,6 +234,8 @@ import {
   type ActionRunner,
 } from '../tiles/text/elements/ActionButton';
 import { readBookmarks } from '../tiles/text/dashboardBookmarks';
+import { ParameterControl } from '../tiles/text/elements/ParameterControl';
+import { useParameters } from './parameters/useParameters';
 import { FilterSettings } from '../filters/FilterSettings';
 import {
   FilteredCharts,
@@ -1021,6 +1023,8 @@ function TileBody({
                   name={textEditing.nameOf(tile.id)}
                   sources={textEditing.sources}
                   copilot={textEditing.copilot}
+                  parameters={textEditing.parameters}
+                  onNewParameter={textEditing.onNewParameter}
                   selectElement={textEditing.selectElement}
                   changeElement={textEditing.changeElement}
                   onElements={(elements, selected) => {
@@ -2527,8 +2531,9 @@ export function DashboardView({
    * the reader's, not the dashboard's, as a filter's is; absent is its
    * default (`parameterValueOf`).
    */
-  const [parameterValues] = useState<ParameterValues>({});
   const liveParameters = live.parameters ?? NO_PARAMETERS;
+  const parameterState = useParameters(liveParameters);
+  const parameterValues: ParameterValues = parameterState.values;
   /**
    * The charts as drawn and asked (T898, AC-533): a local chart's wells that
    * follow a parameter hold the member it stands for now. What its author
@@ -4600,6 +4605,9 @@ export function DashboardView({
   const brokenElement = (node: TextNode): boolean =>
     (node.type === 'filterControl' &&
       !(live.filters ?? []).some((each) => each.id === node.attrs?.['filter'])) ||
+    // A Parameter control whose parameter has been deleted (T899, AC-534).
+    (node.type === 'parameterControl' &&
+      !liveParameters.some((each) => each.id === node.attrs?.['parameter'])) ||
     (modelMembers !== undefined &&
       textDocumentMembers({
         version: 1,
@@ -5332,6 +5340,21 @@ export function DashboardView({
             ? 'value'
             : (shortTitles?.[filter.member] ?? memberTitle?.(filter.member) ?? filter.member);
         return <FilterValueText key={key} words={filterValueWords(set, fieldTitle)} />;
+      }
+      // A Parameter control (T899, AC-534): segments or a list, applied at once.
+      if (node.type === 'parameterControl') {
+        const shown = liveParameters.find((each) => each.id === attrs['parameter']);
+        if (shown === undefined) return null;
+        return (
+          <ParameterControl
+            key={key}
+            parameter={shown}
+            value={parameterValueOf(shown, parameterValues[shown.id])}
+            onChoose={(member) => {
+              parameterState.choose(shown.id, member);
+            }}
+          />
+        );
       }
       // A Filter control (T892, AC-528): the bar's own pill for its filter,
       // holding the dashboard's value and setting it as the bar does.
@@ -6338,6 +6361,15 @@ export function DashboardView({
           onClose={closeSql}
         />
       )}
+      {/* A Parameter control's change, said once, politely (T899, AC-534). */}
+      <p
+        className="visually-hidden"
+        role="status"
+        aria-live="polite"
+        data-testid="parameter-announcer"
+      >
+        {parameterState.said}
+      </p>
       {Object.keys(reached).length === 0 &&
       Object.keys(asked).length === 0 &&
       followingNow.size === 0 ? null : (
@@ -7722,6 +7754,14 @@ function DashboardPages({
     nameOf: tileName,
     sources: textSources,
     copilot,
+    // New parameter… from the insert menu (AC-531): one change to the dashboard.
+    parameters: document.parameters,
+    onNewParameter: (parameter) => {
+      session.update((current) => ({
+        ...current,
+        parameters: [...(current.parameters ?? []), parameter],
+      }));
+    },
     onElements: onTextElements,
     selectElement: elementAsk,
     changeElement: elementChange,

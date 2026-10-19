@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -287,6 +287,83 @@ describe('the insert menu (T881, AC-517)', () => {
     });
     await userEvent.keyboard('/');
     expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  /**
+   * T899 / AC-531: New parameter is "also offered from the insert menu's
+   * Parameter control …, which open[s] it in a 520 px dialog and return[s]
+   * where [it] came from".
+   */
+  it('offers New parameter… for a Parameter control, a 520 px dialog that inserts its control', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              cubes: [
+                {
+                  name: 'orders',
+                  title: 'Orders',
+                  measures: [
+                    { name: 'orders.revenue', title: 'Orders Revenue', shortTitle: 'Revenue' },
+                    { name: 'orders.count', title: 'Orders Count', shortTitle: 'Count' },
+                  ],
+                  dimensions: [],
+                },
+              ],
+            }),
+          ),
+      ),
+    );
+    const onNewParameter = vi.fn();
+    const onLeave = vi.fn();
+    render(
+      <TextEditor
+        document={doc(line('Show '))}
+        name="Controls"
+        onLeave={onLeave}
+        sources={SOURCES}
+        onNewParameter={onNewParameter}
+      />,
+    );
+    const textbox = screen.getByRole('textbox', { name: 'Controls' });
+    await waitFor(() => {
+      expect(textbox.contains(window.document.activeElement)).toBe(true);
+    });
+    await userEvent.keyboard('{{{{');
+    await userEvent.click(within(listbox()).getByRole('option', { name: /^Parameter control/ }));
+    expect(rowsOf('Parameter control')).toEqual([
+      'This dashboard has no parameters yet.',
+      'New parameter…',
+    ]);
+    await userEvent.click(within(listbox()).getByRole('option', { name: /^New parameter…/ }));
+
+    const dialog = screen.getByRole('dialog', { name: 'New parameter' });
+    expect(dialog.style.width).toBe('520px');
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Name' }), 'Metric to show');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add a measure choice' }));
+    const option = await waitFor(() => {
+      const found = screen
+        .getByRole('listbox', { name: 'Fields' })
+        .querySelector<HTMLElement>('[data-member="orders.count"]');
+      if (found === null) throw new Error('not offered');
+      return found;
+    });
+    fireEvent.mouseDown(option);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create parameter' }));
+
+    expect(onNewParameter).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'p1', name: 'Metric to show', role: 'measure' }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Back in the text, its control inserted where the menu was opened.
+    await waitFor(() => {
+      expect(textbox.contains(window.document.activeElement)).toBe(true);
+    });
+    expect(textbox.querySelector('[data-element="parameterControl"]')).not.toBeNull();
+    expect(onLeave).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it('is one menu when / and {{ are both typed: one Esc closes it, the next leaves the text', async () => {

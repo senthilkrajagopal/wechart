@@ -142,3 +142,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/editor/Wells.tsx` (the Parameters group), `packages/core/src/chart-spec.ts` (a parameter in a well; + test), `packages/web/src/dashboard/chartSpec.ts` (resolving it; + test), `packages/web/src/tiles/ChartTile.tsx` ("set by").
   - Failing test: `chartSpec.test.ts`: a local chart whose Metrics well holds "Metric to show" queries Revenue, then Orders when the parameter changes, its title and format following; its pinned type stays; `Wells.test.tsx`: the picker lists "Parameters of this dashboard" first with Metric to show only in Metrics; the pill reads "Metric to show · now Revenue" with its tooltip; a chart from folders lists no Parameters group; the tile's head shows "· set by Metric to show" in view mode (AC-533).
   - Depends on: T895
+
+- [x] T899 (AC-534) The Parameter control in a Text tile: segments for up to 5 choices, a listbox beyond, the default at open, applied at once and announced once
+  - Files: `packages/web/src/tiles/text/elements/ParameterControl.tsx` (+ test), `packages/web/src/dashboard/parameters/useParameters.ts` (+ test).
+  - Failing test: `ParameterControl.test.tsx`: 3 choices render a `radiogroup`, 6 a `listbox`; choosing Orders re-queries the bound chart and Value with Orders and the polite region receives "Metric to show: Orders" once; `useParameters.test.ts`: a dashboard opened plainly starts at the default (AC-534).
+  - Depends on: T898, T882

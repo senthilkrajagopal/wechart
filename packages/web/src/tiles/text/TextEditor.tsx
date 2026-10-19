@@ -4,7 +4,14 @@ import type { EditorView } from '@tiptap/pm/view';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { ELEMENT_KINDS, type TextDocument, type TextNode } from '@wechart/core';
+import {
+  ELEMENT_KINDS,
+  type DashboardParameter,
+  type TextDocument,
+  type TextNode,
+} from '@wechart/core';
+
+import { ParameterDialog } from '../../dashboard/settings/ParameterForm';
 
 import {
   insertMenuOpen,
@@ -77,7 +84,13 @@ export interface TextEditorProps {
         readonly ask: number;
       }
     | undefined;
+  /** The dashboard's parameters, which a new one's name must differ from (AC-531). */
+  readonly parameters?: readonly DashboardParameter[] | undefined;
+  /** A parameter made from the insert menu's New parameter…, added to the dashboard. */
+  readonly onNewParameter?: ((parameter: DashboardParameter) => void) | undefined;
 }
+
+const NO_PARAMETERS: readonly DashboardParameter[] = [];
 
 const ELEMENT_TYPES = new Set<string>(ELEMENT_KINDS);
 
@@ -133,11 +146,15 @@ export default function TextEditor({
   onElements,
   selectElement,
   changeElement,
+  parameters = NO_PARAMETERS,
+  onNewParameter,
 }: TextEditorProps) {
   const names = useMemo(() => namesFrom(sources), [sources]);
   /** The insert menu, while open: what's typed, where, and which row (AC-517). */
   const [menu, setMenu] = useState<MenuState | null>(null);
   const menuId = useId();
+  /** Where New parameter… was chosen, while its dialog is open (AC-531). */
+  const [creating, setCreating] = useState<Range | null>(null);
   /** Opened by Insert, which typed its `{{` for it: Esc takes that back. */
   const byInsert = useRef(false);
   /** How many elements the text holds, kept as it changes: at 10, nothing more goes in (AC-518). */
@@ -157,6 +174,13 @@ export default function TextEditor({
     if (row?.run === undefined || row.disabled !== undefined) return;
     if (row.run.type === 'step') {
       setMenu({ ...now, step: row.run.step, active: 0 });
+      return;
+    }
+    if (row.run.type === 'newParameter') {
+      // Its dialog, over the text, which stays being edited; its control
+      // goes where the menu was opened (AC-531).
+      setMenu(null);
+      setCreating(range);
       return;
     }
     // In place of the trigger and what's typed after it.
@@ -462,10 +486,34 @@ export default function TextEditor({
       // menu's or the link field's, is handled where it's pressed.
       onKeyDown={(event) => {
         if (event.key !== 'Escape' || event.defaultPrevented) return;
+        // A dialog over the text takes its own Esc (AC-531's New parameter).
+        if ((event.target as Element).closest('[role="dialog"]') !== null) return;
         event.preventDefault();
         leave('escape');
       }}
     >
+      {creating === null ? null : (
+        <ParameterDialog
+          existing={parameters}
+          role="measure"
+          onCancel={() => {
+            setCreating(null);
+          }}
+          onCreate={(parameter) => {
+            onNewParameter?.(parameter);
+            const at = creating;
+            setCreating(null);
+            editorOf.current
+              ?.chain()
+              .focus()
+              .insertContentAt(at, {
+                type: 'parameterControl',
+                attrs: { parameter: parameter.id },
+              })
+              .run();
+          }}
+        />
+      )}
       {/* Above the text (AC-515). */}
       <TextToolbar
         editor={editor}

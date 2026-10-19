@@ -1,6 +1,6 @@
 import { createContext, lazy } from 'react';
 
-import type { TextDocument, TextNode } from '@wechart/core';
+import type { DashboardParameter, TextDocument, TextNode } from '@wechart/core';
 
 import type { CopilotOffer, InsertSources } from './InsertMenu';
 import type { LeftBy } from './TextEditor';
@@ -23,6 +23,9 @@ export interface TextEditing {
   readonly sources?: InsertSources | undefined;
   /** The insert menu's Copilot group (AC-535). */
   readonly copilot?: CopilotOffer;
+  /** The dashboard's parameters, and a new one from the insert menu (AC-531). */
+  readonly parameters?: readonly DashboardParameter[] | undefined;
+  readonly onNewParameter?: ((parameter: DashboardParameter) => void) | undefined;
   /** The text's elements and the selected one, for Properties' Elements list (AC-519). */
   readonly onElements?:
     ((tileId: string, elements: TextNode[], selected: number | null) => void) | undefined;

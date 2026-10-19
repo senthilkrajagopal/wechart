@@ -54,7 +54,11 @@ export const METRIC = {
 };
 
 /** A chart local to the dashboard, its Metrics well following Metric to show, by status. */
-export async function boundChart(request: APIRequestContext, dashboardId: string) {
+export async function boundChart(
+  request: APIRequestContext,
+  dashboardId: string,
+  chartType = 'bar',
+) {
   const chart = (await (
     await request.post(`${API}/documents`, {
       data: { kind: 'chart', title: 'Metric by status', ...IN_MY_WORKSPACE },
@@ -75,7 +79,7 @@ export async function boundChart(request: APIRequestContext, dashboardId: string
             dimensions: ['orders.status'],
             timeDimensions: [],
           },
-          chartType: 'bar',
+          chartType,
         },
       },
     },
@@ -152,6 +156,93 @@ test('a local chart bound to a parameter asks its default, says “set by”, an
   await overlay.getByRole('button', { name: 'Add to Metrics' }).click();
   const groups = page.getByRole('listbox', { name: 'Fields' }).getByRole('group');
   await expect(groups.first()).toHaveAttribute('aria-label', 'Parameters of this dashboard');
+});
+
+/** Places these tiles on the dashboard's one page, once what they name exists. */
+async function placeTiles(request: APIRequestContext, id: string, items: unknown[]) {
+  const read = await request.get(`${API}/documents/dashboard/${id}`);
+  const stored = (await read.json()) as { version: number; body: Record<string, unknown> };
+  const put = await request.put(`${API}/documents/dashboard/${id}`, {
+    data: {
+      version: stored.version,
+      body: { ...stored.body, pages: [{ id: 'only', title: 'Only', items }] },
+    },
+  });
+  expect(put.ok(), await put.text()).toBe(true);
+}
+
+/**
+ * T899 / AC-534, AC-533: a dashboard opened plainly starts Metric to show at
+ * its default; its Parameter control, a radio group of two segments, applies
+ * Orders at once to the bound chart — asked again with Orders, its column
+ * now Orders' title, its pinned type kept — and to a Value of the parameter,
+ * and says "Metric to show: Orders" once.
+ */
+test('a Parameter control applies its choice at once to the bound chart and Value, and says it once', async ({
+  page,
+  request,
+}) => {
+  const asked = measuresAsked(page);
+  const { id, title } = await dashboardOf(request, {
+    parameters: [METRIC],
+    pages: [{ id: 'only', title: 'Only', items: [] }],
+  });
+  const chartId = await boundChart(request, id, 'table');
+  await placeTiles(request, id, [
+    {
+      id: 'tile-text',
+      kind: 'text',
+      w: 6,
+      h: 12,
+      document: {
+        version: 1,
+        doc: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: 'Show ' },
+                { type: 'parameterControl', attrs: { parameter: 'p-metric' } },
+                { type: 'text', text: ' · now ' },
+                { type: 'value', attrs: { parameter: 'p-metric' } },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    { id: 'tile-chart', kind: 'chart', w: 6, h: 40, chartId },
+  ]);
+
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const text = page.locator('[data-tile="tile-text"] .text-tile');
+  const control = text.getByRole('radiogroup', { name: 'Metric to show' });
+  // Opened plainly: at its default.
+  await expect(control.getByRole('radio', { name: 'Revenue' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  expect((await control.getByRole('radio', { name: 'Revenue' }).boundingBox())?.height).toBe(32);
+  const value = text.locator('.text-value');
+  await expect(value).toHaveText(/^\$[\d,.]+$/);
+  const chart = page.locator('[data-tile="tile-chart"]');
+  await expect(chart.getByRole('columnheader').nth(1)).toHaveText(/Total Amount/);
+  const announcer = page.getByTestId('parameter-announcer');
+  await expect(announcer).toHaveText('');
+
+  await control.getByRole('radio', { name: 'Orders' }).click();
+  await expect(control.getByRole('radio', { name: 'Orders' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(value).toHaveText('240');
+  await expect(chart.getByRole('columnheader').nth(1)).toHaveText(/Count/);
+  await expect(chart.locator('table')).toHaveCount(1);
+  expect(asked.flat()).toContain('orders.count');
+  await expect(announcer).toHaveText('Metric to show: Orders');
+  await expect(chart.locator('.tile-head__set-by')).toHaveText(' · set by Metric to show');
 });
 
 /**

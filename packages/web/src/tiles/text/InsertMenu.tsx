@@ -52,7 +52,9 @@ export interface InsertRow {
   /** The element it puts in the text, or the step it goes to. */
   readonly run?:
     | { readonly type: 'insert'; readonly node: JSONContent }
-    | { readonly type: 'step'; readonly step: InsertStep };
+    | { readonly type: 'step'; readonly step: InsertStep }
+    /** New parameter… (AC-531): its dialog, then its control inserted. */
+    | { readonly type: 'newParameter' };
   /** A measure's row: → lists the kinds that take it. */
   readonly measure?: InsertMeasure;
 }
@@ -233,22 +235,39 @@ function sourceGroups(kind: ElementKind, sources: InsertSources): InsertGroup[] 
           },
         ];
   const parameters = sources.parameters ?? [];
-  return parameters.length === 0
-    ? none('This dashboard has no parameters yet.')
-    : [
-        {
-          label: name,
-          rows: parameters.map((parameter) => ({
-            key: `parameter-${parameter.id}`,
-            name: parameter.name,
-            hint: 'a dashboard parameter',
-            run: {
-              type: 'insert' as const,
-              node: element('parameterControl', { parameter: parameter.id }),
-            },
-          })),
-        },
-      ];
+  // Then New parameter… (AC-531; design 21 S3 pin 2): its dialog, then its control.
+  const make: InsertRow = {
+    key: 'new-parameter',
+    name: 'New parameter…',
+    hint: 'define one, then insert its control',
+    run: { type: 'newParameter' },
+  };
+  return [
+    {
+      label: name,
+      rows: [
+        ...(parameters.length === 0
+          ? [
+              {
+                key: 'none',
+                name: 'This dashboard has no parameters yet.',
+                hint: '',
+                disabled: 'This dashboard has no parameters yet.',
+              },
+            ]
+          : parameters.map((parameter) => ({
+              key: `parameter-${parameter.id}`,
+              name: parameter.name,
+              hint: 'a dashboard parameter',
+              run: {
+                type: 'insert' as const,
+                node: element('parameterControl', { parameter: parameter.id }),
+              },
+            }))),
+        make,
+      ],
+    },
+  ];
 }
 
 /** A row's id, which the text's `aria-activedescendant` names. */

@@ -1923,10 +1923,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T898 (AC-533) Bind a parameter from a local chart's well, follow it in the chart and in Value elements, and say "set by ‹parameter›" in view mode
 
-- [ ] T899 (AC-534) The Parameter control in a Text tile: segments for up to 5 choices, a listbox beyond, the default at open, applied at once and announced once
-  - Files: `packages/web/src/tiles/text/elements/ParameterControl.tsx` (+ test), `packages/web/src/dashboard/parameters/useParameters.ts` (+ test).
-  - Failing test: `ParameterControl.test.tsx`: 3 choices render a `radiogroup`, 6 a `listbox`; choosing Orders re-queries the bound chart and Value with Orders and the polite region receives "Metric to show: Orders" once; `useParameters.test.ts`: a dashboard opened plainly starts at the default (AC-534).
-  - Depends on: T898, T882
+- [x] T899 (AC-534) The Parameter control in a Text tile: segments for up to 5 choices, a listbox beyond, the default at open, applied at once and announced once
 
 - [ ] T900 (AC-121, AC-123) Bookmarks and copied links carry each parameter's value, and applying one sets it
   - Files: `packages/web/src/dashboard/bookmarks/viewState.ts` (+ test), `packages/web/src/dashboard/bookmarks/applyBookmark.ts` (+ test), `packages/web/src/filters/url.ts` (+ test).
