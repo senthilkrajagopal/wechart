@@ -526,6 +526,9 @@ test('a 100 % stacked bar on a 5-column tile marks a segment as its tuple, shows
   await expect(chip).toContainText('Germany');
   await expect(mix.getByTestId('mark-badge')).toContainText('Germany');
   await expect(mix.getByTestId('mark-badge')).toContainText('share shown');
+  // AC-098 (R81): the whole line, by more than colour, and never "0 marked".
+  await expect(mix.getByTestId('mark-badge')).toHaveText("Marking: Germany's share shown");
+  await expect(mix).not.toContainText(/(?<![\d,.$])0 marked/);
 
   // Its table view adds each row's share of its status.
   await viewAs(mix, 'table');
@@ -2123,6 +2126,13 @@ test('a graphical table on a 6-column tile marks its rows by click, Ctrl and Shi
     await expect(average).toHaveText(/^\$[\d,.]+$/);
     await expect(average).toHaveAttribute('title', /^Marked: \$[\d,.]+$/);
   }
+  // AC-098 (R81): every row only partly marked, so its badge names whose share
+  // it shows, by more than colour, and never "0 marked".
+  const badge = tile.getByTestId('mark-badge');
+  await expect(badge).toHaveText("Marking: Germany's share shown");
+  await expect(badge.getByTestId('mark-swatch')).toBeVisible();
+  // (A count of 0, not a cell's "$19,900 marked".)
+  await expect(tile).not.toContainText(/(?<![\d,.$])0 marked/);
 
   // As a cross-filter source, a row filters the others to its status.
   await remode({ mode: 'crossFilter', crossFilter: { defaultAction: 'filter' } });

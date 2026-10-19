@@ -344,6 +344,11 @@ test('a click marks what was clicked, and says so in words and a count', async (
   await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
   // And a chip on the bar, naming it and what it holds.
   await expect(page.getByTestId('mark-chip')).toContainText('shipped');
+  await expect(page.getByTestId('mark-chip')).toContainText('Marking');
+  // In the row too, with the sheet closed: named, its values summarised (AC-098, T838).
+  await expect(page.locator('.dashboard__header').getByTestId('compact-mark-chip')).toHaveAccessibleName(
+    /^Marking: .*shipped.*, from /,
+  );
   // Announced politely, with the count (AC-101).
   await expect(page.getByTestId('marking-announcer')).toContainText('1');
 });
