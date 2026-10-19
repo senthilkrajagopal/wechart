@@ -43,6 +43,12 @@ export function ElementsList({
                 type="button"
                 className="text-elements__row"
                 aria-current={index === selected ? true : undefined}
+                // A press keeps focus where it is — in the text, while it's
+                // edited — as browsers that don't focus a pressed button
+                // would otherwise leave focus nowhere (T882's review).
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                }}
                 onClick={() => {
                   onSelect(index);
                 }}

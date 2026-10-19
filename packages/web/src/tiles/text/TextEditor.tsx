@@ -319,7 +319,9 @@ export default function TextEditor({
   useEffect(() => {
     if (selectElement === undefined) return;
     const at = elementAt(editor, selectElement.index);
-    if (at !== undefined) editor.commands.setNodeSelection(at);
+    // Focus in the text with it, so the keys and the leave rules are the
+    // text's however it was opened (T882's review).
+    if (at !== undefined) editor.chain().setNodeSelection(at).focus().run();
   }, [editor, selectElement]);
 
   /**

@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { TextDocument, TextNode } from '@wechart/core';
 
+import { getSchema } from '@tiptap/core';
+import { DOMSerializer, Node as PMNode } from '@tiptap/pm/model';
+
 import '../editorTestDom';
+import { textEditorExtensions } from '../editorExtensions';
 import type { InsertSources } from '../InsertMenu';
 import TextEditor from '../TextEditor';
 
@@ -92,6 +96,40 @@ describe('an element in the text being edited (T882, AC-519)', () => {
     // Selecting changed nothing in the text.
     await userEvent.keyboard('{Escape}');
     expect(onLeave).toHaveBeenCalledWith(undefined, 'escape');
+  });
+
+  it('opened by a row of the Elements list, is selected with focus in the text (T882’s review)', async () => {
+    const onLeave = vi.fn();
+    const document = doc({ type: 'text', text: 'a' }, CHANGE);
+    render(
+      <>
+        <button type="button">Row</button>
+        <TextEditor
+          document={document}
+          name="EMEA summary"
+          onLeave={onLeave}
+          sources={SOURCES}
+          selectElement={{ index: 0, ask: 1 }}
+        />
+      </>,
+    );
+    const textbox = screen.getByRole('textbox', { name: 'EMEA summary' });
+    await waitFor(() => {
+      expect(textbox.contains(window.document.activeElement)).toBe(true);
+    });
+    expect(selectedElement(textbox)?.getAttribute('data-element')).toBe('change');
+  });
+
+  it('is copied as its kind and source in words, for wherever it’s pasted', () => {
+    const extensions = textEditorExtensions();
+    const schema = getSchema(extensions);
+    const node = PMNode.fromJSON(schema, {
+      type: 'paragraph',
+      content: [CHANGE],
+    });
+    const holder = window.document.createElement('div');
+    holder.append(DOMSerializer.fromSchema(schema).serializeFragment(node.content));
+    expect(holder.textContent).toBe('Change, orders.revenue against previous quarter');
   });
 
   it('is removed whole by Backspace just after it', async () => {

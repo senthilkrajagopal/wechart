@@ -415,4 +415,13 @@ test('an element is an atom: stepped over and selected by the arrows, removed wh
   await tile.locator('.tile-head__kind').click();
   await expect(textbox).toHaveCount(0);
   await expect(tile.locator('.text-tile p')).toHaveText('Orders 240 so far');
+
+  // Its row, while the text isn't being edited, opens the text with it
+  // selected, focus in the text (T882's review).
+  await list.getByRole('button', { name: /Value/ }).click();
+  await expect(textbox).toBeFocused();
+  await expect(selected).toHaveCount(1);
+  await expect(settings).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(textbox).toHaveCount(0);
 });

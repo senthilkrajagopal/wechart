@@ -1,9 +1,19 @@
 import { Extension, Node } from '@tiptap/core';
+import type { EditorView } from '@tiptap/pm/view';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 
 import { ELEMENT_KINDS, elementAttributeNames, type ElementKind } from '@wechart/core';
 
+import { elementName, type ElementNames } from '../elementName';
 import { ElementView } from './ElementView';
+
+/** Names as written, where no model is at hand: the clipboard's. */
+const MEMBER_NAMES: ElementNames = {
+  measure: (member) => member,
+  measurePath: (member) => member,
+  filter: (id) => id,
+  parameter: (id) => id,
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -57,10 +67,11 @@ export const elementNode = (kind: ElementKind) =>
       const settings = Object.fromEntries(
         Object.entries(node.attrs).filter(([, value]) => value !== null && value !== undefined),
       );
+      // Its words, for wherever it's pasted as text (T882's review).
       return [
         'span',
         { class: 'text-element', 'data-element': kind, 'data-attrs': JSON.stringify(settings) },
-        kind,
+        elementName({ type: kind, attrs: settings }, MEMBER_NAMES),
       ];
     },
     addNodeView() {
@@ -72,6 +83,19 @@ export const elementNode = (kind: ElementKind) =>
 export const elementNodes = () => ELEMENT_KINDS.map(elementNode);
 
 const ELEMENTS = new Set<string>(ELEMENT_KINDS);
+
+/** The page's collapsed caret in the text, as a document position, or undefined. */
+function caretOf(view: EditorView): number | undefined {
+  const selection = view.dom.ownerDocument.getSelection();
+  const node = selection?.focusNode;
+  if (selection === null || !selection.isCollapsed || node == null || !view.dom.contains(node))
+    return undefined;
+  try {
+    return view.posAtDOM(node, selection.focusOffset);
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Backspace just after an element, and Delete just before one, remove it
@@ -98,13 +122,22 @@ export const ElementKeys = Extension.create({
      * #937), so that one step is taken here, landing beside it.
      */
     const step = (dir: -1 | 1) => () => {
-      const { selection, doc } = this.editor.state;
-      if (!selection.empty) return false;
-      const { $head } = selection;
+      const { state, view } = this.editor;
+      if (!state.selection.empty) return false;
+      /**
+       * Where the caret is now: the page's, which a quick key can have
+       * moved before ProseMirror read it — its selection is read on the
+       * page's next `selectionchange`, after this key.
+       */
+      const $head = state.doc.resolve(caretOf(view) ?? state.selection.head);
       const beside = dir < 0 ? $head.nodeBefore : $head.nodeAfter;
-      if (beside === null || !beside.isText || $head.pos + dir < $head.start()) return false;
-      if ($head.pos + dir > $head.end()) return false;
-      const $next = doc.resolve($head.pos + dir);
+      if (beside !== null && ELEMENTS.has(beside.type.name))
+        return this.editor.commands.setNodeSelection(
+          dir < 0 ? $head.pos - beside.nodeSize : $head.pos,
+        );
+      if (beside === null || !beside.isText) return false;
+      if ($head.pos + dir < $head.start() || $head.pos + dir > $head.end()) return false;
+      const $next = state.doc.resolve($head.pos + dir);
       const next = dir < 0 ? $next.nodeBefore : $next.nodeAfter;
       if (next === null || !ELEMENTS.has(next.type.name)) return false;
       return this.editor.commands.setTextSelection($head.pos + dir);
