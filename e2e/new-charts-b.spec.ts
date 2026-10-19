@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
 import { cubePicker } from './cubePicker';
@@ -341,4 +341,185 @@ test('a Sankey says its steps, flows, total and largest flows, and its table lis
     return scroller.querySelectorAll('tbody tr[data-testid="table-row"]').length;
   });
   expect(rows).toBe(240);
+});
+
+/** A dashboard of a Sankey (status → category) and a bar of orders by country, in this mode. */
+async function sankeyDashboard(request: APIRequestContext, mode: 'markings' | 'crossFilter') {
+  const title = `Sankey ${mode} ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/api/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const items = [];
+  for (const [tile, chartType, measure, dimensions] of [
+    ['tile-sankey', 'sankey', 'orders.total_amount', ['orders.status', 'products.category']],
+    ['tile-country', 'bar', 'orders.count', ['customers.country']],
+  ] as const) {
+    const chart = (await (
+      await request.post(`${API}/api/documents`, {
+        data: { kind: 'chart', title: tile, ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`${API}/api/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: tile,
+          owner: 'admin',
+          localToDashboardId: dashboard.id,
+          chart: {
+            source: { cube: 'orders' },
+            wells: { measures: [measure], dimensions: [...dimensions], timeDimensions: [] },
+            chartType,
+          },
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    items.push({ id: tile, kind: 'chart', w: 6, h: 40, chartId: chart.id });
+  }
+  const placed = await request.put(`${API}/api/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: {
+          width: 'fixed',
+          interactions:
+            mode === 'markings'
+              ? { mode: 'markings' }
+              : { mode: 'crossFilter', crossFilter: { defaultAction: 'filter' } },
+        },
+        markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
+        pages: [{ id: 'only', title: 'Only', items }],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  return { id: dashboard.id, title };
+}
+
+/** A place inside a Sankey's link (its first, or the nth) that no other link covers, on the page. */
+async function insideALink(page: Page, tile: string, nth = 0): Promise<{ x: number; y: number }> {
+  const spot = await page
+    .locator(`[data-tile="${tile}"] svg path[fill-opacity]`)
+    .nth(nth)
+    .evaluate((shape) => {
+      const path = shape as SVGGeometryElement;
+      const box = path.getBBox();
+      const matrix = path.getScreenCTM();
+      if (matrix === null) return undefined;
+      // The middle of the band where it crosses its middle, clear of its edges.
+      const inside: { x: number; y: number }[] = [];
+      for (let y = box.y; y <= box.y + box.height; y += 0.5) {
+        const point = new DOMPoint(box.x + box.width / 2, y);
+        if (!path.isPointInFill(point)) continue;
+        const at = point.matrixTransform(matrix);
+        if (document.elementFromPoint(at.x, at.y) === path) inside.push({ x: at.x, y: at.y });
+      }
+      return inside[Math.floor(inside.length / 2)];
+    });
+  if (spot === undefined) throw new Error('no place inside a link');
+  return spot;
+}
+
+/**
+ * T988 / AC-612: THE SYSTEM SHALL mark a Sankey node as its member and a link
+ * as its (source, target) tuple (AC-087); WHILE another tile's marking
+ * applies, fade unmarked links to 0.28 of their opacity and give a partly
+ * marked link's share in its tooltip ("Marked: $96K of $210K"), the tile's ⓘ
+ * saying a link's marked share is given in its tooltip, not drawn; and as a
+ * cross-filter source a node filters the others to its member and a link to
+ * its tuple, with one chip ("Channel: Web · Region: EMEA").
+ * `Fails when: a link marks other than its tuple; a partly marked link's
+ * tooltip lacks its share; the ⓘ is missing; or the chip reads otherwise.`
+ */
+test('a Sankey marks a link as its tuple and a node as its member, says a marked share in a link’s tooltip, and cross-filters by a link’s tuple', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await sankeyDashboard(request, 'markings');
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const sankey = page.locator('[data-tile="tile-sankey"]');
+  const full = sankey.locator('svg path[fill-opacity="0.4"]');
+  const faded = sankey.locator('svg path[fill-opacity="0.112"]');
+  await expect(full.first()).toBeVisible();
+  const flows = await full.count();
+  expect(flows).toBeGreaterThan(3);
+
+  // A link marks its (status, category) tuple: it alone stays at 0.4.
+  const link = await insideALink(page, 'tile-sankey');
+  await page.mouse.click(link.x, link.y);
+  await expect(sankey.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(full).toHaveCount(1);
+  await expect(faded).toHaveCount(flows - 1);
+
+  // A node marks its status: every link it holds stays, and only those.
+  // Its label: "completed" over its total, to its left.
+  const label = sankey.locator('svg text', { hasText: /^completed/ }).first();
+  const node = await label.evaluate((text) => {
+    const own = text.getBoundingClientRect();
+    // Nodes by their rectangles, faded or not; links are curves.
+    const svg = (text as unknown as SVGTextElement).ownerSVGElement;
+    const nodes = [...(svg?.querySelectorAll('path') ?? [])]
+      .filter((path) => /^M[\d.]+ [\d.]+l[\d.]+ 0/.test(path.getAttribute('d') ?? ''))
+      .map((path) => path.getBoundingClientRect())
+      .filter((box) => box.left >= own.right - 1);
+    // The node its label sits beside: nearest to the label's right end.
+    const gap = (box: DOMRect) =>
+      Math.hypot(box.left - own.right, box.top + box.height / 2 - (own.top + own.height / 2));
+    const nearest = nodes.sort((a, b) => gap(a) - gap(b))[0];
+    return nearest === undefined
+      ? undefined
+      : { x: nearest.left + nearest.width / 2, y: nearest.top + nearest.height / 2 };
+  });
+  if (node === undefined) throw new Error('no node beside "completed"');
+  await page.mouse.click(node.x, node.y);
+  // Its member alone: its status, not a tuple ("1 item").
+  await expect(page.getByTestId('mark-chip')).toContainText(/Status: completedfrom/);
+  await expect.poll(() => full.count()).toBeGreaterThan(1);
+  expect((await full.count()) + (await faded.count())).toBe(flows);
+
+  // Another tile marks a country, which the Sankey doesn't group by: its
+  // links are partly marked, their share in their tooltips, and it says so.
+  const country = page.locator('[data-tile="tile-country"] svg text').filter({ hasText: /^\D/ });
+  const first = await country.first().boundingBox();
+  if (first === null) throw new Error('no country');
+  await page.mouse.click(first.x + first.width / 2, first.y - 10);
+  await expect(page.locator('[data-tile="tile-country"]').getByTestId('mark-badge')).toContainText(
+    '1 marked',
+  );
+  await expect(sankey.getByTestId('sankey-share-info')).toHaveText(
+    'A link’s marked share is given in its tooltip, not drawn.',
+  );
+  // Some flow is only part the country's: its tooltip says how much.
+  let said = false;
+  for (let nth = 0; nth < flows && !said; nth += 1) {
+    const at = await insideALink(page, 'tile-sankey', nth);
+    await page.mouse.move(at.x, at.y);
+    said = await expect(sankey)
+      .toContainText(/Marked: \$[\d.]+K? of \$[\d.]+K?/, { timeout: 1000 })
+      .then(
+        () => true,
+        () => false,
+      );
+  }
+  expect(said).toBe(true);
+
+  // Cross-filter mode: a link filters the other tile by its tuple, in one chip.
+  const crossing = await sankeyDashboard(request, 'crossFilter');
+  await page.goto(`/explore/dashboards/${crossing.id}`);
+  await expect(page.getByRole('heading', { name: crossing.title })).toBeVisible();
+  await expect(sankey.locator('svg path[fill-opacity="0.4"]').first()).toBeVisible();
+  const crossLink = await insideALink(page, 'tile-sankey');
+  await page.mouse.click(crossLink.x, crossLink.y);
+  const chips = page.getByTestId('cross-filter-chip');
+  await expect(chips).toHaveCount(1);
+  await expect(chips.locator('.cross-chip__what')).toHaveText(/^.*Status: \S+ · .*Category: .+$/);
 });

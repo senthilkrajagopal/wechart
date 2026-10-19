@@ -26,6 +26,7 @@ import { nameWriter, seriesWriter, titleOf } from './modelWriter';
 import { boxesOf, whiskerRuleOf } from './series/boxplot';
 import { isPieType } from './series/pie';
 import { sankeyDrawnOf } from './series/sankey';
+import { compactWriter } from './compact';
 
 /** Types where a shared crosshair reads better than a per-mark hit. */
 const CROSSHAIR_TYPES: readonly ChartType[] = ['line', 'multiLine', 'area', 'stackedArea', 'combo'];
@@ -194,14 +195,22 @@ function sankeyTooltip(spec: RenderSpec): EChartsOption {
   }
   const pct = (part: number, whole: number | undefined) =>
     whole === undefined || whole === 0 ? '' : `${String(Math.round((part / whole) * 100))} %`;
+  const short = compactWriter(spec, measure ?? '');
   const render = (params: Params & { dataType?: string }) => {
     const value = Number(params.value ?? 0);
-    const link = params.data as { source?: string; target?: string } | undefined;
+    const link = params.data as
+      { source?: string; target?: string; share?: { marked: number; total: number } } | undefined;
     if (params.dataType === 'edge' && link?.source !== undefined && link.target !== undefined) {
       return [
         `${escapeHtml(link.source)} → ${escapeHtml(link.target)}`,
         `${title}: ${escapeHtml(write(value))}`,
         `${pct(value, out.get(link.source))} of ${escapeHtml(link.source)} · ${pct(value, into.get(link.target))} of ${escapeHtml(link.target)}`,
+        // A partly marked flow's share, not drawn: one width (T988, AC-612).
+        ...(link.share === undefined
+          ? []
+          : [
+              `Marked: ${escapeHtml(short(link.share.marked))} of ${escapeHtml(short(link.share.total))}`,
+            ]),
       ].join('<br/>');
     }
     return [escapeHtml(params.name ?? ''), `${title}: ${escapeHtml(write(value))}`].join('<br/>');

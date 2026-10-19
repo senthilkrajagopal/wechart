@@ -27,6 +27,7 @@ export {
   sankeyDrawnOf,
   sankeyNotes,
   sankeyOption,
+  sankeyPartlyMarked,
   type SankeyDrawn,
   type SankeyFlow,
   type SankeyNode,

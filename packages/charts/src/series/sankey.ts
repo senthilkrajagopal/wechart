@@ -13,6 +13,8 @@
  */
 import {
   formatterFor,
+  isEmptyPredicate,
+  matchesPredicate,
   membersOn,
   OTHER_LABEL,
   sankeyLinksOf,
@@ -25,6 +27,7 @@ import { format } from 'echarts/core';
 
 import { OTHER_COLOUR } from '../colorAssignment';
 import { colourFor } from '../colours';
+import { UNMARKED_OPACITY } from '../marking/render';
 import type { EChartsOption } from '../theme';
 import { CHART_FONT } from '../themed';
 import { DEFAULT_CANVAS, type Canvas } from './bar';
@@ -254,6 +257,35 @@ export function sankeyOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS):
             .map((line) => format.getTextRect(line, LABEL_FONT).width),
         ),
     );
+  // What a click on each node and link marks (AC-612): a node its member,
+  // a link its (source, target) tuple, each value as the rows hold it;
+  // "Other" is no member, so it marks nothing.
+  const rawOf = (step: number, member: string) => {
+    const dimension = drawn.steps[step] ?? '';
+    const held = spec.rows.find((row) => String(row[dimension] ?? '') === member)?.[dimension];
+    return typeof held === 'number' || typeof held === 'string' ? held : member;
+  };
+  const isOther = (member: string) => drawn.folded && member === OTHER_LABEL;
+  const nodeMarks = (one: SankeyNode) =>
+    isOther(one.member)
+      ? {}
+      : { marks: [{ member: drawn.steps[one.step] ?? '', value: rawOf(one.step, one.member) }] };
+  const linkMarks = (flow: SankeyFlow) =>
+    isOther(flow.sourceMember) || isOther(flow.targetMember)
+      ? {}
+      : {
+          marks: [
+            {
+              member: drawn.steps[flow.from] ?? '',
+              value: rawOf(flow.from, flow.sourceMember),
+            },
+            {
+              member: drawn.steps[flow.from + 1] ?? '',
+              value: rawOf(flow.from + 1, flow.targetMember),
+            },
+          ],
+        };
+
   // The first step's labels to its left, the others' to their right; the
   // plot keeps room for the outer two.
   const left = Math.ceil(widest(0) + 2 * LABEL_GAP_PX);
@@ -277,11 +309,13 @@ export function sankeyOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS):
           depth: one.step,
           itemStyle: { color: colourOf(one) },
           label: { position: one.step === 0 ? 'left' : 'right' },
+          ...nodeMarks(one),
         })),
         links: drawn.flows.map((flow) => ({
           source: flow.source,
           target: flow.target,
           value: flow.value,
+          ...linkMarks(flow),
         })),
         label: {
           show: true,
@@ -297,5 +331,105 @@ export function sankeyOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS):
         },
       },
     ],
+  };
+}
+
+/**
+ * Whether a link is drawn partly marked (AC-612): its marked share is then in
+ * its tooltip, not drawn, which the tile says.
+ */
+export function sankeyPartlyMarked(spec: RenderSpec): boolean {
+  if (!isSankeyType(spec.chartType) || spec.marking === undefined) return false;
+  const series = (withSankeyMarks(sankeyOption(spec), spec)['series'] ?? []) as {
+    links?: { share?: unknown }[];
+  }[];
+  return series.some((one) => (one.links ?? []).some((link) => link.share !== undefined));
+}
+
+const numberOf = (raw: unknown): number => {
+  if (raw === null || raw === undefined || raw === '') return 0;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : 0;
+};
+
+/** To a thousandth, so a faded opacity is written as it reads ("0.112"). */
+const thousandths = (value: number) => Math.round(value * 1000) / 1000;
+
+/**
+ * A Sankey under a marking (T988, AC-612; design 23 sheet 10): its marked
+ * rows — the tile's own rows the marking holds, every row where it is marked
+ * whole, or the marked share answered apart where another tile's marking
+ * names members it doesn't group by — summed over each flow and node as
+ * drawn ("Other" where folded). A flow none of whose rows is marked fades to
+ * 0.28 of its 0.4; a node none of whose flows is, to 0.28. A flow only part
+ * marked keeps its opacity, its width being one value, and carries its
+ * marked part, which its tooltip says ("Marked: $96K of $210K").
+ */
+export function withSankeyMarks(option: EChartsOption, spec: RenderSpec): EChartsOption {
+  const marking = spec.marking;
+  if (marking === undefined) return option;
+  const whole = marking.whole === true;
+  const share = whole ? undefined : marking.share;
+  if (!whole && share === undefined && isEmptyPredicate(marking.predicate)) return option;
+  const drawn = sankeyDrawnOf(spec);
+  const { measure, steps } = drawn;
+  if (measure === undefined || drawn.flows.length === 0) return option;
+
+  const membersAt = steps.map(
+    (_step, at) => new Set(drawn.nodes.filter((one) => one.step === at).map((one) => one.member)),
+  );
+  const asDrawn = (row: Row, at: number) => {
+    const member = String(row[steps[at] ?? ''] ?? '');
+    return drawn.folded && !membersAt[at]!.has(member) ? OTHER_LABEL : member;
+  };
+  const marked = whole
+    ? spec.rows
+    : (share ?? spec.rows.filter((row) => matchesPredicate(marking.predicate, row)));
+  const onFlow = new Map<string, number>();
+  const onNode = new Set<string>();
+  for (const row of marked) {
+    const value = numberOf(row[measure]);
+    for (let at = 0; at + 1 < steps.length; at += 1) {
+      const key = `${String(at)}\u0000${asDrawn(row, at)}\u0000${asDrawn(row, at + 1)}`;
+      onFlow.set(key, (onFlow.get(key) ?? 0) + value);
+      onNode.add(`${String(at)}\u0000${asDrawn(row, at)}`);
+      onNode.add(`${String(at + 1)}\u0000${asDrawn(row, at + 1)}`);
+    }
+  }
+
+  const series = (option['series'] as Record<string, unknown>[] | undefined) ?? [];
+  return {
+    ...option,
+    series: series.map((one) => {
+      if (one['type'] !== 'sankey') return one;
+      const nodes = (one['data'] as Record<string, unknown>[] | undefined) ?? [];
+      const links = (one['links'] as Record<string, unknown>[] | undefined) ?? [];
+      return {
+        ...one,
+        data: nodes.map((item, index) => {
+          const node = drawn.nodes[index];
+          if (node === undefined || onNode.has(`${String(node.step)}\u0000${node.member}`))
+            return item;
+          const style = (item['itemStyle'] as object | undefined) ?? {};
+          return { ...item, itemStyle: { ...style, opacity: UNMARKED_OPACITY } };
+        }),
+        links: links.map((item, index) => {
+          const flow = drawn.flows[index];
+          if (flow === undefined) return item;
+          const part =
+            onFlow.get(
+              `${String(flow.from)}\u0000${flow.sourceMember}\u0000${flow.targetMember}`,
+            ) ?? 0;
+          if (part <= 0) {
+            const style = (item['lineStyle'] as object | undefined) ?? {};
+            return {
+              ...item,
+              lineStyle: { ...style, opacity: thousandths(LINK_OPACITY * UNMARKED_OPACITY) },
+            };
+          }
+          return part < flow.value ? { ...item, share: { marked: part, total: flow.value } } : item;
+        }),
+      };
+    }),
   };
 }

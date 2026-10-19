@@ -9,6 +9,7 @@ import {
 import { isTrellisType } from '../layout/trellis';
 import { isBoxplotType } from '../series/boxplot';
 import { isHeatmapType } from '../series/heatmap';
+import { isSankeyType, withSankeyMarks } from '../series/sankey';
 import { isScatterType, scatterSeriesOf } from '../series/scatter';
 import type { EChartsOption } from '../theme';
 import { drawsPartialMarks, withBoxMarks, withPartialMarks, type ItemShare } from './partialOption';
@@ -46,6 +47,9 @@ const asObject = (item: unknown) =>
 export function withMarks(option: EChartsOption, spec: RenderSpec): EChartsOption {
   const marking = spec.marking;
   if (marking === undefined) return option;
+  // A Sankey's flows and nodes by their rows as drawn, partly marked flows
+  // keeping their width (T988, AC-612).
+  if (isSankeyType(spec.chartType)) return withSankeyMarks(option, spec);
   // Its items partly marked, where the marked share was answered apart (T387).
   if (drawsPartialMarks(spec)) return withPartialMarks(option, spec);
 

@@ -34,7 +34,12 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
-import { clickedEntity, clickedName, type ClickedItem } from '../dashboard/crossfilter/clicked';
+import {
+  clickedEntity,
+  clickedMarks,
+  clickedName,
+  type ClickedItem,
+} from '../dashboard/crossfilter/clicked';
 import { StateLine } from '../shell/StatusIcon';
 import { useThemeName } from '../shell/ThemeProvider';
 
@@ -251,11 +256,20 @@ export function ChartCanvas({
      * at all — a mark that sometimes does nothing, with nothing to debug.
      */
     const clicks = itemClicks(({ item, toggle }) => {
-      const [name, seriesName, entity = ''] = (item ?? '').split('\u0000');
+      const [name, seriesName, entity = '', marks = ''] = (item ?? '').split('\u0000');
       // Ctrl or ⌘ held: a marking toggles the one item rather than replacing
       // itself with it (AC-087). Cross-filtering ignores it. A box plot's
-      // point carries its entity too (AC-593).
-      clicked.current?.({ name, seriesName, ...(entity === '' ? {} : { entity }) }, toggle);
+      // point carries its entity too (AC-593), and a Sankey's node or link
+      // what it marks (AC-612).
+      clicked.current?.(
+        {
+          name,
+          seriesName,
+          ...(entity === '' ? {} : { entity }),
+          ...(marks === '' ? {} : { marks: clickedMarks({ data: { marks: JSON.parse(marks) } }) }),
+        },
+        toggle,
+      );
     });
     const at = (params: {
       name?: string;
@@ -270,7 +284,15 @@ export function ChartCanvas({
       // The pair carries both names; which one a click stands for is the
       // dashboard's to decide, by chart type (`crossfilter/clicked.ts`). A
       // pie's slice by the category it carries, not its written name.
-      item: `${clickedName(params)}\u0000${params.seriesName ?? ''}\u0000${clickedEntity(params) ?? ''}`,
+      item: [
+        clickedName(params),
+        params.seriesName ?? '',
+        clickedEntity(params) ?? '',
+        (() => {
+          const marks = clickedMarks(params);
+          return marks === undefined ? '' : JSON.stringify(marks);
+        })(),
+      ].join('\u0000'),
       x: params.event?.offsetX ?? 0,
       y: params.event?.offsetY ?? 0,
       // zrender carries the browser's own event under `event.event`.

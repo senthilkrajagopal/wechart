@@ -1,4 +1,4 @@
-import type { CrossSelection } from './apply';
+import { crossChipWords, type CrossSelection } from './apply';
 
 /**
  * The chips for the cross-filters in effect (AC-119, direction.md rule 13).
@@ -34,8 +34,7 @@ export function CrossFilterChips({
   return (
     <div className="cross-chips" data-testid="cross-filter-chips">
       {selections.map((selection) => {
-        const field = memberTitle?.(selection.member) ?? selection.member;
-        const said = `${field} = ${selection.value}`;
+        const said = crossChipWords(selection, memberTitle);
         return (
           <span
             key={`${selection.from}:${selection.member}`}

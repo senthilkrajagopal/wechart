@@ -49,6 +49,11 @@ Lane CHARTS-B's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Failing test: `sankey.test.ts` (series): nodes 12 px wide; the colouring step's nodes in their members' colours, others `text-secondary`; links at 0.4, emphasis 0.6; EMEA in steps 1 and 3 yields a node "EMEA (2)" and the note; 214 flows keep each step's members carrying its top 50 and fold the rest into "Other" with the note (AC-611).
   - Depends on: T986
 
+- [x] T988 (AC-612) Mark a Sankey node as its member and a link as its tuple, give a link's marked share in its tooltip, and cross-filter
+  - Files: `packages/charts/src/series/sankey.ts`, `packages/charts/src/marking/partial.ts`, `packages/charts/src/series/sankeyMarking.test.ts`.
+  - Failing test: `sankeyMarking.test.ts`: clicking Web → EMEA marks (Channel = Web, Region = EMEA); with a marking elsewhere unmarked links fade to 0.28 of 0.4 and Web → EMEA's tooltip reads "Marked: $96K of $210K"; the tile's ⓘ says the share is in the tooltip; the chip reads "Channel: Web · Region: EMEA" (AC-612).
+  - Depends on: T987
+
 - [x] T989 (AC-613) The Sankey's text alternative and its table of flows
   - Files: `packages/charts/src/describe/sankey.ts` (+ test), `packages/web/src/tiles/tableView/sankey.ts` (+ test).
   - Failing test: (describe) "Sankey of Revenue from Channel to Region, 12 flows, $1.35M. Largest: Web → North America $237K; Web → EMEA $210K; Retail → North America $183K."; (table view) "Web → EMEA · $210,000 · 32.3%" (AC-613).

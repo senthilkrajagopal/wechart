@@ -163,7 +163,14 @@ import { MarkingToken, MeasureToken, UnknownMarkingToken } from './tiles/LiveTok
 import { measureQueryOf } from './tiles/TextTokens';
 import { coverageOf, type Reach } from '../filters/coverage';
 import { chartTilesOf, scopeOf } from '../filters/scope';
-import { effectsOn, type CrossEffects, type CrossSelection } from './crossfilter/apply';
+import {
+  crossChipWords,
+  effectsOn,
+  sameSelection,
+  selectionParts,
+  type CrossEffects,
+  type CrossSelection,
+} from './crossfilter/apply';
 import { CrossFilterChips } from './crossfilter/CrossFilterChip';
 import {
   clickedMarkItem,
@@ -2832,26 +2839,31 @@ export function DashboardView({
    * tile the click came from is left out of its own selection.
    */
   const crossFilters = useMemo(() => {
-    const byKey = new Map<string, { selection: CrossSelection; chartIds: string[] }>();
+    const byKey = new Map<
+      string,
+      { from: string; part: { member: string; value: string }; chartIds: string[] }
+    >();
     for (const [chartId, effects] of Object.entries(crossEffects.perChart))
-      for (const selection of effects.filters) {
-        const key = `${selection.from}:${selection.member}:${selection.value}`;
-        const entry = byKey.get(key) ?? { selection, chartIds: [] };
-        entry.chartIds.push(chartId);
-        byKey.set(key, entry);
-      }
+      for (const selection of effects.filters)
+        // A tuple's every member, each a filter (a Sankey link, T988, AC-612).
+        for (const part of selectionParts(selection)) {
+          const key = `${selection.from}:${part.member}:${part.value}`;
+          const entry = byKey.get(key) ?? { from: selection.from, part, chartIds: [] };
+          entry.chartIds.push(chartId);
+          byKey.set(key, entry);
+        }
     const tilesOf = (chartIds: readonly string[]) =>
       chartTilesOf(live)
         .filter((tile) => tile.chartId !== undefined && chartIds.includes(tile.chartId))
         .map((tile) => tile.tileId);
-    return [...byKey.values()].map(({ selection, chartIds }) => ({
+    return [...byKey.values()].map(({ from, part, chartIds }) => ({
       filter: {
-        id: `cross:${selection.from}:${selection.member}`,
+        id: `cross:${from}:${part.member}`,
         widget: 'checkbox' as const,
-        member: selection.member,
+        member: part.member,
         scope: { kind: 'tiles' as const, tileIds: tilesOf(chartIds) },
       },
-      value: { kind: 'values' as const, values: [selection.value] },
+      value: { kind: 'values' as const, values: [part.value] },
     }));
   }, [crossEffects, live]);
 
@@ -3158,7 +3170,8 @@ export function DashboardView({
         const others = before.filter((each) => each.from !== tileId);
         if (value === undefined) return others;
         const had = before.find((each) => each.from === tileId);
-        const same = had?.member === value.member && had?.value === value.value;
+        // A Sankey link's whole tuple too (T988, AC-612).
+        const same = had !== undefined && sameSelection(had, value);
         return same ? others : [...others, { from: tileId, ...value }];
       });
     },
@@ -3179,8 +3192,11 @@ export function DashboardView({
     [setCrossSelections],
   );
   /** A cross-filter in words, by its field's title: "Category is Beverages". */
-  const crossWords = (selection: Pick<CrossSelection, 'member' | 'value'>) =>
-    `${memberTitle?.(selection.member) ?? selection.member} is ${String(selection.value)}`;
+  const crossWords = (selection: Pick<CrossSelection, 'member' | 'value' | 'also'>) =>
+    // A tuple's every member (T988, AC-612): "Channel is Web and Region is EMEA".
+    selectionParts(selection)
+      .map((part) => `${memberTitle?.(part.member) ?? part.member} is ${String(part.value)}`)
+      .join(' and ');
   /** One cross-filter, or all of them, taken back from a chip, and said (AC-493). */
   const clearCrossFilterSaid = (selection?: CrossSelection) => {
     clearCrossFilter(selection);
@@ -3211,7 +3227,7 @@ export function DashboardView({
         );
       return;
     }
-    const same = had?.member === value.member && had?.value === value.value;
+    const same = had !== undefined && sameSelection(had, value);
     const from = chartTitleOf(chartId);
     sayAfresh(
       setCrossSaid,
@@ -6488,7 +6504,7 @@ export function DashboardView({
               crossFiltering
                 ? crossSelections.map((selection) => ({
                     key: `${selection.from}:${selection.member}`,
-                    what: `${memberTitle?.(selection.member) ?? selection.member} = ${selection.value}`,
+                    what: crossChipWords(selection, memberTitle),
                     from: chartTitleOfTile(selection.from) ?? selection.from,
                     onClear: () => {
                       clearCompactCrossFilter(selection);

@@ -2380,10 +2380,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T987 (AC-611) Draw the Sankey's nodes and links, split a repeated member as "‹member› (2)", and fold flows past 50 into "Other"
 
-- [ ] T988 (AC-612) Mark a Sankey node as its member and a link as its tuple, give a link's marked share in its tooltip, and cross-filter
-  - Files: `packages/charts/src/series/sankey.ts`, `packages/charts/src/marking/partial.ts`, `packages/charts/src/series/sankeyMarking.test.ts`.
-  - Failing test: `sankeyMarking.test.ts`: clicking Web → EMEA marks (Channel = Web, Region = EMEA); with a marking elsewhere unmarked links fade to 0.28 of 0.4 and Web → EMEA's tooltip reads "Marked: $96K of $210K"; the tile's ⓘ says the share is in the tooltip; the chip reads "Channel: Web · Region: EMEA" (AC-612).
-  - Depends on: T987
+- [x] T988 (AC-612) Mark a Sankey node as its member and a link as its tuple, give a link's marked share in its tooltip, and cross-filter
 
 - [x] T989 (AC-613) The Sankey's text alternative and its table of flows
 

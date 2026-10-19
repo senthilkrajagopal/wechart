@@ -22,6 +22,42 @@ export interface CrossSelection {
   /** The Cube member the clicked mark stands for. */
   readonly member: string;
   readonly value: string;
+  /**
+   * The rest of a tuple the mark stands for (a Sankey link's target, T988,
+   * AC-612): each filters too, as one selection, said in one chip.
+   */
+  readonly also?: readonly { readonly member: string; readonly value: string }[];
+}
+
+/** A selection's members and values, its tuple's rest after its first. */
+export function selectionParts(
+  selection: Pick<CrossSelection, 'member' | 'value' | 'also'>,
+): { member: string; value: string }[] {
+  return [{ member: selection.member, value: selection.value }, ...(selection.also ?? [])];
+}
+
+/** Whether two selections are the same one: every member and value alike. */
+export function sameSelection(
+  a: Pick<CrossSelection, 'member' | 'value' | 'also'>,
+  b: Pick<CrossSelection, 'member' | 'value' | 'also'>,
+): boolean {
+  return JSON.stringify(selectionParts(a)) === JSON.stringify(selectionParts(b));
+}
+
+/**
+ * A cross-filter in a chip's words: "Status = shipped"; a tuple's members
+ * each with its value, "Channel: Web · Region: EMEA" (T988, AC-612).
+ */
+export function crossChipWords(
+  selection: Pick<CrossSelection, 'member' | 'value' | 'also'>,
+  memberTitle?: (member: string) => string | undefined,
+): string {
+  const field = (member: string) => memberTitle?.(member) ?? member;
+  if (selection.also === undefined || selection.also.length === 0)
+    return `${field(selection.member)} = ${selection.value}`;
+  return selectionParts(selection)
+    .map((part) => `${field(part.member)}: ${part.value}`)
+    .join(' · ');
 }
 
 /** The key a pair is written under, as the settings matrix writes it. */

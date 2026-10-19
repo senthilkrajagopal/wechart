@@ -73,6 +73,30 @@ export interface ClickedItem {
    * (AC-593): the point stands for it, not for its category.
    */
   readonly entity?: string | undefined;
+  /**
+   * What the item stands for as the chart drew it, where its type says so
+   * itself (T988, AC-612): a Sankey node its member, a link its (source,
+   * target) tuple. "Other" carries none, being no member.
+   */
+  readonly marks?: MarkedItem | undefined;
+}
+
+/** What a clicked item stands for as drawn (a Sankey's node or link, AC-612). */
+export function clickedMarks(params: { data?: unknown }): MarkedItem | undefined {
+  const { data } = params;
+  const own =
+    typeof data === 'object' && data !== null && !Array.isArray(data)
+      ? (data as { marks?: unknown }).marks
+      : undefined;
+  if (!Array.isArray(own) || own.length === 0) return undefined;
+  const parts = own.filter(
+    (part): part is MarkedItem[number] =>
+      typeof part === 'object' &&
+      part !== null &&
+      typeof (part as { member?: unknown }).member === 'string' &&
+      ['string', 'number'].includes(typeof (part as { value?: unknown }).value),
+  );
+  return parts.length === own.length ? parts : undefined;
 }
 
 /** The entity a clicked item carries as drawn (a box plot's point, AC-593), as text. */
@@ -114,6 +138,11 @@ export function clickedName(params: { name?: string | undefined; data?: unknown 
 export interface ClickedValue {
   readonly member: string;
   readonly value: string;
+  /**
+   * The rest of a tuple the item stands for, each filtered by too (a Sankey
+   * link's target, T988, AC-612); none for a single member.
+   */
+  readonly also?: readonly { readonly member: string; readonly value: string }[];
 }
 
 /**
@@ -155,6 +184,17 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
       ? undefined
       : { member: split, value: item.legend };
   }
+  // A Sankey's node is its member and its link its tuple (AC-612); "Other",
+  // or anything else that carries nothing, is no member of anything.
+  if (spec.chartType === 'sankey') {
+    const [first, ...rest] = item.marks ?? [];
+    if (first === undefined) return undefined;
+    const said = (part: MarkedItem[number]) => ({
+      member: part.member,
+      value: String(part.value),
+    });
+    return rest.length === 0 ? said(first) : { ...said(first), also: rest.map(said) };
+  }
   // A box plot's point is its entity (AC-593): "a point to its Order".
   if (spec.chartType === 'boxplot' && item.entity !== undefined && spec.eachPointIs !== undefined)
     return { member: spec.eachPointIs, value: item.entity };
@@ -185,6 +225,8 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
  * (AC-090). A stack at Sum marks its segment's series, as it did.
  */
 export function clickedMarkItem(spec: RenderSpec, item: ClickedItem): MarkedItem | undefined {
+  // What the item stands for as drawn, its values as its rows hold them (AC-612).
+  if (spec.chartType === 'sankey') return item.marks;
   const clicked = clickedValue(spec, item);
   if (clicked === undefined) return undefined;
   // A point's entity as its row holds it, so the row matches (AC-593).
