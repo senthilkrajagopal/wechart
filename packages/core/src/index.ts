@@ -240,6 +240,17 @@ export {
 } from './dashboard-document';
 
 export {
+  PARAMETER_CHOICE_LIMIT,
+  dashboardParameterProblems,
+  dashboardParametersProblems,
+  parameterChoiceOf,
+  parameterValueOf,
+  type DashboardParameter,
+  type ParameterChoice,
+  type ParameterRole,
+} from './dashboard-parameters';
+
+export {
   applyItemClick,
   applyToggleOrAdd,
   isItemMarked,

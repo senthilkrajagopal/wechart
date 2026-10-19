@@ -117,3 +117,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/api/src/mcp/tools/read.ts`, `packages/api/src/mcp/tools/workspace.ts`, `packages/api/src/mcp/tools/text-tiles.test.ts`.
   - Failing test: `text-tiles.test.ts`: reading a dashboard returns its Text tile's content as T870's markdown inside the marked data field (AC-443); writing a dashboard with a markdown Text tile stores a document equal to T869's conversion (`exported`, every element kind's token read back as its element); one holding `<script>` stores it as literal text; one of 11 tokens is refused; re-writing a tile with a Button on "Go to Detail" (two actions), a Change (Lower is better) and a Value (its own filter), read and sent back with its tokens unchanged, keeps every stored setting, matched by kind and source in order, and a new token takes the defaults (AC-527, decision T891-1).
   - Depends on: T870, T871
+
+- [x] T895 [P] (AC-531) The dashboard parameter in the dashboard's document: a name, a role, ordered labelled choices of at most 1,000 and a default among them
+  - Files: `packages/core/src/dashboard-parameters.ts` (+ test), `packages/core/src/dashboard-document.ts`, `packages/core/src/index.ts`.
+  - Failing test: `dashboard-parameters.test.ts`: a Measure parameter of Revenue, Orders and Margin % with default Revenue passes; 1,001 choices, a default outside the choices, a Dimension choice in a Measure parameter, and an empty name are each refused, named (AC-531).
+  - Depends on: none

@@ -63,6 +63,12 @@ export interface NewDashboard {
   readonly owner: string;
 }
 
+/**
+ * A new dashboard has no parameters (F46, `dashboard-parameters.ts`): they
+ * sit at the top of the document beside `filters` and `markings`, as
+ * `parameters`, and are absent until the author makes one — absent and empty
+ * read alike, so nothing stored before F46 needs a migration.
+ */
 export interface NewDashboardBody extends NewDashboard {
   readonly schemaVersion: number;
   readonly pages: readonly never[];

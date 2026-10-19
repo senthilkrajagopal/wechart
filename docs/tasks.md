@@ -1924,10 +1924,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `ActionList.test.tsx`: + action offers Go to page tab, Apply bookmark, Reset filters and Export only; Move up reorders; `ActionButton.test.tsx`: Reset filters then Go to page tab Detail runs in that order; Reset filters leaves a parameter's value; Export of two tiles downloads two CSVs, each as AC-171 makes it; a stored button with `{"kind":"script"}` is refused by `textDocumentProblems` and runs nothing (AC-530).
   - Depends on: T882
 
-- [ ] T895 [P] (AC-531) The dashboard parameter in the dashboard's document: a name, a role, ordered labelled choices of at most 1,000 and a default among them
-  - Files: `packages/core/src/dashboard-parameters.ts` (+ test), `packages/core/src/dashboard-document.ts`, `packages/core/src/index.ts`.
-  - Failing test: `dashboard-parameters.test.ts`: a Measure parameter of Revenue, Orders and Margin % with default Revenue passes; 1,001 choices, a default outside the choices, a Dimension choice in a Measure parameter, and an empty name are each refused, named (AC-531).
-  - Depends on: none
+- [x] T895 [P] (AC-531) The dashboard parameter in the dashboard's document: a name, a role, ordered labelled choices of at most 1,000 and a default among them
 
 - [ ] T896 (AC-531) Dashboard settings › Parameters: the section and its list, and New parameter in the section or a 520 px dialog from the insert menu and a well's picker
   - Files: `packages/web/src/dashboard/settings/ParametersSettings.tsx` (+ test), `packages/web/src/dashboard/settings/ParameterForm.tsx` (+ test), `packages/web/src/dashboard/settings/SettingsPage.tsx`.
