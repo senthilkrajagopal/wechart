@@ -245,6 +245,22 @@ describe('a graphical table drawn (T944, AC-571)', () => {
     expect(change('Dairy')?.textContent).toBe('▲ +10.0%');
   });
 
+  it('draws a Sparkline’s own last periods where a Change at its grain asks more', () => {
+    const shared = [
+      { kind: 'sparkline' as const, settings: { measure: REVENUE, time: AT, last: 2 } },
+      { kind: 'change' as const, settings: { measure: REVENUE, time: AT, period: 'month' } },
+    ];
+    // One trend by month over 12 periods, as the two columns share it.
+    render(<GraphicalTableView spec={spec({}, shared)} trends={[months]} now={now} />);
+    const spark = within(screen.getByRole('row', { name: /^Beverages/ }))
+      .getAllByRole('cell')[0]
+      ?.querySelector('svg');
+    // September and October, not August too.
+    expect(spark?.getAttribute('aria-label')).toBe(
+      'Revenue by month, last 2 months: from $2.0K to $3.0K, low $2.0K, high $3.0K',
+    );
+  });
+
   it('says "No rule matched" for an icon no rule applies to', () => {
     const noRule = COLUMNS.map((column) =>
       column.kind === 'icon'

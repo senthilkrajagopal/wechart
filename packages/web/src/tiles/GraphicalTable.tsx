@@ -205,7 +205,7 @@ function Cell({
             <ElementUnavailable measure={labelOf(spec, measure)} error={trend.error} />
           </td>
         );
-      const values = trend === undefined ? [] : valuesAlong(trend, measure, matches, now);
+      const values = sparklineValuesOf(column, trend, matches, now);
       if (values.every((value) => value === null))
         return (
           <td>
@@ -223,7 +223,7 @@ function Cell({
             member={measure}
             formats={formats}
             granularity={trend?.time.granularity ?? 'month'}
-            last={trend?.periods ?? values.length}
+            last={values.length}
             lastPoint={column.settings['lastPoint'] === true}
             colour={spec.colours?.[measure] ?? spec.palette?.[0] ?? DEFAULT_PALETTE[0]}
           />
@@ -363,6 +363,23 @@ export function changeReadingOf(
             ratio: previous === 0 ? undefined : (current - previous) / previous,
           },
   };
+}
+
+/**
+ * A Sparkline's values, oldest first: its own last periods (12 unless it
+ * says), though the trend it shares with a Change at its grain, or a longer
+ * Sparkline, was asked over more (graphicalTableTrends asks the longest).
+ */
+export function sparklineValuesOf(
+  column: GraphicalTableColumn,
+  trend: LoadedTrend | undefined,
+  matches: (one: Row) => boolean,
+  now: Date,
+): (number | null)[] {
+  if (trend === undefined) return [];
+  const last = column.settings['last'];
+  const own = typeof last === 'number' && last >= 1 ? last : 12;
+  return valuesAlong(trend, column.settings.measure, matches, now).slice(-own);
 }
 
 /** The rows of a trend that are one drawn row's: its member, and its section's. */

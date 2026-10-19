@@ -6,9 +6,9 @@ import {
   iconValueOf,
   matcherFor,
   rulesOf,
+  sparklineValuesOf,
   targetOf,
   trendFor,
-  valuesAlong,
   type LoadedTrend,
 } from '../GraphicalTable';
 import { changeWordsOf } from '../text/elements/ChangeElement';
@@ -67,7 +67,7 @@ export function graphicalTableTableView(
     if (trend?.error !== undefined) return 'Unavailable';
     const matches = matcherFor(row, rowsMember, groupBy);
     if (column.kind === 'sparkline') {
-      const present = (trend === undefined ? [] : valuesAlong(trend, measure, matches, now)).filter(
+      const present = sparklineValuesOf(column, trend, matches, now).filter(
         (value): value is number => value !== null,
       );
       if (present.length === 0) return '—';
