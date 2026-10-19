@@ -30,6 +30,26 @@ const keyOf = (feature: Feature, keyProperty: string): string | undefined => {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : undefined;
 };
 
+const isPosition = (value: unknown) =>
+  Array.isArray(value) &&
+  value.length >= 2 &&
+  typeof value[0] === 'number' &&
+  typeof value[1] === 'number' &&
+  Number.isFinite(value[0]) &&
+  Number.isFinite(value[1]);
+
+/** A polygon: one or more rings, each of at least 4 positions (RFC 7946 §3.1.6). */
+const isPolygon = (value: unknown) =>
+  Array.isArray(value) &&
+  value.length > 0 &&
+  value.every((ring) => Array.isArray(ring) && ring.length >= 4 && ring.every(isPosition));
+
+/** Whether a geometry's coordinates are what its type says (checkpoint 5's review). */
+const holdsRings = (type: 'Polygon' | 'MultiPolygon', coordinates: unknown) =>
+  type === 'Polygon'
+    ? isPolygon(coordinates)
+    : Array.isArray(coordinates) && coordinates.length > 0 && coordinates.every(isPolygon);
+
 /** Why the set can't be taken, naming the first feature that fails; none where it can. */
 export function boundarySetProblem(geojson: unknown, keyProperty: string): string | undefined {
   if (keyProperty.trim() === '') return 'Name the key property.';
@@ -44,6 +64,8 @@ export function boundarySetProblem(geojson: unknown, keyProperty: string): strin
     const shape = feature.geometry?.type;
     if (shape !== 'Polygon' && shape !== 'MultiPolygon')
       return `Feature ${String(place)}${named} is a ${typeof shape === 'string' ? shape : 'feature with no geometry'}: every feature must be a Polygon or MultiPolygon.`;
+    if (!holdsRings(shape, (feature.geometry as { coordinates?: unknown }).coordinates))
+      return `Feature ${String(place)}${named} has a ${shape} that isn’t rings of at least 4 [longitude, latitude] positions.`;
     if (key === undefined)
       return `Feature ${String(place)} has no "${keyProperty}": every feature must hold the key property.`;
     const before = seen.get(key);

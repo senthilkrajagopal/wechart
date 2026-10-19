@@ -161,6 +161,23 @@ describe('uploading a custom boundary set (AC-628)', () => {
     });
     expect(twice.statusCode).toBe(422);
     expect(twice.json<{ error: string }>().error).toContain('Feature 4 ("Gulf")');
+    // Checkpoint 5's review: a Polygon's coordinates must be rings of positions.
+    for (const coordinates of [null, [], [[[0, 0], ['a', 'b'], [1, 1], [0, 0]]]]) {
+      const broken = await upload('writer', {
+        ...body,
+        geojson: {
+          ...TERRITORIES,
+          features: [
+            ...TERRITORIES.features,
+            { ...square('Reef', 9), geometry: { type: 'Polygon', coordinates } },
+          ],
+        },
+      });
+      expect(broken.statusCode, JSON.stringify(coordinates)).toBe(422);
+      expect(broken.json<{ error: string }>().error).toBe(
+        'Feature 4 ("Reef") has a Polygon that isn’t rings of at least 4 [longitude, latitude] positions.',
+      );
+    }
     const keyless = await upload('writer', { ...body, keyProperty: 'region' });
     expect(keyless.json<{ error: string }>().error).toBe(
       'Feature 1 has no "region": every feature must hold the key property.',

@@ -71,6 +71,33 @@ describe('a custom boundary set (AC-628)', () => {
     ).toBe('Feature 3 ("Gulf") has the same "territory_id" as feature 2: each key must be unique.');
   });
 
+  // Checkpoint 5's review: a polygon is rings of positions, or it can't be drawn or marked.
+  it('refuses a polygon whose coordinates aren’t rings of positions, naming it', () => {
+    const shaped = (key: string, geometry: unknown) => ({
+      type: 'Feature',
+      properties: { territory_id: key },
+      geometry,
+    });
+    for (const coordinates of [null, [], 'x', [[[0, 0], [1, 0], [0, 0]]], [[[0, 0], [1, 'a'], [1, 1], [0, 0]]]])
+      expect(
+        boundarySetProblem(
+          collection(square('Atlantic', 0), shaped('Gulf', { type: 'Polygon', coordinates })),
+          'territory_id',
+        ),
+        JSON.stringify(coordinates),
+      ).toBe(
+        'Feature 2 ("Gulf") has a Polygon that isn’t rings of at least 4 [longitude, latitude] positions.',
+      );
+    expect(
+      boundarySetProblem(
+        collection(shaped('Islands', { type: 'MultiPolygon', coordinates: [[]] })),
+        'territory_id',
+      ),
+    ).toBe(
+      'Feature 1 ("Islands") has a MultiPolygon that isn’t rings of at least 4 [longitude, latitude] positions.',
+    );
+  });
+
   it('refuses what isn’t a FeatureCollection, or holds no features, or is too large', () => {
     expect(boundarySetProblem({ type: 'Feature' }, 'territory_id')).toBe(
       'This is not a GeoJSON FeatureCollection.',
