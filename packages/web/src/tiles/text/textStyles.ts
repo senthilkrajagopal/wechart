@@ -50,6 +50,24 @@ export const TEXT_CSS = `
 .text-tile__count[data-state='warning'] { color: var(--wc-status-warning); font-weight: 600; }
 /* An empty tile's placeholder, in edit mode only (design 21 G6). */
 .text-tile--empty { margin: 0; color: var(--wc-text-muted); }
+/* Double-click's target in edit mode; no box of its own (T876). */
+.text-tile-host { display: contents; }
+/* The text edited in place: a 2 px accent border (AC-302; design 21 pin 1). */
+.text-editor__text {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 4px 6px;
+  border: 2px solid var(--wc-accent);
+  border-radius: 4px;
+  outline: none;
+}
+/* An element in the editor, at the text's own size (rule 130). */
+.text-element {
+  padding: 0 4px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+}
 /* Under its kind head in edit mode, the text fills the rest, as the markdown
    tile's did. */
 .grid-tile > .tile-head--kind ~ .text-tile { flex: 1 1 0; min-height: 0; height: auto; }

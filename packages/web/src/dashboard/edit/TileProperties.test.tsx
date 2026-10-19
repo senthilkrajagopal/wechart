@@ -1,22 +1,20 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { textDocumentFromMarkdown } from '@wechart/core';
 
-import { TextTile } from '../../tiles/text/TextTile';
-import { elementAt, type DashboardDocument, type Tile } from '../model/document';
+import type { DashboardDocument } from '../model/document';
 import { TileProperties } from './TileProperties';
 
 /**
- * T394, AC-302: WHEN the user selects a markdown tile in edit mode, THE
- * SYSTEM SHALL let them edit its text, and render the change (gap 12).
- * `Fails when: a markdown tile's text can't be changed in the UI.`
+ * T876 / AC-302: … "Edit text on the canvas", the first control of its
+ * Properties (reached by keyboard as Enter on the focused tile, then Enter)
+ * … and Properties SHALL hold no markdown source.
+ * `Fails when: … or Properties shows a markdown textarea.`
  *
- * The Properties panel on a document it changes, the tile drawn beside it as
- * the dashboard draws it: a markdown tile inside a section, as a dashboard
- * nests one.
+ * A Text tile inside a section, as a dashboard nests one, and a markdown tile
+ * saved before R80, which reads as the Text tile it now is (T875).
  */
 const DOCUMENT: DashboardDocument = {
   schemaVersion: 1,
@@ -31,47 +29,56 @@ const DOCUMENT: DashboardDocument = {
           id: 'section',
           kind: 'section',
           title: 'Detail',
-          items: [{ id: 'note', kind: 'markdown', w: 6, h: 18, text: '## Old' }],
+          items: [
+            {
+              id: 'note',
+              kind: 'text',
+              w: 6,
+              h: 18,
+              document: textDocumentFromMarkdown('## Old'),
+            },
+            { id: 'legacy', kind: 'markdown', w: 6, h: 18, text: '## Older' },
+          ],
         },
       ],
     },
   ],
 };
 
-function Editing() {
-  const [document, setDocument] = useState(DOCUMENT);
-  const tile = elementAt(document, 'note') as Tile;
-  return (
-    <>
-      <TileProperties
-        dashboardId="d1"
-        document={document}
-        selected="note"
-        onChange={(apply) => {
-          setDocument(apply);
-        }}
-      />
-      <div data-testid="tile">
-        {/* Drawn as the dashboard now draws a markdown tile: a Text tile (T875). */}
-        <TextTile document={textDocumentFromMarkdown(tile.text ?? '')} />
-      </div>
-    </>
+function opened(selected: string) {
+  const onEditText = vi.fn();
+  render(
+    <TileProperties
+      dashboardId="d1"
+      document={DOCUMENT}
+      selected={selected}
+      onChange={() => undefined}
+      onEditText={onEditText}
+    />,
   );
+  return onEditText;
 }
 
-describe('a markdown tile’s text in Properties (T394, AC-302)', () => {
-  it('is edited there, typed key by key, and drawn as it changes', async () => {
-    render(<Editing />);
-    const text = screen.getByLabelText('Markdown text');
-    expect((text as HTMLTextAreaElement).value).toBe('## Old');
+describe('a Text tile’s Properties (T876, AC-302)', () => {
+  it('starts with "Edit text on the canvas", which edits it there, and holds no markdown', async () => {
+    const onEditText = opened('note');
+    const edit = screen.getByRole('button', { name: 'Edit text on the canvas' });
+    // The panel's first control: what Enter on the focused tile reaches.
+    const controls = document.querySelectorAll('button, input, select, textarea, summary');
+    expect(controls[0]).toBe(edit);
+    expect(edit.hasAttribute('data-panel-first')).toBe(true);
+    expect(screen.getByText('Or double-click the tile. Esc leaves the text.')).toBeTruthy();
+    expect(document.querySelector('textarea')).toBeNull();
+    expect(screen.queryByLabelText('Markdown text')).toBeNull();
 
-    await userEvent.clear(text);
-    await userEvent.type(text, '## Revenue{Enter}Up **12%**');
+    await userEvent.click(edit);
+    expect(onEditText).toHaveBeenCalledWith('note');
+  });
 
-    expect((text as HTMLTextAreaElement).value).toBe('## Revenue\nUp **12%**');
-    const tile = screen.getByTestId('tile');
-    // The tile's own heading, ranked under the dashboard's and its section's.
-    expect(within(tile).getByRole('heading', { name: 'Revenue' }).tagName).toBe('H3');
-    expect(tile.querySelector('strong')?.textContent).toBe('12%');
+  it('is the same for a markdown tile saved before R80: no markdown source', async () => {
+    const onEditText = opened('legacy');
+    expect(document.querySelector('textarea')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit text on the canvas' }));
+    expect(onEditText).toHaveBeenCalledWith('legacy');
   });
 });

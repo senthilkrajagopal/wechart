@@ -26,6 +26,29 @@ describe('asking the sidebar for a panel', () => {
     expect(document.activeElement).toBe(panel);
   });
 
+  it('moves focus to the control the panel names first, where it names one (T876, AC-302)', () => {
+    render(
+      <EditSidebar
+        panels={{
+          ...panels,
+          properties: (
+            <button type="button" data-panel-first="">
+              Edit text on the canvas
+            </button>
+          ),
+        }}
+      />,
+    );
+
+    act(() => {
+      openSidebarPanel('Properties');
+    });
+
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Edit text on the canvas' }),
+    );
+  });
+
   it('moves focus into it when it is the panel already open', () => {
     // A second tile's Enter, with Properties still open from the first:
     // nothing about the panel changes, and focus must move all the same.

@@ -24,6 +24,7 @@ export function TileProperties({
   selected,
   onChange,
   chartProperties,
+  onEditText,
 }: {
   dashboardId: string;
   document: DashboardDocument;
@@ -35,6 +36,8 @@ export function TileProperties({
   onChange: (apply: (current: DashboardDocument) => DashboardDocument) => void;
   /** A chart tile's own properties — its chart's ownership (T133) — from above, which has its chart. */
   chartProperties?: ((tile: Tile) => ReactNode) | undefined;
+  /** A Text tile's text, made editable on the canvas (AC-302). */
+  onEditText?: ((tileId: string) => void) | undefined;
 }) {
   const element = selected === null ? null : elementAt(document, selected);
   if (element === null || !isTile(element))
@@ -56,8 +59,16 @@ export function TileProperties({
         );
       case 'link':
         return <LinkProperties key={element.id} tile={element} onChange={change} />;
+      // A markdown tile saved before R80 reads as the Text tile it now is (T875).
       case 'markdown':
-        return <MarkdownProperties key={element.id} tile={element} onChange={change} />;
+      case 'text':
+        return (
+          <TextProperties
+            onEdit={() => {
+              onEditText?.(element.id);
+            }}
+          />
+        );
       case 'chart':
         return chartProperties?.(element) ?? <Note>This tile has no properties to set here.</Note>;
       default:
@@ -240,31 +251,18 @@ function useDashboardSearch(text: string): readonly Found[] {
 }
 
 /**
- * A markdown tile's text (T394, AC-302): edited here, and drawn on the tile
- * as it is typed, in the tile's own subset of markdown (AC-208). Saved with
- * the dashboard, as any change in edit mode is.
+ * A Text tile's Properties (T876, AC-302; design 21 screen 1 pins 12 and 13):
+ * no markdown source — the canvas is the editor (R80, Q1) — and first, the
+ * way into the text, which Enter on the focused tile reaches (`data-panel-first`).
  */
-function MarkdownProperties({
-  tile,
-  onChange,
-}: {
-  tile: Tile;
-  onChange: (patch: Partial<Tile>) => void;
-}) {
-  const id = useId();
+function TextProperties({ onEdit }: { onEdit: () => void }) {
   return (
     <div className="panel-section tile-properties">
-      <h3>Markdown</h3>
-      <Field id={id} label="Markdown text">
-        <textarea
-          id={id}
-          rows={10}
-          value={tile.text ?? ''}
-          onChange={(event) => {
-            onChange({ text: event.target.value });
-          }}
-        />
-      </Field>
+      <h3>Text</h3>
+      <button type="button" className="btn btn-sm" data-panel-first="" onClick={onEdit}>
+        Edit text on the canvas
+      </button>
+      <p className="tile-properties__hint">Or double-click the tile. Esc leaves the text.</p>
     </div>
   );
 }

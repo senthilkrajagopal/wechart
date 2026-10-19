@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  elementAttributeNames,
   elementsOf,
   TEXT_DOCUMENT_VERSION,
   TEXT_ELEMENT_LIMIT,
@@ -461,6 +462,17 @@ describe('a Text document’s elements (T868, AC-518)', () => {
     });
     expect(elementsOf(doc)).toHaveLength(2);
     expect(elementsOf(docOf())).toEqual([]);
+  });
+
+  it('names the attributes each kind declares, for the editor to declare the same (T876)', () => {
+    expect(elementAttributeNames('value')).toEqual([
+      'measure',
+      'filters',
+      'marking',
+      'whenUnmarked',
+    ]);
+    expect(elementAttributeNames('actionButton')).toEqual(['label', 'style', 'actions']);
+    expect(elementAttributeNames('filterValue')).toEqual(['filter']);
   });
 });
 

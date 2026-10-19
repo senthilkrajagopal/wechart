@@ -123,3 +123,82 @@ test('a markdown tile of 12 tokens shows all 12, and holds Save until 2 are remo
   await expect(toolbar(page).getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
   await expect(page.getByTestId('save-blocked')).toContainText('Remove 2 live values to save');
 });
+
+/**
+ * T876 / AC-302: a Text tile's text is edited in place on the canvas, reached
+ * by keyboard as Enter on the focused tile then Enter on "Edit text on the
+ * canvas", with focus at the text's end and a 2 px accent border; a click
+ * outside, Esc and Tab each leave it; the edit bar's Undo, pressed once,
+ * restores the old text whole; Properties holds no textarea.
+ */
+test('a Text tile’s text is edited on the canvas, left by a click, Esc or Tab, and undone whole', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWith(request, 'Revenue grew');
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+
+  const tile = page.locator('[data-tile="tile-text"]');
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  const textbox = tile.getByRole('textbox');
+
+  // By keyboard: Enter on the focused tile, then Enter on Properties' first control.
+  await tile.focus();
+  await page.keyboard.press('Enter');
+  const editText = sidebar.getByRole('button', { name: 'Edit text on the canvas' });
+  await expect(editText).toBeFocused();
+  await expect(sidebar.locator('textarea')).toHaveCount(0);
+  await page.keyboard.press('Enter');
+
+  await expect(textbox).toBeFocused();
+  await expect(textbox).toHaveAttribute('aria-multiline', 'true');
+  await expect(textbox).toHaveAccessibleName(/Revenue grew/);
+  const border = await textbox.evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--wc-accent)';
+    element.parentElement?.append(probe);
+    const accent = getComputedStyle(probe).color;
+    probe.remove();
+    const style = getComputedStyle(element);
+    return { width: style.borderTopWidth, colour: style.borderTopColor, accent };
+  });
+  expect(border.width).toBe('2px');
+  expect(border.colour).toBe(border.accent);
+
+  // Focus is at the text's end: what's typed follows it.
+  await page.keyboard.type(' fast, and margins held');
+  await expect(textbox).toHaveText('Revenue grew fast, and margins held');
+
+  // A click outside the text leaves it, the tile selected and focused.
+  await tile.locator('.tile-head__kind').click();
+  await expect(textbox).toHaveCount(0);
+  await expect(tile).toBeFocused();
+  await expect(tile).toHaveAttribute('data-selected', 'true');
+  await expect(tile.locator('.text-tile p')).toHaveText('Revenue grew fast, and margins held');
+
+  // One Undo takes the whole edit.
+  await toolbar(page).getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(tile.locator('.text-tile p')).toHaveText('Revenue grew');
+
+  // Double-click, type, Esc: left, the tile selected and focused.
+  await tile.locator('.text-tile').dblclick();
+  await expect(textbox).toBeFocused();
+  await page.keyboard.type('!');
+  await page.keyboard.press('Escape');
+  await expect(textbox).toHaveCount(0);
+  await expect(tile).toBeFocused();
+  await expect(tile).toHaveAttribute('data-selected', 'true');
+  await expect(tile.locator('.text-tile p')).toHaveText('Revenue grew!');
+
+  // Tab leaves it for the next control: focus is no longer in the text.
+  await tile.locator('.text-tile').dblclick();
+  await expect(textbox).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(textbox).toHaveCount(0);
+  await expect(tile.locator('.text-tile p')).toHaveText('Revenue grew!');
+  expect(
+    await page.evaluate(() => document.activeElement?.closest('[contenteditable]') ?? null),
+  ).toBeNull();
+});

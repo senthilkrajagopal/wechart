@@ -47,6 +47,7 @@ import {
   TEXT_ELEMENT_LIMIT,
 } from '@wechart/core';
 import {
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -122,6 +123,7 @@ import {
 } from '../tiles/text/documents';
 import { elementCountOf, whyTextUnsaveable } from '../tiles/text/elementLimit';
 import { TextTile } from '../tiles/text/TextTile';
+import { LazyTextEditor, TextEditingContext, type TextEditing } from '../tiles/text/textEditing';
 import { MarkingToken, MeasureToken, UnknownMarkingToken } from './tiles/LiveToken';
 import { measureQueryOf } from './tiles/TextTokens';
 import { coverageOf, type Reach } from '../filters/coverage';
@@ -685,6 +687,8 @@ function TileBody({
   // the context, not a failure of the chart (T173, AC-167).
   const preview = useContext(SecurityPreview);
   const hidden = preview === undefined ? undefined : hiddenMemberOf(error);
+  /** A Text tile's text edited in place (T876, AC-302). */
+  const textEditing = useContext(TextEditingContext);
   // Under the head where the state has one, and first where it has none.
   const noted = notes === undefined ? null : <div className="tile-notes">{notes}</div>;
   switch (tile.kind) {
@@ -846,6 +850,22 @@ function TileBody({
       // on open, so this reads only one that never went through it.
       const document = (tile.kind === 'text' ? tile : (readAsText(tile) as Tile)).document;
       const count = elementCountOf(document);
+      const drawn = (
+        <TextTile
+          document={document ?? emptyTextDocument()}
+          // Its Value and Marking elements as the markdown tile's tokens
+          // were drawn: the markings and measures (T389, AC-116).
+          renderElement={(node, key) => {
+            const token = tokenOfElement(node);
+            return token === undefined ? null : tokens?.(token, key);
+          }}
+        />
+      );
+      /**
+       * Its text editable in place (T876, AC-302): the editor while it is
+       * this tile's, the tile as drawn while the editor's chunk loads.
+       */
+      const inPlace = editing && textEditing !== undefined && textEditing.tileId === tile.id;
       return (
         <>
           {editing ? (
@@ -862,19 +882,34 @@ function TileBody({
               ) : null}
             </KindHead>
           ) : null}
-          {editing && isEmptyTextDocument(document) ? (
-            <p className="text-tile text-tile--empty">Type, or press / to insert a live value</p>
-          ) : (
-            <TextTile
-              document={document ?? emptyTextDocument()}
-              // Its Value and Marking elements as the markdown tile's tokens
-              // were drawn: the markings and measures (T389, AC-116).
-              renderElement={(node, key) => {
-                const token = tokenOfElement(node);
-                return token === undefined ? null : tokens?.(token, key);
-              }}
-            />
-          )}
+          {/* Double-clicked in edit mode, its text becomes editable (AC-302);
+              the keyboard's way in is Properties' first control. */}
+          <div
+            className="text-tile-host"
+            onDoubleClick={
+              editing && !inPlace && textEditing !== undefined
+                ? () => {
+                    textEditing.start(tile.id);
+                  }
+                : undefined
+            }
+          >
+            {inPlace ? (
+              <Suspense fallback={drawn}>
+                <LazyTextEditor
+                  document={document ?? emptyTextDocument()}
+                  name={textEditing.nameOf(tile.id)}
+                  onLeave={(next, how) => {
+                    textEditing.leave(tile.id, next, how);
+                  }}
+                />
+              </Suspense>
+            ) : editing && isEmptyTextDocument(document) ? (
+              <p className="text-tile text-tile--empty">Type, or press / to insert a live value</p>
+            ) : (
+              drawn
+            )}
+          </div>
         </>
       );
     }
@@ -5139,6 +5174,12 @@ export function DashboardView({
    */
   const [selected, setSelected] = useState<string | null>(null);
   /**
+   * The Text tile whose text is editable on the canvas (T876, AC-302): view
+   * state, like the selection; the edit reaches the history once, when the
+   * text is left.
+   */
+  const [editingText, setEditingText] = useState<string | null>(null);
+  /**
    * The filter selected while editing, its field, scope and Remove in
    * Properties (T468, UX-031); and whether focus is asked for in its field
    * picker. A filter is not an element of the canvas, so it has a selection
@@ -5901,6 +5942,13 @@ export function DashboardView({
                 onChange={(apply) => {
                   session.update(apply);
                 }}
+                // "Edit text on the canvas" (T876, AC-302).
+                onEditText={(tileId) => {
+                  if (session.saving) return;
+                  setSelected(tileId);
+                  setAddTarget(null);
+                  setEditingText(tileId);
+                }}
                 // Whose its chart is, and "Save to folders…" (T133, AC-127).
                 chartProperties={(tile) => (
                   <>
@@ -6305,6 +6353,8 @@ export function DashboardView({
               startEditing={startEditing}
               onStartedEditing={onStartedEditing}
               editorOpenFor={editingChart?.tileId}
+              editingText={editingText}
+              onEditingText={setEditingText}
               where={where}
               onAim={(next) => {
                 setSelected(next.selected);
@@ -6503,6 +6553,8 @@ function DashboardPages({
   startEditing = false,
   onStartedEditing,
   editorOpenFor,
+  editingText = null,
+  onEditingText,
   where,
   onAim,
   deleted,
@@ -6577,6 +6629,12 @@ function DashboardPages({
   onStartedEditing?: (() => void) | undefined;
   /** The tile the editor is open on now, if it is open. */
   editorOpenFor?: string | undefined;
+  /**
+   * The Text tile whose text is editable on the canvas (T876, AC-302), owned
+   * above so Properties' "Edit text on the canvas" can start it too.
+   */
+  editingText?: string | null;
+  onEditingText?: ((tileId: string | null) => void) | undefined;
   /** Where the next insert is aimed, owned above so the sidebar agrees. */
   where: { selected: string | null; addTarget: string | null; pageId: string };
   onAim: (next: { selected: string | null; addTarget: string | null }) => void;
@@ -6671,6 +6729,33 @@ function DashboardPages({
   const containers = containersOf(document);
   /** A tile's name wherever it is announced (AC-209), as the Outline names it. */
   const tileName = (id: string) => tileNameOf(document, id, (chartId) => charts.titleOf?.(chartId));
+
+  /**
+   * A Text tile's text edited in place (T876, AC-302; design 21 pin 1): the
+   * tile selected as it starts; once it's left, the whole edit is one change
+   * to the session, so one Undo reverses it; after Esc, or a click on nothing
+   * that takes focus, the tile has focus (rule 85's pattern).
+   */
+  const textEditing: TextEditing = {
+    tileId: editing ? editingText : null,
+    start: (tileId) => {
+      if (!editing || session.saving) return;
+      onAim({ selected: tileId, addTarget: null });
+      onEditingText?.(tileId);
+    },
+    leave: (tileId, next, how) => {
+      onEditingText?.(null);
+      if (next !== undefined)
+        session.update((current) =>
+          changeTile(current, tileId, (tile) => ({
+            ...(readAsText(tile) as Tile),
+            document: next,
+          })),
+        );
+      if (how !== 'away') tileNode(tileId)?.focus();
+    },
+    nameOf: tileName,
+  };
 
   const drag = useTileDrag({
     onMove: (tileId, to) => {
@@ -7154,11 +7239,13 @@ function DashboardPages({
         data-width={document.settings.width}
       >
         {showing ? (
-          <Elements
-            items={showing.items}
-            containerKey={pageKey(showing.id)}
-            affordances={affordances}
-          />
+          <TextEditingContext value={textEditing}>
+            <Elements
+              items={showing.items}
+              containerKey={pageKey(showing.id)}
+              affordances={affordances}
+            />
+          </TextEditingContext>
         ) : null}
         {/* A page with nothing on it says so, and how to begin (AC-207). While
             editing, the canvas's own drop zones and the Add panel are that. */}

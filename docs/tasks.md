@@ -1916,10 +1916,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T875 (AC-512) A markdown tile shown as a Text tile, converted on open, and stored as a document on the next save
 
-- [ ] T876 (AC-302) Edit a Text tile in place on the canvas: double-click, or "Edit text on the canvas" by keyboard; Esc, Tab or a click outside leaves; one Undo takes the whole edit
-  - Files: `packages/web/src/tiles/text/TextEditor.tsx` (+ test; loaded with `React.lazy`), `packages/web/src/tiles/text/editorExtensions.ts`, `packages/web/src/dashboard/edit/TileProperties.tsx` (the first control; no markdown textarea), `packages/web/src/dashboard/edit/EditChrome.tsx`, `e2e/text-tile.spec.ts`.
-  - Failing test: `TextEditor.test.tsx`: the editor is a `textbox` with `aria-multiline="true"` named after the tile; Esc leaves it with the tile selected and focused, Tab moves to the next control; the e2e: Enter on a focused Text tile then Enter on "Edit text on the canvas" puts focus at the text's end with a 2 px `accent` border; typing then clicking outside and pressing the edit bar's Undo once restores the old text whole; Properties has no textarea (AC-302).
-  - Depends on: T875
+- [x] T876 (AC-302) Edit a Text tile in place on the canvas: double-click, or "Edit text on the canvas" by keyboard; Esc, Tab or a click outside leaves; one Undo takes the whole edit
 
 - [ ] T877 (AC-514) Keep the editor's code out of view mode: no editor chunk until a Text tile is first edited
   - Files: `packages/web/vite.config.ts` (the editor chunk's name), `e2e/text-tile.spec.ts`.

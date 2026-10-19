@@ -72,7 +72,14 @@ export function EditSidebar({ panels }: EditSidebarProps) {
     };
   }, []);
   useEffect(() => {
-    if (asked > 0) panel.current?.focus();
+    if (asked === 0) return;
+    /**
+     * A panel whose first control is where the keyboard goes next names it,
+     * and gets focus there: a Text tile's "Edit text on the canvas", so Enter
+     * on the tile, then Enter, is in the text (AC-302; design 21 pin 12).
+     */
+    const first = panel.current?.querySelector<HTMLElement>('[data-panel-first]');
+    (first ?? panel.current)?.focus();
   }, [asked]);
 
   /**

@@ -602,6 +602,15 @@ export function textDocumentRenamed(
 }
 
 /**
+ * The attributes an element of this kind may hold, as the schema declares
+ * them: what the editor declares on its node (T876), so it keeps every
+ * setting it is given and writes no other.
+ */
+export function elementAttributeNames(kind: ElementKind): readonly string[] {
+  return Object.keys(own(NODES, kind)?.attrs ?? {});
+}
+
+/**
  * The document's elements — live elements, controls and buttons — in text
  * order, wherever they sit: what counts toward the 10 (AC-518).
  */
