@@ -21,11 +21,10 @@
  * Its regions are each country's ISO 3166-2 top tier (R83): where Natural
  * Earth's units are a lower tier, they are dissolved by the field the
  * research names (`DISSOLVE` below); elsewhere a unit is its own region. A
- * region's key is its ISO 3166-2 code where that is a code unique in its
- * country, else `~` and Natural Earth's `adm1_code`, drawn and placed only by
- * its name; a code several units share is kept as an alias of each, so a
- * value of it matches more than one region and is never placed (R83). Its
- * name is the English one.
+ * region's key is its ISO 3166-2 code, the units that share one dissolved
+ * into one region under it (T975-3: one ISO subdivision drawn in parts), else
+ * `~` and Natural Earth's `adm1_code`, drawn and placed only by its name. Its
+ * name is the English one (of its largest part).
  *
  * mapshaper 0.7.90 (MPL-2.0, run as a dev-time CLI, research "Source files")
  * simplifies the whole world once, before splitting, so shared borders stay
@@ -266,14 +265,20 @@ const PARTIAL = new Set(['AZE', 'IRQ', 'SRB']);
 
 const admin1 = checked(admin1Path, ADMIN1_BLOB);
 
-// Natural Earth's own codes, per country, to find those several units share.
-const shared = new Map();
+// A code several of Natural Earth's units share is one ISO subdivision drawn
+// in parts (New South Wales and Lord Howe Island, both AU-NSW): they are
+// dissolved into one region under it, named as its largest part is
+// (the coordinator's call T975-3).
+const largest = new Map();
 for (const { properties: p } of admin1.features) {
   const country = isoOf.get(p.adm0_a3);
   const code = trim(p.iso_3166_2);
   if (country === undefined || !ISO2.test(code)) continue;
   const id = `${country}|${code}`;
-  shared.set(id, (shared.get(id) ?? 0) + 1);
+  const area = Number(p.area_sqkm) || 0;
+  const best = largest.get(id);
+  if (best === undefined || area > best.area)
+    largest.set(id, { area, name: trim(p.name_en) || trim(p.name) });
 }
 
 const prepared = admin1.features.flatMap(({ properties: p, geometry }) => {
@@ -283,18 +288,16 @@ const prepared = admin1.features.flatMap(({ properties: p, geometry }) => {
   if (DISSOLVE[country] !== undefined && dissolved === undefined && !PARTIAL.has(country))
     throw new Error(`${country} ${p.adm1_code} ${p.name}: no region to dissolve into`);
   const code = trim(p.iso_3166_2);
-  const name = trim(p.name_en) || trim(p.name);
-  const own = ISO2.test(code) && shared.get(`${country}|${code}`) === 1;
+  const coded = ISO2.test(code);
   const properties =
     dissolved !== undefined
-      ? { country, key: dissolved[0], name: dissolved[1], alias: '' }
+      ? { country, key: dissolved[0], name: dissolved[1] }
       : {
           country,
-          key: own ? code : `~${p.adm1_code}`,
-          name,
-          // A code several units share: each of them is named by it, so it
-          // matches more than one region (R83).
-          alias: !own && ISO2.test(code) ? code : '',
+          key: coded ? code : `~${p.adm1_code}`,
+          name: coded
+            ? largest.get(`${country}|${code}`).name
+            : trim(p.name_en) || trim(p.name),
         };
   return [{ type: 'Feature', properties, geometry }];
 });
@@ -316,7 +319,7 @@ try {
       'keep-shapes',
       '-dissolve',
       'country,key',
-      'copy-fields=name,alias',
+      'copy-fields=name',
       '-o',
       output,
       'format=geojson',
@@ -346,14 +349,7 @@ try {
       join(OUT, `${country}.geo.json`),
       `${JSON.stringify({ type: 'FeatureCollection', features: list })}\n`,
     );
-    const aliases = new Map(
-      features
-        .filter((one) => one.properties.country === country && one.properties.alias !== '')
-        .map((one) => [one.properties.key, one.properties.alias]),
-    );
-    index[country] = list.map(({ properties: { key, name } }) =>
-      aliases.has(key) ? [key, name, aliases.get(key)] : [key, name],
-    );
+    index[country] = list.map(({ properties: { key, name } }) => [key, name]);
   }
   writeFileSync(join(OUT, 'index.json'), `${JSON.stringify(index)}\n`);
   const sizes = readdirSync(OUT)

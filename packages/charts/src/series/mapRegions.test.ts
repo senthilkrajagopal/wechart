@@ -107,11 +107,16 @@ describe('Admin-1 (AC-622, R83)', () => {
     expect(admin1CountryOf(['Online'])).toBeUndefined();
   });
 
-  it('never places a code Natural Earth gives several units: it matches more than one region', () => {
+  // T975-3: units Natural Earth gives one code are one ISO subdivision in
+  // parts, dissolved under it; a name two regions share still matches both.
+  it('places a code Natural Earth gives several units as one region, and never a name two regions share', () => {
     // New South Wales and Lord Howe Island both carry AU-NSW.
-    const regions = admin1RegionsOf('AUS')!;
-    expect(regions.regionsOf('AU-NSW').length).toBeGreaterThan(1);
-    expect(regions.regionsOf('New South Wales')).toHaveLength(1);
+    const australia = admin1RegionsOf('AUS')!;
+    expect(australia.regionsOf('AU-NSW')).toEqual(['AU-NSW']);
+    expect(australia.regionsOf('New South Wales')).toEqual(['AU-NSW']);
+    expect((INDEX['AUS'] ?? []).filter(([key]) => key === 'AU-NSW')).toHaveLength(1);
+    // Buenos Aires: the city and the province.
+    expect(admin1RegionsOf('ARG')!.regionsOf('Buenos Aires')).toHaveLength(2);
   });
 
   it('keeps each country’s file small enough to fetch on demand', () => {

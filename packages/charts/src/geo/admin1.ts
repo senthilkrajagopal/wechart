@@ -9,8 +9,8 @@
  * name most, read from the index (90 kB) before that country's file is
  * fetched and registered with ECharts as its own map. A region is placed by
  * its ISO 3166-2 code or its English name; a `~` key is placed by its name
- * alone; a code several of Natural Earth's units share names each of them,
- * so it matches more than one region and is never placed (R83).
+ * alone; a name two regions share matches both, and is never placed (R83).
+ * Units Natural Earth gives one code are one region under it (T975-3).
  */
 import { regionIndexOf, type RegionIndex } from '@wechart/core';
 
@@ -20,7 +20,7 @@ import { registerRegionSet, regionSetOf, type RegionSet } from './regionSets';
 /** The feature property a region is keyed by in every country's file. */
 export const ADMIN1_KEY = 'key';
 
-/** Every country's regions: [key, English name, a code it shares with others]. */
+/** Every country's regions: [key, English name, and any other value that names it]. */
 export type Admin1Index = Readonly<Record<string, readonly (readonly string[])[]>>;
 
 /** The ECharts map one country's Admin-1 regions are registered as. */
