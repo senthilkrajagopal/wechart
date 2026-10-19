@@ -13,6 +13,8 @@ import { cancelRun, GOING_QUERY, NO_CANCEL } from '../sql/going';
 import { NO_LONGER_AVAILABLE } from '../sql/HistoryList';
 import { OffPanel, useReadWriteGroups, WhoRuns } from '../sql/OffPanel';
 import { OPEN_IN_SQL_RUNNER, openInSqlRunner } from '../sql/openIn';
+import { unboundOn } from '../sql/ParameterStrip';
+import { parameterNames } from '../sql/parameterNames';
 import { loginFor, pageKeyOf, pathText, routeOf, type SqlSource } from '../sql/sqlSource';
 
 /**
@@ -304,6 +306,8 @@ function Runner({
   const run = useCallback(
     async (sql: string) => {
       if (running !== null || elsewhere !== null || sql.trim() === '') return;
+      // A `{{ name }}` Cube Store can't bind: held, as the workspace holds it (AC-482).
+      if (parameterNames(sql).length > 0) return;
       const startedAt = new Date();
       setRunning(startedAt);
       setNow(startedAt.getTime());
@@ -380,6 +384,12 @@ function Runner({
   };
 
   const toRun = selected === '' ? text : selected;
+  /**
+   * Why Run is held for the SQL's `{{ name }}`, or null (T810, AC-482):
+   * Cube Store writes values into the SQL text, so none is ever given here,
+   * as in the SQL runner workspace; the API refuses such a run too.
+   */
+  const unbound = parameterNames(toRun).length > 0 ? unboundOn(source) : null;
   const switchedBy = runner.confirmedBy?.name;
   return (
     <div className="sql-runner">
@@ -461,11 +471,19 @@ function Runner({
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={running !== null || elsewhere !== null || toRun.trim() === ''}
+                disabled={
+                  running !== null || elsewhere !== null || toRun.trim() === '' || unbound !== null
+                }
                 onClick={() => void run(toRun)}
               >
                 {running !== null ? 'Running…' : selected === '' ? 'Run' : 'Run selection'}
               </button>
+              {running === null && unbound !== null ? (
+                <span className="sql-runner__note sql-params__held" data-testid="sql-params-held">
+                  <StatusIcon kind="idle" />
+                  {unbound}
+                </span>
+              ) : null}
               {/* ⌘↵ on a Mac, Ctrl+Enter elsewhere, as CodeMirror's Mod reads it (pin 6). */}
               <span className="sql-runner__keys" aria-hidden="true">
                 <kbd>

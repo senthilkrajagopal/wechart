@@ -288,6 +288,27 @@ describe('Cube Store’s SQL tab, the runner on (T535, T536)', () => {
     expect(sqlPosts(asked)).toHaveLength(1);
   });
 
+  /**
+   * AC-482 (T810): Cube Store binds no parameter, so its own page holds Run
+   * for SQL holding a `{{ name }}`, saying why, as the workspace does; one in
+   * a string or a comment is no parameter, and runs as written.
+   */
+  it('holds Run for a {{name}}, saying parameters aren’t available on Cube Store (AC-482)', async () => {
+    const asked = serve();
+    const { container } = open();
+    typeSql(container, 'SELECT * FROM t WHERE r = {{x}}');
+    expect(screen.getByTestId('sql-params-held').textContent).toBe(
+      'Parameters aren’t available on Cube Store. Write the value into the SQL to run it here.',
+    );
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+
+    typeSql(container, "SELECT '{{x}}' -- {{y}}");
+    expect(screen.queryByTestId('sql-params-held')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await screen.findByRole('table', { name: 'Result: 2 rows, 2 columns' });
+    expect(sqlPosts(asked).map((each) => each.body)).toEqual([{ sql: "SELECT '{{x}}' -- {{y}}" }]);
+  });
+
   // Cancel, a cancelled run's rows and a failed Cancel were the data source
   // page's runner's (T535, T545): Cube Store has no Cancel (R64), and they are
   // the workspace's now (QueryTab.test.tsx, SqlWorkspace.test.tsx's T804).

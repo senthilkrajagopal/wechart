@@ -1026,6 +1026,84 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
     });
 
     /**
+     * T810 (AC-482, as narrowed on 2026-10-18, R85): Cube Store writes values
+     * into the SQL text (research/sql-parameter-binding.md), so SQL holding a
+     * `{{ name }}` holds Run, saying why, in the SQL runner workspace and on
+     * Cube Store's own page; the API refuses such a run before Cube Store is
+     * asked, writing no value anywhere.
+     */
+    test('holds Run on SQL holding a {{name}}, saying why, in the workspace and on its page, and the API refuses it (AC-482)', async ({
+      page: admin,
+      browser,
+    }) => {
+      const on = await admin.request.put('/api/cube-store/sql-runner', {
+        data: { on: true, readOnlyConfirmed: true },
+      });
+      expect(on.status(), await on.text()).toBe(200);
+      const held =
+        'Parameters aren’t available on Cube Store. Write the value into the SQL to run it here.';
+      const sql = 'SELECT table_name FROM information_schema.tables WHERE table_name = {{t}}';
+      const marker = `zz-${RUN}-value`;
+      const writer = await signedIn(browser, 'writer');
+      const { page } = writer;
+      const sent: string[] = [];
+      page.on('request', (each) => {
+        if (each.method() === 'POST' && new URL(each.url()).pathname === '/api/cube-store/sql')
+          sent.push(each.postData() ?? '');
+      });
+      try {
+        // The workspace: Cube Store chosen in the picker, under Shared.
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.goto('/sql');
+        await page
+          .getByRole('complementary', { name: 'Data source and schema' })
+          .getByRole('button', { name: /^Data source (?!and)/ })
+          .click();
+        await page
+          .getByRole('listbox', { name: 'Data sources' })
+          .getByRole('option', { name: /Cube Store/ })
+          .click();
+        const area = page.getByRole('region', { name: 'SQL runner' });
+        const editor = area.locator('.sql-editor .cm-content');
+        await editor.click();
+        await page.keyboard.press('ControlOrMeta+A');
+        await page.keyboard.press('Delete');
+        await page.keyboard.insertText(sql);
+        await expect(area.getByTestId('sql-params-held')).toHaveText(held);
+        await expect(area.getByRole('button', { name: 'Run', exact: true })).toBeDisabled();
+        await expect(area.getByRole('group', { name: 'Parameters' })).toHaveCount(0);
+        await page.keyboard.press('ControlOrMeta+Enter');
+
+        // Cube Store's own page, whose editor is its own (T823).
+        await page.goto('/explore/data-sources/cubestore');
+        const panel = page.getByRole('tabpanel', { name: 'SQL' });
+        await panel.locator('.sql-editor .cm-content').click();
+        await page.keyboard.press('ControlOrMeta+A');
+        await page.keyboard.press('Delete');
+        await page.keyboard.insertText(sql);
+        await expect(panel.getByTestId('sql-params-held')).toHaveText(held);
+        await expect(panel.getByRole('button', { name: 'Run', exact: true })).toBeDisabled();
+        await page.keyboard.press('ControlOrMeta+Enter');
+        // Neither Run nor the keys sent anything.
+        await expect(panel.getByTestId('sql-result-head')).toHaveCount(0);
+        expect(sent).toEqual([]);
+
+        // The API, asked directly, with a value and without: refused, nothing run.
+        for (const data of [{ sql }, { sql, parameters: [{ name: 't', type: 'text', value: marker }] }]) {
+          const answer = await page.request.post('/api/cube-store/sql', { data });
+          expect(answer.status(), JSON.stringify(data)).toBe(400);
+          expect(await answer.json()).toEqual({ outcome: 'refused', error: held });
+        }
+        const history = await page.request.get('/api/sql-runs?dataSource=cubestore');
+        expect(history.status()).toBe(200);
+        expect(await history.text()).not.toContain('{{t}}');
+        expect(await history.text()).not.toContain(marker);
+      } finally {
+        await writer.context.close();
+      }
+    });
+
+    /**
      * T650 (R64; xcube 636ffa04b2, research xcube-636ffa04b2.md): a join
      * Cube Store's router would run itself, which nothing could stop once it
      * started, not even Cube Store's timeout, is refused before it runs. The

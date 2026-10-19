@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 import type { Browser, Page } from '@playwright/test';
@@ -178,6 +179,141 @@ test.describe('bound parameter values (T811, AC-454)', () => {
       expect(text).not.toContain(INJECTION);
       expect(text).not.toContain('France');
     } finally {
+      await admin.context.close();
+    }
+  });
+});
+
+/**
+ * AC-482, as narrowed on 2026-10-18 (R85), on Dremio: its driver writes
+ * values into the SQL text (research/sql-parameter-binding.md), so a tab
+ * on a Dremio source holding a `{{ name }}` holds Run, button and
+ * ⌘/Ctrl+Enter, saying why, and the API refuses such a run before xcube is
+ * asked, writing no value anywhere.
+ *
+ * No Dremio runs in compose, and a data source is made only from a passing
+ * test of it (AC-158): its test is run against a host where nothing listens
+ * and marked passed in the suite's database, as data-sources.spec.ts does
+ * (T506). A run that reached xcube would therefore fail at the connection,
+ * not be refused.
+ */
+const DREMIO = `lake_${RUN}`;
+const DREMIO_FIELDS = { host: '127.0.0.1', port: 9047, ssl: false, database: 'e2e' };
+/** A value that, written into the SQL anywhere, would show. */
+const MARKER = `zz-${RUN}-value`;
+
+function markPassed(testId: string) {
+  expect(testId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  const said = execFileSync(
+    'docker',
+    [
+      'exec',
+      'wechart-meta',
+      'psql',
+      '-U',
+      'wechart',
+      '-d',
+      'wechart_security',
+      '-Atc',
+      `UPDATE connection_tests SET ok = true WHERE id = '${testId}' AND data_source_id IS NULL`,
+    ],
+    { encoding: 'utf8' },
+  );
+  expect(said.trim()).toBe('UPDATE 1');
+}
+
+test.describe('parameters on Dremio (T810, AC-482)', () => {
+  test('a tab on Dremio holding a {{name}} holds Run, saying why; the API refuses it before xcube, writing no value', async ({
+    browser,
+  }) => {
+    const admin = await signedIn(browser, 'super');
+    let lake = '';
+    try {
+      const request = admin.page.request;
+      const settings = {
+        folderId: world.folderId,
+        driver: 'dremio',
+        authMethod: 'token',
+        fields: DREMIO_FIELDS,
+        sealed: {
+          token: await sealSecretV1(KEY, 'dremio', 'token', DREMIO_FIELDS, 'e2e-fixture-token'),
+        },
+      };
+      const trial = await request.post('/api/data-sources/test', {
+        data: settings,
+        timeout: 90_000,
+      });
+      expect(trial.status(), await trial.text()).toBe(200);
+      const { testId } = (await trial.json()) as { testId: string };
+      markPassed(testId);
+      const made = await request.post('/api/data-sources', {
+        data: { ...settings, name: DREMIO, testId },
+      });
+      expect(made.status(), await made.text()).toBe(201);
+      lake = ((await made.json()) as { id: string }).id;
+      const on = await request.put(`/api/data-sources/${lake}/sql-runner`, {
+        data: { on: true, readOnlyConfirmed: true },
+      });
+      expect(on.status(), await on.text()).toBe(200);
+
+      const { context, page } = await signedIn(browser, 'writer');
+      const sent: string[] = [];
+      page.on('request', (each) => {
+        if (each.method() === 'POST' && new URL(each.url()).pathname === `/api/data-sources/${lake}/sql`)
+          sent.push(each.postData() ?? '');
+      });
+      try {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.goto('/sql');
+        await page
+          .getByRole('complementary', { name: 'Data source and schema' })
+          .getByRole('button', { name: /^Data source (?!and)/ })
+          .click();
+        await page
+          .getByRole('listbox', { name: 'Data sources' })
+          .getByRole('option', { name: new RegExp(DREMIO) })
+          .click();
+        await expect(page.getByTestId('sql-warning')).toBeVisible();
+        const run = workspace(page).getByRole('button', { name: 'Run', exact: true });
+
+        await write(page, 'SELECT * FROM orders WHERE status = {{status}}');
+        await expect(page.getByTestId('sql-params-held')).toHaveText(
+          'Parameters aren’t available on Dremio. Write the value into the SQL to run it here.',
+        );
+        await expect(run).toBeDisabled();
+        // No strip to give a value in.
+        await expect(workspace(page).getByRole('group', { name: 'Parameters' })).toHaveCount(0);
+        await editor(page).click();
+        await page.keyboard.press('ControlOrMeta+Enter');
+        // No run: no result head, and no request sent.
+        await expect(head(page)).toHaveCount(0);
+        expect(sent).toEqual([]);
+
+        // The API, asked directly, with a value and without: refused before xcube.
+        for (const data of [
+          { sql: 'SELECT * FROM orders WHERE status = {{status}}' },
+          {
+            sql: 'SELECT * FROM orders WHERE status = {{status}}',
+            parameters: [{ name: 'status', type: 'text', value: MARKER }],
+          },
+        ]) {
+          const answer = await page.request.post(`/api/data-sources/${lake}/sql`, { data });
+          expect(answer.status(), JSON.stringify(data)).toBe(400);
+          expect(await answer.json()).toEqual({
+            outcome: 'refused',
+            error:
+              'Parameters aren’t available on Dremio. Write the value into the SQL to run it here.',
+          });
+        }
+        // Nothing ran, so nothing kept: no run, and no value, in History.
+        const history = await page.request.get(`/api/sql-runs?dataSource=${lake}`);
+        expect(history.status()).toBe(200);
+        expect(((await history.json()) as { runs: unknown[] }).runs).toEqual([]);
+      } finally {
+        await context.close();
+      }
+    } finally {
+      if (lake !== '') await admin.page.request.delete(`/api/data-sources/${lake}`);
       await admin.context.close();
     }
   });
