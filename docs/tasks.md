@@ -2013,6 +2013,7 @@ F47, AI summaries (AC-535 … AC-545), and F48, Security › AI (AC-546 … AC-5
 - **F48** (build first): T901, T902, T903, T905, T907, T908, T909, T915, T916, T917, T918, T919, T920, T921, T922, T923, T924, T1016, T1017.
 - **F47:** T904, T906, T910, T911, T912, T913, T914, T925, T926, T927, T928, T929, T930, T931, T932, T933.
 - **At pick-up:**
+  - **Insert menu:** un-park the Text tile insert menu's Copilot group by setting `AI_PARKED` to false in `packages/web/src/tiles/text/copilotOffer.ts` (decision T881-2).
   - **Migrations:** T902's `1758700000000_ai-settings.cjs` and T914's `1758700001000_ai-usage.cjs` sit in lane SQL's range now. Renumber both above the highest migration applied in the shared test databases at that time.
   - **Lane:** these were lane TEXT's. They go to whichever lane picks them up, in the order the Lane TEXT bullet above struck through (F48's service tasks need T904 and T906 from F47 before T905 and T907).
   - **Dependencies outside the parked set:** T925 on T881 and T912 on lane MCP's T1015, both done (AC-630 is ticked).
