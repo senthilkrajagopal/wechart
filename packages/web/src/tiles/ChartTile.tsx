@@ -143,6 +143,11 @@ export interface ChartTileProps {
    * (T954, AC-581); absent, its empty state says what it needs without it.
    */
   readonly onAddTarget?: (() => void) | undefined;
+  /**
+   * A KPI's + Time, where it compares periods without Time (T939, AC-566):
+   * the chart's editor from a dashboard, the Time well in the editor.
+   */
+  readonly onAddTime?: (() => void) | undefined;
 }
 
 interface ChartBodyProps {
@@ -164,6 +169,8 @@ interface ChartBodyProps {
   readonly kpiSolo?: boolean | undefined;
   /** A bullet chart's + Target (T954). */
   readonly onAddTarget?: (() => void) | undefined;
+  /** A KPI's + Time (T939). */
+  readonly onAddTime?: (() => void) | undefined;
 }
 
 /** Types wechart draws as DOM rather than handing to ECharts. */
@@ -184,6 +191,7 @@ function ChartBody({
   rowMarking,
   kpiSolo,
   onAddTarget,
+  onAddTime,
 }: ChartBodyProps) {
   const describedId = useId();
   /**
@@ -209,7 +217,13 @@ function ChartBody({
     );
   // A KPI alone, at text-kpi-solo (T683; design 06 state B).
   if (spec.chartType === 'kpi')
-    return <Kpi spec={spec} {...(kpiSolo === true ? { solo: true } : {})} />;
+    return (
+      <Kpi
+        spec={spec}
+        {...(kpiSolo === true ? { solo: true } : {})}
+        {...(onAddTime === undefined ? {} : { onAddTime })}
+      />
+    );
   const DomChart = DOM_TYPES[spec.chartType];
   if (DomChart !== undefined) {
     return (
@@ -284,6 +298,7 @@ export function ChartTile({
   notes,
   kind,
   onAddTarget,
+  onAddTime,
 }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
@@ -491,6 +506,7 @@ export function ChartTile({
           {...(rowMarking === undefined ? {} : { rowMarking })}
           {...(kpiSolo === true ? { kpiSolo } : {})}
           {...(onAddTarget === undefined ? {} : { onAddTarget })}
+          {...(onAddTime === undefined ? {} : { onAddTime })}
         />
       )}
       {/* A map's codes it can't place, named under it (T398, rule 87). */}

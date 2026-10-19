@@ -876,6 +876,8 @@ function TileBody({
           {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
           {...(onAddTarget === undefined ? {} : { onAddTarget })}
+          // A KPI's + Time opens its chart too, as + Target does (T939).
+          {...(onAddTarget === undefined ? {} : { onAddTime: onAddTarget })}
         />
       );
     case 'markdown':

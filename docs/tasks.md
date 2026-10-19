@@ -2238,10 +2238,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Failing test: `KpiTrend.test.tsx`: in a 280 px tile the sparkline is R80's `Sparkline` at 256 × 32, over Ordered at by month; `KpiTarget.test.tsx`: $1.35M against $1.40M draws R80's `BulletGraph` 16 px tall and "97% of $1.40M" in `text-xs` `text-secondary` (AC-565).
   - Depends on: T937, T885
 
-- [ ] T939 (AC-566) A KPI comparing periods with no Time says it needs one, and a compared period with no data reads "— vs ‹period› · No data for the comparison period"
-  - Files: `packages/web/src/tiles/kpi/KpiChange.tsx`, `packages/web/src/tiles/kpi/KpiEmpty.test.tsx`.
-  - Failing test: `KpiEmpty.test.tsx`: Previous period with Time empty shows "Compare to: Previous period needs a time dimension in Time." with a Time action that opens the Time well; a compared period of no rows reads "— vs Sep 2026 · No data for the comparison period" and no 0 % (AC-566).
-  - Depends on: T937
+- [x] T939 (AC-566) A KPI comparing periods with no Time says it needs one, and a compared period with no data reads "— vs ‹period› · No data for the comparison period"
 
 - [ ] T940 (AC-567) Tile a KPI by a dimension: one tile per member as a list, ordered by value unless the author orders them, paged past 20
   - Files: `packages/web/src/tiles/kpi/KpiTiles.tsx` (+ test), `packages/web/src/editor/wells/kpi.tsx` (Customize's tile order).

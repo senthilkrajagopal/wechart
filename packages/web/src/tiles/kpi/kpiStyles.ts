@@ -22,4 +22,13 @@ export const KPI_CSS = `
   font-variant-numeric: tabular-nums;
 }
 .kpi__vs { color: var(--wc-text-secondary); }
+.kpi__no-data { color: var(--wc-text-muted); }
+/* A period comparison with no Time (T939, AC-566): said in the warning ink,
+   with + Time beside it. */
+.kpi__needs {
+  margin-top: 4px;
+  font-size: var(--wc-text-xs-size);
+  line-height: 16px;
+  color: var(--wc-status-warning);
+}
 `;

@@ -30,6 +30,15 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - **Tile:** `tiles/kpi/KpiChange.tsx` draws R80's Change classes and tones, then "vs ‹period› (‹value›)"; `Kpi.tsx` names Time's period beside the measure and draws the value at 40/52 (`kpi--detailed`); the CSS is `tiles/kpi/kpiStyles.ts`, in lane A's `CHARTS_A_CSS`.
     - **Tests:** `kpi.test.ts`, `client.test.ts` (api), `loadTile.test.ts`, `KpiChange.test.tsx` and `Kpi.test.tsx` seen red, then green; e2e `new-charts-a.spec.ts`, "KPIs on 4- to 6-column tiles compare this month with the last…" (a fixed clock in August 2026), on headless Chromium. AC-565 stays open for T938's trend and target.
 
+- [x] T939 (AC-566) A KPI comparing periods with no Time says it needs one, and a compared period with no data reads "— vs ‹period› · No data for the comparison period"
+  - Files: `packages/web/src/tiles/kpi/KpiChange.tsx`, `packages/web/src/tiles/kpi/KpiEmpty.test.tsx`.
+  - Failing test: `KpiEmpty.test.tsx`: Previous period with Time empty shows "Compare to: Previous period needs a time dimension in Time." with a Time action that opens the Time well; a compared period of no rows reads "— vs Sep 2026 · No data for the comparison period" and no 0 % (AC-566).
+  - Depends on: T937
+  - Done (2026-10-18), decision T939-1:
+    - **No Time:** `Kpi.tsx` says the sentence under the value, in `status-warning` text, with + Time where the tile has an action (`onAddTime` through `ChartTile`): from a dashboard it opens the chart, as the bullet's + Target does; in the editor it focuses the KPI's Time well.
+    - **No data:** `KpiChange` reads "— vs ‹period› · No data for the comparison period" where the compared period's value is empty, its row is missing, or its count is 0 (Cube's count of no rows); the period is named from Cube's tag, else from the value's own period.
+    - **AC-566** is ticked on `e2e/new-charts-a.spec.ts`, "a KPI says a period comparison needs Time…" (dashboard tiles 4 and 5 columns wide on a fixed clock of January 2026, and the editor's + Time), on headless Chromium, with `KpiEmpty.test.tsx` seen red, then green.
+
 - [x] T943 (AC-570, AC-037) The graphical table's spec and wells: Rows, Group rows by, and ordered columns of R80's element kinds, moved and removed from a ⋯ menu with Undo
   - Files: `packages/core/src/chart-types/graphicalTable.ts` (+ test), `packages/web/src/editor/wells/graphicalTable.tsx` (+ test).
   - Failing test: `graphicalTable.test.ts`: a spec of Category with Value, Sparkline, Bullet, Icon and Change columns parses and saves back in order; `graphicalTable.test.tsx` (wells): + Column offers the five kinds; a column's row opens its R80 element settings; its ⋯ holds Move up, Move down and Remove, Remove offering Undo; with no column the tile says "Add a column: Value, Change, Sparkline, Bullet or Icon." (AC-570, AC-037).

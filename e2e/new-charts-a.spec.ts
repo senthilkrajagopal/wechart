@@ -1018,3 +1018,67 @@ test('KPIs on 4- to 6-column tiles compare this month with the last through comp
     ['2026-07-01', '2026-07-31'],
   ]);
 });
+
+/**
+ * T939 / AC-566: IF a KPI's Compare to is Previous period or Same period last
+ * year and Time is empty, THEN THE SYSTEM SHALL say "Compare to: ‹choice›
+ * needs a time dimension in Time." with the Time well as its action; and IF
+ * the compared period has no data, THEN the change line SHALL read "— vs
+ * ‹period› · No data for the comparison period".
+ * `Fails when: a period comparison without Time draws a change, or says
+ * nothing; or a period with no data reads as 0 % or as a change.`
+ *
+ * The sample orders start in January 2026, so on a fixed clock of 20 January
+ * December 2025 has none.
+ */
+test('a KPI says a period comparison needs Time, its + Time reaching the well, and a compared period with no data says so', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await kpiDashboard(request, [
+    {
+      tile: 'kpi-no-data',
+      w: 4,
+      measure: 'orders.count',
+      kpi: {
+        compareTo: { kind: 'previousPeriod' },
+        time: { member: 'orders.ordered_at', granularity: 'month' },
+      },
+    },
+    {
+      tile: 'kpi-no-time',
+      w: 5,
+      measure: 'orders.count',
+      kpi: { compareTo: { kind: 'samePeriodLastYear' } },
+    },
+  ]);
+  await page.clock.setFixedTime(new Date('2026-01-20T12:00:00Z'));
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  const noData = page.locator('[data-tile="kpi-no-data"]');
+  await expect(noData.getByTestId('kpi-period')).toHaveText('Jan 2026');
+  await expect(noData.getByTestId('kpi-change')).toHaveText(
+    '— vs Dec 2025 · No data for the comparison period',
+  );
+  await expect(page.locator('[data-tile="kpi-no-time"]').getByTestId('kpi-needs-time')).toHaveText(
+    /^Compare to: Same period last year needs a time dimension in Time\./,
+  );
+  await expect(page.locator('[data-tile="kpi-no-time"]').getByTestId('kpi-change')).toHaveCount(0);
+
+  // In the editor, + Time takes the author to the Time well.
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await expect(page.getByTestId('member-orders.count')).toBeVisible();
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await chooseChartType(page, 'kpi');
+  await page
+    .getByRole('combobox', { name: 'Compare to', exact: true })
+    .selectOption('previousPeriod');
+  const result = page.getByTestId('editor-result');
+  await expect(result.getByTestId('kpi-needs-time')).toContainText(
+    'Compare to: Previous period needs a time dimension in Time.',
+  );
+  await result.getByRole('button', { name: '+ Time' }).click();
+  await expect(page.getByTestId('well-kpi-time').locator('select').first()).toBeFocused();
+});

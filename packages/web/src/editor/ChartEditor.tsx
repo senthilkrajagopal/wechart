@@ -1025,6 +1025,15 @@ function EditorBody({
                           add?.click();
                         });
                       }}
+                      // A KPI's + Time takes the reader to its Time well (T939, AC-566).
+                      onAddTime={() => {
+                        setInspector('data');
+                        requestAnimationFrame(() => {
+                          document
+                            .querySelector<HTMLElement>('[data-testid="well-kpi-time"] select')
+                            ?.focus();
+                        });
+                      }}
                     />
                   )}
                 </PreviewFrame>

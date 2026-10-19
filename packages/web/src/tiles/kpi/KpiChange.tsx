@@ -4,7 +4,8 @@ import { kindOfFormat, shortValues } from '../text/elements/shortNumbers';
 
 /** What a KPI's value is compared with: its value, and the period or measure it is, if named. */
 export interface KpiCompared {
-  readonly value: number;
+  /** Undefined where the compared period has no data (AC-566). */
+  readonly value: number | undefined;
   /** "Sep 2026", or another measure's title; a value compared with is named by itself. */
   readonly against?: string;
 }
@@ -58,6 +59,17 @@ export function KpiChange({
   readonly formats?: MemberFormats | undefined;
   readonly direction: KpiDirection;
 }) {
+  // A compared period with no data (T939, AC-566): "—", and no change at all.
+  if (compared.value === undefined)
+    return (
+      <p className="kpi__change" data-testid="kpi-change">
+        <span className="text-change" data-tone="neutral">
+          —
+        </span>{' '}
+        <span className="kpi__vs">{`vs ${compared.against ?? ''} ·`}</span>{' '}
+        <span className="kpi__no-data">No data for the comparison period</span>
+      </p>
+    );
   const delta = current - compared.value;
   const glyph = delta > 0 ? '▲ ' : delta < 0 ? '▼ ' : '';
   const [value = ''] = shortValues([compared.value], member, formats);

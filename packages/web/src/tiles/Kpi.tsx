@@ -27,6 +27,12 @@ export interface KpiProps {
    * `text-kpi`, 32/40, as a row of them is drawn (design 04 pin 3).
    */
   readonly solo?: boolean;
+  /**
+   * Where a period comparison has no Time (AC-566), the action that opens
+   * the Time well: the chart's editor from a dashboard, the well itself in
+   * the editor. Absent, the tile says what it needs without one.
+   */
+  readonly onAddTime?: (() => void) | undefined;
 }
 
 /**
@@ -98,13 +104,35 @@ function comparedOf(spec: RenderSpec, kpi: KpiOptions, measure: string): KpiComp
   }
   if (time === undefined) return undefined;
   const row = spec.rows[1];
+  // The period compared, as Cube tagged its row, else as the value's period places it.
+  const current = periodStartOf(spec.rows[0]);
+  const periods = kpiPeriodOf(
+    time.granularity,
+    current === undefined ? new Date() : new Date(`${current}Z`),
+  );
+  const start =
+    periodStartOf(row) ??
+    (compareTo.kind === 'previousPeriod' ? periods.previous : periods.lastYear)[0];
+  const against = periodLabelOf(start, time, spec);
+  // No data then (AC-566): no value, or a count of 0, Cube's count of no rows.
   const value = numberOf(row?.[measure]);
-  const start = periodStartOf(row);
-  if (value === undefined || start === undefined) return undefined;
-  return { value, against: periodLabelOf(start, time, spec) };
+  const noRows = value === 0 && spec.measureTypes?.[measure] === 'count';
+  return value === undefined || noRows ? { value: undefined, against } : { value, against };
 }
 
-export function Kpi({ spec, solo = false }: KpiProps) {
+/** "Compare to: ‹choice› needs a time dimension in Time." (AC-566), for a period without Time. */
+function needsTimeOf(kpi: KpiOptions): string | undefined {
+  if (kpi.time !== undefined) return undefined;
+  const choice =
+    kpi.compareTo?.kind === 'previousPeriod'
+      ? 'Previous period'
+      : kpi.compareTo?.kind === 'samePeriodLastYear'
+        ? 'Same period last year'
+        : undefined;
+  return choice === undefined ? undefined : `Compare to: ${choice} needs a time dimension in Time.`;
+}
+
+export function Kpi({ spec, solo = false, onAddTime }: KpiProps) {
   const kpi = kpiOptionsOf(spec.options);
   // With any of R81's settings, standing alone, its value in text-kpi-solo (AC-565).
   const detailed =
@@ -131,6 +159,7 @@ export function Kpi({ spec, solo = false }: KpiProps) {
 
   const marked = measure === undefined ? undefined : markedShareOf(spec, measure, value);
   const compared = measure === undefined ? undefined : comparedOf(spec, kpi, measure);
+  const needsTime = needsTimeOf(kpi);
   // Time's period, as Cube tagged the value's row, else the one asked (kpiPeriodOf).
   const period =
     kpi.time === undefined
@@ -175,6 +204,19 @@ export function Kpi({ spec, solo = false }: KpiProps) {
           formats={spec.formats}
           direction={kpi.direction}
         />
+      )}
+      {needsTime === undefined ? null : (
+        <p className="kpi__needs" data-testid="kpi-needs-time" role="status">
+          {needsTime}
+          {onAddTime === undefined ? null : (
+            <>
+              {' '}
+              <button type="button" className="btn btn-sm" onClick={onAddTime}>
+                + Time
+              </button>
+            </>
+          )}
+        </p>
       )}
       {marked === undefined ? null : (
         <p className="kpi__marked">
