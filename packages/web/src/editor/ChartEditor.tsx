@@ -1225,6 +1225,34 @@ function EditorBody({
                               : undefined,
                         }
                   }
+                  // A combo's pills: each metric's mark and axis, from its
+                  // glyph's menu (T856, AC-497). Format… is the value axis's
+                  // Number format, on Customize (decision T856-1).
+                  combo={
+                    shownType === 'combo'
+                      ? {
+                          options,
+                          onOptions: setOptions,
+                          split:
+                            comboRows?.split === undefined
+                              ? undefined
+                              : { dimension: comboRows.split.dimension },
+                          onFormat: () => {
+                            setInspector('customize');
+                            requestAnimationFrame(() => {
+                              const formats = [
+                                ...document.querySelectorAll<HTMLLabelElement>(
+                                  '[data-testid="axes-section"] label',
+                                ),
+                              ].filter((label) => label.textContent === 'Number format');
+                              const field = formats.at(-1)?.control;
+                              field?.closest('details')?.setAttribute('open', '');
+                              field?.focus();
+                            });
+                          },
+                        }
+                      : undefined
+                  }
                   topN={topN}
                   onTopN={(n) => setOption('topN', n)}
                   tail={options['tail'] === 'drop' ? 'drop' : undefined}

@@ -219,4 +219,41 @@ test.describe('a combo of revenue and a count, by month (T855 follow-up)', () =>
     await expect(page.getByTestId('in-measures-orders.count')).not.toContainText('not drawn');
     await expect.poll(() => axesOnCanvas(page)).toBeGreaterThan(0);
   });
+
+  test('puts the count on the right from its pill’s menu, which Customize › Series agrees with (T856)', async ({
+    page,
+  }) => {
+    await comboOfRevenueAndCount(page);
+    const pill = page.getByTestId('in-measures-orders.count');
+    // The pill starts with its mark's glyph and ends with its axis, L.
+    const glyph = pill.getByRole('button', { name: 'Count: line, left axis. Change mark or axis' });
+    await expect(pill.getByTestId('pill-axis')).toHaveText('L');
+
+    await glyph.click();
+    const menu = page.getByRole('menu', { name: 'Count: line, left axis. Change mark or axis' });
+    await expect(
+      menu.getByRole('group', { name: 'Draw as' }).getByRole('menuitemradio'),
+    ).toHaveText(['Bar', 'Line', 'Area', 'Point'].map((name) => new RegExp(`${name}$`)));
+    await menu.getByRole('menuitemradio', { name: 'Right' }).click();
+
+    await expect(pill.getByTestId('pill-axis')).toHaveText('R');
+    await expect(pill).not.toContainText('not drawn');
+    await expect.poll(() => axesOnCanvas(page)).toBeGreaterThan(0);
+    await page.getByRole('tab', { name: 'Customize' }).click();
+    await page.locator('summary', { hasText: /^Series/ }).click();
+    await expect(
+      page.getByRole('radiogroup', { name: 'Count axis' }).getByRole('radio', { name: 'Right' }),
+    ).toBeChecked();
+
+    // Esc gives focus back to the pill's glyph.
+    await page.getByRole('tab', { name: 'Data' }).click();
+    const moved = pill.getByRole('button', {
+      name: 'Count: line, right axis. Change mark or axis',
+    });
+    await moved.click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(moved).toBeFocused();
+  });
 });

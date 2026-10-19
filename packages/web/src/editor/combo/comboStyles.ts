@@ -65,4 +65,29 @@ export const COMBO_CSS = `
 .combo-series__seg > label:has(input:focus-visible) { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
 .combo-series__auto { width: 20px; height: 20px; flex: none; }
 .combo-series__same { margin: 0 0 4px 20px; font-size: var(--wc-text-xs-size); color: var(--wc-text-muted); }
+/* A combo's Metrics pill (T856, design 20 screen 2): its mark's glyph first,
+   a 20 px button in the pill's ink opening its menu, and its axis tag, L or
+   R, boxed in the pill's ink, before ×. */
+.pill__mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.pill__mark:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+.pill__mark:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 0; }
+.pill__axis {
+  font-weight: 600;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0 3px;
+  line-height: 14px;
+}
+.pill .menu-button__item > svg { flex: none; color: var(--wc-text-secondary); }
 `;

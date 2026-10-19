@@ -32,6 +32,12 @@ export interface MenuItem {
    * aggregation the model allows, the measure's own checked.
    */
   readonly checked?: boolean;
+  /**
+   * The named group it belongs to, headed by its name (T856: a combo pill's
+   * "Draw as" and "Axis"): consecutive items of one group are drawn inside a
+   * `group` of that name. The arrows still walk every item in order.
+   */
+  readonly group?: string;
 }
 
 export interface MenuButtonProps {
@@ -221,49 +227,87 @@ export function MenuButton({
               {heading}
             </div>
           )}
-          {items.map((item, index) => [
-            item.separatorBefore === true ? (
-              <div key={`${item.key} rule`} role="separator" className="menu-button__sep" />
-            ) : null,
-            <button
-              key={item.key}
-              ref={(element) => {
-                itemRefs.current[index] = element;
-              }}
-              type="button"
-              role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
-              aria-checked={item.checked}
-              // The menu owns focus; Tab leaves it rather than walking items.
-              tabIndex={-1}
-              className={item.danger === true ? 'menu-button__item is-danger' : 'menu-button__item'}
-              data-testid={item.testId}
-              /**
-               * `aria-disabled`, not `disabled`: a natively disabled button
-               * cannot take focus, so a menu whose first item is disabled
-               * opened with focus nowhere — and with every item disabled the
-               * arrows, Escape and Tab stopped working at all.
-               */
-              aria-disabled={item.disabled === true ? 'true' : undefined}
-              title={item.title}
-              onClick={() => {
-                if (item.disabled === true) return;
-                // Back to the button first; an item that moves focus itself
-                // (opening a field to type in) does so after this.
-                close(true);
-                item.onSelect();
-              }}
-            >
-              {item.checked === undefined ? null : (
-                // The chosen one's ✓, seen as well as said (T689's review).
-                <span className="menu-button__check" aria-hidden="true">
-                  {item.checked ? '✓' : ''}
-                </span>
-              )}
-              {item.label}
-            </button>,
-          ])}
+          {groupsOf(items).map(({ group, entries }) => {
+            const drawn = entries.map(({ item, index }) => [
+              item.separatorBefore === true ? (
+                <div key={`${item.key} rule`} role="separator" className="menu-button__sep" />
+              ) : null,
+              itemButton(item, index),
+            ]);
+            if (group === undefined) return drawn;
+            const [first] = entries;
+            return [
+              first?.item.separatorBefore === true ? (
+                <div key={`${group} rule`} role="separator" className="menu-button__sep" />
+              ) : null,
+              <div key={`${group} group`} role="group" aria-label={group}>
+                {/* Drawn for the eye; the group's name says the same. */}
+                <div className="menu-button__head" aria-hidden="true">
+                  {group}
+                </div>
+                {entries.map(({ item, index }) => itemButton(item, index))}
+              </div>,
+            ];
+          })}
         </div>
       ) : null}
     </span>
   );
+
+  function itemButton(item: MenuItem, index: number) {
+    return (
+      <button
+        key={item.key}
+        ref={(element) => {
+          itemRefs.current[index] = element;
+        }}
+        type="button"
+        role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
+        aria-checked={item.checked}
+        // The menu owns focus; Tab leaves it rather than walking items.
+        tabIndex={-1}
+        className={item.danger === true ? 'menu-button__item is-danger' : 'menu-button__item'}
+        data-testid={item.testId}
+        /**
+         * `aria-disabled`, not `disabled`: a natively disabled button
+         * cannot take focus, so a menu whose first item is disabled
+         * opened with focus nowhere — and with every item disabled the
+         * arrows, Escape and Tab stopped working at all.
+         */
+        aria-disabled={item.disabled === true ? 'true' : undefined}
+        title={item.title}
+        onClick={() => {
+          if (item.disabled === true) return;
+          // Back to the button first; an item that moves focus itself
+          // (opening a field to type in) does so after this.
+          close(true);
+          item.onSelect();
+        }}
+      >
+        {item.checked === undefined ? null : (
+          // The chosen one's ✓, seen as well as said (T689's review).
+          <span className="menu-button__check" aria-hidden="true">
+            {item.checked ? '✓' : ''}
+          </span>
+        )}
+        {item.label}
+      </button>
+    );
+  }
+}
+
+/** Items in runs: each run of one named group together, the rest one by one. */
+function groupsOf(
+  items: readonly MenuItem[],
+): { group: string | undefined; entries: { item: MenuItem; index: number }[] }[] {
+  const runs: { group: string | undefined; entries: { item: MenuItem; index: number }[] }[] = [];
+  items.forEach((item, index) => {
+    const last = runs[runs.length - 1];
+    if (last !== undefined && item.group !== undefined && last.group === item.group) {
+      last.entries.push({ item, index });
+    } else {
+      runs.push({ group: item.group, entries: [{ item, index }] });
+    }
+  });
+  return runs;
 }

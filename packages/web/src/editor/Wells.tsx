@@ -15,6 +15,7 @@ import { useQueryItem } from '../query/item';
 import { loadTile } from '../query/loadTile';
 import { MenuButton, type MenuItem } from '../shell/MenuButton';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
+import { PillAxisTag, PillMarkMenu, type ComboPillProps } from './combo/PillMarkMenu';
 import { FieldIcon } from './FieldList';
 import { fieldMetaOf, type Member } from './fields';
 import { PathPicker } from './PathPicker';
@@ -328,6 +329,16 @@ export interface WellsProps {
   readonly highlight?: TypeWellsProps['highlight'];
   /** R81's type's own wells, drawn from its module after Metrics (T934, T936). */
   readonly typeWells?: Omit<TypeWellsProps, 'highlight'> | undefined;
+  /**
+   * A combo's (T856, AC-497): each Metrics pill starts with its mark's glyph,
+   * opening its menu of mark and axis, and ends with an L or R tag.
+   */
+  readonly combo?:
+    | (Omit<ComboPillProps, 'measures'> & {
+        /** Format… on a pill's menu: that measure's format. */
+        readonly onFormat: (member: string) => void;
+      })
+    | undefined;
 }
 
 export function Wells({
@@ -357,6 +368,7 @@ export function Wells({
   undrawn,
   highlight,
   typeWells,
+  combo,
 }: WellsProps) {
   const TypeWells = typeWells === undefined ? undefined : TYPE_WELLS[typeWells.chartType];
   const ids = useId();
@@ -388,6 +400,16 @@ export function Wells({
       : undefined) ?? fullTitleOf(name);
   const filters = spec.filters ?? [];
   const filterable = available.filter((member) => member.kind === 'dimension');
+  /** What a combo's pills read and write (T856): every metric, by its title. */
+  const comboPill: ComboPillProps | undefined =
+    combo === undefined
+      ? undefined
+      : {
+          measures: spec.measures.map((measure) => ({ measure, title: titleOf(measure) })),
+          options: combo.options,
+          onOptions: combo.onOptions,
+          split: combo.split,
+        };
   /**
    * Why a quick calculation can't be applied here (AC-049): one over time, on
    * a chart with no time field, names the time fields it could take.
@@ -605,6 +627,15 @@ export function Wells({
                       }
                       data-testid={`in-${well.name}-${member}`}
                     >
+                      {/* A combo's metric starts with its mark's glyph, its menu (T856, AC-497). */}
+                      {comboPill === undefined || well.name !== 'measures' ? null : (
+                        <PillMarkMenu
+                          {...comboPill}
+                          measure={member}
+                          onFormat={() => combo?.onFormat(member)}
+                          onRemove={() => onRemove(well.name, member)}
+                        />
+                      )}
                       <span className="pill__title">{title}</span>
                       {well.name === 'timeDimensions' ? (
                         // Its grain, changed right here (AC-216).
@@ -656,6 +687,10 @@ export function Wells({
                         <span className="pill__tag pill__off">
                           {off === 'scale' ? 'not drawn · on another scale' : 'not drawn'}
                         </span>
+                      )}
+                      {/* …and ends with its axis, L or R, before × (T856, AC-497). */}
+                      {comboPill === undefined || well.name !== 'measures' ? null : (
+                        <PillAxisTag {...comboPill} measure={member} />
                       )}
                       <button
                         type="button"
