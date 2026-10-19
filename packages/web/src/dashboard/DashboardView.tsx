@@ -922,8 +922,10 @@ function TileBody({
           {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
           {...(onAddTarget === undefined ? {} : { onAddTarget })}
-          // A KPI's + Time opens its chart too, as + Target does (T939).
+          // A KPI's + Time and a graphical table's + Column open its chart
+          // too, as + Target does (T939, T944).
           {...(onAddTarget === undefined ? {} : { onAddTime: onAddTarget })}
+          {...(onAddTarget === undefined ? {} : { onAddColumn: onAddTarget })}
           {...(query === undefined ? {} : { query })}
         />
       );

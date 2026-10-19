@@ -1541,6 +1541,180 @@ test('a tiled KPI on a 6-column tile marks, toggles, limits, cross-filters and h
 });
 
 /**
+ * T944 / AC-571: THE SYSTEM SHALL draw a graphical table as a real `<table>`
+ * with column headers and a caption counting its rows and its icon states …,
+ * in 24 px rows under a 28 px header: Value cells in the member's format;
+ * Change cells R80's Change; Sparkline cells R80's sparkline at 64 × 16 …;
+ * Bullet cells R80's bullet graph at 96 × 16 with the value beside it …; and
+ * Icon cells the status icon and its word …; each micro-chart an `img` with
+ * its own text alternative …
+ * And AC-570: Group rows by draws a section headed by each member; with no
+ * column the tile says "Add a column: Value, Change, Sparkline, Bullet or
+ * Icon." with + Column.
+ *
+ * On a fixed clock of 20 August 2026, as the sample orders end in August.
+ */
+test('graphical tables on 5- and 6-column tiles draw their cells, sections and empty state, and + Column opens Columns', async ({
+  page,
+  request,
+}) => {
+  const title = `Tables ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const chartOf = async (dimensions: readonly string[], columns: readonly unknown[]) => {
+    const made = (await (
+      await request.post(`${API}/documents`, {
+        data: { kind: 'chart', title: 'Categories', ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`${API}/documents/chart/${made.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: 'Categories',
+          owner: 'admin',
+          localToDashboardId: dashboard.id,
+          chart: {
+            source: { cube: 'orders' },
+            wells: {
+              measures: ['orders.total_amount'],
+              dimensions,
+              timeDimensions: ['orders.ordered_at'],
+            },
+            chartType: 'graphicalTable',
+            ...(columns.length === 0 ? {} : { options: { graphicalTable: { columns } } }),
+          },
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    return made.id;
+  };
+  const columns = [
+    { kind: 'value', measure: 'orders.total_amount' },
+    { kind: 'sparkline', measure: 'orders.count', granularity: 'month', last: 12 },
+    {
+      kind: 'bulletGraph',
+      measure: 'orders.total_amount',
+      target: { kind: 'fixed', value: 40000 },
+      ranges: [32000, 40000, 48000],
+    },
+    {
+      kind: 'icon',
+      measure: 'orders.total_amount',
+      rules: [
+        { op: '>=', value: 40000, state: 'success', label: 'On track' },
+        { op: '>=', value: 30000, state: 'warning', label: 'At risk' },
+        { op: 'otherwise', state: 'error', label: 'Off track' },
+      ],
+    },
+    { kind: 'change', measure: 'orders.count', period: 'month' },
+  ];
+  const table = await chartOf(['products.category'], columns);
+  const grouped = await chartOf(['products.category', 'orders.status'], columns.slice(0, 1));
+  const empty = await chartOf(['products.category'], []);
+  const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [
+              { id: 'tile-table', kind: 'chart', w: 6, h: 40, chartId: table },
+              { id: 'tile-grouped', kind: 'chart', w: 5, h: 40, chartId: grouped },
+              { id: 'tile-empty', kind: 'chart', w: 5, h: 24, chartId: empty },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  await page.clock.setFixedTime(new Date('2026-08-20T12:00:00Z'));
+  await page.goto(`/explore/dashboards/${dashboard.id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  const tile = page.locator('[data-tile="tile-table"]');
+  const drawn = tile.getByRole('table');
+  // A real table, captioned by its rows and its icon states.
+  await expect(drawn.locator('caption')).toHaveText(
+    /^Products Categories at a glance: \d+ rows?; (\d+ (on track|at risk|off track)(, )?)+\.$/,
+  );
+  await expect(drawn.getByRole('columnheader')).toHaveText([
+    // Two cubes' members: each by its full title (AC-220).
+    'Products Category',
+    'Orders Total Amount',
+    'Trend, 12 months',
+    'Orders Total Amount vs target',
+    'Orders Total Amount status',
+    'Orders Count vs last month',
+  ]);
+  await expect(drawn.locator('thead th').first()).toHaveCSS('height', '28px');
+  const first = drawn.locator('tbody tr').first();
+  await expect(first).toHaveCSS('height', '24px');
+  const cells = first.locator('td');
+  // Sparkline: R80's 64 × 16 image, named.
+  await expect(cells.nth(1).locator('svg')).toHaveAttribute('width', '64');
+  await expect(cells.nth(1).locator('svg')).toHaveAttribute('height', '16');
+  await expect(cells.nth(1).locator('svg')).toHaveAttribute(
+    'aria-label',
+    /^Orders Count by month, last 12 months: from \d+ to \d+, low \d+, high \d+$/,
+  );
+  // Bullet: 96 × 16, read with its target and band, its value beside it.
+  const bullet = cells.nth(2).locator('svg');
+  await expect(bullet).toHaveAttribute('width', '96');
+  await expect(bullet).toHaveAttribute(
+    'aria-label',
+    /^\$[\d,.]+ of \$40,000(\.00)?, in the (below 80 %|80–100 %|100–120 %|above 120 %) band$/,
+  );
+  // Icon: an icon and its word.
+  await expect(cells.nth(3)).toHaveText(/^(On track|At risk|Off track)$/);
+  // Change: R80's Change, ▲ or ▼ with its size.
+  await expect(cells.nth(4)).toHaveText(/^(▲ |▼ )?[\d.]+%$|^—$/);
+  // Inside the tile: the table scrolls in it, the tile never widens.
+  const tileBox = await tile.boundingBox();
+  const scroller = await tile.getByTestId('graphical-table').boundingBox();
+  if (tileBox === null || scroller === null) throw new Error('the graphical table is not drawn');
+  expect(scroller.x + scroller.width).toBeLessThanOrEqual(tileBox.x + tileBox.width + 0.5);
+
+  // Grouped by status: a section headed by each.
+  const sections = page.locator('[data-tile="tile-grouped"] tbody');
+  await expect(sections).toHaveCount(3);
+  await expect(sections.locator('th[scope="rowgroup"]')).toHaveText([
+    /completed|shipped|processing/,
+    /completed|shipped|processing/,
+    /completed|shipped|processing/,
+  ]);
+
+  // No column: what to add.
+  await expect(page.locator('[data-tile="tile-empty"]').getByTestId('gt-no-columns')).toContainText(
+    'Add a column: Value, Change, Sparkline, Bullet or Icon.',
+  );
+
+  // In the editor, + Column opens the Columns well's own + Column.
+  await page.goto(`/explore/charts/${empty}/edit`);
+  const result = page.getByTestId('editor-result');
+  await expect(result.getByTestId('gt-no-columns')).toBeVisible();
+  await result.getByRole('button', { name: '+ Column' }).click();
+  // Its menu of the five kinds, open, as the well's own click opens it.
+  await expect(page.getByTestId('add-graphicalTableColumn')).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+});
+
+/**
  * T939 / AC-566: IF a KPI's Compare to is Previous period or Same period last
  * year and Time is empty, THEN THE SYSTEM SHALL say "Compare to: ‹choice›
  * needs a time dimension in Time." with the Time well as its action; and IF

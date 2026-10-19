@@ -15,8 +15,10 @@
  * that element, so a column can never hold a setting R80's element couldn't.
  * A Bullet column is R80's Bullet graph, `bulletGraph` as stored.
  */
+import type { TimeGranularity } from '../format';
 import { textDocumentProblems, TEXT_DOCUMENT_VERSION } from '../text-document';
 import type { ChartTypeModule } from './index';
+import { kpiTrendQuery } from './kpi';
 
 /** A column's kind, by design 23's names. */
 export type ColumnKind = 'value' | 'change' | 'sparkline' | 'bullet' | 'icon';
@@ -166,6 +168,92 @@ export function graphicalTableOf(chart: {
     ...(groupBy === undefined ? {} : { groupBy }),
     columns: columnsOf(chart.options),
   };
+}
+
+const text = (value: unknown): string | undefined =>
+  typeof value === 'string' && value !== '' ? value : undefined;
+
+/**
+ * Every measure the table's columns read (T944, AC-571): each column's own, a
+ * Bullet's Target measure and an Icon's "as % of" one. Asked of Cube with the
+ * chart's Metrics (`targetMeasuresOf`).
+ */
+export function graphicalTableMeasures(columns: readonly GraphicalTableColumn[]): string[] {
+  const measures = columns.flatMap((column) => {
+    const target = record(column.settings['target']);
+    return [
+      column.settings.measure,
+      ...(column.kind === 'bullet' && target?.['kind'] === 'measure' && text(target['measure'])
+        ? [target['measure'] as string]
+        : []),
+      ...(column.kind === 'icon' && text(column.settings['of']) !== undefined
+        ? [column.settings['of'] as string]
+        : []),
+    ];
+  });
+  return [...new Set(measures)].sort();
+}
+
+/** R80's Change compares months unless it says otherwise (decision T884-1). */
+const CHANGE_PERIOD = 'month';
+/** R80's Sparkline shows the last 12 periods unless it says otherwise. */
+const TREND_PERIODS = 12;
+
+/** One trend the table asks of Cube: its time at a grain, over its last periods. */
+export interface GraphicalTableTrend {
+  readonly time: { readonly member: string; readonly granularity: TimeGranularity };
+  readonly periods: number;
+  readonly measures: readonly string[];
+  readonly query: Record<string, unknown>;
+}
+
+/**
+ * The trends the table's columns draw (T944, AC-571; design 23 sheet 2's
+ * "two queries per page: the values, and the values by month"): each
+ * Sparkline's measure by its time at its grain over its last periods, each
+ * Change's by its time at its period, so the latest two can be compared.
+ * Asked once per time and grain, as the values query is asked — Rows, Group
+ * rows by and every filter kept — the current period last. A column with no
+ * time of its own takes the chart's Time; with neither, it asks nothing.
+ */
+export function graphicalTableTrends(
+  values: Readonly<Record<string, unknown>>,
+  columns: readonly GraphicalTableColumn[],
+  chartTime: string | undefined,
+  now: Date,
+): GraphicalTableTrend[] {
+  const needs = new Map<
+    string,
+    { member: string; granularity: TimeGranularity; periods: number; measures: Set<string> }
+  >();
+  for (const column of columns) {
+    if (column.kind !== 'sparkline' && column.kind !== 'change') continue;
+    const member = text(column.settings['time']) ?? chartTime;
+    if (member === undefined) continue;
+    const granularity = (
+      column.kind === 'sparkline'
+        ? (text(column.settings['granularity']) ?? 'month')
+        : (text(column.settings['period']) ?? CHANGE_PERIOD)
+    ) as TimeGranularity;
+    const last = column.settings['last'];
+    const periods =
+      column.kind === 'sparkline' && typeof last === 'number' && last >= 1 ? last : TREND_PERIODS;
+    const key = `${member}|${granularity}`;
+    const need = needs.get(key) ?? { member, granularity, periods, measures: new Set<string>() };
+    need.periods = Math.max(need.periods, periods);
+    need.measures.add(column.settings.measure);
+    needs.set(key, need);
+  }
+  return [...needs.values()].map(({ member, granularity, periods, measures }) => {
+    const sorted = [...measures].sort();
+    const time = { member, granularity };
+    return {
+      time,
+      periods,
+      measures: sorted,
+      query: kpiTrendQuery(values, sorted, time, now, periods),
+    };
+  });
 }
 
 /** What a table with no columns says, beside + Column (AC-570). */

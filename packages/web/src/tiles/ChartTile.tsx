@@ -15,6 +15,7 @@ import { ChartCanvas, type ChartCanvasProps } from './ChartCanvas';
 import { badgesIn, badgesNeeded, nextPlace, roomIn, type BadgePlace } from './badgePlace';
 import { FreshnessBadge } from './FreshnessBadge';
 import { DataTable, type DataTableProps } from './DataTable';
+import { GraphicalTable } from './GraphicalTable';
 import { Kpi } from './Kpi';
 import { PivotTable } from './PivotTable';
 import { TileEmpty } from './TileEmpty';
@@ -155,6 +156,11 @@ export interface ChartTileProps {
    */
   readonly onAddTime?: (() => void) | undefined;
   /**
+   * A graphical table's + Column, while it has none (T944, AC-570): the
+   * chart's editor from a dashboard, the Columns well in the editor.
+   */
+  readonly onAddColumn?: (() => void) | undefined;
+  /**
    * The query the tile asked, its filters and limits in: a KPI asks its
    * trend as the same question by Time's grain (T938, AC-565).
    */
@@ -184,6 +190,8 @@ interface ChartBodyProps {
   readonly onAddTarget?: (() => void) | undefined;
   /** A KPI's + Time (T939). */
   readonly onAddTime?: (() => void) | undefined;
+  /** A graphical table's + Column (T944). */
+  readonly onAddColumn?: (() => void) | undefined;
   /** The tile's query, for a KPI's trend (T938). */
   readonly query?: Readonly<Record<string, unknown>> | undefined;
 }
@@ -209,6 +217,7 @@ function ChartBody({
   kpiSolo,
   onAddTarget,
   onAddTime,
+  onAddColumn,
   query,
 }: ChartBodyProps) {
   const describedId = useId();
@@ -232,6 +241,15 @@ function ChartBody({
           </p>
         )}
       </div>
+    );
+  // A graphical table, a real <table> of R80's elements (T944, AC-571).
+  if (spec.chartType === 'graphicalTable')
+    return (
+      <GraphicalTable
+        spec={spec}
+        {...(query === undefined ? {} : { query })}
+        {...(onAddColumn === undefined ? {} : { onAddColumn })}
+      />
     );
   // A KPI alone, at text-kpi-solo (T683; design 06 state B).
   if (spec.chartType === 'kpi')
@@ -324,6 +342,7 @@ export function ChartTile({
   kind,
   onAddTarget,
   onAddTime,
+  onAddColumn,
   query,
 }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
@@ -535,6 +554,7 @@ export function ChartTile({
           {...(kpiSolo === true ? { kpiSolo } : {})}
           {...(onAddTarget === undefined ? {} : { onAddTarget })}
           {...(onAddTime === undefined ? {} : { onAddTime })}
+          {...(onAddColumn === undefined ? {} : { onAddColumn })}
           {...(query === undefined ? {} : { query })}
         />
       )}

@@ -7,6 +7,7 @@
  * are kept sparse in the chart's options under `bullet`, as the KPI keeps
  * its settings (T936-1): no key while nothing differs from the defaults.
  */
+import { columnsOf, graphicalTableMeasures } from './graphicalTable';
 import type { ChartTypeModule } from './index';
 
 /** What each member is compared with: another measure, or one value for all. */
@@ -146,6 +147,8 @@ export function targetMeasuresOf(
   chartType: string | undefined,
   options: Readonly<Record<string, unknown>> | undefined,
 ): string[] {
+  // A graphical table's columns' measures (T944, AC-571).
+  if (chartType === 'graphicalTable') return graphicalTableMeasures(columnsOf(options));
   if (chartType !== 'bullet') return [];
   const { target } = bulletOptionsOf(options);
   return target?.kind === 'measure' ? [target.member] : [];

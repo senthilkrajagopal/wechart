@@ -424,8 +424,10 @@ export {
 export {
   COLUMN_KINDS,
   columnsOf,
+  graphicalTableMeasures,
   graphicalTableModule,
   graphicalTableOf,
+  graphicalTableTrends,
   newColumn,
   NO_COLUMNS,
   withColumns,
@@ -433,6 +435,7 @@ export {
   type GraphicalTable,
   type GraphicalTableColumn,
   type GraphicalTableSettings,
+  type GraphicalTableTrend,
 } from './chart-types/graphicalTable';
 export {
   MAX_SANKEY_STEPS,

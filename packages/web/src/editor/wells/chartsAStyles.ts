@@ -1,3 +1,4 @@
+import { GT_CSS } from '../../tiles/graphicalTableStyles';
 import { KPI_CSS } from '../../tiles/kpi/kpiStyles';
 
 /**
@@ -53,4 +54,5 @@ export const CHARTS_A_CSS = `
   padding-bottom: 6px;
   border-bottom: 1px solid var(--wc-border-subtle);
 }
-${KPI_CSS}`;
+${KPI_CSS}
+${GT_CSS}`;

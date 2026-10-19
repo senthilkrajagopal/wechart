@@ -201,6 +201,19 @@ export function toCubeQuery(spec: ChartSpec, now: Date = new Date()): Record<str
       ...(filters.length > 0 ? { filters } : {}),
     };
   }
+  /**
+   * A graphical table's values, a row per member of Rows, sectioned by Group
+   * rows by (T944, AC-571): asked by those two alone, never by Time, whose
+   * trends are asked apart (`graphicalTableTrends`).
+   */
+  if (spec.chartType === 'graphicalTable') {
+    const filters = cubeFiltersOf(spec.filters);
+    return {
+      ...query,
+      dimensions: spec.dimensions.slice(0, 2).sort(),
+      ...(filters.length > 0 ? { filters } : {}),
+    };
+  }
 
   const grains = granularitiesOf(spec.timeDimensions, spec.granularities);
   if (spec.timeDimensions.length > 0) {

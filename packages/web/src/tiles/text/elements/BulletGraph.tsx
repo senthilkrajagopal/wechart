@@ -45,7 +45,10 @@ export function BulletGraphSvg({
   formats,
   width: WIDTH = WORD_WIDTH,
   height: HEIGHT = WORD_HEIGHT,
+  label: said,
 }: {
+  /** Its words where its place reads it otherwise: a graphical table's cell (T944). */
+  readonly label?: string | undefined;
   /** Its size where it isn't a word's: a KPI's target, the content width × 16 (T938). */
   readonly width?: number;
   readonly height?: number;
@@ -73,7 +76,7 @@ export function BulletGraphSvg({
     <svg
       className="text-bullet"
       role="img"
-      aria-label={label}
+      aria-label={said ?? label}
       width={WIDTH}
       height={HEIGHT}
       viewBox={`0 0 ${String(WIDTH)} ${String(HEIGHT)}`}

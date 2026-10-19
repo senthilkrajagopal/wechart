@@ -305,22 +305,21 @@ export const KPI_TREND_PERIODS = 12;
  */
 export function kpiTrendQuery(
   query: Readonly<Record<string, unknown>>,
-  measure: string,
+  measure: string | readonly string[],
   time: KpiTime,
   now: Date,
+  /** How many periods, the current one last: 12, or a graphical table's Sparkline's Last (T944). */
+  periods = KPI_TREND_PERIODS,
 ): Record<string, unknown> {
   const current = startOf(time.granularity, now);
-  const first = rangeOf(
-    time.granularity,
-    shifted(time.granularity, current, 1 - KPI_TREND_PERIODS),
-  )[0];
+  const first = rangeOf(time.granularity, shifted(time.granularity, current, 1 - periods))[0];
   const last = rangeOf(time.granularity, current)[1];
   const others = (
     (query['timeDimensions'] as readonly { readonly dimension?: unknown }[] | undefined) ?? []
   ).filter((entry) => entry.dimension !== time.member);
   return {
     ...query,
-    measures: [measure],
+    measures: typeof measure === 'string' ? [measure] : [...measure],
     timeDimensions: [
       ...others,
       { dimension: time.member, granularity: time.granularity, dateRange: [first, last] },
@@ -329,13 +328,12 @@ export function kpiTrendQuery(
   };
 }
 
-/** The starts of the trend's 12 periods, oldest first, as its query asks them. */
-export function kpiTrendPeriods(time: KpiTime, now: Date): string[] {
+/** The starts of the trend's periods (12 unless said), oldest first, as its query asks them. */
+export function kpiTrendPeriods(time: KpiTime, now: Date, periods = KPI_TREND_PERIODS): string[] {
   const current = startOf(time.granularity, now);
   return Array.from(
-    { length: KPI_TREND_PERIODS },
-    (_, at) =>
-      rangeOf(time.granularity, shifted(time.granularity, current, at + 1 - KPI_TREND_PERIODS))[0],
+    { length: periods },
+    (_, at) => rangeOf(time.granularity, shifted(time.granularity, current, at + 1 - periods))[0],
   );
 }
 
@@ -350,6 +348,7 @@ export function kpiTrendValues(
   measure: string,
   time: KpiTime,
   now: Date,
+  periods = KPI_TREND_PERIODS,
 ): (number | null)[] {
   const at = new Map<string, number>();
   for (const row of rows) {
@@ -358,7 +357,7 @@ export function kpiTrendValues(
     const value = raw === null || raw === undefined || raw === '' ? Number.NaN : Number(raw);
     if (typeof when === 'string' && Number.isFinite(value)) at.set(when, value);
   }
-  return kpiTrendPeriods(time, now).map((start) => {
+  return kpiTrendPeriods(time, now, periods).map((start) => {
     const found = [...at].find(([when]) => when.startsWith(start));
     return found === undefined ? null : found[1];
   });

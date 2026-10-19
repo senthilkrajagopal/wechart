@@ -1252,6 +1252,18 @@ function EditorBody({
                       }}
                       // The query it asked: a KPI's trend asks it by Time's grain (T938).
                       query={query}
+                      // A graphical table's + Column opens the Columns well's
+                      // + Column (T944, AC-570).
+                      onAddColumn={() => {
+                        setInspector('data');
+                        requestAnimationFrame(() => {
+                          const add = document.querySelector<HTMLElement>(
+                            '[data-testid="add-graphicalTableColumn"]',
+                          );
+                          add?.focus();
+                          add?.click();
+                        });
+                      }}
                       // A KPI's + Time takes the reader to its Time well (T939, AC-566).
                       onAddTime={() => {
                         setInspector('data');

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { toChartSpec, type ChartDocument } from '../chart-document';
+import { toCubeQuery } from '../chart-spec';
 import {
   COLUMN_KINDS,
   graphicalTableModule,
   graphicalTableOf,
+  graphicalTableTrends,
   newColumn,
   withColumns,
   type GraphicalTableColumn,
@@ -173,5 +176,82 @@ describe('the graphical table’s spec (AC-570, AC-037)', () => {
       kind: 'sparkline',
       settings: { measure: 'orders.revenue' },
     });
+  });
+});
+
+/**
+ * T944 / AC-571: THE SYSTEM SHALL draw a graphical table … Value cells …;
+ * Change cells R80's Change; Sparkline cells R80's sparkline …, each scaled
+ * to its own row; Bullet cells R80's bullet graph …; and Icon cells …
+ * What each cell needs is asked of Cube: the values by Rows (and Group rows
+ * by), every column's measures among them; and each trend — a Sparkline's,
+ * a Change's periods — by Rows and its time at its grain.
+ */
+describe('what a graphical table asks of Cube (T944, AC-571)', () => {
+  const document = (dimensions: readonly string[]) =>
+    ({
+      schemaVersion: 2,
+      title: 'Categories',
+      chart: {
+        source: { cube: 'orders' },
+        wells: {
+          measures: ['orders.revenue'],
+          dimensions,
+          timeDimensions: ['orders.ordered_at'],
+        },
+        chartType: 'graphicalTable',
+        options: withColumns({}, CATEGORY_COLUMNS),
+      },
+    }) as unknown as ChartDocument;
+
+  it('asks its values by Rows and Group rows by, with every column’s measures, and not by Time', () => {
+    const query = toCubeQuery(
+      toChartSpec(document(['products.category', 'customers.region', 'orders.status'])),
+    );
+    expect(query['measures']).toEqual(['orders.margin', 'orders.margin_target', 'orders.revenue']);
+    expect(query['dimensions']).toEqual(['customers.region', 'products.category']);
+    expect(query['timeDimensions']).toBeUndefined();
+  });
+
+  it('asks each trend once, by its time and grain, over its last periods, under the values’ filters', () => {
+    const now = new Date('2026-10-18T09:00:00Z');
+    const values = {
+      measures: ['orders.margin', 'orders.margin_target', 'orders.revenue'],
+      dimensions: ['products.category'],
+      filters: [{ member: 'orders.status', operator: 'equals', values: ['shipped'] }],
+    };
+    const trends = graphicalTableTrends(values, CATEGORY_COLUMNS, 'orders.ordered_at', now);
+    expect(trends.map(({ time, periods }) => [time.member, time.granularity, periods])).toEqual([
+      ['orders.ordered_at', 'month', 12],
+      ['orders.ordered_at', 'quarter', 12],
+    ]);
+    expect(trends[0]?.query).toEqual({
+      measures: ['orders.revenue'],
+      dimensions: ['products.category'],
+      filters: values.filters,
+      timeDimensions: [
+        {
+          dimension: 'orders.ordered_at',
+          granularity: 'month',
+          dateRange: ['2025-11-01', '2026-10-31'],
+        },
+      ],
+      order: { 'orders.ordered_at': 'asc' },
+    });
+    expect(trends[1]?.query['timeDimensions']).toEqual([
+      {
+        dimension: 'orders.ordered_at',
+        granularity: 'quarter',
+        dateRange: ['2024-01-01', '2026-12-31'],
+      },
+    ]);
+  });
+
+  it('asks no trend where a column has no time and the chart has none', () => {
+    expect(
+      graphicalTableTrends({ measures: [] }, [CATEGORY_COLUMNS[2]!], undefined, new Date()),
+    ).toEqual([]);
+    const sparkline = { kind: 'sparkline' as const, settings: { measure: 'orders.revenue' } };
+    expect(graphicalTableTrends({ measures: [] }, [sparkline], undefined, new Date())).toEqual([]);
   });
 });

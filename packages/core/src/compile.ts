@@ -106,6 +106,14 @@ export function defaultEncoding(chart: ChartDefinition, chartType?: ChartType): 
   // (T954, AC-581): never per day of a time dimension.
   if (chartType === 'bullet')
     return encoded({ x: channel(firstDimension), y: channel(firstMeasure) });
+  // A graphical table's Rows and Group rows by, its first two plain dimensions
+  // (T944, AC-570): never Time, whose trends are its columns'.
+  if (chartType === 'graphicalTable')
+    return encoded({
+      x: channel(firstDimension),
+      facet: channel(secondDimension),
+      y: channel(firstMeasure),
+    });
   // A Sankey's steps, every plain dimension in order, of its one measure (T987).
   if (chartType === 'sankey')
     return encoded({

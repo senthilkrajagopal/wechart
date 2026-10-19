@@ -2205,10 +2205,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T943 (AC-570, AC-037) The graphical table's spec and wells: Rows, Group rows by, and ordered columns of R80's element kinds, moved and removed from a ⋯ menu with Undo
 
-- [ ] T944 (AC-571, AC-570) Draw the graphical table as a real `<table>` with its caption, 24 px rows, and its Value, Change, Sparkline, Bullet and Icon cells
-  - Files: `packages/web/src/tiles/GraphicalTable.tsx` (+ test).
-  - Failing test: `GraphicalTable.test.tsx`: 6 categories render a `table` with column headers and the caption "Categories at a glance: 6 rows; 2 on track, 2 at risk, 2 off track."; rows 24 px under a 28 px header; Sparkline cells are 64 × 16 `img`s each scaled to its own row; a Bullet cell is 96 × 16 with "23.1%" beside it, read "23.1 % of 25 %, in the 80–100 % band"; an Icon cell shows the icon and "At risk"; a row with no trend shows "—" with "No data for these filters"; Group rows by Region puts each region's rows under a heading row (AC-571); with no column the tile says "Add a column: Value, Change, Sparkline, Bullet or Icon." with + Column (design 23 sheet 2's empty state), and AC-570 is ticked on an e2e of both (added 2026-10-18 after T943's review: T943 built the wells, the tile is T944's).
-  - Depends on: T943, T885, T886
+- [x] T944 (AC-571, AC-570) Draw the graphical table as a real `<table>` with its caption, 24 px rows, and its Value, Change, Sparkline, Bullet and Icon cells
 
 - [ ] T945 (AC-572) Page a graphical table at 50 rows, each page asking Cube for its values and its own members' trends
   - Files: `packages/web/src/tiles/GraphicalTable.tsx`, `packages/core/src/chart-types/graphicalTable.ts` (`pageQueries`; + test).

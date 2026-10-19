@@ -17,7 +17,6 @@ export const AWAITING_SERIES: ReadonlySet<string> = new Set([
   'timeline',
   'calendar',
   'icicle',
-  'graphicalTable',
 ]);
 
 /** Types whose table view and fixture aren't built yet (AC-178, each type's table-view task). */
