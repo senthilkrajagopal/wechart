@@ -1821,10 +1821,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T856 (AC-497) The Metrics pill's menu: Draw as and Axis as `menuitemradio` groups, Back to Auto, Format… and Remove; the pill's mark glyph and L or R tag
 
-- [ ] T857 (AC-497, AC-500) In the chart editor only, make each legend entry's glyph a 20 px button opening the pill's menu
-  - Files: `packages/web/src/editor/combo/LegendGlyphButtons.tsx` (+ test), `packages/web/src/editor/PreviewFrame.tsx`, `e2e/combo.spec.ts`.
-  - Failing test: `LegendGlyphButtons.test.tsx`: in the editor's preview each entry has a button named "Revenue target: line, left axis. Change mark or axis" opening the same menu; the e2e: on a dashboard, in view and edit mode, a combo tile's legend has no such button (AC-497, AC-500).
-  - Depends on: T856, T848
+- [x] T857 (AC-497, AC-500) In the chart editor only, make each legend entry's glyph a 20 px button opening the pill's menu
 
 - [ ] T858 (AC-219, AC-499, AC-501, AC-502) Customize › Axes: the Left and Right axis groups, include zero locked with its reason, Synchronize with its toast, log scale on both, and the canvas line
   - Files: `packages/web/src/editor/AxisPanel.tsx` (+ test), `packages/web/src/editor/combo/SynchronizeSwitch.tsx` (+ test), `packages/web/src/editor/PreviewFrame.tsx`.

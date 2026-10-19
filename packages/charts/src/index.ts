@@ -57,6 +57,7 @@ export {
 export { insideShape, touchesSpan, type Point, type Shape } from './interaction/hitTest';
 export { itemsInShape, type PixelConverter, type ShapeItem } from './interaction/itemsInShape';
 export { axisEmphasis, emphasisPatch } from './interaction/axisEmphasis';
+export { legendEntryAt, legendGlyphBoxes, type LegendGlyphBox } from './combo/legendGlyphs';
 export { dragGesture, type DragEvent, type DragGesture } from './interaction/dragOverlay';
 export {
   bucketRangeAt,

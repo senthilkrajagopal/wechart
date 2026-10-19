@@ -38,6 +38,11 @@ export interface PillMarkMenuProps extends ComboPillProps {
   readonly measure: string;
   readonly onFormat: () => void;
   readonly onRemove: () => void;
+  /**
+   * Where it opens from: the pill, drawing its mark's glyph, or a legend
+   * entry (T857), over the glyph the chart draws, so it draws none.
+   */
+  readonly on?: 'pill' | 'legend';
 }
 
 const MARK_NAMES: Record<ComboMark, string> = {
@@ -84,7 +89,7 @@ export function PillAxisTag(props: ComboPillProps & { readonly measure: string }
 }
 
 export function PillMarkMenu(props: PillMarkMenuProps) {
-  const { measures, options, onOptions, split, measure, onFormat, onRemove } = props;
+  const { measures, options, onOptions, split, measure, onFormat, onRemove, on = 'pill' } = props;
   const { now, auto } = seriesFor(props, measure);
   if (now === undefined) return null;
   const names = measures.map((one) => one.measure);
@@ -137,11 +142,13 @@ export function PillMarkMenu(props: PillMarkMenuProps) {
     <MenuButton
       label={`${title}: ${now.mark}, ${now.axis} axis. Change mark or axis`}
       items={items}
-      className="pill__mark"
+      className={on === 'pill' ? 'pill__mark' : 'pill__mark legend-glyph__button'}
       align="start"
-      testId={`pill-mark-${measure}`}
+      // Over the chart, the tile's box would clip it.
+      fixed={on === 'legend'}
+      testId={`${on}-mark-${measure}`}
     >
-      <MarkGlyph mark={now.mark} />
+      {on === 'pill' ? <MarkGlyph mark={now.mark} /> : null}
     </MenuButton>
   );
 }

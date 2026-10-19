@@ -11,16 +11,28 @@ import {
   focusedItemOf,
   itemClicks,
   itemsInShape,
+  legendEntryAt,
+  legendGlyphBoxes,
   optionFor,
   themed,
   withScrollKept,
   type Canvas,
   type EChartsOption,
+  type LegendGlyphBox,
   type Point,
 } from '@wechart/charts';
 import { seriesOf, type MarkingSlot, type RenderSpec } from '@wechart/core';
 import { COLORS } from '@wechart/ui';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
 
 import { clickedEntity, clickedName, type ClickedItem } from '../dashboard/crossfilter/clicked';
 import { StateLine } from '../shell/StatusIcon';
@@ -77,6 +89,17 @@ export interface ChartCanvasProps {
   readonly onContextMenuAt?: ((x: number, y: number) => void) | undefined;
   /** The id of the chart's text alternative, where its type has one (T958; rule 166). */
   readonly describedBy?: string | undefined;
+  /**
+   * Drawn over the legend, given where each entry's glyph is and a way to
+   * emphasise a series' axis (T857, AC-497, AC-500): the chart editor's
+   * glyph buttons. A dashboard tile never passes it.
+   */
+  readonly legendOverlay?:
+    | ((
+        glyphs: readonly LegendGlyphBox[],
+        emphasise: (name: string | undefined) => void,
+      ) => ReactNode)
+    | undefined;
 }
 
 const DEFAULT_HEIGHT = 320;
@@ -102,6 +125,7 @@ export function ChartCanvas({
   rangeStripes,
   onContextMenuAt,
   describedBy,
+  legendOverlay,
 }: ChartCanvasProps) {
   /** The page's theme, which the chart is drawn in (AC-211). */
   const theme = useThemeName();
@@ -113,6 +137,16 @@ export function ChartCanvas({
   const drawnOption = useRef<EChartsOption | null>(null);
   const drawnType = useRef<string>(spec.chartType);
   const hovered = useRef<string | undefined>(undefined);
+  /** What emphasises a series' axis, for the legend's glyph buttons (T857). */
+  const emphasiseRef = useRef<((name: string | undefined) => void) | undefined>(undefined);
+  const emphasiseNamed = useCallback((name: string | undefined) => {
+    emphasiseRef.current?.(name);
+  }, []);
+  /** The layer the legend overlay is drawn in, and the glyphs it's laid over (T857). */
+  const [overlayLayer, setOverlayLayer] = useState<HTMLDivElement | null>(null);
+  const [glyphs, setGlyphs] = useState<readonly LegendGlyphBox[]>([]);
+  const overlaid = legendOverlay !== undefined;
+  const isCombo = spec.chartType === 'combo';
   const [canvas, setCanvas] = useState<Canvas | null>(null);
   /**
    * A map's boundaries, registered before its first option is set, which
@@ -535,10 +569,9 @@ export function ChartCanvas({
    * axis (T848, AC-500): merged into the drawn chart (`emphasisPatch`), so
    * the chart keeps its elements and the pointer its hover, and put back as
    * the pointer leaves. A series is the pointer's `mouseover`. A legend entry
-   * would be the `highlight` the legend dispatches with its series' name, but
-   * wechart's legend (`selectedMode: false`) is silent to the pointer
-   * (research/echarts-combo-layers.md; decision T848-2), so that path waits on
-   * an entry the pointer can reach; the axis pointer's own `downplay`, sent
+   * isn't: wechart's legend (`selectedMode: false`) is silent to the pointer
+   * (research/echarts-combo-layers.md; decision T848-2), so an entry is found
+   * by where the pointer is, below (T857); the axis pointer's own `downplay`, sent
    * at each category, isn't the pointer leaving (T848's review). Anything but
    * a combo of two value axes is left alone.
    */
@@ -553,6 +586,8 @@ export function ChartCanvas({
       hovered.current = name;
       chart.setOption(patch);
     };
+    // The legend's glyph buttons emphasise as a hovered series does (T857).
+    emphasiseRef.current = emphasise;
     type Hovered = { componentType?: unknown; seriesName?: unknown } | null | undefined;
     const over = (params: unknown) => {
       const { componentType, seriesName } = (params as Hovered) ?? {};
@@ -572,6 +607,77 @@ export function ChartCanvas({
       chart.off('globalout', away);
     };
   }, [theme]);
+
+  /**
+   * Where a combo's legend drew each entry, read again each time the chart
+   * finishes drawing (T857; research/echarts-legend-item-boxes.md): a
+   * pointer over an entry emphasises its series' axis on any tile (AC-500),
+   * found by where the pointer is, since the legend itself is silent to it
+   * (decision T848-2) and an element over it would take the legend's
+   * marking click (AC-090). While an overlay is asked for, the chart
+   * editor's, it's drawn in a layer over the chart, given the glyphs.
+   */
+  useEffect(() => {
+    const element = node.current;
+    const chart = instance.current;
+    if (!(overlaid || isCombo) || element === null || chart === null || chart.isDisposed())
+      return undefined;
+    const layer = overlaid ? window.document.createElement('div') : undefined;
+    if (layer !== undefined) {
+      layer.className = 'legend-glyph-layer';
+      element.appendChild(layer);
+      setOverlayLayer(layer);
+    }
+    let boxes: readonly LegendGlyphBox[] = [];
+    let overEntry = false;
+    const move = (event: MouseEvent) => {
+      const box = element.getBoundingClientRect();
+      const hit = legendEntryAt(boxes, event.clientX - box.left, event.clientY - box.top);
+      if (hit !== undefined) {
+        overEntry = true;
+        emphasiseRef.current?.(hit.name);
+      } else if (overEntry) {
+        overEntry = false;
+        emphasiseRef.current?.(undefined);
+      }
+    };
+    const leave = () => {
+      if (!overEntry) return;
+      overEntry = false;
+      emphasiseRef.current?.(undefined);
+    };
+    element.addEventListener('mousemove', move);
+    element.addEventListener('mouseleave', leave);
+    const read = () => {
+      if (chart.isDisposed()) return;
+      const next = legendGlyphBoxes(chart);
+      boxes = next;
+      // Drawn over only where an overlay is: elsewhere, nothing to render.
+      if (layer === undefined) return;
+      setGlyphs((was) =>
+        was.length === next.length &&
+        was.every(
+          (one, at) =>
+            one.name === next[at]?.name &&
+            Math.abs(one.x - (next[at]?.x ?? 0)) < 0.5 &&
+            Math.abs(one.y - (next[at]?.y ?? 0)) < 0.5,
+        )
+          ? was
+          : next,
+      );
+    };
+    read();
+    chart.on('finished', read);
+    return () => {
+      if (!chart.isDisposed()) chart.off('finished', read);
+      element.removeEventListener('mousemove', move);
+      element.removeEventListener('mouseleave', leave);
+      if (layer !== undefined) {
+        layer.remove();
+        setOverlayLayer(null);
+      }
+    };
+  }, [overlaid, isCombo]);
 
   /**
    * The marked ranges' stripes along the x axis (T386, AC-093; direction.md
@@ -641,7 +747,7 @@ export function ChartCanvas({
       </StateLine>
     );
 
-  return (
+  const drawn = (
     /**
      * `jsx-a11y/no-static-element-interactions` asks for a role and a
      * keyboard path on anything that takes a mouse. The role belongs to the
@@ -723,5 +829,13 @@ export function ChartCanvas({
         clicked.current?.(said !== '' && seriesNames.has(said) ? { legend: said } : {}, toggle);
       }}
     />
+  );
+  // The editor's legend overlay, in its own layer over the chart (T857).
+  if (legendOverlay === undefined || overlayLayer === null) return drawn;
+  return (
+    <>
+      {drawn}
+      {createPortal(legendOverlay(glyphs, emphasiseNamed), overlayLayer)}
+    </>
   );
 }

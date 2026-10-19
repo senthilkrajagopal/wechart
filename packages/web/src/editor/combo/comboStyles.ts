@@ -90,4 +90,9 @@ export const COMBO_CSS = `
   line-height: 14px;
 }
 .pill .menu-button__item > svg { flex: none; color: var(--wc-text-secondary); }
+.legend-glyph-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.legend-glyph { position: absolute; display: grid; place-items: center; pointer-events: auto; }
+.legend-glyph .menu-button { display: grid; width: 100%; height: 100%; }
+.legend-glyph__button { width: 20px; height: 20px; color: var(--wc-text-primary); }
+.legend-glyph__button:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
 `;

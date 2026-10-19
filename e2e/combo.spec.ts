@@ -285,6 +285,116 @@ test.describe('a combo of revenue and a count, by month (T855 follow-up)', () =>
     await expect(page.getByRole('menu')).toHaveCount(0);
     await expect(moved).toBeFocused();
   });
+
+  /**
+   * T857 (AC-497, AC-500; design 20 pin 11): in the editor, each legend
+   * entry's glyph is a 20 px button opening the pill's menu, and a pointer
+   * over it emphasises its series' axis.
+   */
+  test('makes each legend glyph a 20 px button opening the pill’s menu (T857)', async ({
+    page,
+  }) => {
+    await comboOfRevenueAndCount(page);
+    await page
+      .getByTestId('undrawn-metrics')
+      .getByRole('button', { name: 'Draw on a right axis' })
+      .click();
+    const canvas = page.getByTestId('chart-canvas');
+    const glyph = canvas.getByRole('button', {
+      name: 'Count: line, right axis. Change mark or axis',
+    });
+    await expect(glyph).toBeVisible();
+    await expect(
+      canvas.getByRole('button', { name: 'Total Amount: bar, left axis. Change mark or axis' }),
+    ).toBeVisible();
+    const box = (await glyph.boundingBox())!;
+    expect(Math.round(box.width)).toBe(20);
+    expect(Math.round(box.height)).toBe(20);
+
+    // Centred on the legend's glyph: the entry's text starts 5 px past the
+    // 12 px glyph, level with it.
+    const label = (await canvas.locator('svg text').evaluateAll((nodes) =>
+      nodes
+        .filter((node) => node.textContent === 'Count ')
+        .map((node) => {
+          const rect = node.getBoundingClientRect();
+          return { left: rect.left, middle: rect.top + rect.height / 2 };
+        }),
+    ))[0]!;
+    expect(Math.abs(label.left - (box.x + box.width / 2 + 11))).toBeLessThanOrEqual(2);
+    expect(Math.abs(label.middle - (box.y + box.height / 2))).toBeLessThanOrEqual(3);
+
+    // Over it, the count's axis is emphasised: its ticks go to text-primary.
+    const plot = (await canvas.boundingBox())!;
+    const rightTicks = () =>
+      canvas.locator('svg text').evaluateAll((nodes, edge) => {
+        const right = nodes.filter((node) => {
+          const rect = node.getBoundingClientRect();
+          return /^\d/.test(node.textContent ?? '') && rect.left > edge;
+        });
+        return [...new Set(right.map((node) => node.getAttribute('fill')))];
+      }, plot.x + plot.width * 0.85);
+    await expect.poll(rightTicks).toEqual([TEXT_SECONDARY]);
+    await glyph.hover();
+    await expect.poll(rightTicks).toEqual([TEXT_PRIMARY]);
+
+    // Its menu is the pill's: Point here draws the count as points everywhere.
+    await glyph.click();
+    const menu = page.getByRole('menu', { name: 'Count: line, right axis. Change mark or axis' });
+    await expect(menu.getByRole('menuitem')).toHaveText([
+      /^Back to Auto/,
+      'Format…',
+      'Remove',
+    ]);
+    await menu.getByRole('menuitemradio', { name: 'Point' }).click();
+    await expect(
+      page
+        .getByTestId('in-measures-orders.count')
+        .getByRole('button', { name: 'Count: point, right axis. Change mark or axis' }),
+    ).toBeVisible();
+    await expect(
+      canvas.getByRole('button', { name: 'Count: point, right axis. Change mark or axis' }),
+    ).toBeVisible();
+  });
+});
+
+/** T857 (AC-497): a dashboard's combo legend has no glyph buttons, in view or edit mode. */
+test('gives a combo tile’s legend no glyph buttons on a dashboard, in view or edit mode (T857)', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await comboDashboard(request);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-combo"]');
+  await expect.poll(async () => (await textsIn(page)).map((one) => one.text)).toContain('(right)');
+  const glyphButtons = tile.getByRole('button', { name: /Change mark or axis$/ });
+
+  await expect(glyphButtons).toHaveCount(0);
+  await expect(tile.getByTestId('legend-glyph')).toHaveCount(0);
+
+  // Its legend entry still emphasises its series' axis under the pointer
+  // (AC-500): the count's, on the right, goes to text-primary.
+  const plot = (await tile.locator('svg').first().boundingBox())!;
+  const rightTicks = async () =>
+    new Set(
+      (await textsIn(page))
+        .filter((one) => /^\d/.test(one.text) && one.x > plot.x + plot.width * 0.85)
+        .map((one) => one.fill),
+    );
+  await expect.poll(rightTicks).toEqual(new Set([TEXT_SECONDARY]));
+  // The count's entry, on the right: the one saying "(right)".
+  const entry = (await textsIn(page)).find((one) => one.text === '(right)')!;
+  await page.mouse.move(entry.x, entry.y);
+  await expect.poll(rightTicks).toEqual(new Set([TEXT_PRIMARY]));
+  await page.mouse.move(plot.x - 40, plot.y - 40);
+  await expect.poll(rightTicks).toEqual(new Set([TEXT_SECONDARY]));
+
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
+  await expect.poll(async () => (await textsIn(page)).map((one) => one.text)).toContain('(right)');
+  await expect(glyphButtons).toHaveCount(0);
+  await expect(tile.getByTestId('legend-glyph')).toHaveCount(0);
 });
 
 /**

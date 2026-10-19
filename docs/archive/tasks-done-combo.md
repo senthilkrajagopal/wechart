@@ -71,3 +71,8 @@ Lane COMBO's ticked tasks from `docs/tasks.md` §P2.26 (F44), their sub-lines wo
   - Files: `packages/core/src/combo.ts` (`comboLimit`), `packages/core/src/undrawn.ts` ("over 8 series"; + test), `packages/core/src/topN.ts`.
   - Failing test: `combo.test.ts`: 2 measures × 21 countries fold to top 3 + Other (8 series); 3 measures × 4 regions with nothing chosen fold to top 1 + Other (6); the same with "All" chosen draws 2 measures × 4 and leaves the third, last added, "not drawn · over 8 series"; 5 measures × 4 regions with nothing chosen draw 4 measures × (top 1 + Other); 9 unsplit measures draw 8; a hidden member and a member with no data each count (AC-505).
   - Depends on: T852
+
+- [x] T857 (AC-497, AC-500) In the chart editor only, make each legend entry's glyph a 20 px button opening the pill's menu
+  - Files: `packages/web/src/editor/combo/LegendGlyphButtons.tsx` (+ test), `packages/web/src/editor/PreviewFrame.tsx`, `e2e/combo.spec.ts`.
+  - Failing test: `LegendGlyphButtons.test.tsx`: in the editor's preview each entry has a button named "Revenue target: line, left axis. Change mark or axis" opening the same menu; the e2e: on a dashboard, in view and edit mode, a combo tile's legend has no such button (AC-497, AC-500).
+  - Depends on: T856, T848

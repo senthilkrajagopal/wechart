@@ -52,6 +52,8 @@ export interface ChartTileProps {
   readonly rangeStripes?: ChartCanvasProps['rangeStripes'];
   /** A right-click on the chart: its menu, at the pointer (T266, AC-246). */
   readonly onContextMenuAt?: ChartCanvasProps['onContextMenuAt'];
+  /** Drawn over the legend's glyphs: the chart editor's alone (T857, AC-497). */
+  readonly legendOverlay?: ChartCanvasProps['legendOverlay'];
   /** Marking this tile's rows, where it draws a table (AC-092). */
   readonly rowMarking?: DataTableProps['marking'];
   /**
@@ -160,6 +162,7 @@ interface ChartBodyProps {
   readonly onAxisRange?: ChartCanvasProps['onAxisRange'];
   readonly rangeStripes?: ChartCanvasProps['rangeStripes'];
   readonly onContextMenuAt?: ChartCanvasProps['onContextMenuAt'];
+  readonly legendOverlay?: ChartCanvasProps['legendOverlay'];
   /**
    * Marking this tile's rows, where it draws a table and the cube has a
    * primary key to identify them by (AC-092).
@@ -188,6 +191,7 @@ function ChartBody({
   onAxisRange,
   rangeStripes,
   onContextMenuAt,
+  legendOverlay,
   rowMarking,
   kpiSolo,
   onAddTarget,
@@ -262,6 +266,7 @@ function ChartBody({
         {...(onAxisRange === undefined ? {} : { onAxisRange })}
         {...(rangeStripes === undefined ? {} : { rangeStripes })}
         {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
+        {...(legendOverlay === undefined ? {} : { legendOverlay })}
         {...(described === undefined ? {} : { describedBy: describedId })}
       />
       {described === undefined ? null : (
@@ -293,6 +298,7 @@ export function ChartTile({
   onAxisRange,
   rangeStripes,
   onContextMenuAt,
+  legendOverlay,
   rowMarking,
   badge,
   notes,
@@ -503,6 +509,7 @@ export function ChartTile({
           {...(onAxisRange === undefined ? {} : { onAxisRange })}
           {...(rangeStripes === undefined ? {} : { rangeStripes })}
           {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
+          {...(legendOverlay === undefined ? {} : { legendOverlay })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
           {...(kpiSolo === true ? { kpiSolo } : {})}
           {...(onAddTarget === undefined ? {} : { onAddTarget })}

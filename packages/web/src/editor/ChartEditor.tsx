@@ -41,7 +41,7 @@ import {
   type WellName,
 } from '@wechart/recommender';
 
-import { DEFAULT_PALETTE, STACKABLE_TYPES } from '@wechart/charts';
+import { DEFAULT_PALETTE, STACKABLE_TYPES, type LegendGlyphBox } from '@wechart/charts';
 
 import { ChartTypeCard } from './ChartTypeCard';
 import { ChartTypeGallery } from './ChartTypeGallery';
@@ -71,6 +71,7 @@ import { countryMarkingsOf, signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { CubeSourcePicker, FieldList, membersWithJoins, useJoined } from './FieldList';
 import { Wells } from './Wells';
+import { LegendGlyphButtons } from './combo/LegendGlyphButtons';
 import { stackChoice, stackCustomize } from './wells/stack';
 import { requestCalculation } from './calcRequests';
 import { RequestCalcDialog } from './RequestCalcDialog';
@@ -779,6 +780,52 @@ function EditorBody({
       : { measures, split: { dimension: own(splitBy), members: drawnSeries } };
   }, [drawnSpec, titles, drawnSeries]);
   /**
+   * A combo's mark and axis menu, as its Metrics pills (T856) and, in the
+   * preview, its legend's glyphs (T857) open it: one menu over the same
+   * options, so neither can disagree with Customize › Series (AC-497).
+   * Format… is the value axis's Number format, on Customize (decision T856-1).
+   */
+  const comboMenu =
+    shownType === 'combo'
+      ? {
+          options,
+          onOptions: setOptions,
+          split:
+            comboRows?.split === undefined ? undefined : { dimension: comboRows.split.dimension },
+          onFormat: () => {
+            setInspector('customize');
+            requestAnimationFrame(() => {
+              const formats = [
+                ...document.querySelectorAll<HTMLLabelElement>(
+                  '[data-testid="axes-section"] label',
+                ),
+              ].filter((label) => label.textContent === 'Number format');
+              const field = formats.at(-1)?.control;
+              field?.closest('details')?.setAttribute('open', '');
+              field?.focus();
+            });
+          },
+        }
+      : undefined;
+  /** The combo legend's glyph buttons, in the editor's preview only (T857, AC-497). */
+  const legendOverlay =
+    comboMenu === undefined || comboRows === undefined
+      ? undefined
+      : (glyphs: readonly LegendGlyphBox[], emphasise: (name: string | undefined) => void) => (
+          <LegendGlyphButtons
+            glyphs={glyphs}
+            emphasise={emphasise}
+            measures={comboRows.measures}
+            options={comboMenu.options}
+            onOptions={comboMenu.onOptions}
+            split={comboMenu.split}
+            onFormat={() => comboMenu.onFormat()}
+            onRemove={(measure) =>
+              setSpec((current) => removeFromWell(current, 'measures', measure))
+            }
+          />
+        );
+  /**
    * A cell's colour in the results grid (T690, EDI-18): the colour
    * dimension's values each wear their series' colour as drawn — its own,
    * chosen in Customize, or the palette's by place, as Customize shows it.
@@ -1005,6 +1052,7 @@ function EditorBody({
                         })
                       }
                       {...(chartHeight === undefined ? {} : { height: chartHeight })}
+                      {...(legendOverlay === undefined ? {} : { legendOverlay })}
                       // A box plot's rows cut at Cube's limit, said here too,
                       // where box plots are built (T401's review, AC-315).
                       rowsTotal={served.total}
@@ -1257,31 +1305,7 @@ function EditorBody({
                   // A combo's pills: each metric's mark and axis, from its
                   // glyph's menu (T856, AC-497). Format… is the value axis's
                   // Number format, on Customize (decision T856-1).
-                  combo={
-                    shownType === 'combo'
-                      ? {
-                          options,
-                          onOptions: setOptions,
-                          split:
-                            comboRows?.split === undefined
-                              ? undefined
-                              : { dimension: comboRows.split.dimension },
-                          onFormat: () => {
-                            setInspector('customize');
-                            requestAnimationFrame(() => {
-                              const formats = [
-                                ...document.querySelectorAll<HTMLLabelElement>(
-                                  '[data-testid="axes-section"] label',
-                                ),
-                              ].filter((label) => label.textContent === 'Number format');
-                              const field = formats.at(-1)?.control;
-                              field?.closest('details')?.setAttribute('open', '');
-                              field?.focus();
-                            });
-                          },
-                        }
-                      : undefined
-                  }
+                  combo={comboMenu}
                   topN={topN}
                   onTopN={(n) => setOption('topN', n)}
                   tail={options['tail'] === 'drop' ? 'drop' : undefined}
