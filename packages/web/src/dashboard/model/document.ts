@@ -124,6 +124,18 @@ export interface Tile extends GridTile {
    */
   readonly nothingMarked?: NothingMarkedState;
   readonly nothingMarkedMessage?: string;
+  /**
+   * Dashboard parameters this tile followed that have since been deleted
+   * (T897, AC-532): each use now holds the choice it stood for then as a
+   * fixed field, and the tile says so in edit mode until dismissed.
+   */
+  readonly parameterFixed?: readonly ParameterFixed[];
+}
+
+/** A deleted parameter, by its name, and the label of the choice a tile kept. */
+export interface ParameterFixed {
+  readonly parameter: string;
+  readonly label: string;
 }
 
 /**

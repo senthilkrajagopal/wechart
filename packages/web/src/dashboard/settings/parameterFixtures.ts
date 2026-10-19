@@ -8,6 +8,8 @@ export const META = {
     {
       name: 'orders',
       title: 'Orders',
+      // Orders joins Customers; Products is joined to neither (T897).
+      connectedComponent: 1,
       measures: [
         { name: 'orders.revenue', title: 'Orders Revenue', shortTitle: 'Revenue', type: 'number' },
         { name: 'orders.count', title: 'Orders Count', shortTitle: 'Count', type: 'number' },
@@ -25,6 +27,7 @@ export const META = {
     {
       name: 'customers',
       title: 'Customers',
+      connectedComponent: 1,
       measures: [],
       dimensions: [
         {
@@ -34,6 +37,20 @@ export const META = {
           type: 'string',
         },
       ],
+    },
+    {
+      name: 'products',
+      title: 'Products',
+      connectedComponent: 2,
+      measures: [
+        {
+          name: 'products.margin_target',
+          title: 'Products Margin target',
+          shortTitle: 'Margin target',
+          type: 'number',
+        },
+      ],
+      dimensions: [],
     },
   ],
 };

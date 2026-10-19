@@ -2,13 +2,17 @@ import {
   dashboardParameterProblems,
   dashboardParametersProblems,
   markingsFrom,
+  parameterValueOf,
   type ChartDocument,
+  type ParameterValues,
 } from '@wechart/core';
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
-import type { DashboardDocument } from '../model/document';
+import type { ChartDraft, DashboardDocument } from '../model/document';
 import { CrossFilterMatrix } from './CrossFilterMatrix';
+import { useParameterModel } from './ParameterForm';
 import { ParametersSettings } from './ParametersSettings';
+import { choiceProblems } from './parameterUses';
 import { MarkingsSettings } from './MarkingsSettings';
 import { chartTileMarkings, markingNameProblem } from './markingsDraft';
 import { changedSentence, changesOf } from './dirtyGuard';
@@ -251,14 +255,39 @@ export interface SettingsPageProps {
   readonly section?: SettingsSection | undefined;
   /** A chart tile's chart, where it is at hand: what uses a parameter is read from it (AC-531). */
   readonly chartOf?: ((chartId: string) => ChartDocument | undefined) | undefined;
+  /** The reader's choice of each parameter now: what a deleted one's uses keep (AC-532). */
+  readonly parameterValues?: ParameterValues | undefined;
+  /** A tile's name, as the dashboard names it: how a parameter's use names its tile. */
+  readonly nameOf?: ((tileId: string) => string) | undefined;
+  /**
+   * A parameter's use followed (AC-532): leave the page, its tile opened
+   * selected in edit mode. Asked first when there is something to lose.
+   */
+  readonly onOpenTile?: ((tileId: string) => void) | undefined;
+  /**
+   * Charts changed by deleting a parameter (AC-532), as drafts the dashboard's
+   * save writes: each read for its version, drawn as it is drawn now.
+   */
+  readonly draftsFor?:
+    ((charts: Record<string, ChartDocument>) => Promise<Record<string, ChartDraft>>) | undefined;
 }
 
-/** The first thing wrong with the dashboard's parameters, or none (AC-531). */
-function parameterProblem(document: DashboardDocument): string | undefined {
+/**
+ * The first thing wrong with the dashboard's parameters, or none (AC-531):
+ * and a choice a chart bound to one can't query, naming both (AC-532).
+ */
+function parameterProblem(
+  document: DashboardDocument,
+  chartOf: (chartId: string) => ChartDocument | undefined,
+  model: unknown,
+): string | undefined {
   const parameters = document.parameters ?? [];
   return [
     ...dashboardParametersProblems(parameters),
     ...parameters.flatMap((parameter) => dashboardParameterProblems(parameter)),
+    ...(model === undefined
+      ? []
+      : parameters.flatMap((parameter) => choiceProblems(document, parameter, chartOf, model))),
   ][0];
 }
 
@@ -322,10 +351,16 @@ export function SettingsPage({
   titleOf,
   section = 'General',
   chartOf = () => undefined,
+  parameterValues,
+  nameOf,
+  onOpenTile,
+  draftsFor,
 }: SettingsPageProps) {
   const [open, setOpen] = useState<SettingsSection>(section);
   const folders = useFolders();
   const formId = useId();
+  // The model, for what each parameter's choices are and whether its charts can query them.
+  const model = useParameterModel();
 
   /**
    * The edits live here and nowhere else until Save. That is the whole of
@@ -340,6 +375,8 @@ export function SettingsPage({
    * guard asks about.
    */
   const changes = changesOf(document, draft);
+  /** A chart as this page holds it: as a parameter's deletion left it, else as drawn. */
+  const chartIn = (chartId: string) => draft.chartDrafts?.[chartId]?.document ?? chartOf(chartId);
 
   /**
    * A view-mode save is a write, and the page waits for it (AC-185): open
@@ -368,6 +405,8 @@ export function SettingsPage({
   const [asking, setAsking] = useState(false);
   /** The control that asked, for focus to go back to when the answer is to stay (T182). */
   const asker = useRef<HTMLElement | null>(null);
+  /** A parameter's use followed while there was something to lose: its tile, once answered. */
+  const following = useRef<string | null>(null);
 
   /**
    * Stable, because the dialog focuses its safe answer in an effect keyed on
@@ -375,6 +414,7 @@ export function SettingsPage({
    * see the note there.
    */
   const keepEditing = useCallback(() => {
+    following.current = null;
     setAsking(false);
     asker.current?.focus();
   }, []);
@@ -386,6 +426,53 @@ export function SettingsPage({
         window.document.activeElement instanceof HTMLElement ? window.document.activeElement : null;
       setAsking(true);
     } else onCancel();
+  };
+
+  /**
+   * A parameter's use followed (AC-532): the page left for its tile, asked
+   * first as leaving any other way is when there is something to lose.
+   */
+  const openTile =
+    onOpenTile === undefined
+      ? undefined
+      : (tileId: string) => {
+          following.current = tileId;
+          if (changes.length > 0) leave();
+          else onOpenTile(tileId);
+        };
+  const discard = () => {
+    const tileId = following.current;
+    if (tileId !== null && onOpenTile !== undefined) onOpenTile(tileId);
+    else onCancel();
+  };
+
+  /**
+   * A parameter deleted (AC-532): the dashboard with each use fixed, and the
+   * charts it changed held as drafts, written with the dashboard on its save.
+   */
+  const deleteParameter = (next: DashboardDocument, charts: Record<string, ChartDocument>) => {
+    if (Object.keys(charts).length === 0) {
+      setDraft(next);
+      return;
+    }
+    if (draftsFor === undefined) {
+      setFailed('The charts that use it can’t be changed here, so it wasn’t deleted.');
+      return;
+    }
+    setFailed(undefined);
+    draftsFor(charts)
+      .then((drafts) => {
+        if (!here.current) return;
+        setDraft({ ...next, chartDrafts: { ...next.chartDrafts, ...drafts } });
+      })
+      .catch((reason: unknown) => {
+        if (!here.current) return;
+        setFailed(
+          `A chart that uses it couldn’t be read, so it wasn’t deleted: ${
+            reason instanceof Error ? reason.message : String(reason)
+          }`,
+        );
+      });
   };
 
   /**
@@ -563,7 +650,8 @@ export function SettingsPage({
                 return;
               }
               // So must each parameter be whole (AC-531): said on its section.
-              const wrong = parameterProblem(draft);
+              // And each choice queryable by every chart bound to it (AC-532).
+              const wrong = parameterProblem(draft, chartIn, model);
               if (wrong !== undefined) {
                 setOpen('Parameters');
                 setFailed(wrong);
@@ -797,7 +885,19 @@ export function SettingsPage({
             </>
           ) : open === 'Parameters' ? (
             // The dashboard's parameters (T896, AC-531), in the draft until Save.
-            <ParametersSettings document={draft} chartOf={chartOf} onChange={setDraft} />
+            <ParametersSettings
+              document={draft}
+              chartOf={chartIn}
+              onChange={setDraft}
+              model={model}
+              nameOf={nameOf}
+              // What a deleted parameter's uses keep: what it stands for now (AC-532).
+              currentOf={(parameter) =>
+                parameterValueOf(parameter, parameterValues?.[parameter.id])
+              }
+              onOpenTile={openTile}
+              onDelete={deleteParameter}
+            />
           ) : open === 'Layout' ? (
             /**
              * direction.md: "The dashboard is fixed-width and centred (max
@@ -834,7 +934,7 @@ export function SettingsPage({
       </div>
 
       {asking ? (
-        <DiscardSettingsDialog changes={changes} onDiscard={onCancel} onKeep={keepEditing} />
+        <DiscardSettingsDialog changes={changes} onDiscard={discard} onKeep={keepEditing} />
       ) : null}
     </div>
   );

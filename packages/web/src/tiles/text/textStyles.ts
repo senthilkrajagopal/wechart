@@ -496,6 +496,33 @@ button.parameters-settings__name {
 }
 .parameter-form__ask p { flex-basis: 100%; margin: 0; }
 .parameter-form__problems { margin: 0; padding-left: 20px; color: var(--wc-status-error); font-size: var(--wc-text-xs-size); }
+/* Under a parameter's form (T897, AC-532; design 21 S3 pins 7 and 8): its
+   uses as links, its check against the charts, and Delete parameter…. */
+.parameters-settings__open { display: grid; gap: 12px; width: 100%; max-width: 520px; }
+.parameters-settings__uses { display: grid; gap: 4px; font-size: var(--wc-text-xs-size); }
+.parameters-settings__label { color: var(--wc-text-secondary); }
+.parameters-settings__hint { color: var(--wc-text-secondary); }
+.parameters-settings__use-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.parameters-settings__where { color: var(--wc-text-muted); }
+button.parameters-settings__use {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wc-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.parameters-settings__delete { color: var(--wc-status-error); }
+.tile-note__dismiss {
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wc-accent);
+  font: inherit;
+  cursor: pointer;
+}
 .parameter-dialog { max-width: calc(100vw - 32px); }
 /* A Parameter control (T899, AC-534; §7h "a 32 px segmented control (≤ 5
    choices) or a list"): segments joined, the chosen one in the accent. */

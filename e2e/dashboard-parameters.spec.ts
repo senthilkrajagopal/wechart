@@ -403,3 +403,117 @@ test('Settings › Parameters: a new Measure parameter, its choices picked, list
     settings.getByRole('table', { name: 'Parameters' }).getByRole('row').nth(1).getByRole('cell'),
   ).toHaveText(['Metric to show', 'Field switch', 'Measure', '2', 'Orders', 'Not used yet']);
 });
+
+/**
+ * T897 / AC-532: Metric to show's uses — the chart's Metrics well, a
+ * parameter control and a Value — are listed as links, one opening its tile
+ * selected in edit mode; a choice from `monthly_orders`, which `orders`
+ * doesn't join, holds Save settings naming the chart and the choice;
+ * deleting the parameter lists its uses and asks, and then each keeps
+ * Revenue as a fixed field, its tile saying so, and the dashboard saved
+ * writes the chart with Revenue in its well.
+ */
+test('Settings › Parameters: uses as links, Save held for a choice a chart can’t query, and deleting a used parameter', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardOf(request, {
+    parameters: [METRIC],
+    pages: [{ id: 'only', title: 'Only', items: [] }],
+  });
+  const chartId = await boundChart(request, id, 'table');
+  await placeTiles(request, id, [
+    controlsTile,
+    { id: 'tile-chart', kind: 'chart', w: 6, h: 40, chartId },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const chart = page.locator('[data-tile="tile-chart"]');
+  await expect(chart.getByRole('columnheader').nth(1)).toHaveText(/Total Amount/);
+
+  const settings = page.getByTestId('dashboard-settings');
+  const openParameters = async () => {
+    await page.getByRole('button', { name: 'Dashboard settings' }).click();
+    await settings.locator('[data-section="Parameters"]').click();
+  };
+  await openParameters();
+  const used = settings.getByRole('list', { name: 'Used by' });
+  // In the dashboard's order: the Text tile, by its words, then the chart.
+  await expect(used.getByRole('listitem')).toHaveText([
+    'Show · now · Text · a parameter control',
+    'Show · now · Text · the Value “Metric to show”',
+    'Metric by status · chart · its Metrics well',
+  ]);
+  await expect(settings.getByTestId('parameter-checked')).toHaveText(
+    'Every choice works in every chart that uses this parameter.',
+  );
+
+  // A choice from a cube the chart doesn't join: named, and Save held.
+  const form = settings.getByRole('group', { name: 'Parameter' });
+  await form.getByRole('button', { name: 'Add a measure choice' }).click();
+  await page
+    .getByRole('listbox', { name: 'Fields' })
+    .locator('[data-member="monthly_orders.count"]')
+    .click();
+  const unqueryable = settings.getByTestId('parameter-unqueryable');
+  await expect(unqueryable).toHaveText(/^Metric by status can’t query .+ › Count$/);
+  const named = (await unqueryable.textContent()) ?? '';
+  await settings.getByRole('button', { name: 'Save settings' }).click();
+  await expect(settings.getByTestId('settings-save-failed')).toHaveText(named);
+  await expect(settings).toBeVisible();
+  await settings.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Discard changes' }).click();
+  await expect(settings).toBeHidden();
+
+  // A use's link: its tile, selected in edit mode.
+  await openParameters();
+  await used.getByRole('listitem').nth(2).getByRole('button').click();
+  await expect(settings).toBeHidden();
+  await expect(toolbarOf(page)).toBeVisible();
+  await expect(chart).toHaveAttribute('data-selected', 'true');
+  // From edit mode too: the Value's link selects the Text tile.
+  await openParameters();
+  await used.getByRole('listitem').nth(1).getByRole('button').click();
+  await expect(settings).toBeHidden();
+  await expect(page.locator('[data-tile="tile-text"]')).toHaveAttribute('data-selected', 'true');
+  await expect(chart).not.toHaveAttribute('data-selected', 'true');
+
+  // Deleted: asked first, its uses listed; then each keeps Revenue and says so.
+  await openParameters();
+  await settings.getByRole('button', { name: 'Delete parameter…' }).click();
+  const asked = page.getByRole('alertdialog', { name: 'Delete “Metric to show”?' });
+  await expect(asked.getByTestId('delete-parameter-said')).toHaveText(
+    'It has 3 uses. Each keeps Revenue, its value now, as a fixed field, and its tile says so.',
+  );
+  await expect(asked.getByRole('listitem')).toHaveCount(3);
+  await asked.getByRole('button', { name: 'Delete parameter', exact: true }).click();
+  await expect(settings.getByText('This dashboard has no parameters yet.')).toBeVisible();
+  await settings.getByRole('button', { name: 'Save settings' }).click();
+  await expect(settings).toBeHidden();
+  const said = 'Fixed at Revenue: the parameter Metric to show was deleted.';
+  await expect(chart.getByTestId('parameter-fixed')).toContainText(said);
+  const text = page.locator('[data-tile="tile-text"]');
+  await expect(text.getByTestId('parameter-fixed')).toContainText(said);
+  await expect(text.locator('.text-tile')).toContainText('Show Revenue · now');
+  await expect(text.locator('.text-value')).toHaveText(/^\$[\d,.]+$/);
+  await expect(chart.getByRole('columnheader').nth(1)).toHaveText(/Total Amount/);
+
+  await toolbarOf(page).getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(toolbarOf(page)).toBeHidden();
+  const storedChart = (await (await request.get(`${API}/documents/chart/${chartId}`)).json()) as {
+    body: { chart: { wells: { measures: string[] } } };
+  };
+  expect(storedChart.body.chart.wells.measures).toEqual(['orders.total_amount']);
+  const storedDashboard = (await (
+    await request.get(`${API}/documents/dashboard/${id}`)
+  ).json()) as {
+    body: { parameters?: unknown[] };
+  };
+  expect(storedDashboard.body.parameters ?? []).toEqual([]);
+  // Read: the note is the author's, and the chart follows nothing.
+  await expect(chart.getByTestId('parameter-fixed')).toHaveCount(0);
+  await expect(chart.locator('.tile-head__set-by')).toHaveCount(0);
+  await expect(chart.getByRole('columnheader').nth(1)).toHaveText(/Total Amount/);
+});
+
+const toolbarOf = (page: Page) => page.getByRole('toolbar', { name: 'Dashboard editing' });

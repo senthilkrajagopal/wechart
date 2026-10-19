@@ -1910,10 +1910,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T896 (AC-531) Dashboard settings › Parameters: the section and its list, and New parameter in the section or a 520 px dialog from the insert menu and a well's picker
 
-- [ ] T897 (AC-532) A parameter's uses as links, Save held for a choice a bound chart can't query, and deleting a used parameter
-  - Files: `packages/web/src/dashboard/settings/ParametersSettings.tsx`, `packages/web/src/dashboard/settings/parameterUses.ts` (+ test).
-  - Failing test: `parameterUses.test.ts`: uses list the chart's Metrics well, a parameter control and a Value; a choice from a cube the bound chart doesn't join holds Save settings with "Revenue by month can't query Products › Margin target"; deleting the parameter asks, then each use keeps the current choice as a fixed field and its tile says so (AC-532).
-  - Depends on: T896
+- [x] T897 (AC-532) A parameter's uses as links, Save held for a choice a bound chart can't query, and deleting a used parameter
 
 - [x] T898 (AC-533) Bind a parameter from a local chart's well, follow it in the chart and in Value elements, and say "set by ‹parameter›" in view mode
 

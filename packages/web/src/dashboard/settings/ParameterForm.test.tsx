@@ -80,7 +80,13 @@ describe('a parameter’s form (T896, AC-531)', () => {
         [...list.querySelectorAll<HTMLElement>('[data-member]')].map(
           (option) => option.dataset['member'],
         ),
-      ).toEqual(['orders.revenue', 'orders.count', 'orders.margin_pct']);
+      ).toEqual([
+        'orders.revenue',
+        'orders.count',
+        'orders.margin_pct',
+        // The fixture's third cube, joined to neither (T897).
+        'products.margin_target',
+      ]);
     });
     await userEvent.keyboard('{Escape}');
     await pick('orders.revenue');

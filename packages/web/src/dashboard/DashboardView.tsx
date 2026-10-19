@@ -332,6 +332,8 @@ import {
   type Tile,
 } from './model/document';
 import { detach } from '../editor/detach';
+import { loadChart } from '../editor/openChart';
+import { parameterFixedNote } from './settings/parameterUses';
 import { TileChartOwnership } from './edit/ChartOwnership';
 import { allowedLimits, TileLimits } from './settings/TileLimits';
 import { TileMarking } from './settings/TileMarking';
@@ -736,8 +738,11 @@ function TileBody({
   textBroken = 0,
   onTextRetry,
   rowsTotal,
+  onDismissFixed,
 }: {
   tile: Tile;
+  /** Dismisses what the tile says of a deleted parameter it followed (T897, AC-532). */
+  onDismissFixed?: (() => void) | undefined;
   /** How many of a Text tile's elements name a member no longer in the model (AC-525). */
   textBroken?: number | undefined;
   /** Asks a Text tile's failed elements again: its ⋯'s Retry (AC-525). */
@@ -811,8 +816,36 @@ function TileBody({
   const hidden = preview === undefined ? undefined : hiddenMemberOf(error);
   /** A Text tile's text edited in place (T876, AC-302). */
   const textEditing = useContext(TextEditingContext);
+  /**
+   * A deleted parameter this tile followed (T897, AC-532): its use kept the
+   * choice it stood for as a fixed field, said in edit mode until dismissed.
+   */
+  const fixed =
+    editing && (tile.parameterFixed ?? []).length > 0 ? (
+      <StateLine
+        key="parameter-fixed"
+        kind="info"
+        testId="parameter-fixed"
+        className="tile-not-covered"
+      >
+        {parameterFixedNote(tile.parameterFixed ?? [])}
+        {onDismissFixed === undefined ? null : (
+          <button
+            type="button"
+            className="tile-note__dismiss"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDismissFixed();
+            }}
+          >
+            Dismiss
+          </button>
+        )}
+      </StateLine>
+    ) : null;
+  const said = fixed === null ? notes : [...(notes ?? []), fixed];
   // Under the head where the state has one, and first where it has none.
-  const noted = notes === undefined ? null : <div className="tile-notes">{notes}</div>;
+  const noted = said === undefined ? null : <div className="tile-notes">{said}</div>;
   switch (tile.kind) {
     case 'chart':
       /**
@@ -1025,6 +1058,8 @@ function TileBody({
               ) : null}
             </KindHead>
           ) : null}
+          {/* What it says of a deleted parameter it followed (T897, AC-532). */}
+          {noted}
           {/* Double-clicked in edit mode, its text becomes editable (AC-302);
               the keyboard's way in is Properties' first control. */}
           <div
@@ -1364,6 +1399,8 @@ interface Affordances {
   readonly onDelete?: ((id: string) => void) | undefined;
   /** Duplicating a chart tile from its ⋯ menu, the copy with a chart of its own (AC-062). */
   readonly onDuplicate?: ((id: string) => void) | undefined;
+  /** Dismissing what a tile says of a deleted parameter it followed (T897, AC-532). */
+  readonly onDismissFixed?: ((id: string) => void) | undefined;
   /**
    * "Create details tile" from a tile's marked-rows group (AC-112): a tile
    * beside it, limited by its marking — the dashboard put into edit mode to
@@ -1837,6 +1874,13 @@ function Elements({
             )}
             <TileBody
               tile={element}
+              onDismissFixed={
+                affordances.onDismissFixed === undefined
+                  ? undefined
+                  : () => {
+                      affordances.onDismissFixed?.(element.id);
+                    }
+              }
               /**
                * What the tile says of its answer, under its head: the head
                * stays the tile's first row, where the grip sits while editing
@@ -6708,8 +6752,81 @@ export function DashboardView({
               section={settingsSection}
               // How the cross-filter matrix names each tile (AC-118).
               titleOf={chartTitleOf}
-              // What uses each parameter, from its charts' wells (AC-531).
-              chartOf={(chartId) => drawn.documents?.[chartId]}
+              // What uses each parameter, from its charts' wells as their
+              // author wrote them, not as drawn now (AC-531, AC-532).
+              chartOf={(chartId) =>
+                session.document.chartDrafts?.[chartId]?.document ?? authored.documents?.[chartId]
+              }
+              parameterValues={parameterValues}
+              nameOf={(tileId) => {
+                const element = elementAt(session.document, tileId);
+                const title =
+                  element !== null && 'chartId' in element && element.chartId !== undefined
+                    ? chartTitleOf(element.chartId)
+                    : undefined;
+                // A Text tile by its words, its kind said beside it ("· Text · …").
+                return (
+                  title ??
+                  tileNameOf(session.document, tileId, chartTitleOf)
+                    .replace(/^Text: /, '')
+                    .replace(/\s+/g, ' ')
+                );
+              }}
+              /**
+               * A parameter's use (T897, AC-532): its tile opened selected in
+               * edit mode — on its page, its Properties shown, brought into
+               * view — as the Outline opens one.
+               */
+              onOpenTile={(tileId) => {
+                setSettingsOpen(false);
+                if (!session.editing) session.edit();
+                const onPage = session.document.pages.find((page) => holds(page.items, tileId));
+                if (onPage !== undefined) setOpenPage(onPage.id);
+                setSelected(tileId);
+                setAddTarget(null);
+                openSidebarPanel('Properties', { focus: false });
+                requestAnimationFrame(() => {
+                  globalThis.document
+                    .querySelector(`[data-tile="${CSS.escape(tileId)}"]`)
+                    ?.scrollIntoView({ block: 'nearest' });
+                });
+              }}
+              /**
+               * The charts a deleted parameter's uses fixed (T897, AC-532),
+               * held as drafts the dashboard's save writes: each at the
+               * version read — a draft's own, else read now — and drawn as
+               * it now reads, asked of Cube.
+               */
+              draftsFor={async (charts) =>
+                Object.fromEntries(
+                  await Promise.all(
+                    Object.entries(charts).map(async ([chartId, chart]) => {
+                      const held = session.document.chartDrafts?.[chartId];
+                      const version =
+                        held === undefined ? (await loadChart(chartId)).version : held.version;
+                      const fresh = await tileChartOf(
+                        chart,
+                        async (query) =>
+                          (
+                            (await loadTile({
+                              query,
+                              ...(preview === undefined ? {} : { context: preview }),
+                              item,
+                            })) as { data?: Record<string, unknown>[] }
+                          ).data ?? [],
+                        formats,
+                      );
+                      const draft: ChartDraft = {
+                        ...(held ?? {}),
+                        document: chart,
+                        drawn: fresh,
+                        version,
+                      };
+                      return [chartId, draft] as const;
+                    }),
+                  ),
+                )
+              }
               onCancel={() => {
                 setSettingsOpen(false);
               }}
@@ -6738,7 +6855,8 @@ export function DashboardView({
                  * which the page reports, since it is the page that holds
                  * them.
                  */
-                return Promise.resolve(onSave(withoutDrafts(next))).then(() => {
+                // With the charts a deleted parameter's uses fixed (T897, AC-532).
+                return Promise.resolve(onSave(withoutDrafts(next), next.chartDrafts)).then(() => {
                   setSettingsOpen(false);
                 });
               }}
@@ -8102,6 +8220,18 @@ function DashboardPages({
             });
           }
         : undefined,
+    // What a tile says of a deleted parameter, dismissed: one change (T897, AC-532).
+    onDismissFixed: editing
+      ? (id) => {
+          session.change(
+            changeTile(document, id, (tile) => {
+              const kept: { -readonly [K in keyof Tile]?: Tile[K] } = { ...tile };
+              delete kept.parameterFixed;
+              return kept as Tile;
+            }),
+          );
+        }
+      : undefined,
     onCreateDetails:
       canEdit && duplicateFrom !== undefined
         ? (tileId) => {

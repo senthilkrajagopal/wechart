@@ -162,3 +162,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/filters/widgets/` (the list widget's cap and search), `packages/web/src/tiles/text/elements/FilterControl.tsx`, tests.
   - Failing test: the list widget's test over 4,212 customers: 1,000 options and "Showing 1,000 of 4,212 · type to find the rest"; typing "acme" queries Cube with `contains` and lists "Acme Retail SARL", which wasn't in the first 1,000, with "3 matches in all 4,212 customers" (AC-529).
   - Depends on: T892
+
+- [x] T897 (AC-532) A parameter's uses as links, Save held for a choice a bound chart can't query, and deleting a used parameter
+  - Files: `packages/web/src/dashboard/settings/ParametersSettings.tsx`, `packages/web/src/dashboard/settings/parameterUses.ts` (+ test).
+  - Failing test: `parameterUses.test.ts`: uses list the chart's Metrics well, a parameter control and a Value; a choice from a cube the bound chart doesn't join holds Save settings with "Revenue by month can't query Products › Margin target"; deleting the parameter asks, then each use keeps the current choice as a fixed field and its tile says so (AC-532).
+  - Depends on: T896
