@@ -377,6 +377,29 @@ The user: these "will be deferred and not done in this phase". No task builds th
   | Icicle and sunburst | AC-618 – AC-621 | T1007 – T1011 |
 
   Their parts of the cross-cutting criteria (AC-037, AC-559, AC-560, AC-561, AC-563) and tasks (T968, T969, T971, T972, T1012, T1013, T1014) are struck through or noted as parked there. The started types go on in phase 2: the KPI, the graphical table, the bullet chart, 100 % stacking, the Map, parallel coordinates, the Sankey and the box plot's points and violin.
+- **Parked: F47, AI summaries, and F48, Security › AI (the user, 2026-10-18: "you cN PARK THESE │ AI summaries (F47) + Security › AI (F48)"; "whatever you are parking will be picked up later.. so document them for later pick up").** Their tasks are kept unticked and word for word in `docs/tasks.md` §P2.26 "Parked (user, 2026-10-18): AI summaries and Security › AI", and their criteria stay in `docs/spec.md`, each group marked parked.
+
+  | Feature | Criteria | Tasks |
+  |---|---|---|
+  | F48, Security › AI | AC-546 – AC-558 | T901 – T903, T905, T907 – T909, T915 – T924, T1016, T1017 |
+  | F47, AI summaries | AC-535 – AC-545 | T904, T906, T910 – T914, T925 – T933 |
+
+  - **What's built:** nothing. No AI code, migration, package or Helm value is in the repo. Lane AI was started on 2026-10-18 and stopped before its first commit.
+  - **What's decided** (picked up as is):
+    - R80 in `docs/requirements-log.md`: the providers, "Bedrock, Anthropic, Azure and openAI"; R80-1 (the date filter's period), R80-2 (the deployment's time zone, AC-630, built), R80-3 (60 s, 1,024 tokens, 20 facts, 80-character names), R80-5 ("Start; AI can't store keys (Recommended)"); and the coordinator's overturnable calls on R80-6 (`AnthropicBedrock` on `bedrock-runtime`, not `AnthropicBedrockMantle`; the pods' IAM role first, or a saved access key pair with no session token; Bedrock refused while `AWS_BEARER_TOKEN_BEDROCK` or `ANTHROPIC_BEDROCK_BASE_URL` is set).
+    - Design 22 (`docs/design/reviews/2026-10-18/designs/22-llm-settings.html`) and design 21's screen 4 and state J, approved with the "Decided 2026-10-18" block of that folder's `index.md` (22-Q2 asked; every other 22-Qn and 21-Q9, 21-Q10, 21-Q12 as drawn); direction.md §7h and rules 138–145.
+    - The key at rest: AES-256-GCM under its own key-encryption key, AAD bound to the settings, the provider and the endpoint's origin (for Bedrock, the region's endpoint); a changed provider or endpoint clears the key (AC-549).
+  - **What's researched:**
+    - `docs/research/llm-providers.md`: direct SDKs, the typed-segment narrative contract, § Key handling, § Never log keys or prompts, § 7 Test connection, § Testing (fakes only, no live calls), and its 2026-10-18 Bedrock addendum;
+    - `docs/research/bedrock-client.md`: `AnthropicBedrock`'s options, models and inference-profile IDs, the minimal IAM policy, IRSA and Pod Identity on Kubernetes, and a local fake;
+    - `docs/research/credential-encryption.md` scheme v1, reused with its own key and the AAD above.
+  - **Packages,** pinned: `@anthropic-ai/sdk@0.135.0`, `openai@7.38.0`, `@anthropic-ai/bedrock-sdk@0.35.0`, `@aws-sdk/credential-providers@3.1152.0`, and `zod@4.6.5` as a direct dependency of `@wechart/api`. Recheck each against its registry at pick-up and amend the research if a version moves.
+  - **Order to build:** F48 before F47, since summaries need the settings, the key and Test connection. F48's T905 and T907 need F47's provider port and draft check (T904, T906), so in practice: T901, T902, T903, T915, T916, T1016; then T904, T906; then T905, T1017, T907, T908, T909, T917 – T924; then the rest of F47, T913, T910, T911, T912, T914, T925 – T933.
+  - **At pick-up:**
+    - **Migrations:** T902's and T914's planned numbers (1758700000000, 1758700001000) are lane SQL's range now. Renumber both above the highest migration then applied.
+    - **The keyring file's format:** T901 reads `WECHART_AI_KEY_KEYRING_FILE` through `keyOf`, one file, where `credential-encryption.md` proposes a Secret directory of key ids. How one file names more than one key id, for rotation, is a small call for the picking lane, recorded in its decisions file.
+    - **A built pointer to the parked page:** decision T881-1 shows a Super-Admin "Summarize…" in the Text tile's insert menu, disabled, with "Set up AI in Security › AI", which doesn't exist while F48 is parked (AC-517 is narrowed in the spec). Whether to hide that row until F48 is built is the coordinator's call.
+  - **Open, from the research, to settle in the build's tests rather than with the user:** whether zod 4.6.5 emits `anyOf` for `Narrative` (T904's test); whether Bedrock returns a `request-id` header (`bedrock-client.md`); whether the api pod's `automountServiceAccountToken: false` blocks the IRSA or Pod Identity token (T915's Gotcha 8, checked on the first EKS deployment); whether provider error messages echo request content (scrubbed regardless, T913).
 
 ## 8. Deferred past phase 3
 

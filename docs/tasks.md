@@ -1790,7 +1790,8 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 **Two lanes,** each in its own worktree, touching disjoint files as far as possible. Foundations come first in each.
 - **Lane COMBO:** `packages/core/src/combo.ts`, `render-spec.ts` and `undrawn.ts`; `packages/charts/`; `packages/recommender/`; the chart editor's combo parts in `packages/web/src/editor/`; `e2e/combo.spec.ts`. Order: T845, T846, T847, T848, T849, T850, T851, T852, T853, T854, T855, T856, T857, T858, T859, T860, T861, T862, T863, T864, T865, T866, T867. T845 depends on nothing.
-- **Lane TEXT:** `packages/core/src/text-document*.ts` and the dashboard parameter model; `packages/web/src/tiles/text/`, the dashboard's model, edit sidebar, settings, bookmarks and filters; `packages/api/src/ai/`, the AI routes and repos, `packages/api/src/mcp/tools/`; `packages/web/src/workspaces/security/ai/`; `deploy/helm/`. Order: T868, T869, T870, T871, T872, T873, T874, T875, T876, T877, T878, T879, T880, T881, T882, T883, T884, T885, T886, T887, T888, T889, T891, T892, T893, T894, T895, T896, T897, T898, T899, T900, T890; the AI service T901, T902, T903, T904, T906, T907, T908, T909, T913, T910, T911, T912 (after lane MCP's T1015), T914, T905, T1017, T915; the AI pages T916, T1016, T917, T918, T919, T920, T921, T922, T923, T924, T925, T926; then T927, T928, T929, T930, T931, T932, T933. ~~then, once their questions are answered, …~~ (R80-1 … R80-6 settled 2026-10-18). T868, T895 and T901 depend on nothing and can go first.
+- **Lane TEXT:** `packages/core/src/text-document*.ts` and the dashboard parameter model; `packages/web/src/tiles/text/`, the dashboard's model, edit sidebar, settings, bookmarks and filters; `packages/api/src/ai/`, the AI routes and repos, `packages/api/src/mcp/tools/`; `packages/web/src/workspaces/security/ai/`; `deploy/helm/`. Order: T868, T869, T870, T871, T872, T873, T874, T875, T876, T877, T878, T879, T880, T881, T882, T883, T884, T885, T886, T887, T888, T889, T891, T892, T893, T894, T895, T896, T897, T898, T899, T900, T890~~; the AI service T901, T902, T903, T904, T906, T907, T908, T909, T913, T910, T911, T912 (after lane MCP's T1015), T914, T905, T1017, T915; the AI pages T916, T1016, T917, T918, T919, T920, T921, T922, T923, T924, T925, T926; then T927, T928, T929, T930, T931, T932, T933~~ (parked, below). ~~then, once their questions are answered, …~~ (R80-1 … R80-6 settled 2026-10-18). T868 and T895 depend on nothing and can go first.
+- **Parked (the user, 2026-10-18, "you cN PARK THESE │ AI summaries (F47) + Security › AI (F48)"):** F47's tasks (T904, T906, T910–T914, T925–T933) and F48's (T901–T903, T905, T907–T909, T915–T924, T1016, T1017) are moved unticked to §"Parked (user, 2026-10-18): AI summaries and Security › AI" at the end of this section, unchanged. Lane TEXT's order above ends at T890. No F45 or F46 task (T868–T900) depends on a parked task; the dependency runs the other way only (T925 on T881). One built behaviour points at the parked page: decision T881-1 shows a Super-Admin Summarize… disabled with "Set up AI in Security › AI" (AC-517's narrowing in `docs/spec.md`); hiding that row until F48 is built is the coordinator's call. The pick-up notes are in `docs/phase-2/backlog.md` §7.
 - **Shared files** (expect cherry-pick conflicts there only): `packages/web/src/editor/Wells.tsx` (lane COMBO's pill menu, Split by well and offers; lane TEXT's Parameters group, T898); `packages/core/src/index.ts`; `packages/web/src/shell/styles.ts`; `packages/web/src/dashboard/DashboardView.tsx` (lane COMBO's tile edit-head warning, T861; lane TEXT's Text tile).
 - **Migrations,** lane TEXT only, from 1758700000000.
 - **Tests never call a provider.** Unit tests point each client at an in-process fake provider (`packages/api/src/ai/fake.ts`, after `packages/api/src/xcube/fake.ts`); the e2e stack runs the same fake over HTTPS with a test certificate the API trusts through `NODE_EXTRA_CA_CERTS`, set up as Azure OpenAI at the fake's address (`llm-providers.md` § Testing).
@@ -2027,7 +2028,20 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `viewState.test.ts`: a bookmark saved with Metric to show at Orders stores it, and applying it sets it back from Revenue; `url.test.ts`: a copied link holds the parameter's value, and opening it starts there (AC-121, AC-123).
   - Depends on: T899
 
-### Lane TEXT: the AI service
+### Parked (user, 2026-10-18): AI summaries and Security › AI
+
+> "you cN PARK THESE │ AI summaries (F47) + Security › AI (F48)" (the user, 2026-10-18, through the coordinator); "whatever you are parking will be picked up later.. so document them for later pick up"
+
+F47, AI summaries (AC-535 … AC-545), and F48, Security › AI (AC-546 … AC-558), are parked. Their tasks are kept below unticked and word for word, under the lane headings they were planned with, and are not built this phase; their criteria are marked parked in `docs/spec.md`, and the pick-up entry is in `docs/phase-2/backlog.md` §7. Nothing of them is built: lane AI was started on 2026-10-18 and stopped before its first commit.
+- **F48** (build first): T901, T902, T903, T905, T907, T908, T909, T915, T916, T917, T918, T919, T920, T921, T922, T923, T924, T1016, T1017.
+- **F47:** T904, T906, T910, T911, T912, T913, T914, T925, T926, T927, T928, T929, T930, T931, T932, T933.
+- **At pick-up:**
+  - **Migrations:** T902's `1758700000000_ai-settings.cjs` and T914's `1758700001000_ai-usage.cjs` sit in lane SQL's range now. Renumber both above the highest migration applied in the shared test databases at that time.
+  - **Lane:** these were lane TEXT's. They go to whichever lane picks them up, in the order the Lane TEXT bullet above struck through (F48's service tasks need T904 and T906 from F47 before T905 and T907).
+  - **Dependencies outside the parked set:** T925 on T881 and T912 on lane MCP's T1015, both done (AC-630 is ticked).
+  - **Keyring format:** T901 names `WECHART_AI_KEY_KEYRING_FILE` read through `keyOf`, a single file, where `credential-encryption.md` proposes a Secret directory of key ids. How one file holds more than one key id, for rotation, is to be settled and recorded in the picking lane's decisions file.
+
+#### Lane TEXT: the AI service
 
 - [ ] T901 [P] (AC-549) Encrypt the AI key at rest with AES-256-GCM under its own key-encryption key, bound to the settings, the provider and the endpoint's origin
   - Files: `packages/api/src/ai/keyStore.ts` (+ test), `packages/api/src/config.ts` (`WECHART_AI_KEY_KEYRING_FILE`, through `keyOf`), `packages/api/src/config.test.ts`.
@@ -2116,7 +2130,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Depends on: T905, T917
   - R80-6's coordinator's call (`bedrock-client.md` Gotcha 2), recorded under R80 in the requirements log.
 
-### Lane TEXT: Security › AI
+#### Lane TEXT: Security › AI
 
 - [ ] T916 (AC-546) Security's fifth tab, AI, at `/security/ai`, with its state chip, and Not found for everyone else
   - Files: `packages/web/src/workspaces/security/ai/AiTab.tsx` (+ test), `packages/web/src/workspaces/security/SecurityPage.tsx`, `packages/web/src/router/routes.tsx`.
@@ -2169,7 +2183,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `ai-settings.spec.ts` at 900 px: the state and settings show with "Changing AI settings needs a window at least 1,024 px wide.", and no Save, Replace… or Test connection (AC-557).
   - Depends on: T917
 
-### Lane TEXT: Summarize
+#### Lane TEXT: Summarize
 
 - [ ] T925 (AC-535) The Copilot group in the insert menu for those who may use AI, a disabled row with its link for Super-Admins while AI is off, and nothing for viewers
   - Files: `packages/web/src/tiles/text/InsertMenu.tsx`, `packages/web/src/tiles/text/ai/useAiAvailability.ts` (+ test).
