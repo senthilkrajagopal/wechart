@@ -380,7 +380,14 @@ export function GraphicalTableView({
     );
   return (
     <div className="gt-paged">
-      <div className="gt-scroll" data-testid="graphical-table">
+      {/* A table wider than its tile scrolls inside it, in a named region the keyboard reaches (T944-1). */}
+      <div
+        className="gt-scroll"
+        data-testid="graphical-table"
+        role="region"
+        aria-label={`${pluralOf(rowsTitle)} at a glance`}
+        tabIndex={0}
+      >
         <table className="gt">
           <caption>{captionOf(rowsTitle, spec.rows, columns)}</caption>
           <thead>

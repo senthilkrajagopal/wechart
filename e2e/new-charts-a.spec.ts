@@ -1687,6 +1687,11 @@ test('graphical tables on 5- and 6-column tiles draw their cells, sections and e
   const scroller = await tile.getByTestId('graphical-table').boundingBox();
   if (tileBox === null || scroller === null) throw new Error('the graphical table is not drawn');
   expect(scroller.x + scroller.width).toBeLessThanOrEqual(tileBox.x + tileBox.width + 0.5);
+  // Its scroll region is named, and Tab reaches it (decision T944-1).
+  const region = tile.getByRole('region', { name: 'Products Categories at a glance' });
+  await expect(region).toHaveAttribute('tabindex', '0');
+  await region.focus();
+  await expect(region).toBeFocused();
 
   // Grouped by status: a section headed by each.
   const sections = page.locator('[data-tile="tile-grouped"] tbody');

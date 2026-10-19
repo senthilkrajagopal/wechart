@@ -6,6 +6,7 @@
 export const GT_CSS = `
 .gt-paged { height: 100%; min-height: 0; display: flex; flex-direction: column; }
 .gt-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.gt-scroll:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
 .gt-pager {
   flex: none;
   margin: 4px 0 0;

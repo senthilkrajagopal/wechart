@@ -165,6 +165,14 @@ describe('a graphical table drawn (T944, AC-571)', () => {
     expect(said.getAttribute('aria-label')).toBe('No data for these filters');
   });
 
+  it('scrolls a table wider than its tile in a named region the keyboard reaches (decision T944-1)', () => {
+    render(<GraphicalTableView spec={spec()} trends={[]} now={now} />);
+    const region = screen.getByRole('region', { name: 'Categories at a glance' });
+    expect(region.getAttribute('tabindex')).toBe('0');
+    expect(region.contains(screen.getByRole('table'))).toBe(true);
+    expect(GT_CSS).toMatch(/\.gt-scroll:focus-visible \{[^}]*outline:[^}]*\}/);
+  });
+
   it('says "No rule matched" for an icon no rule applies to', () => {
     const noRule = COLUMNS.map((column) =>
       column.kind === 'icon'
