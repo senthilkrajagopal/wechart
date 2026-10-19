@@ -364,6 +364,19 @@ The user: these "will be deferred and not done in this phase". No task builds th
   - the refresh worker's build history;
   - xcube's slice 7;
   - the 4 Northwind bugs.
+- **Parked: R81's chart types not started (the user, 2026-10-18: "any of the charts that you have not started implmentation put them in the parking lot for now... whatever is started see them through the completion").** Their tasks are kept unticked in `docs/tasks.md` §P2.27 "Parked (user, 2026-10-18)", and their criteria stay in `docs/spec.md`, each group marked parked:
+
+  | Type | Criteria | Tasks |
+  |---|---|---|
+  | Waterfall | AC-575 – AC-579 | T948 – T952 |
+  | Histogram | AC-586 – AC-590, AC-631 | T959 – T964, T1018 |
+  | Bubble | AC-594 – AC-596 | T965 – T967 |
+  | Timeline | AC-602 – AC-605, AC-632 | T998 – T1002, T1019 |
+  | Calendar heatmap | AC-606 – AC-609 | T1003 – T1006 |
+  | Funnel | AC-614 – AC-617 | T994 – T997 |
+  | Icicle and sunburst | AC-618 – AC-621 | T1007 – T1011 |
+
+  Their parts of the cross-cutting criteria (AC-037, AC-559, AC-560, AC-561, AC-563) and tasks (T968, T969, T971, T972, T1012, T1013, T1014) are struck through or noted as parked there. The started types go on in phase 2: the KPI, the graphical table, the bullet chart, 100 % stacking, the Map, parallel coordinates, the Sankey and the box plot's points and violin.
 
 ## 8. Deferred past phase 3
 

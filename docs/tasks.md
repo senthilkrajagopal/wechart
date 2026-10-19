@@ -2228,6 +2228,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 **Two lanes,** each in its own worktree, touching disjoint files as far as possible. Each new type's spec lives in `packages/core/src/chart-types/‹type›.ts`, its series in `packages/charts/src/series/‹type›.ts`, its wells in `packages/web/src/editor/wells/‹type›.tsx`, its table view in `packages/web/src/tiles/tableView/‹type›.ts` and its text alternative in `packages/charts/src/describe/‹type›.ts`, each registered in one line of a shared registry.
 - **Lane CHARTS-A:** the gallery and registries (T934), the "share shown" badge, the KPI, the graphical table, the waterfall, the bullet chart, 100 % stacking, the histogram and the bubble; lane A's recommender rules, saved Auto charts, its keyboard order and its e2e (`e2e/new-charts-a.spec.ts`). Order: T934, T935, T936, T937, T938, T939, T940, T941, T942, T943, T944, T945, T946, T947, T948, T949, T950, T951, T952, T953, T954, T955, T956, T957, T958, T959, T960, T961, T962, T1018, T963, T964, T965, T966, T967, T968, T969, T970, T971, T972. T934 and T935 depend on nothing and go first.
 - **Lane CHARTS-B:** the Map, parallel coordinates, the Sankey, the box plot's points and violin, the funnel, the timeline, the calendar heatmap, and the icicle and sunburst; lane B's recommender rules, its keyboard order and its e2e (`e2e/new-charts-b.spec.ts`). Order: T973, T974, T975, T976, T977, T978, T980, T981, T982, T983, T984, T985, T986, T987, T988, T989, T990, T991, T992, T993, T994, T995, T996, T997, T998, T999, T1000, T1019, T1001, T1002, T1003, T1004, T1005, T1006, T1007, T1008, T1009, T1010, T1011, T1012, T1013, T1014; then T979 ~~, once R81-1 is answered~~ (R81-1 answered 2026-10-18). T990 depends on nothing; every other lane B task starts after lane A's T934.
+- **Parked (the user, 2026-10-18):** the types not started — the waterfall, the histogram, the bubble, the funnel, the timeline, the calendar heatmap and the icicle and sunburst — are parked, their tasks moved unticked to §"Parked (user, 2026-10-18)" at the end of this section. The two orders above skip them; the cross-cutting tasks (T968, T969, T971, T972, T1012, T1013, T1014) are narrowed to the started types, their parked parts struck through.
 - **Shared with each other** (expect cherry-pick conflicts there only): the registries T934 creates (`packages/core/src/chart-types/index.ts`, `packages/charts/src/series/registry.ts`, `packages/web/src/editor/wells/registry.ts`, `packages/web/src/tiles/tableView/index.ts`, `packages/charts/src/describe/index.ts`), one line per type; `packages/recommender/src/recommend.ts`, `legality.ts` and `reason.ts` (T968, T969 against T1012); `packages/charts/src/interaction/keyboardMarking.ts` (T971 against T1013); `packages/charts/src/marking/partial.ts` (the marked share: T946, T951, T963 against T988); `packages/core/src/chart-spec.ts`.
 - **Shared with lanes COMBO and TEXT** (P2.26): `packages/charts/src/series/` and `packages/charts/src/optionFor.ts` (COMBO's T846 and T863 against T934's registry and every series task); `packages/recommender/` (COMBO's T861 `warnings.ts` and T865 `explain.ts` against T968, T969 and T1012); `packages/web/src/editor/Wells.tsx` (COMBO's pill menu and Split by well, TEXT's Parameters group, against T934, which routes R81's wells to `editor/wells/` once); `packages/web/src/editor/chartTypeCatalog.ts` and `ChartTypeGallery.tsx` (T934 only, against nothing in COMBO or TEXT); `packages/core/src/render-spec.ts` (COMBO's T845 and T852 against T934's `ChartType` union); `packages/web/src/tiles/DataTable.tsx` and `ChartCanvas.tsx` (COMBO's T864 against T934's table-view and describe registries). KPI and graphical-table tasks import lane TEXT's elements, so they depend on T884, T885 and T886.
 - **Migrations** (the coordinator, 2026-10-18): lane CHARTS-A numbers from 1758730000000 and lane CHARTS-B from 1758720000000 (lane SQL holds 1758700000000 and up, lane MCP 1758710000000 and up). T979, if the research puts custom boundary sets in wechart's database, takes 1758730000000.
@@ -2307,34 +2308,6 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Failing test: `graphicalTable.test.ts` (table view): Beverages reads "$1,210,000 · $84K → $112K · 23.1% / 25% · At risk", each matching its drawn cell (AC-574).
   - Depends on: T944
 
-### Lane CHARTS-A: the waterfall
-
-- [ ] T948 (AC-575, AC-037) The waterfall's spec and data: steps by member or by change between two periods through `compareDateRange`, totals, and "Show at most 6"
-  - Files: `packages/core/src/chart-types/waterfall.ts` (+ test), `packages/web/src/editor/wells/waterfall.tsx` (+ test).
-  - Failing test: `waterfall.test.ts`: Gross margin by Category without Compare periods gives one step per member and an end total of their sum; with Q3 → Q4 2026 it asks for `compareDateRange` and gives each member's change, a start of $800,000 and an end equal to start plus every step; "Show at most" starts at 6; `waterfall.test.tsx` (wells): the five wells and options are there (AC-575, AC-037).
-  - Depends on: T934
-
-- [ ] T949 (AC-576) Draw the waterfall: increases blue and decreases red, totals `text-secondary`, ▲ or ▼ and a sign on every label, square ends and dashed connectors
-  - Files: `packages/charts/src/series/waterfall.ts` (+ test), `packages/charts/src/series/registry.ts`.
-  - Failing test: `waterfall.test.ts` (series): an increase is §5's diverging blue and a decrease its red, totals `text-secondary`; labels read "▲ +$120K" and "▼ −$90K" in `text-xs` `text-primary`; each step's base is the previous running total; bars have no `borderRadius`; connectors are 1 px `border-strong` dashed [2, 2]; with Totals None the axis min isn't forced to zero (AC-576).
-  - Depends on: T948
-  - Waits on: research: the palette validator (`docs/research/palette-validation.md`) run on the waterfall's blue and red pair against §5's checks.
-
-- [ ] T950 (AC-577) Refuse a waterfall of a measure that isn't summed, with "Bar chart instead", and fold steps past "Show at most" into "Other (n)"
-  - Files: `packages/core/src/chart-types/waterfall.ts`, `packages/web/src/tiles/WaterfallEmpty.tsx` (+ test).
-  - Failing test: `waterfall.test.ts`: 20 steps with "Show at most" 6 fold the 14 smallest by absolute change into "Other (14)", whose tooltip lists 10 and "+4 more"; `WaterfallEmpty.test.tsx`: Margin % draws nothing and says "Margin % is an average, so its steps wouldn't add up to a total. Choose a summed measure." with "Bar chart instead" (AC-577).
-  - Depends on: T948
-
-- [ ] T951 (AC-578) Mark a waterfall's steps, Other and totals, draw another tile's marked share from each step's start, and cross-filter by step but never by total
-  - Files: `packages/charts/src/series/waterfall.ts`, `packages/charts/src/marking/partial.ts`, `packages/charts/src/series/waterfallMarking.test.ts`.
-  - Failing test: `waterfallMarking.test.ts`: clicking "Q4 2026" marks every member it sums, as Mark all; "Other (3)" marks its three; a drag over two steps marks both; with EMEA marked elsewhere, Beverages draws $40K from the step's start at full opacity and the rest at 0.28; in cross-filter mode a total filters nothing and its tooltip reads "A total: click a step to filter" (AC-578).
-  - Depends on: T949, T935
-
-- [ ] T952 (AC-579) The waterfall's text alternative and its table view with a running total
-  - Files: `packages/charts/src/describe/waterfall.ts` (+ test), `packages/web/src/tiles/tableView/waterfall.ts` (+ test).
-  - Failing test: `waterfall.test.ts` (describe): "Waterfall of Gross margin from Q3 2026 $0.80M to Q4 2026 $0.84M, up $40K. Largest rise Beverages +$120K; largest fall Confections −$110K."; (table view) columns Step, Change, Direction, Running total, Beverages "+$120,000 · ▲ Increase · $920,000" (AC-579).
-  - Depends on: T949
-
 ### Lane CHARTS-A: the bullet chart
 
 - [x] T953 (AC-580, AC-037) The bullet chart's spec and wells: Target, 2–3 bands at 80, 100 and 120 % by default, and its empty state
@@ -2363,70 +2336,18 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Failing test: `stack100Marking.test.ts`: a segment marks (Region, Channel); a legend entry marks its Channel; with a marking covering half of EMEA · Web, the drawn marked part is half the segment's height from its own base; (describe) "Web's share is largest in APAC (62 %) and smallest in LATAM (38 %)."; (table view) a "Share of Region" column (AC-585).
   - Depends on: T957, T935
 
-### Lane CHARTS-A: the histogram
-
-- [ ] T959 (AC-586, AC-037) The histogram's spec and wells: Value from a model bin dimension or a measure with Each point is, bins of a width or a count of 5–50, and the "from the model" label
-  - Files: `packages/core/src/chart-types/histogram.ts` (+ test), `packages/core/src/bins.ts` (reading `meta.wechart.binOf`; + test), `packages/web/src/editor/wells/histogram.tsx` (+ test).
-  - Failing test: `bins.test.ts`: a dimension whose meta is `{ wechart: { binOf: { member: "orders.value", width: 50 } } }` is the bin dimension of Order value at $50; `histogram.test.ts`: a bin count of 4 or 51 is refused; `histogram.test.tsx` (wells): a model-binned chart reads "Bins of $50 · from the model" (AC-586, AC-037).
-  - Depends on: T934
-
-- [ ] T960 (AC-586) "Make bins in the model…" drafts a bin dimension in the author's My workspace
-  - Files: `packages/web/src/editor/wells/MakeBins.tsx` (+ test), `packages/web/src/workspaces/model/draftBinDimension.ts` (+ test).
-  - Failing test: `draftBinDimension.test.ts`: Order value at $50 drafts, in the cube's My workspace copy, a `number` dimension whose SQL floors the value to 50 and whose meta is `wechart.binOf` naming its source and width; the shared model is unchanged; `MakeBins.test.tsx`: the offer appears only for a numeric dimension with no bin dimension (AC-586).
-  - Depends on: T959
-
-- [ ] T961 (AC-587) Draw histogram bins touching with square ends, ticks at bin edges, and bins named "from ‹a› to under ‹b›"
-  - Files: `packages/charts/src/series/histogram.ts` (+ test).
-  - Failing test: `histogram.test.ts` (series): bars have a 1 px surface gap, no radius and `barCategoryGap: 0`; axis ticks fall on 0, 50, …, 500; Colour by Channel stacks within each bin; a bin's label is "from $100 to under $150" (AC-587).
-  - Depends on: T959
-
-- [ ] T962 (AC-588) Bin a measure per entity in the browser, saying "Computed from n of N" when Cube's row limit cut it
-  - Files: `packages/core/src/chart-types/histogram.ts` (`browserBins`; + test), `packages/web/src/tiles/HistogramCut.tsx` (+ test).
-  - Failing test: `histogram.test.ts`: 10,000 per-order values bin into counts equal to a direct count of each range; `HistogramCut.test.tsx`: 10,000 of 48,210 reads "Computed from 10,000 of 48,210 orders (Cube's row limit). Bin counts are of those orders only." (AC-588).
-  - Depends on: T961
-
-- [ ] T963 (AC-589) Mark a model bin as a range on its source, a browser bin as at most 1,000 IDs, draw another tile's marked share per bin, and cross-filter to the bin's range
-  - Files: `packages/charts/src/series/histogram.ts`, `packages/core/src/markings/range.ts`, `packages/charts/src/series/histogramMarking.test.ts`.
-  - Failing test: `histogramMarking.test.ts`: clicking the $100 bin of a model-binned chart stores Order value ≥ 100 and < 150; a drag over two bins ≥ 100 and < 200; a browser bin of 2,140 orders refuses with "Too many orders to mark: 2,140 in this bin; at most 1,000. The marking didn't change."; with EMEA marked elsewhere each bin's EMEA part draws from the baseline; the cross-filter chip reads "Order value ≥ $100 and < $150" (AC-589).
-  - Depends on: T962, T935
-
-- [ ] T964 (AC-590) The histogram's empty state, text alternative and table view
-  - Files: `packages/charts/src/describe/histogram.ts` (+ test), `packages/web/src/tiles/tableView/histogram.ts` (+ test), `packages/web/src/editor/wells/histogram.tsx`.
-  - Failing test: (describe) "Histogram of Order value, 10 bins of $50 from $0 to $500. Most orders $100 to under $150 (4,100); counts fall toward $500."; (table view) Order value, Count, Share, the first row "from $0 to under $50"; with nothing to bin, "Put a numeric dimension in Value, or a measure with Each point is." with Value as its action (AC-590).
-  - Depends on: T961
-
-- [ ] T1018 (AC-631) Bin a numeric dimension with no bin dimension in the browser from its grouped values, with "Make bins in the model…" beside it and "Computed from n of N rows" when cut
-  - Files: `packages/core/src/chart-types/histogram.ts` (`dimensionBins`, its query; + test), `packages/web/src/tiles/HistogramCut.tsx` (+ test), `packages/web/src/editor/wells/histogram.tsx` (Metrics summed only; + test).
-  - Failing test: `histogram.test.ts`: Order value with no bin dimension asks Cube for Order value grouped with Count, and 120 grouped values bin at $50 into counts equal to the sum of each range's grouped counts; Average order value is refused in Metrics; a bin marks and filters as Order value ≥ 100 and < 150; `HistogramCut.test.tsx`: 10,000 of 48,210 grouped rows reads "Computed from 10,000 of 48,210 rows (Cube's row limit). Bin counts are of those rows only.", and "Make bins in the model…" shows beside the chart (AC-631).
-  - Depends on: T962, T960
-
-### Lane CHARTS-A: the bubble
-
-- [ ] T965 (AC-594, AC-037) Size and Shape wells on a scatter, a Bubble while Size is set, Colour at most 3 and Shape at most 6 with their reasons, and Shape never filled by Auto
-  - Files: `packages/core/src/chart-types/bubble.ts` (+ test), `packages/web/src/editor/wells/bubble.tsx` (+ test).
-  - Failing test: `bubble.test.ts`: a scatter spec with Size is a bubble, and without it a scatter drawn as today; `bubble.test.tsx` (wells): Region of 4 in Colour reads "Region Colour takes at most 3 values on a bubble chart; Region has 4. Put it in Shape."; Category of 8 in Shape reads "Category Shape takes at most 6 values; Category has 8."; the Bubble card is greyed with "Put a measure in Size" while Size is empty (AC-594, AC-037).
-  - Depends on: T934
-
-- [ ] T966 (AC-595) Size bubbles by area from 8 to 40 px, draw larger first, take shapes in order, show a size legend, and count marks of size at or below zero
-  - Files: `packages/charts/src/series/scatter.ts` (+ test), `packages/charts/src/legend.ts`.
-  - Failing test: `scatter.test.ts`: the smallest value's `symbolSize` is 8 and the largest's 40, and for any mark `size² ∝ value` within 1 %; `z` orders larger marks below smaller; shapes run circle, rect, triangle, diamond, down-triangle, cross; the legend holds three reference circles with values; 3 marks of Order count 0 aren't drawn and the note reads "3 products with Order count at or below 0 aren't drawn: an area can't be negative." (AC-595).
-  - Depends on: T965
-
-- [ ] T967 (AC-596) Mark a bubble as a scatter point, and name its encodings in its text alternative and table view
-  - Files: `packages/charts/src/describe/bubble.ts` (+ test), `packages/web/src/tiles/tableView/bubble.ts` (+ test), `packages/charts/src/series/bubbleMarking.test.ts`.
-  - Failing test: `bubbleMarking.test.ts`: click, Ctrl, rectangle and lasso mark Products as a scatter's do; (describe) "Bubble chart of 12 products: Revenue across, Margin % up, Order count as size, Channel as colour, Region as shape. Largest Chai ($1.21M, 23.1 %, 2,140 orders)."; (table view) Product, Revenue, Margin %, Orders, Channel, Region (AC-596).
-  - Depends on: T966
-
 ### Lane CHARTS-A: the recommender, saved charts, the keyboard and the e2e
 
-- [ ] T968 (AC-560, AC-031, AC-028) The new top picks: histogram, bubble, parallel coordinates, bullet and KPI with a target; line kept for one measure over time with KPI with trend next; and R81's caps on bubbles and KPI tiles
+- [ ] T968 (AC-560, AC-031, AC-028) The new top picks: ~~histogram, bubble,~~ parallel coordinates, bullet and KPI with a target; line kept for one measure over time with KPI with trend next; and R81's caps on ~~bubbles and~~ KPI tiles (the histogram and bubble parts parked, the user, 2026-10-18)
   - Files: `packages/recommender/src/recommend.ts` (+ test), `packages/recommender/src/legality.ts` (+ test), `packages/recommender/src/reason.ts`.
-  - Failing test: `recommend.test.ts`: one numeric dimension alone gives Histogram; one measure with Each point is gives Histogram then Box plot; Revenue, Margin % and Order count by 12 Products give Bubble then Parallel coordinates; 5 measures by 14 Products give Parallel coordinates; a Target with Region gives Bullet chart, and with no dimension KPI then a single bullet; Revenue by month gives Line then "KPI with trend"; `legality.test.ts`: a bubble with Colour of 4 or Shape of 7, and a KPI tiled by 21, are rejected (AC-560, AC-031, AC-028).
+  - Failing test: `recommend.test.ts`: ~~one numeric dimension alone gives Histogram; one measure with Each point is gives Histogram then Box plot; Revenue, Margin % and Order count by 12 Products give Bubble then Parallel coordinates;~~ 5 measures by 14 Products give Parallel coordinates; a Target with Region gives Bullet chart, and with no dimension KPI then a single bullet; Revenue by month gives Line then "KPI with trend"; `legality.test.ts`: ~~a bubble with Colour of 4 or Shape of 7, and~~ a KPI tiled by 21~~, are~~ is rejected (AC-560, AC-031, AC-028).
+  - Parked (the user, 2026-10-18, "any of the charts that you have not started implmentation put them in the parking lot for now"): the histogram's and the bubble's top picks and the bubble's caps, struck through above, go with T959–T967 and T1018 (§"Parked" below).
   - Depends on: T934
 
-- [ ] T969 (AC-561, AC-031) Runners-up with their reasons: waterfall, 100 % stacked, graphical table, KPI tiled and parallel coordinates for 4+ measures over at most 8 members
+- [ ] T969 (AC-561, AC-031) Runners-up with their reasons: ~~waterfall,~~ 100 % stacked, graphical table, KPI tiled and parallel coordinates for 4+ measures over at most 8 members (the waterfall part parked, the user, 2026-10-18)
   - Files: `packages/recommender/src/recommend.ts`, `packages/recommender/src/reason.ts` (+ test), `packages/recommender/src/runnersUpR81.test.ts`.
-  - Failing test: `runnersUpR81.test.ts`: Gross margin changing sign across 6 Categories offers Waterfall, never first, with "Two periods by Category: …" under 80 characters while Compare periods is set; Revenue by Region and Channel of 5 offers 100 % stacked bar; 42 Categories with Revenue and month offer Graphical table; Revenue, month and 4 Regions offer KPI tiled, 21 Regions don't; an average offers no waterfall or 100 %; 4 measures by 6 Products offer Parallel coordinates as a runner-up (AC-561, AC-031).
+  - Failing test: `runnersUpR81.test.ts`: ~~Gross margin changing sign across 6 Categories offers Waterfall, never first, with "Two periods by Category: …" under 80 characters while Compare periods is set;~~ Revenue by Region and Channel of 5 offers 100 % stacked bar; 42 Categories with Revenue and month offer Graphical table; Revenue, month and 4 Regions offer KPI tiled, 21 Regions don't; an average offers no ~~waterfall or~~ 100 %; 4 measures by 6 Products offer Parallel coordinates as a runner-up (AC-561, AC-031).
+  - Parked (the user, 2026-10-18): the waterfall's runner-up, struck through above, goes with T948–T952 (§"Parked" below).
   - Depends on: T968
 
 - [ ] T970 (AC-562, AC-028) Keep a chart saved in Auto before R81 drawing its saved type until its fields next change
@@ -2434,15 +2355,17 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Failing test: `chart-migrations.test.ts`: an Auto spec of Revenue, Margin % and Order count by Product saved without a rules version reads as drawn type bar; `chartTypeState.test.ts`: it stays bar on opening, and after the author adds and removes a filter field it is recommended Bubble; a spec saved with R81's version follows the rules at once (AC-562, AC-028).
   - Depends on: T968
 
-- [ ] T971 (AC-563) Keyboard marking on KPI tiles, bullets, waterfall steps and histogram bins, with §7a's keys in their order
+- [ ] T971 (AC-563) Keyboard marking on KPI tiles~~, bullets, waterfall steps and histogram bins~~ and bullets, with §7a's keys in their order (the waterfall and histogram parts parked, the user, 2026-10-18)
   - Files: `packages/charts/src/interaction/keyboardMarking.ts` (+ test), `packages/web/src/tiles/kpi/KpiTiles.tsx`.
-  - Failing test: `keyboardMarking.test.ts`: on a waterfall, → moves focus step to step left to right without marking, Space marks, Ctrl+Space toggles, Shift+→ extends, Esc unmarks, each announced once; KPI tiles and bullets in reading order; histogram bins left to right; no other key acts (AC-563).
-  - Depends on: T941, T951, T955, T963
+  - Failing test: `keyboardMarking.test.ts`: on ~~a waterfall, → moves focus step to step left to right~~ a bullet chart, → moves focus bullet to bullet in reading order without marking, Space marks, Ctrl+Space toggles, Shift+→ extends, Esc unmarks, each announced once; KPI tiles ~~and bullets~~ in reading order; ~~histogram bins left to right;~~ no other key acts (AC-563).
+  - Depends on: T941, ~~T951,~~ T955~~, T963~~
+  - Parked (the user, 2026-10-18): waterfall steps and histogram bins, struck through above, go with T951 and T963 (§"Parked" below).
 
-- [ ] T972 (AC-559, AC-037, AC-098, AC-568, AC-573, AC-578, AC-582, AC-589) Design 23's screen 2 on a running dashboard: a KPI tiled by Region marks EMEA, and the graphical table, waterfall, bullet chart and histogram each show it their way
+- [ ] T972 (AC-559, AC-037, AC-098, AC-568, AC-573, ~~AC-578,~~ AC-582~~, AC-589~~) Design 23's screen 2 on a running dashboard: a KPI tiled by Region marks EMEA, and the graphical table~~, waterfall,~~ and bullet chart ~~and histogram~~ each show it their way (the waterfall and histogram parts parked, the user, 2026-10-18)
   - Files: `e2e/new-charts-a.spec.ts`.
-  - Failing test: `new-charts-a.spec.ts`: an author picks each lane A type from the gallery's shelves and saves it on one dashboard; in Markings mode, clicking EMEA's KPI tile outlines it; the graphical table's Beverages reads "· $310K marked" and its tile "● EMEA's share shown"; the waterfall's steps and the histogram's bins draw EMEA's part from their base; the bullet chart's EMEA bullet is outlined; reloading draws the same (AC-559, AC-037, AC-098, AC-568, AC-573, AC-578, AC-582, AC-589).
-  - Depends on: T941, T946, T951, T955, T963, T970
+  - Failing test: `new-charts-a.spec.ts`: an author picks each ~~lane A~~ started lane A type from the gallery's shelves and saves it on one dashboard; in Markings mode, clicking EMEA's KPI tile outlines it; the graphical table's Beverages reads "· $310K marked" and its tile "● EMEA's share shown"; ~~the waterfall's steps and the histogram's bins draw EMEA's part from their base;~~ the bullet chart's EMEA bullet is outlined; reloading draws the same (AC-559, AC-037, AC-098, AC-568, AC-573, ~~AC-578,~~ AC-582~~, AC-589~~).
+  - Depends on: T941, T946, ~~T951,~~ T955, ~~T963,~~ T970
+  - Parked (the user, 2026-10-18): the waterfall's and the histogram's parts, struck through above, go with T951 and T963 (§"Parked" below).
 
 ### Lane CHARTS-B: the Map
 
@@ -2546,7 +2469,115 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Failing test: `boxplotMarking.test.ts`: clicking a point marks its Order ID; a lasso over 1,200 points refuses as AC-102 says; a box marks its Region; (describe) adds "Points: every order, as a beeswarm. Violin: …"; (table view) "View points" lists the orders and their values (AC-593).
   - Depends on: T991
 
-### Lane CHARTS-B: the funnel
+### Lane CHARTS-B: the recommender, the keyboard and the e2e
+
+- [ ] T1012 (AC-560, AC-561, AC-031, AC-305) The map as the top pick for a geo dimension or a region key; the Sankey~~, funnel, timeline, calendar and icicle~~ as ~~runners-up~~ a runner-up with ~~their reasons~~ its reason; and their caps (the funnel, timeline, calendar and icicle parts parked, the user, 2026-10-18)
+  - Files: `packages/recommender/src/recommend.ts`, `packages/recommender/src/legality.ts`, `packages/recommender/src/reason.ts`, `packages/recommender/src/recommendLaneB.test.ts`.
+  - Failing test: `recommendLaneB.test.ts`: a geo dimension and Revenue give Map with Points; an admin-1 key and Revenue give Map with Regions, an ISO-3 one as AC-305 says; Channel and Region with Revenue offer Sankey ("Revenue from Channel to Region: 12 flows, widths to scale."), 51 pairs don't; ~~5 counts and no dimension offer Funnel; Batch, Started at and Finished at offer Timeline; Count by day over 184 days offers Calendar heatmap, 55 days don't; Region › Country of Revenue offers Icicle, a first level of 9 doesn't;~~ an average offers ~~neither Sankey nor Icicle~~ no Sankey; none is ever first and every reason is at most 80 characters (AC-560, AC-561, AC-031, AC-305).
+  - Depends on: T974, T968
+  - Parked (the user, 2026-10-18, "any of the charts that you have not started implmentation put them in the parking lot for now"): the funnel's, timeline's, calendar's and icicle's runners-up, struck through above, go with T994–T1011 and T1019 (§"Parked" below).
+
+- [ ] T1013 (AC-563) Keyboard marking on ~~calendar days, timeline bars,~~ Sankey nodes and links, ~~icicle boxes,~~ parallel lines, map regions and points~~, and funnel stages~~, in their order (the calendar, timeline, icicle and funnel parts parked, the user, 2026-10-18)
+  - Files: `packages/charts/src/interaction/keyboardMarking.ts` (+ test).
+  - Failing test: `keyboardMarking.test.ts`: ~~calendar days by date; timeline bars by row;~~ Sankey nodes by step, then links; ~~icicle boxes depth-first;~~ parallel lines by the first axis; map regions by name, then points; ~~funnel stages left to right;~~ on each, Space marks, Ctrl+Space toggles, Shift+arrow extends and Esc unmarks, announced once (AC-563).
+  - Depends on: T978, T983, T988, ~~T996, T1001, T1005, T1010,~~ T971
+  - Parked (the user, 2026-10-18): calendar days, timeline bars, icicle boxes and funnel stages, struck through above, go with T996, T1001, T1005 and T1010 (§"Parked" below).
+
+- [ ] T1014 (AC-622, AC-305, AC-037, AC-599, ~~AC-604,~~ AC-612~~, AC-620~~) A dashboard of lane B's types: a saved country map unchanged as a Map, and the Sankey~~, timeline, icicle~~ and parallel coordinates marking from the pointer and the keyboard (the timeline and icicle parts parked, the user, 2026-10-18)
+  - Files: `e2e/new-charts-b.spec.ts`, `e2e/country-map.spec.ts`.
+  - Failing test: `new-charts-b.spec.ts`: an author picks a Map with points, parallel coordinates~~,~~ and a Sankey~~, a funnel, a timeline, a calendar and an icicle~~ from the gallery and saves them on one dashboard; brushing Margin % marks members highlighted on the Sankey; ~~a drag on the timeline marks the overlapping batches; double-clicking EMEA on the icicle zooms with a breadcrumb and marks nothing;~~ reloading draws the same; `country-map.spec.ts`: a dashboard saved before R81 shows its country map unchanged, its type card reading "Map" (AC-622, AC-305, AC-037, AC-599, ~~AC-604,~~ AC-612~~, AC-620~~).
+  - Depends on: T976, T983, T988, ~~T995, T1001, T1004, T1010,~~ T1013
+  - Parked (the user, 2026-10-18): the funnel, timeline, calendar and icicle on this dashboard, struck through above, go with T994–T1011 (§"Parked" below).
+
+### Parked (user, 2026-10-18)
+
+> "any of the charts that you have not started implmentation put them in the parking lot for now... whatever is started see them through the completion" (the user, 2026-10-18, through the coordinator)
+
+The chart types not started are parked: the waterfall (T948–T952), the histogram (T959–T964, T1018), the bubble (T965–T967), the funnel (T994–T997), the timeline (T998–T1002, T1019), the calendar heatmap (T1003–T1006) and the icicle and sunburst (T1007–T1011). Their tasks are kept below unticked and unchanged, so nothing is lost, and are not built this phase; their criteria are marked parked in `docs/spec.md` and listed in `docs/phase-2/backlog.md` §7. The types started stay in their lanes above and are seen through: the KPI, the graphical table, the bullet chart, 100 % stacking, the Map, parallel coordinates, the Sankey and the box plot's points and violin.
+
+#### Lane CHARTS-A: the waterfall
+
+- [ ] T948 (AC-575, AC-037) The waterfall's spec and data: steps by member or by change between two periods through `compareDateRange`, totals, and "Show at most 6"
+  - Files: `packages/core/src/chart-types/waterfall.ts` (+ test), `packages/web/src/editor/wells/waterfall.tsx` (+ test).
+  - Failing test: `waterfall.test.ts`: Gross margin by Category without Compare periods gives one step per member and an end total of their sum; with Q3 → Q4 2026 it asks for `compareDateRange` and gives each member's change, a start of $800,000 and an end equal to start plus every step; "Show at most" starts at 6; `waterfall.test.tsx` (wells): the five wells and options are there (AC-575, AC-037).
+  - Depends on: T934
+
+- [ ] T949 (AC-576) Draw the waterfall: increases blue and decreases red, totals `text-secondary`, ▲ or ▼ and a sign on every label, square ends and dashed connectors
+  - Files: `packages/charts/src/series/waterfall.ts` (+ test), `packages/charts/src/series/registry.ts`.
+  - Failing test: `waterfall.test.ts` (series): an increase is §5's diverging blue and a decrease its red, totals `text-secondary`; labels read "▲ +$120K" and "▼ −$90K" in `text-xs` `text-primary`; each step's base is the previous running total; bars have no `borderRadius`; connectors are 1 px `border-strong` dashed [2, 2]; with Totals None the axis min isn't forced to zero (AC-576).
+  - Depends on: T948
+  - Waits on: research: the palette validator (`docs/research/palette-validation.md`) run on the waterfall's blue and red pair against §5's checks.
+
+- [ ] T950 (AC-577) Refuse a waterfall of a measure that isn't summed, with "Bar chart instead", and fold steps past "Show at most" into "Other (n)"
+  - Files: `packages/core/src/chart-types/waterfall.ts`, `packages/web/src/tiles/WaterfallEmpty.tsx` (+ test).
+  - Failing test: `waterfall.test.ts`: 20 steps with "Show at most" 6 fold the 14 smallest by absolute change into "Other (14)", whose tooltip lists 10 and "+4 more"; `WaterfallEmpty.test.tsx`: Margin % draws nothing and says "Margin % is an average, so its steps wouldn't add up to a total. Choose a summed measure." with "Bar chart instead" (AC-577).
+  - Depends on: T948
+
+- [ ] T951 (AC-578) Mark a waterfall's steps, Other and totals, draw another tile's marked share from each step's start, and cross-filter by step but never by total
+  - Files: `packages/charts/src/series/waterfall.ts`, `packages/charts/src/marking/partial.ts`, `packages/charts/src/series/waterfallMarking.test.ts`.
+  - Failing test: `waterfallMarking.test.ts`: clicking "Q4 2026" marks every member it sums, as Mark all; "Other (3)" marks its three; a drag over two steps marks both; with EMEA marked elsewhere, Beverages draws $40K from the step's start at full opacity and the rest at 0.28; in cross-filter mode a total filters nothing and its tooltip reads "A total: click a step to filter" (AC-578).
+  - Depends on: T949, T935
+
+- [ ] T952 (AC-579) The waterfall's text alternative and its table view with a running total
+  - Files: `packages/charts/src/describe/waterfall.ts` (+ test), `packages/web/src/tiles/tableView/waterfall.ts` (+ test).
+  - Failing test: `waterfall.test.ts` (describe): "Waterfall of Gross margin from Q3 2026 $0.80M to Q4 2026 $0.84M, up $40K. Largest rise Beverages +$120K; largest fall Confections −$110K."; (table view) columns Step, Change, Direction, Running total, Beverages "+$120,000 · ▲ Increase · $920,000" (AC-579).
+  - Depends on: T949
+
+#### Lane CHARTS-A: the histogram
+
+- [ ] T959 (AC-586, AC-037) The histogram's spec and wells: Value from a model bin dimension or a measure with Each point is, bins of a width or a count of 5–50, and the "from the model" label
+  - Files: `packages/core/src/chart-types/histogram.ts` (+ test), `packages/core/src/bins.ts` (reading `meta.wechart.binOf`; + test), `packages/web/src/editor/wells/histogram.tsx` (+ test).
+  - Failing test: `bins.test.ts`: a dimension whose meta is `{ wechart: { binOf: { member: "orders.value", width: 50 } } }` is the bin dimension of Order value at $50; `histogram.test.ts`: a bin count of 4 or 51 is refused; `histogram.test.tsx` (wells): a model-binned chart reads "Bins of $50 · from the model" (AC-586, AC-037).
+  - Depends on: T934
+
+- [ ] T960 (AC-586) "Make bins in the model…" drafts a bin dimension in the author's My workspace
+  - Files: `packages/web/src/editor/wells/MakeBins.tsx` (+ test), `packages/web/src/workspaces/model/draftBinDimension.ts` (+ test).
+  - Failing test: `draftBinDimension.test.ts`: Order value at $50 drafts, in the cube's My workspace copy, a `number` dimension whose SQL floors the value to 50 and whose meta is `wechart.binOf` naming its source and width; the shared model is unchanged; `MakeBins.test.tsx`: the offer appears only for a numeric dimension with no bin dimension (AC-586).
+  - Depends on: T959
+
+- [ ] T961 (AC-587) Draw histogram bins touching with square ends, ticks at bin edges, and bins named "from ‹a› to under ‹b›"
+  - Files: `packages/charts/src/series/histogram.ts` (+ test).
+  - Failing test: `histogram.test.ts` (series): bars have a 1 px surface gap, no radius and `barCategoryGap: 0`; axis ticks fall on 0, 50, …, 500; Colour by Channel stacks within each bin; a bin's label is "from $100 to under $150" (AC-587).
+  - Depends on: T959
+
+- [ ] T962 (AC-588) Bin a measure per entity in the browser, saying "Computed from n of N" when Cube's row limit cut it
+  - Files: `packages/core/src/chart-types/histogram.ts` (`browserBins`; + test), `packages/web/src/tiles/HistogramCut.tsx` (+ test).
+  - Failing test: `histogram.test.ts`: 10,000 per-order values bin into counts equal to a direct count of each range; `HistogramCut.test.tsx`: 10,000 of 48,210 reads "Computed from 10,000 of 48,210 orders (Cube's row limit). Bin counts are of those orders only." (AC-588).
+  - Depends on: T961
+
+- [ ] T963 (AC-589) Mark a model bin as a range on its source, a browser bin as at most 1,000 IDs, draw another tile's marked share per bin, and cross-filter to the bin's range
+  - Files: `packages/charts/src/series/histogram.ts`, `packages/core/src/markings/range.ts`, `packages/charts/src/series/histogramMarking.test.ts`.
+  - Failing test: `histogramMarking.test.ts`: clicking the $100 bin of a model-binned chart stores Order value ≥ 100 and < 150; a drag over two bins ≥ 100 and < 200; a browser bin of 2,140 orders refuses with "Too many orders to mark: 2,140 in this bin; at most 1,000. The marking didn't change."; with EMEA marked elsewhere each bin's EMEA part draws from the baseline; the cross-filter chip reads "Order value ≥ $100 and < $150" (AC-589).
+  - Depends on: T962, T935
+
+- [ ] T964 (AC-590) The histogram's empty state, text alternative and table view
+  - Files: `packages/charts/src/describe/histogram.ts` (+ test), `packages/web/src/tiles/tableView/histogram.ts` (+ test), `packages/web/src/editor/wells/histogram.tsx`.
+  - Failing test: (describe) "Histogram of Order value, 10 bins of $50 from $0 to $500. Most orders $100 to under $150 (4,100); counts fall toward $500."; (table view) Order value, Count, Share, the first row "from $0 to under $50"; with nothing to bin, "Put a numeric dimension in Value, or a measure with Each point is." with Value as its action (AC-590).
+  - Depends on: T961
+
+- [ ] T1018 (AC-631) Bin a numeric dimension with no bin dimension in the browser from its grouped values, with "Make bins in the model…" beside it and "Computed from n of N rows" when cut
+  - Files: `packages/core/src/chart-types/histogram.ts` (`dimensionBins`, its query; + test), `packages/web/src/tiles/HistogramCut.tsx` (+ test), `packages/web/src/editor/wells/histogram.tsx` (Metrics summed only; + test).
+  - Failing test: `histogram.test.ts`: Order value with no bin dimension asks Cube for Order value grouped with Count, and 120 grouped values bin at $50 into counts equal to the sum of each range's grouped counts; Average order value is refused in Metrics; a bin marks and filters as Order value ≥ 100 and < 150; `HistogramCut.test.tsx`: 10,000 of 48,210 grouped rows reads "Computed from 10,000 of 48,210 rows (Cube's row limit). Bin counts are of those rows only.", and "Make bins in the model…" shows beside the chart (AC-631).
+  - Depends on: T962, T960
+
+#### Lane CHARTS-A: the bubble
+
+- [ ] T965 (AC-594, AC-037) Size and Shape wells on a scatter, a Bubble while Size is set, Colour at most 3 and Shape at most 6 with their reasons, and Shape never filled by Auto
+  - Files: `packages/core/src/chart-types/bubble.ts` (+ test), `packages/web/src/editor/wells/bubble.tsx` (+ test).
+  - Failing test: `bubble.test.ts`: a scatter spec with Size is a bubble, and without it a scatter drawn as today; `bubble.test.tsx` (wells): Region of 4 in Colour reads "Region Colour takes at most 3 values on a bubble chart; Region has 4. Put it in Shape."; Category of 8 in Shape reads "Category Shape takes at most 6 values; Category has 8."; the Bubble card is greyed with "Put a measure in Size" while Size is empty (AC-594, AC-037).
+  - Depends on: T934
+
+- [ ] T966 (AC-595) Size bubbles by area from 8 to 40 px, draw larger first, take shapes in order, show a size legend, and count marks of size at or below zero
+  - Files: `packages/charts/src/series/scatter.ts` (+ test), `packages/charts/src/legend.ts`.
+  - Failing test: `scatter.test.ts`: the smallest value's `symbolSize` is 8 and the largest's 40, and for any mark `size² ∝ value` within 1 %; `z` orders larger marks below smaller; shapes run circle, rect, triangle, diamond, down-triangle, cross; the legend holds three reference circles with values; 3 marks of Order count 0 aren't drawn and the note reads "3 products with Order count at or below 0 aren't drawn: an area can't be negative." (AC-595).
+  - Depends on: T965
+
+- [ ] T967 (AC-596) Mark a bubble as a scatter point, and name its encodings in its text alternative and table view
+  - Files: `packages/charts/src/describe/bubble.ts` (+ test), `packages/web/src/tiles/tableView/bubble.ts` (+ test), `packages/charts/src/series/bubbleMarking.test.ts`.
+  - Failing test: `bubbleMarking.test.ts`: click, Ctrl, rectangle and lasso mark Products as a scatter's do; (describe) "Bubble chart of 12 products: Revenue across, Margin % up, Order count as size, Channel as colour, Region as shape. Largest Chai ($1.21M, 23.1 %, 2,140 orders)."; (table view) Product, Revenue, Margin %, Orders, Channel, Region (AC-596).
+  - Depends on: T966
+
+#### Lane CHARTS-B: the funnel
 
 - [ ] T994 (AC-614, AC-037) The funnel's spec and wells: stages as a dimension or as 2+ measures of one format, Percent of, and its refusals
   - Files: `packages/core/src/chart-types/funnel.ts` (+ test), `packages/web/src/editor/wells/funnel.tsx` (+ test).
@@ -2568,7 +2599,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Failing test: (describe) "Funnel of 5 stages from Visits 48,200 to Purchases 1,180, 2.4 % of the first. Biggest drop Visits → Sign-ups: 74.3 % lost."; (table view) Stage, Count, Of first, Of previous (AC-617).
   - Depends on: T995
 
-### Lane CHARTS-B: the timeline
+#### Lane CHARTS-B: the timeline
 
 - [ ] T998 (AC-602, AC-037) The timeline's spec and wells, one bar per ungrouped row, and its empty state
   - Files: `packages/core/src/chart-types/timeline.ts` (+ test), `packages/web/src/editor/wells/timeline.tsx` (+ test).
@@ -2603,7 +2634,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Depends on: T999, T1000
   - Waits on: research: how Cube returns a measure in an ungrouped query (One row), each row's own value or an error, in the form the research on T999 documents.
 
-### Lane CHARTS-B: the calendar heatmap
+#### Lane CHARTS-B: the calendar heatmap
 
 - [ ] T1003 (AC-606, AC-037) The calendar heatmap's spec and wells: Time by day over the date filter's range, the week starting on the browser locale's first day, and its empty state
   - Files: `packages/core/src/chart-types/calendar.ts` (+ test), `packages/web/src/editor/wells/calendar.tsx` (+ test), `packages/web/src/tiles/weekStart.ts` (+ test).
@@ -2626,7 +2657,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Failing test: (describe) "Calendar of daily Count, Jul 1 to Dec 31 2026. Highest 412 on Fri Nov 27; Fridays run highest; 6 days with no data."; (table view) 2026-12-25 reads "Friday · No data" (AC-609).
   - Depends on: T1004
 
-### Lane CHARTS-B: the icicle and sunburst
+#### Lane CHARTS-B: the icicle and sunburst
 
 - [ ] T1007 (AC-618, AC-037) The icicle's spec and wells: 2–4 levels or a hierarchy dropped at once, one summed measure, Draw as, and its refusals
   - Files: `packages/core/src/chart-types/icicle.ts` (+ test), `packages/web/src/editor/wells/icicle.tsx` (+ test).
@@ -2653,23 +2684,6 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Files: `packages/charts/src/describe/icicle.ts` (+ test), `packages/web/src/tiles/tableView/icicle.ts` (+ test).
   - Failing test: (describe) "Icicle of Revenue, $4.5M, by Region then Country. North America $1.8M (United States $1.45M), EMEA $1.6M, APAC $0.6M, LATAM $0.5M."; (table view) Germany indented under EMEA with "Of parent 34.4%" and "Of total 12.2%" (AC-621).
   - Depends on: T1008
-
-### Lane CHARTS-B: the recommender, the keyboard and the e2e
-
-- [ ] T1012 (AC-560, AC-561, AC-031, AC-305) The map as the top pick for a geo dimension or a region key; the Sankey, funnel, timeline, calendar and icicle as runners-up with their reasons; and their caps
-  - Files: `packages/recommender/src/recommend.ts`, `packages/recommender/src/legality.ts`, `packages/recommender/src/reason.ts`, `packages/recommender/src/recommendLaneB.test.ts`.
-  - Failing test: `recommendLaneB.test.ts`: a geo dimension and Revenue give Map with Points; an admin-1 key and Revenue give Map with Regions, an ISO-3 one as AC-305 says; Channel and Region with Revenue offer Sankey ("Revenue from Channel to Region: 12 flows, widths to scale."), 51 pairs don't; 5 counts and no dimension offer Funnel; Batch, Started at and Finished at offer Timeline; Count by day over 184 days offers Calendar heatmap, 55 days don't; Region › Country of Revenue offers Icicle, a first level of 9 doesn't; an average offers neither Sankey nor Icicle; none is ever first and every reason is at most 80 characters (AC-560, AC-561, AC-031, AC-305).
-  - Depends on: T974, T968
-
-- [ ] T1013 (AC-563) Keyboard marking on calendar days, timeline bars, Sankey nodes and links, icicle boxes, parallel lines, map regions and points, and funnel stages, in their order
-  - Files: `packages/charts/src/interaction/keyboardMarking.ts` (+ test).
-  - Failing test: `keyboardMarking.test.ts`: calendar days by date; timeline bars by row; Sankey nodes by step, then links; icicle boxes depth-first; parallel lines by the first axis; map regions by name, then points; funnel stages left to right; on each, Space marks, Ctrl+Space toggles, Shift+arrow extends and Esc unmarks, announced once (AC-563).
-  - Depends on: T978, T983, T988, T996, T1001, T1005, T1010, T971
-
-- [ ] T1014 (AC-622, AC-305, AC-037, AC-599, AC-604, AC-612, AC-620) A dashboard of lane B's types: a saved country map unchanged as a Map, and the Sankey, timeline, icicle and parallel coordinates marking from the pointer and the keyboard
-  - Files: `e2e/new-charts-b.spec.ts`, `e2e/country-map.spec.ts`.
-  - Failing test: `new-charts-b.spec.ts`: an author picks a Map with points, parallel coordinates, a Sankey, a funnel, a timeline, a calendar and an icicle from the gallery and saves them on one dashboard; brushing Margin % marks members highlighted on the Sankey; a drag on the timeline marks the overlapping batches; double-clicking EMEA on the icicle zooms with a breadcrumb and marks nothing; reloading draws the same; `country-map.spec.ts`: a dashboard saved before R81 shows its country map unchanged, its type card reading "Map" (AC-622, AC-305, AC-037, AC-599, AC-604, AC-612, AC-620).
-  - Depends on: T976, T983, T988, T995, T1001, T1004, T1010, T1013
 
 ## Phase 2 coverage: acceptance criterion → task
 
