@@ -223,6 +223,10 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R85 — the SQL runner's "Cube" group** (2026-10-18, the user, after the coordinator compared it with direct SQL and recommended parking it)
+- The user: "yes park it Cube's own SQL API"
+  - *AC-467 and AC-481 are parked, along with AC-482's Cube-group part, and tasks T825 and T826. The xcube request is withdrawn, and the pick-up notes are in `docs/phase-2/backlog.md` §7.*
+
 **R84 — MCP from outside the cluster** (2026-10-18, the user, after the coordinator explained what the Gateway is for)
 - The user: "we dont need to enable the gateway now. lets assume it is claude code only for now.. we can part requirements for access from outside the cluster.."
   - *AC-476 is split: its no-host half stays; serving `/mcp` to clients outside the cluster through a Gateway becomes AC-633, parked with T795. The pick-up notes are in `docs/phase-2/backlog.md` §7. Claude Code reaches `/mcp` on the API's own address.*

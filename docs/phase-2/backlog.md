@@ -328,6 +328,12 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
 
 The user: these "will be deferred and not done in this phase". No task builds them, and requirements §P2.7 lists them as non-goals.
 
+- **The SQL runner's "Cube" group (parked 2026-10-18).** The user: "yes park it Cube's own SQL API", after the coordinator compared it with direct SQL.
+  - Parked: AC-467, AC-481, AC-482's Cube-group part, and tasks T825 and T826. Direct SQL on data sources and Cube Store is complete.
+  - What it adds over direct SQL: SQL over cubes and views (`MEASURE()`, the model's joins) as each user, with their folder access and access policies, open to everyone who may open the workspace, with results matching dashboards. The chart editor and MCP already give governed access to the same model.
+  - Built, unmerged: branch `laneSQL9`, commits 2a40c78d and 0747beec (route, NDJSON reader, picker group, run line, `CubeTree`, tests).
+  - Blocked on xcube: Cube starts its SQL interface only when `CUBEJS_PG_SQL_PORT` or `sqlPort` is set, which also opens the Postgres-wire port (`docs/research/cube/data-apis.md` §6). At pick-up, ask the Cube-expert session to start the interface with no Postgres-wire listener, or one bound to loopback (the withdrawn request is `~/Work/xcube-exchange/to-xcube/2026-10-18-2300-sql-interface-for-cubesql.md`), wait for its image, then cherry-pick the WIP onto a fresh branch and finish T825 and T826.
+
 - **MCP access from outside the cluster (parked 2026-10-18).** The user: "we dont need to enable the gateway now. lets assume it is claude code only for now.. we can part requirements for access from outside the cluster..".
   - Parked: AC-633 (split from AC-476: `/mcp` on its own host over TLS, through a Gateway API HTTPRoute, behind a source-address allow-list, Anthropic's range off by default) and task T795 (the live check on docker-desktop).
   - Built and kept: the Helm templates and their render tests (T792–T794: `templates/mcp-gateway.yaml`, the SecurityPolicy, 130 s timeouts, mode B attaching to an existing Gateway by default, mode A making its own).
