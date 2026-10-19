@@ -860,3 +860,161 @@ test('a bullet chart’s tile names the chart and each bullet, and its table vie
     expect(cells[4]).toMatch(/ %$/);
   }
 });
+
+/** A dashboard of KPIs, each its own settings, on tiles 4 to 6 columns wide. */
+async function kpiDashboard(
+  request: APIRequestContext,
+  kpis: readonly {
+    readonly tile: string;
+    readonly w: number;
+    readonly measure: string;
+    readonly kpi: Record<string, unknown>;
+  }[],
+) {
+  const title = `KPIs ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const items = [];
+  for (const { tile, w, measure, kpi } of kpis) {
+    const chart = (await (
+      await request.post(`${API}/documents`, {
+        data: { kind: 'chart', title: tile, ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`${API}/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: tile,
+          owner: 'admin',
+          localToDashboardId: dashboard.id,
+          chart: {
+            source: { cube: 'orders' },
+            wells: { measures: [measure], dimensions: [], timeDimensions: [] },
+            chartType: 'kpi',
+            options: { kpi },
+          },
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    items.push({ id: tile, kind: 'chart', w, h: 24, chartId: chart.id });
+  }
+  const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [{ id: 'only', title: 'Only', items }],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  return { id: dashboard.id, title };
+}
+
+/**
+ * T937 / AC-565: WHEN a KPI has Compare to, Target or Time set, THE SYSTEM
+ * SHALL draw its value in `text-kpi-solo` (40/52) alone …; its change as
+ * R80's Change element, ▲ or ▼ following the value's direction, a sign and
+ * the percentage, coloured by Direction (`status-success` when good,
+ * `status-error` when bad, `text-secondary` when Neutral), then "vs
+ * ‹period› (‹value›)" in `text-xs` `text-secondary`, the comparison coming
+ * from Cube's `compareDateRange` for Previous period and Same period last
+ * year.
+ * `Fails when: … the glyph follows Direction rather than the value, or the
+ * colour follows the value rather than Direction; or the comparison is
+ * computed other than by compareDateRange …`
+ *
+ * On a fixed clock, 20 August 2026, as the sample orders end in August:
+ * 29 orders for $50,605 in August against 31 for $47,120 in July.
+ */
+test('KPIs on 4- to 6-column tiles compare this month with the last through compareDateRange, and with a value, coloured by Direction', async ({
+  page,
+  request,
+}) => {
+  const time = { member: 'orders.ordered_at', granularity: 'month' };
+  const { id, title } = await kpiDashboard(request, [
+    {
+      tile: 'kpi-count',
+      w: 4,
+      measure: 'orders.count',
+      kpi: { compareTo: { kind: 'previousPeriod' }, time },
+    },
+    {
+      tile: 'kpi-amount',
+      w: 5,
+      measure: 'orders.total_amount',
+      kpi: { compareTo: { kind: 'previousPeriod' }, time, direction: 'lower' },
+    },
+    {
+      tile: 'kpi-value',
+      w: 6,
+      measure: 'orders.count',
+      kpi: { compareTo: { kind: 'value', value: 25 }, time, direction: 'neutral' },
+    },
+  ]);
+  const compared: unknown[] = [];
+  page.on('request', (sent) => {
+    if (!sent.url().endsWith('/api/load') || sent.method() !== 'POST') return;
+    const query = (sent.postDataJSON() as { query?: { timeDimensions?: unknown[] } } | null)?.query;
+    for (const entry of query?.timeDimensions ?? [])
+      if (typeof entry === 'object' && entry !== null && 'compareDateRange' in entry)
+        compared.push((entry as { compareDateRange: unknown }).compareDateRange);
+  });
+  await page.clock.setFixedTime(new Date('2026-08-20T12:00:00Z'));
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  const count = page.locator('[data-tile="kpi-count"]');
+  await expect(count.getByTestId('kpi-value')).toHaveText('29');
+  await expect(count.getByTestId('kpi-period')).toHaveText('Aug 2026');
+  const countChange = count.getByTestId('kpi-change');
+  await expect(countChange).toHaveText('▼ −6.5% vs Jul 2026 (31)');
+  // Fewer orders, Higher is better: bad, in status-error.
+  await expect(countChange.locator('.text-change')).toHaveAttribute('data-tone', 'error');
+  // Alone, with a setting of R81's: text-kpi-solo, 40/52.
+  await expect(count.getByTestId('kpi-value')).toHaveCSS('font-size', '40px');
+  await expect(count.getByTestId('kpi-value')).toHaveCSS('line-height', '52px');
+  // "vs …" in text-xs, text-secondary.
+  await expect(countChange).toHaveCSS('font-size', '12px');
+  const secondary = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--wc-text-secondary').trim(),
+  );
+  const vsColour = await countChange
+    .locator('.kpi__vs')
+    .evaluate((element) => getComputedStyle(element).color);
+  const probe = await page.evaluate((colour) => {
+    const span = document.createElement('span');
+    span.style.color = colour;
+    document.body.append(span);
+    const read = getComputedStyle(span).color;
+    span.remove();
+    return read;
+  }, secondary);
+  expect(vsColour).toBe(probe);
+
+  // More spent, Lower is better: ▲ for the value, status-error for Direction.
+  const amount = page.locator('[data-tile="kpi-amount"]').getByTestId('kpi-change');
+  await expect(amount).toHaveText(/^▲ \+7\.4% vs Jul 2026 \(\$?47\.12K\) · lower is better$/);
+  await expect(amount.locator('.text-change')).toHaveAttribute('data-tone', 'error');
+
+  // Against a value, Neutral: text-secondary whichever way it went.
+  const value = page.locator('[data-tile="kpi-value"]').getByTestId('kpi-change');
+  await expect(value).toHaveText('▲ +16.0% vs 25');
+  await expect(value.locator('.text-change')).toHaveAttribute('data-tone', 'neutral');
+
+  // Asked of Cube as compareDateRange: August, then July.
+  expect(compared).toContainEqual([
+    ['2026-08-01', '2026-08-31'],
+    ['2026-07-01', '2026-07-31'],
+  ]);
+});

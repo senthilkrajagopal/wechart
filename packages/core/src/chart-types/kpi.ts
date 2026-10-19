@@ -133,6 +133,136 @@ function save(options: KpiOptions): Readonly<Record<string, unknown>> {
 
 export const kpiModule: ChartTypeModule<KpiOptions> = { type: 'kpi', parse, save };
 
+/** A period as Cube's `dateRange` takes it: its first and last day, inclusive. */
+export type KpiRange = readonly [string, string];
+
+/** Time's period that holds now, the one before it, and the same one a year before. */
+export interface KpiPeriods {
+  readonly current: KpiRange;
+  readonly previous: KpiRange;
+  readonly lastYear: KpiRange;
+}
+
+const DAY_MS = 86_400_000;
+const STEP_MS: Partial<Record<TimeGranularity, number>> = {
+  second: 1_000,
+  minute: 60_000,
+  hour: 3_600_000,
+  day: DAY_MS,
+  week: 7 * DAY_MS,
+};
+const MONTHS: Partial<Record<TimeGranularity, number>> = { month: 1, quarter: 3, year: 12 };
+
+/** The start of the period of this grain that holds `at`, in UTC as Cube's default time zone is. */
+function startOf(grain: TimeGranularity, at: Date): Date {
+  const y = at.getUTCFullYear();
+  const m = at.getUTCMonth();
+  switch (grain) {
+    case 'year':
+      return new Date(Date.UTC(y, 0, 1));
+    case 'quarter':
+      return new Date(Date.UTC(y, m - (m % 3), 1));
+    case 'month':
+      return new Date(Date.UTC(y, m, 1));
+    case 'week': {
+      // Cube's weeks start on Monday (research/cube/data-apis.md, "Observed").
+      const day = Date.UTC(y, m, at.getUTCDate());
+      return new Date(day - ((at.getUTCDay() + 6) % 7) * DAY_MS);
+    }
+    default: {
+      const step = STEP_MS[grain] ?? DAY_MS;
+      return new Date(Math.floor(at.getTime() / step) * step);
+    }
+  }
+}
+
+/** `start` moved on by `count` periods of this grain (back, for a negative count). */
+function shifted(grain: TimeGranularity, start: Date, count: number): Date {
+  const months = MONTHS[grain];
+  if (months !== undefined)
+    return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + months * count, 1));
+  return new Date(start.getTime() + (STEP_MS[grain] ?? DAY_MS) * count);
+}
+
+/** The period starting at `start`, as days for a day or more, as timestamps below. */
+function rangeOf(grain: TimeGranularity, start: Date): KpiRange {
+  const last = new Date(shifted(grain, start, 1).getTime() - 1);
+  const whole = grain !== 'second' && grain !== 'minute' && grain !== 'hour';
+  const write = (at: Date) => at.toISOString().slice(0, whole ? 10 : 23);
+  return [write(start), write(last)];
+}
+
+/**
+ * Time's periods at its grain (T937, AC-565): the one that holds now ("this
+ * month", decision T936-1), the one before it, and the one that held the
+ * same moment a year before.
+ */
+export function kpiPeriodOf(grain: TimeGranularity, now: Date): KpiPeriods {
+  const current = startOf(grain, now);
+  const yearBefore = new Date(
+    Date.UTC(
+      now.getUTCFullYear() - 1,
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      now.getUTCHours(),
+      now.getUTCMinutes(),
+      now.getUTCSeconds(),
+    ),
+  );
+  return {
+    current: rangeOf(grain, current),
+    previous: rangeOf(grain, shifted(grain, current, -1)),
+    lastYear: rangeOf(grain, startOf(grain, yearBefore)),
+  };
+}
+
+/** What a KPI asks of Cube. */
+export interface KpiQueries {
+  /** Its value, and what it is compared with. */
+  readonly value: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * A KPI's query with its settings (T937, AC-565): with Time, its value over
+ * Time's period; compared with the previous period or the same one last
+ * year, both periods at once through Cube's `compareDateRange`, which answers
+ * one result per period, in order (research/cube/data-apis.md,
+ * "compareDateRange, end to end"); compared with another measure, that
+ * measure beside it. Time's dimension takes the place of the same one in the
+ * editor's Time well, as `compareDateRange` may sit on one alone. A KPI with
+ * none set is asked as before.
+ */
+export function kpiQueries(
+  query: Readonly<Record<string, unknown>>,
+  kpi: KpiOptions,
+  now: Date,
+): KpiQueries {
+  const { compareTo, time } = kpi;
+  const measures = (query['measures'] as readonly string[] | undefined) ?? [];
+  const next: Record<string, unknown> = { ...query };
+  if (compareTo?.kind === 'measure')
+    next['measures'] = [...new Set([...measures, compareTo.member])].sort();
+  if (time !== undefined) {
+    const periods = kpiPeriodOf(time.granularity, now);
+    const compared =
+      compareTo?.kind === 'previousPeriod'
+        ? periods.previous
+        : compareTo?.kind === 'samePeriodLastYear'
+          ? periods.lastYear
+          : undefined;
+    const others = (
+      (query['timeDimensions'] as readonly { readonly dimension?: unknown }[] | undefined) ?? []
+    ).filter((entry) => entry.dimension !== time.member);
+    next['timeDimensions'] = [
+      ...others,
+      compared === undefined
+        ? { dimension: time.member, dateRange: [...periods.current] }
+        : { dimension: time.member, compareDateRange: [[...periods.current], [...compared]] },
+    ];
+  }
+  return { value: next };
+}
+
 /** A chart's KPI settings, from its options. */
 export function kpiOptionsOf(options: Readonly<Record<string, unknown>> | undefined): KpiOptions {
   return parse(options?.['kpi']);

@@ -1,0 +1,75 @@
+import type { KpiDirection, MemberFormats } from '@wechart/core';
+
+import { kindOfFormat, shortValues } from '../text/elements/shortNumbers';
+
+/** What a KPI's value is compared with: its value, and the period or measure it is, if named. */
+export interface KpiCompared {
+  readonly value: number;
+  /** "Sep 2026", or another measure's title; a value compared with is named by itself. */
+  readonly against?: string;
+}
+
+/** Good, bad or neither, by Direction: R80's Change element's tones (rule 3, AC-520). */
+function toneOf(delta: number, direction: KpiDirection): 'success' | 'error' | 'neutral' {
+  if (direction === 'neutral' || delta === 0) return 'neutral';
+  return delta > 0 === (direction === 'higher') ? 'success' : 'error';
+}
+
+/** A signed size, with the minus sign rather than a hyphen. */
+const signed = (size: number, unit: string) =>
+  `${size > 0 ? '+' : size < 0 ? '−' : ''}${Math.abs(size).toFixed(1)}${unit}`;
+
+/**
+ * How much it changed: a percentage of what it is compared with, or for a
+ * percentage measure the difference in points ("−0.4 pts", design 23 sheet
+ * 1); where that was nothing, the amount.
+ */
+function sizeOf(
+  current: number,
+  compared: number,
+  member: string,
+  formats: MemberFormats | undefined,
+): string {
+  const delta = current - compared;
+  if (kindOfFormat(member, formats).kind === 'percent') return signed(delta * 100, ' pts');
+  if (compared === 0) {
+    const [amount = ''] = shortValues([Math.abs(delta)], member, formats);
+    return `${delta < 0 ? '−' : '+'}${amount}`;
+  }
+  return signed((delta / Math.abs(compared)) * 100, '%');
+}
+
+/**
+ * A KPI's change line (T937, AC-565; design 23 sheet 1): R80's Change
+ * element — ▲ or ▼ by which way the value went, its sign and size, in the
+ * colour Direction gives it — then "vs ‹period› (‹value›)" in `text-xs`
+ * `text-secondary`, and "· lower is better" where that is the direction.
+ */
+export function KpiChange({
+  current,
+  compared,
+  member,
+  formats,
+  direction,
+}: {
+  readonly current: number;
+  readonly compared: KpiCompared;
+  readonly member: string;
+  readonly formats?: MemberFormats | undefined;
+  readonly direction: KpiDirection;
+}) {
+  const delta = current - compared.value;
+  const glyph = delta > 0 ? '▲ ' : delta < 0 ? '▼ ' : '';
+  const [value = ''] = shortValues([compared.value], member, formats);
+  const against = compared.against === undefined ? value : `${compared.against} (${value})`;
+  return (
+    <p className="kpi__change" data-testid="kpi-change">
+      <span className="text-change" data-tone={toneOf(delta, direction)}>
+        {`${glyph}${sizeOf(current, compared.value, member, formats)}`}
+      </span>{' '}
+      <span className="kpi__vs">
+        {`vs ${against}${direction === 'lower' ? ' · lower is better' : ''}`}
+      </span>
+    </p>
+  );
+}

@@ -20,6 +20,16 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Depends on: T934
   - Done (2026-10-18): the settings in the chart's options under `kpi`, sparse (decision T936-1), not in `chart-spec.ts`; the KPI's wells module registered, R81's type wells moved to right after Metrics (direction.md §7i amended). AC-564 ticked on `e2e/new-charts-a.spec.ts` (the wells after Metrics, Compare to's choices, Higher is better first, a KPI with none set drawn as its value and label alone, the settings kept through a save). AC-037 stays open for R81's other types.
 
+- [x] T937 (AC-565) A KPI's comparison through `compareDateRange`, another measure or a value, and its change line coloured by Direction
+  - Files: `packages/core/src/chart-types/kpi.ts` (`kpiQueries`; + test), `packages/web/src/tiles/kpi/KpiChange.tsx` (+ test), `packages/web/src/tiles/Kpi.tsx`.
+  - Failing test: `kpi.test.ts`: Previous period over October 2026 by month asks Cube for `compareDateRange` [Oct 2026, Sep 2026] on Ordered at, and Same period last year [Oct 2026, Oct 2025]; `KpiChange.test.tsx`: $1.35M against $1.32M with Higher is better reads "▲ +2.4% vs Sep 2026 ($1.32M)" in `status-success`; Return rate 1.8 % against 2.2 % with Lower is better reads "▼ −0.4 pts vs Sep 2026 (2.2%) · lower is better" in `status-success`; Neutral in `text-secondary` (AC-565).
+  - Depends on: T936, T884
+  - Done (2026-10-18), decision T937-1:
+    - **Query:** core `kpiQueries` (via `ChartSpec.kpi`, set by `toChartSpec` and the editor's query; `toCubeQuery(spec, now)`). With Time, the value is Time's current period; Previous period and Same period last year ask both periods as one `compareDateRange`; Another measure is asked beside the value.
+    - **Cube's multi answer:** the API's `CubeClient.load` sends `queryType: 'multi'` for a `compareDateRange` query, which Cube otherwise refuses (observed on the local Cube, 2026-10-18); `loadTile` reads the answer as one, each period's rows in order.
+    - **Tile:** `tiles/kpi/KpiChange.tsx` draws R80's Change classes and tones, then "vs ‹period› (‹value›)"; `Kpi.tsx` names Time's period beside the measure and draws the value at 40/52 (`kpi--detailed`); the CSS is `tiles/kpi/kpiStyles.ts`, in lane A's `CHARTS_A_CSS`.
+    - **Tests:** `kpi.test.ts`, `client.test.ts` (api), `loadTile.test.ts`, `KpiChange.test.tsx` and `Kpi.test.tsx` seen red, then green; e2e `new-charts-a.spec.ts`, "KPIs on 4- to 6-column tiles compare this month with the last…" (a fixed clock in August 2026), on headless Chromium. AC-565 stays open for T938's trend and target.
+
 - [x] T943 (AC-570, AC-037) The graphical table's spec and wells: Rows, Group rows by, and ordered columns of R80's element kinds, moved and removed from a ⋯ menu with Undo
   - Files: `packages/core/src/chart-types/graphicalTable.ts` (+ test), `packages/web/src/editor/wells/graphicalTable.tsx` (+ test).
   - Failing test: `graphicalTable.test.ts`: a spec of Category with Value, Sparkline, Bullet, Icon and Change columns parses and saves back in order; `graphicalTable.test.tsx` (wells): + Column offers the five kinds; a column's row opens its R80 element settings; its ⋯ holds Move up, Move down and Remove, Remove offering Undo; with no column the tile says "Add a column: Value, Change, Sparkline, Bullet or Icon." (AC-570, AC-037).

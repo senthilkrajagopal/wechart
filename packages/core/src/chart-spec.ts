@@ -4,6 +4,7 @@
  * ECharts, and the renderer reads this rather than the other way round.
  */
 
+import { kpiQueries, type KpiOptions } from './chart-types/kpi';
 import type { MemberGranularities, TimeGranularity } from './format';
 import { calculationBlock, calculationsInEffect, periodGrainOf, type QuickCalc } from './quickCalc';
 import type { ChartType } from './render-spec';
@@ -41,6 +42,11 @@ export interface ChartSpec {
    * (`targetMeasuresOf`).
    */
   readonly targets?: readonly string[];
+  /**
+   * A KPI's own settings, where it has any (T937): its Time's period and
+   * what it is compared with change what it asks (`kpiQueries`).
+   */
+  readonly kpi?: KpiOptions;
 }
 
 /**
@@ -145,8 +151,10 @@ export function isEmpty(spec: ChartSpec): boolean {
  *
  * Members are sorted so that the same spec always produces byte-identical
  * query JSON, which is what lets a result be served from cache (AC-105).
+ *
+ * `now` places a KPI's Time period (T937); no other chart reads it.
  */
-export function toCubeQuery(spec: ChartSpec): Record<string, unknown> {
+export function toCubeQuery(spec: ChartSpec, now: Date = new Date()): Record<string, unknown> {
   const query: Record<string, unknown> = {
     // A bullet's Target measure with them, once (T954).
     measures: [...new Set([...spec.measures, ...(spec.targets ?? [])])].sort(),
@@ -196,6 +204,10 @@ export function toCubeQuery(spec: ChartSpec): Record<string, unknown> {
    */
   const calculations = calculationBlock(calculationsInEffect(spec, periodGrainOf(grains)));
   if (calculations.length > 0) query['calculations'] = calculations;
+
+  // A KPI's period and comparison (T937, AC-565).
+  if (spec.chartType === 'kpi' && spec.kpi !== undefined)
+    return { ...kpiQueries(query, spec.kpi, now).value };
 
   return query;
 }

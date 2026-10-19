@@ -749,6 +749,36 @@ describe('a Cube that can’t be reached (T422, AC-319)', () => {
   });
 });
 
+/**
+ * T937 / AC-565: a KPI's comparison comes from Cube's `compareDateRange`,
+ * which Cube answers only to a client that says it reads several results:
+ * without `queryType: 'multi'` it refuses with "'compareDateRangeQuery'
+ * query type is not supported by the client" (research/cube/data-apis.md §3;
+ * observed against the local Cube, 2026-10-18).
+ */
+describe('a compareDateRange query (T937, AC-565)', () => {
+  it('is asked as several results at once, and any other query as one', async () => {
+    const cube = client();
+    const compared = {
+      measures: ['orders.count'],
+      timeDimensions: [
+        {
+          dimension: 'orders.ordered_at',
+          compareDateRange: [
+            ['2026-10-01', '2026-10-31'],
+            ['2026-09-01', '2026-09-30'],
+          ],
+        },
+      ],
+    };
+    await cube.load(compared);
+    await cube.load({ measures: ['orders.count'] });
+
+    expect(JSON.parse(received[0]!.body)).toEqual({ query: compared, queryType: 'multi' });
+    expect(JSON.parse(received[1]!.body)).toEqual({ query: { measures: ['orders.count'] } });
+  });
+});
+
 function bearerOf(request: RecordedRequest): string {
   const header = request.headers['authorization'];
   expect(header, 'every Cube request carries an Authorization header').toBeTruthy();

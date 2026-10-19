@@ -1,3 +1,5 @@
+import { KPI_CSS } from '../../tiles/kpi/kpiStyles';
+
 /**
  * Lane CHARTS-A's own rules for R81's wells (design 23; direction.md §7i),
  * installed after the shell's, as the Text tile's are. Every value is a §3
@@ -51,4 +53,4 @@ export const CHARTS_A_CSS = `
   padding-bottom: 6px;
   border-bottom: 1px solid var(--wc-border-subtle);
 }
-`;
+${KPI_CSS}`;

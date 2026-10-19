@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
+import { toChartSpec, type ChartDocument } from '../chart-document';
+import { toCubeQuery } from '../chart-spec';
 import { CHART_TYPE_MODULES } from './index';
-import { KPI_COMPARE_TO, kpiOptionsOf, kpiModule, withKpiOptions } from './kpi';
+import {
+  KPI_COMPARE_TO,
+  kpiOptionsOf,
+  kpiModule,
+  kpiPeriodOf,
+  kpiQueries,
+  withKpiOptions,
+} from './kpi';
 
 /**
  * T936 / AC-564: WHEN a KPI is edited, THE SYSTEM SHALL offer, after Metrics,
@@ -94,5 +103,148 @@ describe('a KPI’s own settings (AC-564, AC-037)', () => {
     expect(withKpiOptions({}, { direction: 'lower', tileBy: 'orders.region' })).toEqual({
       kpi: { direction: 'lower', tileBy: 'orders.region' },
     });
+  });
+});
+
+/**
+ * T937 / AC-565: WHEN a KPI has Compare to, Target or Time set, THE SYSTEM
+ * SHALL draw … its change …, the comparison coming from Cube's
+ * `compareDateRange` for Previous period and Same period last year.
+ * `Fails when: … the comparison is computed other than by compareDateRange …`
+ */
+describe('a KPI’s comparison, asked of Cube (AC-565)', () => {
+  // 18 October 2026: Time's period is the grain's current one, October (T936-1).
+  const now = new Date('2026-10-18T09:30:00Z');
+  const time = { member: 'orders.ordered_at', granularity: 'month' } as const;
+  const base = { measures: ['orders.revenue'], dimensions: [] };
+
+  it('asks Previous period over October 2026 by month as compareDateRange [Oct 2026, Sep 2026] on Ordered at', () => {
+    const { value } = kpiQueries(
+      base,
+      { compareTo: { kind: 'previousPeriod' }, time, direction: 'higher' },
+      now,
+    );
+    expect(value['timeDimensions']).toEqual([
+      {
+        dimension: 'orders.ordered_at',
+        compareDateRange: [
+          ['2026-10-01', '2026-10-31'],
+          ['2026-09-01', '2026-09-30'],
+        ],
+      },
+    ]);
+    expect(value['measures']).toEqual(['orders.revenue']);
+  });
+
+  it('asks Same period last year as [Oct 2026, Oct 2025]', () => {
+    const { value } = kpiQueries(
+      base,
+      { compareTo: { kind: 'samePeriodLastYear' }, time, direction: 'higher' },
+      now,
+    );
+    expect(value['timeDimensions']).toEqual([
+      {
+        dimension: 'orders.ordered_at',
+        compareDateRange: [
+          ['2026-10-01', '2026-10-31'],
+          ['2025-10-01', '2025-10-31'],
+        ],
+      },
+    ]);
+  });
+
+  it('asks Time’s period alone for another measure, beside it, or a value', () => {
+    const measure = kpiQueries(
+      base,
+      {
+        compareTo: { kind: 'measure', member: 'orders.revenue_last_year' },
+        time,
+        direction: 'higher',
+      },
+      now,
+    ).value;
+    expect(measure['measures']).toEqual(['orders.revenue', 'orders.revenue_last_year']);
+    expect(measure['timeDimensions']).toEqual([
+      { dimension: 'orders.ordered_at', dateRange: ['2026-10-01', '2026-10-31'] },
+    ]);
+    const value = kpiQueries(
+      base,
+      { compareTo: { kind: 'value', value: 1_320_000 }, direction: 'higher' },
+      now,
+    ).value;
+    expect(value).toEqual(base);
+  });
+
+  it('asks a KPI with none of its settings exactly as before', () => {
+    expect(kpiQueries(base, { direction: 'higher' }, now).value).toEqual(base);
+  });
+
+  it('puts the compared time dimension in place of the same one in the editor’s Time well', () => {
+    const { value } = kpiQueries(
+      {
+        ...base,
+        timeDimensions: [
+          { dimension: 'orders.ordered_at', granularity: 'day' },
+          { dimension: 'orders.shipped_at', granularity: 'day' },
+        ],
+      },
+      { compareTo: { kind: 'previousPeriod' }, time, direction: 'higher' },
+      now,
+    );
+    expect(value['timeDimensions']).toEqual([
+      { dimension: 'orders.shipped_at', granularity: 'day' },
+      {
+        dimension: 'orders.ordered_at',
+        compareDateRange: [
+          ['2026-10-01', '2026-10-31'],
+          ['2026-09-01', '2026-09-30'],
+        ],
+      },
+    ]);
+  });
+
+  it('takes the period of each grain that holds now, and the one before it', () => {
+    // 18 October 2026 is a Sunday; Cube's weeks start on Monday.
+    expect(kpiPeriodOf('day', now)).toEqual({
+      current: ['2026-10-18', '2026-10-18'],
+      previous: ['2026-10-17', '2026-10-17'],
+      lastYear: ['2025-10-18', '2025-10-18'],
+    });
+    expect(kpiPeriodOf('week', now).current).toEqual(['2026-10-12', '2026-10-18']);
+    expect(kpiPeriodOf('week', now).previous).toEqual(['2026-10-05', '2026-10-11']);
+    expect(kpiPeriodOf('quarter', now)).toEqual({
+      current: ['2026-10-01', '2026-12-31'],
+      previous: ['2026-07-01', '2026-09-30'],
+      lastYear: ['2025-10-01', '2025-12-31'],
+    });
+    expect(kpiPeriodOf('year', now).previous).toEqual(['2025-01-01', '2025-12-31']);
+    expect(kpiPeriodOf('month', new Date('2026-03-31T12:00:00Z')).previous).toEqual([
+      '2026-02-01',
+      '2026-02-28',
+    ]);
+  });
+
+  it('is asked so wherever a KPI’s query is made, and for no other type', () => {
+    const kpi = (chartType: string): ChartDocument =>
+      ({
+        schemaVersion: 2,
+        title: 'Revenue',
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.revenue'], dimensions: [], timeDimensions: [] },
+          chartType,
+          options: { kpi: { compareTo: { kind: 'previousPeriod' }, time } },
+        },
+      }) as unknown as ChartDocument;
+    expect(toCubeQuery(toChartSpec(kpi('kpi')), now)['timeDimensions']).toEqual([
+      {
+        dimension: 'orders.ordered_at',
+        compareDateRange: [
+          ['2026-10-01', '2026-10-31'],
+          ['2026-09-01', '2026-09-30'],
+        ],
+      },
+    ]);
+    expect(toCubeQuery(toChartSpec(kpi('bar')), now)['timeDimensions']).toBeUndefined();
   });
 });

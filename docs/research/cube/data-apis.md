@@ -235,6 +235,8 @@ The server additionally accepts `in`, `notIn` and `onTheDate` ([src-gw-query]). 
 
 A compare-date-range or blending query sent without `multi` throws `'<queryType>' query type is not supported by the client. Please update the client.` ([src-gw]). The SDK always sends `queryType: 'multi'` ([src-core-index]).
 
+**Observed against the local xcube 407622a6b8 (2026-10-18, T937):** `POST /v1/load` with `{query}` holding a `compareDateRange` answered 400 with that message; with `{query, queryType: 'multi'}` it answered 200 with `queryType: 'compareDateRangeQuery'` and one result per range, in order, each row tagged `compareDateRange: "2026-10-01T00:00:00.000 - 2026-10-31T23:59:59.999"`. A range with no rows still answered one row for a query without dimensions (`orders.count: "0"`).
+
 ```ts
 // packages/cubejs-client-core/src/types.ts @ v1.7.42
 export type LoadResponseResult<T> = {

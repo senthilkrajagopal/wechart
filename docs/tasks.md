@@ -2234,10 +2234,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T936 (AC-564, AC-037) The KPI's Compare to, Target, Time, Tile by and Direction in its spec and wells, and a KPI with none set drawn as before
 
-- [ ] T937 (AC-565) A KPI's comparison through `compareDateRange`, another measure or a value, and its change line coloured by Direction
-  - Files: `packages/core/src/chart-types/kpi.ts` (`kpiQueries`; + test), `packages/web/src/tiles/kpi/KpiChange.tsx` (+ test), `packages/web/src/tiles/Kpi.tsx`.
-  - Failing test: `kpi.test.ts`: Previous period over October 2026 by month asks Cube for `compareDateRange` [Oct 2026, Sep 2026] on Ordered at, and Same period last year [Oct 2026, Oct 2025]; `KpiChange.test.tsx`: $1.35M against $1.32M with Higher is better reads "▲ +2.4% vs Sep 2026 ($1.32M)" in `status-success`; Return rate 1.8 % against 2.2 % with Lower is better reads "▼ −0.4 pts vs Sep 2026 (2.2%) · lower is better" in `status-success`; Neutral in `text-secondary` (AC-565).
-  - Depends on: T936, T884
+- [x] T937 (AC-565) A KPI's comparison through `compareDateRange`, another measure or a value, and its change line coloured by Direction
 
 - [ ] T938 (AC-565) A KPI's trend as R80's sparkline at the content width × 32, and its target as R80's bullet graph at the content width × 16 with "‹p›% of ‹target›"
   - Files: `packages/web/src/tiles/kpi/KpiTrend.tsx` (+ test), `packages/web/src/tiles/kpi/KpiTarget.tsx` (+ test), `packages/web/src/tiles/Kpi.tsx`.

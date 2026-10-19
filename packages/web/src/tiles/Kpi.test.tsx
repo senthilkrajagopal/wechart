@@ -209,6 +209,84 @@ describe('a KPI with nothing to show', () => {
  * `Fails when: … a KPI with none set gains a change line, a sparkline, a
  * target or a new layout.`
  */
+/**
+ * T937 / AC-565: WHEN a KPI has Compare to, Target or Time set, THE SYSTEM
+ * SHALL draw its value in `text-kpi-solo` (40/52) alone …; its change as
+ * R80's Change element …, then "vs ‹period› (‹value›)" …, the comparison
+ * coming from Cube's `compareDateRange` for Previous period and Same period
+ * last year. Cube answers one row per period, in order, each tagged with its
+ * range (`loadTile`'s `oneAnswer`).
+ */
+describe('a KPI compared (T937, AC-565)', () => {
+  const time = { member: 'orders.ordered_at', granularity: 'month' };
+  const OCT = '2026-10-01T00:00:00.000 - 2026-10-31T23:59:59.999';
+  const SEP = '2026-09-01T00:00:00.000 - 2026-09-30T23:59:59.999';
+
+  it('compares this period’s value with the previous one’s, naming both periods', () => {
+    render(
+      <Kpi
+        spec={spec({
+          rows: [
+            { [COUNT]: '31', compareDateRange: OCT },
+            { [COUNT]: '29', compareDateRange: SEP },
+          ],
+          options: { kpi: { compareTo: { kind: 'previousPeriod' }, time } },
+        })}
+      />,
+    );
+    expect(screen.getByTestId('kpi-value').textContent).toBe('31');
+    expect(screen.getByTestId('kpi-period').textContent).toBe('Oct 2026');
+    expect(screen.getByTestId('kpi-change').textContent).toBe('▲ +6.9% vs Sep 2026 (29)');
+    // Alone, with a setting of R81's: text-kpi-solo.
+    expect(screen.getByTestId('kpi').classList.contains('kpi--detailed')).toBe(true);
+  });
+
+  it('compares with Same period last year as Cube answers it, coloured by Direction', () => {
+    render(
+      <Kpi
+        spec={spec({
+          rows: [
+            { [COUNT]: '31', compareDateRange: OCT },
+            {
+              [COUNT]: '40',
+              compareDateRange: '2025-10-01T00:00:00.000 - 2025-10-31T23:59:59.999',
+            },
+          ],
+          options: { kpi: { compareTo: { kind: 'samePeriodLastYear' }, time, direction: 'lower' } },
+        })}
+      />,
+    );
+    const change = screen.getByTestId('kpi-change');
+    expect(change.textContent).toBe('▼ −22.5% vs Oct 2025 (40) · lower is better');
+    expect(change.querySelector('.text-change')?.getAttribute('data-tone')).toBe('success');
+  });
+
+  it('compares with another measure by its title, and with a value by itself', () => {
+    const { unmount } = render(
+      <Kpi
+        spec={spec({
+          rows: [{ [COUNT]: '31', 'orders.target_count': '25' }],
+          titles: { 'orders.target_count': 'Target count' },
+          options: { kpi: { compareTo: { kind: 'measure', member: 'orders.target_count' } } },
+        })}
+      />,
+    );
+    expect(screen.getByTestId('kpi-change').textContent).toBe('▲ +24.0% vs Target count (25)');
+    // No Time: no period to name.
+    expect(screen.queryByTestId('kpi-period')).toBeNull();
+    unmount();
+    render(
+      <Kpi
+        spec={spec({
+          rows: [{ [COUNT]: '31' }],
+          options: { kpi: { compareTo: { kind: 'value', value: 40 }, direction: 'neutral' } },
+        })}
+      />,
+    );
+    expect(screen.getByTestId('kpi-change').textContent).toBe('▼ −22.5% vs 40');
+  });
+});
+
 describe('a KPI with none of R81’s settings (AC-564)', () => {
   const marked: Partial<RenderSpec> = {
     marking: {

@@ -152,7 +152,7 @@ async function loadOne({
   signal?.addEventListener('abort', cancelOnCube, { once: true });
 
   try {
-    return calculatedAnswer(await poll(), query);
+    return calculatedAnswer(oneAnswer(await poll()), query);
   } finally {
     signal?.removeEventListener('abort', cancelOnCube);
   }
@@ -229,6 +229,24 @@ async function loadOne({
       if (outageDelayMs > 0) await delay(outageDelayMs, signal);
     }
   }
+}
+
+/**
+ * A `compareDateRange` answer — one result per period, in order (a KPI's
+ * comparison, T937; research/cube/data-apis.md, "compareDateRange, end to
+ * end") — as one answer: every result's rows in order, each tagged by Cube
+ * with its period, under the first result's facts. Any other answer as it is.
+ */
+function oneAnswer(body: unknown): unknown {
+  if (typeof body !== 'object' || body === null || !('results' in body)) return body;
+  const results = (body as { results: unknown }).results;
+  if (!Array.isArray(results) || results.length === 0) return body;
+  const each = results as readonly { readonly data?: unknown }[];
+  const first = each[0] as Record<string, unknown>;
+  return {
+    ...first,
+    data: each.flatMap((result) => (Array.isArray(result.data) ? (result.data as unknown[]) : [])),
+  };
 }
 
 function isContinueWait(body: unknown): boolean {

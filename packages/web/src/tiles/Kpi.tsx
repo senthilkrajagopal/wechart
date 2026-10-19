@@ -1,5 +1,15 @@
 import { isAdditive, labelOf } from '@wechart/charts';
-import { formatValue, memberOn, type RenderSpec } from '@wechart/core';
+import {
+  formatValue,
+  kpiOptionsOf,
+  kpiPeriodOf,
+  memberOn,
+  type KpiOptions,
+  type KpiTime,
+  type RenderSpec,
+} from '@wechart/core';
+
+import { KpiChange, type KpiCompared } from './kpi/KpiChange';
 
 /**
  * The KPI tile (AC-037).
@@ -59,8 +69,47 @@ function markedShareOf(
   };
 }
 
+/** The start of the period Cube tagged a compared row with ("2026-09-01T00:00:00.000 - …"). */
+function periodStartOf(row: Record<string, unknown> | undefined): string | undefined {
+  const tag = row?.['compareDateRange'];
+  return typeof tag === 'string' ? tag.split(' - ')[0] : undefined;
+}
+
+/** A period by its start, as its grain names it ("Sep 2026"). */
+function periodLabelOf(start: string, time: KpiTime, spec: RenderSpec): string {
+  return formatValue(start, time.member, spec.formats ?? {}, {
+    [time.member]: time.granularity,
+  });
+}
+
+/**
+ * What the value is compared with (T937, AC-565): for a period, the second
+ * period's row of Cube's `compareDateRange` answer, named by its period;
+ * another measure, on the value's own row, by its title; a value, itself.
+ * Nothing where there is nothing to compare with.
+ */
+function comparedOf(spec: RenderSpec, kpi: KpiOptions, measure: string): KpiCompared | undefined {
+  const { compareTo, time } = kpi;
+  if (compareTo === undefined) return undefined;
+  if (compareTo.kind === 'value') return { value: compareTo.value };
+  if (compareTo.kind === 'measure') {
+    const value = numberOf(spec.rows[0]?.[compareTo.member]);
+    return value === undefined ? undefined : { value, against: labelOf(spec, compareTo.member) };
+  }
+  if (time === undefined) return undefined;
+  const row = spec.rows[1];
+  const value = numberOf(row?.[measure]);
+  const start = periodStartOf(row);
+  if (value === undefined || start === undefined) return undefined;
+  return { value, against: periodLabelOf(start, time, spec) };
+}
+
 export function Kpi({ spec, solo = false }: KpiProps) {
-  const className = solo ? 'kpi kpi--solo' : 'kpi';
+  const kpi = kpiOptionsOf(spec.options);
+  // With any of R81's settings, standing alone, its value in text-kpi-solo (AC-565).
+  const detailed =
+    kpi.compareTo !== undefined || kpi.target !== undefined || kpi.time !== undefined;
+  const className = `${solo ? 'kpi kpi--solo' : 'kpi'}${detailed ? ' kpi--detailed' : ''}`;
   const measure = memberOn(spec.encoding, 'y');
   const row = spec.rows[0];
   const raw = measure === undefined || row === undefined ? undefined : row[measure];
@@ -81,14 +130,36 @@ export function Kpi({ spec, solo = false }: KpiProps) {
   }
 
   const marked = measure === undefined ? undefined : markedShareOf(spec, measure, value);
+  const compared = measure === undefined ? undefined : comparedOf(spec, kpi, measure);
+  // Time's period, as Cube tagged the value's row, else the one asked (kpiPeriodOf).
+  const period =
+    kpi.time === undefined
+      ? undefined
+      : periodLabelOf(
+          periodStartOf(row) ?? kpiPeriodOf(kpi.time.granularity, new Date()).current[0],
+          kpi.time,
+          spec,
+        );
+  const name = (
+    <p className="kpi__label" data-testid="kpi-label">
+      {label}
+    </p>
+  );
 
   // Its name above its value, as the prototype's kpiHtml has them (T300),
   // and under it the marked share, as its renderMarked has it (T453).
   return (
     <div className={className} data-testid="kpi">
-      <p className="kpi__label" data-testid="kpi-label">
-        {label}
-      </p>
+      {period === undefined ? (
+        name
+      ) : (
+        <div className="kpi__head">
+          {name}
+          <span className="kpi__period" data-testid="kpi-period">
+            {period}
+          </span>
+        </div>
+      )}
       <p className="kpi__value" data-testid="kpi-value">
         {/* The measure's own format, so a currency KPI reads as money
             (AC-046). FORMAT is the fallback for a member that declares none. */}
@@ -96,6 +167,15 @@ export function Kpi({ spec, solo = false }: KpiProps) {
           ? FORMAT.format(value)
           : formatValue(value, measure, spec.formats ?? {})}
       </p>
+      {compared === undefined || measure === undefined ? null : (
+        <KpiChange
+          current={value}
+          compared={compared}
+          member={measure}
+          formats={spec.formats}
+          direction={kpi.direction}
+        />
+      )}
       {marked === undefined ? null : (
         <p className="kpi__marked">
           {/* The swatch is decorative; the words carry the meaning (AC-098). */}

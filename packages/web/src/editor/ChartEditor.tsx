@@ -8,6 +8,7 @@ import {
   distinctValues,
   emptySpec,
   isEmpty,
+  kpiOptionsOf,
   memberOn,
   membersOn,
   onOneScale,
@@ -365,6 +366,9 @@ function EditorBody({
     // as the dashboard asks it (`toChartSpec`).
     const targets = targetMeasuresOf(chartTypeState.manual ?? undefined, options);
     const asked = targets.length === 0 ? spec : { ...spec, targets };
+    // A KPI's period and comparison (T937, AC-565), as the dashboard asks them.
+    if (chartTypeState.manual === 'kpi' && options['kpi'] !== undefined)
+      return toCubeQuery({ ...asked, chartType: 'kpi', kpi: kpiOptionsOf(options) });
     return toCubeQuery(
       chartTypeState.manual === 'boxplot' ? { ...asked, chartType: 'boxplot' } : asked,
     );

@@ -22,6 +22,7 @@
 
 import { emptySpec, type ChartFilter, type ChartSpec } from './chart-spec';
 import { targetMeasuresOf } from './chart-types/bullet';
+import { kpiOptionsOf } from './chart-types/kpi';
 import { comboProblems } from './combo';
 import { GRANULARITY_NAMES, type TimeGranularity } from './format';
 import { readQuickCalcs, type QuickCalc } from './quickCalc';
@@ -339,5 +340,9 @@ export function toChartSpec(document: ChartDocument): ChartSpec {
     ...(chart.calculations === undefined ? {} : { calculations: { ...chart.calculations } }),
     // What its type's settings draw beside Metrics: a bullet's Target (T954).
     ...(targets.length === 0 ? {} : { targets }),
+    // A KPI's period and comparison (T937), where it has settings.
+    ...(chart.chartType === 'kpi' && chart.options?.['kpi'] !== undefined
+      ? { kpi: kpiOptionsOf(chart.options) }
+      : {}),
   };
 }

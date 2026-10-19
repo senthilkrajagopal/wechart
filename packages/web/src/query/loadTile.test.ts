@@ -485,3 +485,47 @@ describe('how long an answer took (T681)', () => {
     expect(elapsedOf({ data: [] })).toBeUndefined();
   });
 });
+
+/**
+ * T937 / AC-565: a KPI's comparison is one `compareDateRange` query, which
+ * Cube answers as one result per period, in order (research/cube/
+ * data-apis.md, "compareDateRange, end to end"). The tile reads one answer:
+ * the first result's facts, and every result's rows in order, each tagged
+ * with its period.
+ */
+describe('a compareDateRange answer (T937, AC-565)', () => {
+  it('is read as one answer: every period’s rows in order, and the first period’s facts', async () => {
+    const current = {
+      'orders.count': '31',
+      compareDateRange: '2026-10-01T00:00:00.000 - 2026-10-31T23:59:59.999',
+    };
+    const previous = {
+      'orders.count': '29',
+      compareDateRange: '2026-09-01T00:00:00.000 - 2026-09-30T23:59:59.999',
+    };
+    const { impl } = fetchReturning({
+      body: {
+        queryType: 'compareDateRangeQuery',
+        results: [
+          {
+            data: [current],
+            lastRefreshTime: '2026-10-18T09:00:00.000Z',
+            annotation: { measures: {} },
+          },
+          {
+            data: [previous],
+            lastRefreshTime: '2026-10-18T09:00:01.000Z',
+            annotation: { measures: {} },
+          },
+        ],
+      },
+    });
+    const result = await loadTile({ query, fetchImpl: impl, retryDelayMs: 0 });
+
+    expect(result).toEqual({
+      data: [current, previous],
+      lastRefreshTime: '2026-10-18T09:00:00.000Z',
+      annotation: { measures: {} },
+    });
+  });
+});

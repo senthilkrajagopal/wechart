@@ -224,11 +224,26 @@ export class CubeClient {
     /** A previewed security context, asked as in place of wechart's (T172). */
     preview?: Record<string, unknown>,
   ): Promise<unknown> {
+    /**
+     * A `compareDateRange` query (a KPI's comparison, T937) is answered as
+     * one result per range, and only to a client that says it reads them:
+     * `queryType: 'multi'` (research/cube/data-apis.md §3). Any other query
+     * is asked as before, and answered as one.
+     */
+    const multi = Array.isArray(query['timeDimensions'])
+      ? (query['timeDimensions'] as unknown[]).some(
+          (entry) => typeof entry === 'object' && entry !== null && 'compareDateRange' in entry,
+        )
+      : false;
     return this.#request(
       '/v1/load',
       {
         method: 'POST',
-        body: JSON.stringify(cache === undefined ? { query } : { query, cache }),
+        body: JSON.stringify({
+          query,
+          ...(cache === undefined ? {} : { cache }),
+          ...(multi ? { queryType: 'multi' } : {}),
+        }),
         headers: { 'content-type': 'application/json' },
       },
       undefined,
