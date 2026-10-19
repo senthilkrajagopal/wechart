@@ -74,5 +74,17 @@ test.describe('Access tokens with sign-in off (T769, AC-479)', () => {
     expect(((await answer.json()) as { message: string }).message).toBe(
       'Route POST:/mcp not found',
     );
+    // On any host (AC-476): the name an MCP host would have, the web app's,
+    // and one of no meaning, each gets the same: no route at all.
+    for (const host of ['mcp.wechart.example.com', 'localhost:5273', 'anything.invalid']) {
+      const elsewhere = await request.post('http://localhost:4100/mcp', {
+        headers: { host },
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+      });
+      expect(elsewhere.status(), host).toBe(404);
+      expect(((await elsewhere.json()) as { message: string }).message, host).toBe(
+        'Route POST:/mcp not found',
+      );
+    }
   });
 });

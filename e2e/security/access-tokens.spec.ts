@@ -186,6 +186,35 @@ test.describe('Security › Access tokens (T772, AC-470; design 18, screen 4)', 
   });
 });
 
+/**
+ * AC-476 (as split 2026-10-18, R84; design 18's Q6, "MCP off"): this stack,
+ * with sign-in on, names no MCP host, so both token pages say MCP isn't set
+ * up, giving no address, and the API serves nothing at `/mcp` on any host.
+ */
+test.describe('MCP off, signed in (T774, AC-476)', () => {
+  test.use({ role: 'super' });
+
+  test('both token pages say MCP isn’t set up, and /mcp is served on no host', async ({
+    page,
+  }) => {
+    for (const path of ['/account/tokens', '/security/tokens']) {
+      await page.goto(path);
+      await expect(page.getByText(/^MCP isn’t set up on this deployment\./), path).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'Server URL' }), path).toHaveCount(0);
+    }
+    for (const host of [undefined, 'mcp.wechart.example.com', 'localhost:5373']) {
+      const answer = await page.request.post('http://localhost:4300/mcp', {
+        ...(host === undefined ? {} : { headers: { host } }),
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+      });
+      expect(answer.status(), host).toBe(404);
+      expect(((await answer.json()) as { message: string }).message, host).toBe(
+        'Route POST:/mcp not found',
+      );
+    }
+  });
+});
+
 test.describe('Security › Access tokens, to anyone else (T772, AC-470; design 18, A4)', () => {
   test.use({ role: 'writer' });
 
