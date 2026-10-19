@@ -324,10 +324,10 @@ function ChartBody({
 }
 
 export function ChartTile(props: ChartTileProps) {
-  // A Map with a Points layer asks it of Cube apart (T976); no other tile
-  // asks anything here, nor needs a query client to be drawn.
-  return props.spec.chartType === 'map' &&
-    mapSettingsOf(props.spec.options).points !== undefined ? (
+  // A Map with a Points or Density layer asks it of Cube apart (T976, T977);
+  // no other tile asks anything here, nor needs a query client to be drawn.
+  const layers = props.spec.chartType === 'map' ? mapSettingsOf(props.spec.options) : undefined;
+  return layers?.points !== undefined || layers?.density !== undefined ? (
     <MapPointsTile {...props} />
   ) : (
     <Tile {...props} />

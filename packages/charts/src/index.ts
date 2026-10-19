@@ -13,6 +13,7 @@ export { treemapOption, isTreemapType } from './series/treemap';
 export { heatmapOption, isHeatmapType } from './series/heatmap';
 export { boxesOf, drawnPointsOf, type Box } from './series/boxplot';
 export { isMapType, mapOption, regionSetIdOf, unplacedCodes, unplacedNote } from './series/map';
+export { DENSITY_CANT_BE_MARKED } from './series/mapDensity';
 export {
   mapPointsOf,
   POINT_COLOURS_MAX,

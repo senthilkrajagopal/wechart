@@ -1,3 +1,4 @@
+import { DENSITY_CANT_BE_MARKED } from '@wechart/charts';
 import { mapModule, mapSettingsOf, type MapSettings } from '@wechart/core';
 import { useId } from 'react';
 
@@ -161,6 +162,10 @@ export function MapWells({
               set(location === undefined ? rest : { ...settings, density: { location } });
             }}
           />
+          {/* Never marked, and said so where it is chosen (T977, AC-626). */}
+          {density === undefined ? null : (
+            <span className="well__empty">{DENSITY_CANT_BE_MARKED}</span>
+          )}
         </div>
       </section>
     </>

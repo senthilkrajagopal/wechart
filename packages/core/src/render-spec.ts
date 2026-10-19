@@ -306,6 +306,8 @@ export interface RenderSpec {
    * row per location, and Cube's count of them all where it was asked.
    */
   readonly mapPoints?: MapPointsAnswer;
+  /** A Map's Density layer as Cube answered its own query (T977, AC-626): a row per place. */
+  readonly mapDensity?: MapPointsAnswer;
 }
 
 /** The rows a Map's Points layer was answered with, and how many there are in all. */

@@ -155,17 +155,6 @@ export function withMapPoints(option: EChartsOption, spec: RenderSpec): EChartsO
   const surface = spec.surface ?? DEFAULT_SURFACE;
   const sizeTitle = layer.size === undefined ? '' : (spec.titles?.[layer.size] ?? layer.size);
 
-  const geo = {
-    map: regions['map'],
-    projection: regions['projection'],
-    left: regions['left'],
-    right: regions['right'],
-    top: regions['top'],
-    bottom: regions['bottom'],
-    show: false,
-    silent: true,
-    roam: false,
-  };
   const points = {
     type: 'scatter' as const,
     coordinateSystem: 'geo',
@@ -193,5 +182,31 @@ export function withMapPoints(option: EChartsOption, spec: RenderSpec): EChartsO
       },
     },
   };
-  return { ...option, geo, series: [...series, points] };
+  return { ...option, geo: hiddenGeoOf(option, regions), series: [...series, points] };
+}
+
+/**
+ * The `geo` a layer over the regions is drawn on (research
+ * `echarts-geo-points.md`): drawing nothing itself, laid out as the map
+ * series' own — the same map, projection and box — so a coordinate lands on
+ * the same pixel on both. One for every layer: the option's own, once made.
+ */
+export function hiddenGeoOf(
+  option: EChartsOption,
+  regions: Record<string, unknown>,
+): Record<string, unknown> {
+  const made = option['geo'] as Record<string, unknown> | undefined;
+  return (
+    made ?? {
+      map: regions['map'],
+      projection: regions['projection'],
+      left: regions['left'],
+      right: regions['right'],
+      top: regions['top'],
+      bottom: regions['bottom'],
+      show: false,
+      silent: true,
+      roam: false,
+    }
+  );
 }

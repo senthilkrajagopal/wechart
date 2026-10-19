@@ -224,6 +224,49 @@ test('a Points layer draws each place from a geo dimension over the regions, siz
 });
 
 /**
+ * T977 / AC-626: THE SYSTEM SHALL draw a Density layer from a geo dimension
+ * on §5's sequential ramp fading to transparent, regions drawn as 1 px
+ * `border-strong` outlines while it shows; and SHALL never mark from it, its
+ * layer row and tooltip saying "Density can't be marked; it shows where
+ * points gather".
+ * `Fails when: density is drawn in another ramp; regions keep their fill
+ * under it; a gesture on it marks anything; or the sentence is missing from
+ * the layer row or the tooltip.`
+ */
+test('a Density layer draws where places gather, the regions as outlines, and says it can’t be marked', async ({
+  page,
+  request,
+}, testInfo) => {
+  const cube = await newChartOnCountries(page, request, testInfo.project.name);
+  await wellPicker(page, 'dimensions').selectOption(`${cube}.iso3`);
+  const result = page.getByTestId('editor-result');
+  await expect(result.locator('svg').first()).toContainText('FRA');
+  await chooseChartType(page, 'map');
+  await expectChartType(page, 'map');
+  const map = result.locator('svg').first();
+  await expect(map.locator('path[fill^="rgb"]').first()).toBeAttached();
+
+  await page.getByTestId('add-mapDensity').click();
+  await page.getByTestId(`pick-${cube}.location`).click();
+  // The layer's row says so.
+  await expect(page.getByTestId('map-layer-density')).toContainText(
+    "Density can't be marked; it shows where points gather",
+  );
+  // Drawn: the heatmap's picture over the map, the regions with no ramp
+  // fill, outlined 1 px in border-strong, and no "No data" swatch.
+  await expect(map.locator('image')).toHaveCount(1);
+  await expect(map.locator('path[fill^="rgb"]')).toHaveCount(0);
+  await expect(map.locator('path[stroke="#c9c7c1"]').first()).toBeAttached();
+  await expect(map).not.toContainText('No data');
+  // Its tooltip, over a region, says it too.
+  const box = (await map.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.52, box.y + box.height * 0.3);
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.32);
+  const tip = result.locator('.chart-canvas div').filter({ hasText: "Density can't be marked" });
+  await expect(tip.first()).toBeVisible();
+});
+
+/**
  * T975 / AC-624: a Regions layer on §5's sequential ramp with a legend and
  * the "No data" swatch, a region with no row in the null neutral, and 0.5 px
  * surface boundaries, on every boundary set. AC-622 (R83): Admin-1 is each

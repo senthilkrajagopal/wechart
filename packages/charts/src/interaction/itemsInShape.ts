@@ -48,6 +48,7 @@ export interface ShapeItem {
 type Axis = { readonly type?: string; readonly data?: readonly unknown[] };
 type Series = {
   readonly type?: string;
+  readonly coordinateSystem?: string;
   readonly name?: string;
   readonly data?: readonly unknown[];
   readonly stack?: string;
@@ -129,6 +130,8 @@ export function itemsInShape(
     const px = (value: number | string) => chart.convertToPixel({ xAxisIndex: xi }, value);
     const py = (value: number | string) => chart.convertToPixel({ yAxisIndex: yi }, value);
     const seriesName = series.name ?? '';
+    // A map's Density layer is never marked (T977, AC-626).
+    if (series.type === 'heatmap' && series.coordinateSystem === 'geo') return;
 
     (series.data ?? []).forEach((item, index) => {
       const value = valueOf(item);

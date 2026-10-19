@@ -91,3 +91,9 @@ Lane CHARTS-B's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Failing test: `mapRegions.test.ts`: German states by Revenue draw on the ramp with a legend; a state with no row takes the null neutral and the "No data" swatch shows; boundaries are 0.5 px `bg-surface`; a Countries map still draws as before (AC-624). Since R83: France draws its régions and the UK its four nations, dissolved from Natural Earth's `region_cod`/`geonunit` (AC-622).
   - Depends on: T974
   - Waits on: research: an admin-1 boundary dataset (source, licence, detail, key format) in `docs/research/`.
+
+- [x] T977 (AC-626) A Density layer on the ramp fading to transparent, regions as outlines while it shows, never markable, saying so
+  - Files: `packages/charts/src/series/mapDensity.ts` (+ test), `packages/web/src/editor/wells/map.tsx`.
+  - Failing test: `mapDensity.test.ts`: a heatmap series on `geo` whose ramp runs from transparent to §5's darkest blue; while it shows, regions have no fill and a 1 px `border-strong` edge; a click or lasso on it changes no marking; the layer row and tooltip read "Density can't be marked; it shows where points gather" (AC-626).
+  - Depends on: T976
+  - Waits on: research: the shape of a Cube `geo` value (as T976).

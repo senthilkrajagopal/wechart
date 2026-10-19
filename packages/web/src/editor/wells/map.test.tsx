@@ -168,6 +168,14 @@ describe('the Map’s wells (AC-622)', () => {
     });
   });
 
+  /** T977 / AC-626: … its layer row and tooltip saying "Density can't be marked; it shows where points gather". */
+  it('says in the Density layer’s row that it can’t be marked, once it has a location', () => {
+    wells({ options: { map: { density: { location: 'stores.location' } } } });
+    expect(screen.getByTestId('map-layer-density').textContent).toContain(
+      "Density can't be marked; it shows where points gather",
+    );
+  });
+
   it('takes a geo dimension as the Density layer’s location', async () => {
     const onOptions = wells();
     await userEvent.click(screen.getByTestId('add-mapDensity'));
