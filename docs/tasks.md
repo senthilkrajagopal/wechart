@@ -2347,10 +2347,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T984 (AC-600) A From and a To slider per parallel axis, named after its measure, setting its brush from the keyboard
 
-- [ ] T985 (AC-601) The text alternative and the table view of parallel coordinates
-  - Files: `packages/charts/src/describe/parallel.ts` (+ test), `packages/web/src/tiles/tableView/parallel.ts` (+ test).
-  - Failing test: (describe) "Parallel coordinates of 14 products across 5 measures, each axis min to max. 6 marked through Margin % 22–26 %."; (table view) Product and the 5 measures, marked rows bold with a left rule (AC-601).
-  - Depends on: T982
+- [x] T985 (AC-601) The text alternative and the table view of parallel coordinates
 
 ### Lane CHARTS-B: the Sankey
 

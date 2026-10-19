@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 
 import { chooseChartType, expectChartType } from './chartType';
 import { cubePicker } from './cubePicker';
+import { viewAs } from './tileMenu';
 import { wellPicker } from './wells';
 import { IN_MY_WORKSPACE, newInMyWorkspace } from './workspace';
 
@@ -745,6 +746,36 @@ test('parallel coordinates mark a line by a click, brush along axes with Ctrl ad
   await expect.poll(count).toBeLessThanOrEqual(keyed.length);
   expect(await count()).toBeGreaterThanOrEqual(keyedStrict.length);
   await expect(tile.locator('svg path[fill-opacity="0.3"]')).toHaveCount(2);
+
+  /**
+   * T985 / AC-601: THE SYSTEM SHALL give parallel coordinates a text
+   * alternative naming the members, measures, scale and any brush …, and a
+   * table view of member and measures with marked rows bold and a left rule.
+   * `Fails when: a part of the text alternative is missing, or the table
+   * lacks a measure or doesn't show marked rows.`
+   */
+  const now = await count();
+  // Through both brushes, the one the keys last set last.
+  await expect(tile.getByTestId('chart-text-alternative')).toHaveText(
+    new RegExp(
+      `^Parallel coordinates of 240 .+ across 3 measures, each axis min to max\\. ${String(now)} marked through .*Average Amount \\$[\\d,.]+–\\$[\\d,.]+ and .*Total Amount \\$[\\d,.]+–\\$[\\d,.]+\\.$`,
+    ),
+  );
+  await viewAs(tile, 'table');
+  await expect(tile.getByRole('columnheader')).toHaveText([
+    /ID/,
+    /Count/,
+    /Total Amount/,
+    /Average Amount/,
+  ]);
+  const markedRows = tile.locator('[data-testid="table-row"][data-marked="whole"]');
+  const scroller = tile.getByTestId('data-table');
+  for (let step = 0; step < 60 && (await markedRows.count()) === 0; step += 1)
+    await scroller.evaluate((element) => {
+      element.scrollTop += element.clientHeight / 2;
+    });
+  await expect(markedRows.first()).toBeVisible();
+  await viewAs(tile, 'chart');
 
   // Cross-filtering, a brush filters the other tile to its members, in one chip.
   const crossing = await parallelDashboard(request, 'crossFilter');

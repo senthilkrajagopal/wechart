@@ -55,6 +55,11 @@ Lane CHARTS-B's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Failing test: `ParallelSliders.test.tsx`: in Markings mode each axis has `input type="range"` named "Margin % from" and "Margin % to"; Tab reaches them and → moves them; setting 22 % and 26 % marks the same 6 Products the drag did (AC-600).
   - Depends on: T983
 
+- [x] T985 (AC-601) The text alternative and the table view of parallel coordinates
+  - Files: `packages/charts/src/describe/parallel.ts` (+ test), `packages/web/src/tiles/tableView/parallel.ts` (+ test).
+  - Failing test: (describe) "Parallel coordinates of 14 products across 5 measures, each axis min to max. 6 marked through Margin % 22–26 %."; (table view) Product and the 5 measures, marked rows bold with a left rule (AC-601).
+  - Depends on: T982
+
 - [x] T987 (AC-611) Draw the Sankey's nodes and links, split a repeated member as "‹member› (2)", and fold flows past 50 into "Other"
   - Files: `packages/charts/src/series/sankey.ts` (+ test).
   - Failing test: `sankey.test.ts` (series): nodes 12 px wide; the colouring step's nodes in their members' colours, others `text-secondary`; links at 0.4, emphasis 0.6; EMEA in steps 1 and 3 yields a node "EMEA (2)" and the note; 214 flows keep each step's members carrying its top 50 and fold the rest into "Other" with the note (AC-611).

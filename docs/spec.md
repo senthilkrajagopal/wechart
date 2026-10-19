@@ -1839,7 +1839,7 @@ Traces to: §P2.6 P, `[R81]`; study §5 items 4, 5, 7 and 11; design 23 sheets 4
       Fails when: a member whose line misses a brushed range is marked; the marking stores a measure range; a second brush replaces the first while Ctrl/⌘ is held; or the chip reads otherwise.
 - [x] AC-600 WHILE a dashboard is in Markings mode, THE SYSTEM SHALL give each parallel-coordinate axis a From and a To slider under the chart (`input type="range"`), named "‹measure› from" and "‹measure› to", setting that axis's brush as a drag does, reached with Tab and moved with ← and → (`[R81]`, "Yes, existing keys (Recommended)", 23-Q8 (a); design 23 keyboard section; rules 159, 167).
       Fails when: an axis lacks either slider, or its name; moving a slider marks other members than the same drag would; or a slider can't be reached or moved from the keyboard.
-- [ ] AC-601 THE SYSTEM SHALL give parallel coordinates a text alternative naming the members, measures, scale and any brush ("Parallel coordinates of 14 products across 5 measures, each axis min to max. 6 marked through Margin % 22–26 %."), and a table view of member and measures with marked rows bold and a left rule (`[R81]`; design 23 sheet 7; AC-178; rule 166).
+- [x] AC-601 THE SYSTEM SHALL give parallel coordinates a text alternative naming the members, measures, scale and any brush ("Parallel coordinates of 14 products across 5 measures, each axis min to max. 6 marked through Margin % 22–26 %."), and a table view of member and measures with marked rows bold and a left rule (`[R81]`; design 23 sheet 7; AC-178; rule 166).
       Fails when: a part of the text alternative is missing, or the table lacks a measure or doesn't show marked rows.
 
 ## F53. Time: the timeline and the calendar heatmap

@@ -2,6 +2,7 @@ import type { ChartType, RenderSpec } from '@wechart/core';
 
 import { describeBoxplot } from './boxplot';
 import { describeBullet } from './bullet';
+import { describeParallel } from './parallel';
 import { describeSankey } from './sankey';
 import { describeStack100 } from './stack100';
 
@@ -18,6 +19,7 @@ export type Describe = (spec: RenderSpec) => string | undefined;
 export const DESCRIBE: Partial<Record<ChartType, Describe>> = {
   boxplot: describeBoxplot,
   bullet: describeBullet,
+  parallel: describeParallel,
   sankey: describeSankey,
   stackedArea: describeStack100,
   stackedBar: describeStack100,
