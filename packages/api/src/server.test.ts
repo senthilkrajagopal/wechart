@@ -942,6 +942,53 @@ describe('recording every query (AC-016)', () => {
     await app.close();
   });
 
+  /**
+   * Checkpoint 2's review: a KPI's comparison is asked as several results
+   * (`queryType: 'multi'`, T937), each with its own `usedPreAggregations`.
+   * It is accelerated where every result was served from a rollup.
+   */
+  it('records a compareDateRange query as accelerated where every period was', async () => {
+    const queryLog = recordingLog();
+    let both = true;
+    const app = buildServer({
+      config,
+      queryLog,
+      cube: stubCube(() => ({
+        queryType: 'compareDateRangeQuery',
+        results: [
+          { data: [], usedPreAggregations: { 'orders.main': {} } },
+          { data: [], usedPreAggregations: both ? { 'orders.main': {} } : {} },
+        ],
+      })),
+    });
+    const ask = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/load',
+        payload: {
+          query: {
+            measures: ['orders.count'],
+            timeDimensions: [
+              {
+                dimension: 'orders.ordered_at',
+                compareDateRange: [
+                  ['2026-10-01', '2026-10-31'],
+                  ['2026-09-01', '2026-09-30'],
+                ],
+              },
+            ],
+          },
+        },
+      });
+
+    await ask();
+    both = false;
+    await ask();
+
+    expect(queryLog.entries.map((entry) => entry.accelerated)).toEqual([true, false]);
+    await app.close();
+  });
+
   it('records a query that failed, so the log is what happened and not what worked', async () => {
     const queryLog = recordingLog();
     const app = buildServer({

@@ -6666,6 +6666,17 @@ function accelerationOf(result: unknown): {
   accelerated: boolean;
   preAggregation: string | null;
 } {
+  // Several results at once — a KPI's compareDateRange, asked `multi` (T937):
+  // accelerated where every one was (checkpoint 2's review).
+  const results =
+    typeof result === 'object' && result !== null && 'results' in result
+      ? (result as { results?: unknown }).results
+      : undefined;
+  if (Array.isArray(results) && results.length > 0) {
+    const each = results.map((one) => accelerationOf(one));
+    const all = each.every((one) => one.accelerated);
+    return { accelerated: all, preAggregation: all ? (each[0]?.preAggregation ?? null) : null };
+  }
   const used =
     typeof result === 'object' && result !== null && 'usedPreAggregations' in result
       ? ((result as { usedPreAggregations?: Record<string, unknown> }).usedPreAggregations ?? {})
