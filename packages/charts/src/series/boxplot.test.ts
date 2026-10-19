@@ -1,9 +1,11 @@
 import { formatterFor, type RenderSpec } from '@wechart/core';
+import { format } from 'echarts/core';
 import { describe, expect, it } from 'vitest';
 
 import { optionFor } from '../optionFor';
 import { renderToSvg } from '../testing/renderToSvg';
 import { DEFAULT_PALETTE } from '../theme';
+import { CHART_FONT } from '../themed';
 import { boxplotOption, distributionNotes } from './boxplot';
 
 /**
@@ -378,5 +380,50 @@ describe('a box plot’s points (T991, AC-592, AC-306)', () => {
     const others = dotsOf(svg).filter((_, at) => placed[at]!.value[0] !== 'APAC');
     expect(others).toHaveLength(160);
     expect(closest(others)).toBeGreaterThanOrEqual(8);
+  });
+
+  /**
+   * The coordinator's Sales dashboard: Revenue by Category, each point an
+   * order, about 240 orders in each of 8 categories, on a 4-column tile. A
+   * sentence per category filled the tile and squashed the plot; the
+   * fallback is said once, counting the categories (AC-592, amended), and
+   * wrapped to the tile's width.
+   */
+  it('says once, counting them, where several categories fall back to All, wrapped inside the tile', () => {
+    const categories = [
+      'Beverages',
+      'Condiments',
+      'Confections',
+      'Dairy Products',
+      'Grains/Cereals',
+      'Meat/Poultry',
+      'Produce',
+      'Seafood',
+    ];
+    const rows = categories.flatMap((category, at) =>
+      Array.from({ length: 240 }, (_, order) => ({
+        'orders.region': category,
+        'orders.id': `${String(at)}-${String(order)}`,
+        'orders.amount': String(200 + ((order * 37) % 900) + at * 40),
+      })),
+    );
+    const tile = { width: 380, height: 260 };
+    const many = drawn('beeswarm', rows);
+    const sentence =
+      'Too many points to place side by side in 8 categories: drawn as All, jittered.';
+    expect(distributionNotes(many, tile)).toEqual([sentence]);
+
+    const option = boxplotOption(many, tile);
+    const note = (option['graphic'] as { style: { text: string } }[])[0]!.style.text;
+    const lines = note.split('\n');
+    expect(lines.join(' ')).toBe(sentence);
+    for (const line of lines)
+      expect(format.getTextRect(line, `12px ${CHART_FONT}`).width, line).toBeLessThanOrEqual(
+        tile.width,
+      );
+    // Room for the lines it takes, and no more: the plot keeps the tile.
+    expect(lines.length).toBeLessThanOrEqual(2);
+    expect((option['grid'] as { top: number }).top).toBe(12 + lines.length * 16);
+    expect(renderToSvg(optionFor(many, tile), tile)).toContain(lines[0]!);
   });
 });

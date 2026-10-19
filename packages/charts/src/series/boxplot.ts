@@ -76,9 +76,27 @@ const GRID_PX = { top: 12, bottom: 8, left: 8, right: 28 } as const;
 const NOTE_LINE_PX = 16;
 const LABEL_FONT = `12px ${CHART_FONT}`;
 
-/** The sentence a category drawn as All in place of Beeswarm says (AC-592). */
-export function fellBackNote(member: string): string {
-  return `Too many points to place side by side in ${member}: drawn as All, jittered.`;
+/**
+ * The one sentence the categories drawn as All in place of Beeswarm say
+ * (AC-592): one is named, several are counted, so the note never takes the
+ * plot's room (the coordinator's fix: a sentence per category filled a tile).
+ */
+export function fellBackNote(members: readonly string[]): string {
+  const which = members.length === 1 ? members[0] : `${String(members.length)} categories`;
+  return `Too many points to place side by side in ${which ?? ''}: drawn as All, jittered.`;
+}
+
+/** A note broken at its spaces into lines no wider than the canvas. */
+function wrapped(text: string, width: number): string[] {
+  const lines: string[] = [];
+  for (const word of text.split(' ')) {
+    const last = lines[lines.length - 1];
+    const longer = last === undefined ? word : `${last} ${word}`;
+    if (last !== undefined && format.getTextRect(longer, LABEL_FONT).width <= width)
+      lines[lines.length - 1] = longer;
+    else lines.push(word);
+  }
+  return lines;
 }
 
 /** A seeded generator (mulberry32): the same seed gives the same numbers, run after run. */
@@ -134,6 +152,10 @@ export interface PointsLayout {
   readonly extent: readonly [number, number];
   /** The categories a Beeswarm couldn't place side by side, drawn as All. */
   readonly fellBack: readonly string[];
+  /** The note saying so, once, in lines that fit the canvas; none where none fell back. */
+  readonly notes: readonly string[];
+  /** The lines of note the plot was measured below: at least as many as `notes`. */
+  readonly noteLines: number;
 }
 
 /** Each category's numeric values, in the rows' order, the categories as they first appear. */
@@ -212,6 +234,7 @@ export function pointsLayoutOf(
   const all = [...byCategory.values()].flat();
   const extent = niceExtent(all.length === 0 ? [0] : all);
   const write = formatterFor(memberOn(spec.encoding, 'y') ?? '', spec.formats ?? {});
+  const nameOf = nameWriter(spec, memberOn(spec.encoding, 'x'));
   const textWidth = (text: string) => format.getTextRect(text, LABEL_FONT).width;
   const valueLabels =
     Math.max(
@@ -243,17 +266,23 @@ export function pointsLayoutOf(
         dx: swarm?.[at] ?? round((random() - 0.5) * jitterWidth),
       }));
     });
-    return { points: placed, extent, fellBack };
+    const notes =
+      fellBack.length === 0
+        ? []
+        : wrapped(
+            fellBackNote(fellBack.map((each) => nameOf(each))),
+            canvas.width - GRID_PX.left - GRID_PX.right,
+          );
+    return { points: placed, extent, fellBack, notes, noteLines };
   };
 
   // A note takes height from the plot, which can push another category out
-  // of its swarm: placed again until the notes are as many as it says.
+  // of its swarm: placed again, below as many lines as the note has taken at
+  // most, until its note fits them. The lines kept only grow, so this ends; a
+  // plot measured below more lines than drawn is taller as drawn, which only
+  // moves its points further apart.
   let drawn = layout(0);
-  for (let lines = drawn.fellBack.length; lines > 0; lines = drawn.fellBack.length) {
-    const next = layout(lines);
-    if (next.fellBack.length === lines) return next;
-    drawn = next;
-  }
+  while (drawn.notes.length > drawn.noteLines) drawn = layout(drawn.notes.length);
   return drawn;
 }
 
@@ -261,8 +290,8 @@ export function pointsLayoutOf(
 export function distributionNotes(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): string[] {
   const { points } = drawnDistribution(spec.options, spec.eachPointIs !== undefined);
   if (points !== 'beeswarm') return [];
-  const write = nameWriter(spec, memberOn(spec.encoding, 'x'));
-  return pointsLayoutOf(spec, points, canvas).fellBack.map((name) => fellBackNote(write(name)));
+  const { notes } = pointsLayoutOf(spec, points, canvas);
+  return notes.length === 0 ? [] : [notes.join(' ')];
 }
 
 export function boxplotOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EChartsOption {
@@ -313,8 +342,8 @@ export function boxplotOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS)
 
   // Every point, All or Beeswarm, each moved sideways by its own offset.
   const layout = pointsLayoutOf(spec, points, canvas);
-  const write = nameWriter(spec, memberOn(spec.encoding, 'x'));
-  const notes = layout.fellBack.map((name) => fellBackNote(write(name)));
+  // Said once, in lines that fit the canvas, the plot set below them.
+  const { notes } = layout;
   return {
     animation: false,
     xAxis,
