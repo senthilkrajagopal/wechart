@@ -473,4 +473,84 @@ describe('a single series, and a colour chosen in one tile (T465)', () => {
       expect(Object.keys(assigned).sort(), order.join(',')).toEqual([COUNT, REVENUE].sort());
     }
   });
+
+  /**
+   * T885's fix (AC-521, AC-039): a Text tile's sparkline is drawn in its
+   * measure's dashboard colour as the dashboard's own assignment gives it —
+   * the colour a tile chose for it, the colour a chart drawing it alone has,
+   * else a slot of its own, two measures never sharing one.
+   */
+  describe('a Text tile’s sparkline (T885’s fix)', () => {
+    const MARGIN = 'sales.margin';
+    const sparklines = (...measures: string[]) => ({
+      id: 'text',
+      kind: 'text' as const,
+      w: 6,
+      h: 12,
+      document: {
+        version: 1 as const,
+        doc: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: measures.map((measure) => ({ type: 'sparkline', attrs: { measure } })),
+            },
+          ],
+        },
+      },
+    });
+    const withText = (charts: readonly string[], ...measures: string[]): DashboardDocument => {
+      const base = page(charts);
+      const first = base.pages[0];
+      if (first === undefined) throw new Error('No page');
+      return { ...base, pages: [{ ...first, items: [...first.items, sparklines(...measures)] }] };
+    };
+    const several: RenderSpec = {
+      chartType: 'line',
+      encoding: { x: [COUNTRY], y: [REVENUE, 'sales.count'] },
+      rows: [{ [COUNTRY]: 'USA', [REVENUE]: 9, 'sales.count': 3 }],
+    };
+
+    it('takes the colour a tile’s Customize tab chose for its measure', () => {
+      const chose: RenderSpec = {
+        ...several,
+        options: { series: { [REVENUE]: { colour: '#1fa8c9' } } },
+      };
+      const { members } = dashboardColours(withText(['chose'], REVENUE), { chose });
+      expect(members[REVENUE]).toBe('#1fa8c9');
+    });
+
+    it('gives two measures no chart colours two different slots', () => {
+      const { members } = dashboardColours(withText(['donut'], REVENUE, MARGIN), {
+        donut: { ...donut, rows: donut.rows.slice(0, 2) },
+      });
+      // The two slots after the donut's two categories, in text order.
+      expect([members[REVENUE], members[MARGIN]]).toEqual(DEFAULT_PALETTE.slice(2, 4));
+      expect(members[REVENUE]).toBe(DEFAULT_PALETTE[2]);
+      expect(members[MARGIN]).toBe(DEFAULT_PALETTE[3]);
+      expect(Object.keys(members).sort()).toEqual([MARGIN, REVENUE].sort());
+    });
+
+    it('keeps its slot from one call to the next, as a chart’s member does', () => {
+      const first = dashboardColours(withText([], REVENUE, MARGIN), {});
+      const again = dashboardColours(withText([], MARGIN, REVENUE), {}, first.assigned);
+      expect(again.members).toEqual(first.members);
+    });
+
+    it('is the colour a single-series chart of its measure is drawn in', () => {
+      const { specs: coloured, members } = dashboardColours(withText(['donut', 'bars'], REVENUE), {
+        donut,
+        bars: byCountry,
+      });
+      expect([members[REVENUE]]).toEqual(barColours(coloured['bars']));
+    });
+
+    it('is the colour a chart of several series gives its measure', () => {
+      const { specs: coloured, members } = dashboardColours(withText(['several'], REVENUE), {
+        several,
+      });
+      expect(members[REVENUE]).toBe(coloured['several']?.colours?.[REVENUE]);
+    });
+  });
 });

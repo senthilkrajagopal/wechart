@@ -7,7 +7,7 @@ import {
   seriesSettingsOf,
   singleSeriesOf,
 } from '@wechart/charts';
-import type { RenderSpec } from '@wechart/core';
+import { elementsOf, type RenderSpec } from '@wechart/core';
 import { useState } from 'react';
 
 import { isSection, isTabGroup, type DashboardDocument } from './model/document';
@@ -40,6 +40,12 @@ export interface DashboardColours {
    * screen — and the caller is expected to hand it straight back.
    */
   readonly assigned: Record<string, string>;
+  /**
+   * The colour each measure a Text tile's sparkline draws is drawn in
+   * (AC-521): its measure's colour as the charts have it, else a slot of its
+   * own (T885's fix).
+   */
+  readonly members: Record<string, string>;
 }
 
 export function dashboardColours(
@@ -49,6 +55,8 @@ export function dashboardColours(
 ): DashboardColours {
   /** Chart ids in document order: pages, then sections and tab groups within. */
   const chartIds: string[] = [];
+  /** The measures Text tiles' sparklines draw, in document and text order. */
+  const sparklineMeasures: string[] = [];
   const walk = (items: DashboardDocument['pages'][number]['items']) => {
     for (const element of items) {
       if (isSection(element)) walk(element.items);
@@ -59,6 +67,12 @@ export function dashboardColours(
         for (const tab of element.tabs) walk(tab.items);
       } else if (element.kind === 'chart' && element.chartId !== undefined) {
         chartIds.push(element.chartId);
+      } else if (element.kind === 'text' && element.document !== undefined) {
+        for (const node of elementsOf(element.document)) {
+          const measure = node.attrs?.['measure'];
+          if (node.type === 'sparkline' && typeof measure === 'string')
+            sparklineMeasures.push(measure);
+        }
       }
     }
   };
@@ -96,6 +110,8 @@ export function dashboardColours(
   const claimed = assignment.assigned();
 
   const coloured: Record<string, RenderSpec> = {};
+  /** The colour a single-series chart draws its measure in, the first such chart deciding. */
+  const drawnAlone: Record<string, string> = {};
   for (const chartId of chartIds) {
     const spec = specs[chartId];
     if (spec === undefined) continue;
@@ -111,9 +127,21 @@ export function dashboardColours(
     const given = alone === undefined ? undefined : (chosen[alone] ?? claimed[alone]);
     if (alone !== undefined && given !== undefined && given !== OTHER_COLOUR)
       colours[alone] = given;
+    if (alone !== undefined && !(alone in drawnAlone))
+      drawnAlone[alone] = colours[alone] ?? DEFAULT_PALETTE[0] ?? OTHER_COLOUR;
     coloured[chartId] = { ...spec, colours };
   }
-  return { specs: coloured, assigned: claimed };
+
+  // A sparkline's measure: the colour a tile chose for it, or a chart gives it
+  // as a series or draws it alone in; else it claims a slot of its own, after
+  // every chart's, so no chart's colours move and two measures never share one.
+  const members: Record<string, string> = {};
+  for (const measure of sparklineMeasures) {
+    if (measure in members) continue;
+    members[measure] =
+      chosen[measure] ?? claimed[measure] ?? drawnAlone[measure] ?? assignment.colourFor(measure);
+  }
+  return { specs: coloured, assigned: assignment.assigned(), members };
 }
 
 const sameAssignment = (a: Record<string, string>, b: Record<string, string>) => {
@@ -157,12 +185,4 @@ export function useDashboardColourAssignment(
   if (!sameAssignment(coloured.assigned, assigned)) setAssigned(coloured.assigned);
 
   return coloured;
-}
-
-/**
- * A member's dashboard colour (AC-039): the one it was given, else the next
- * the palette has free, as the next chart to draw it would give it.
- */
-export function colourOfMember(assigned: Readonly<Record<string, string>>, member: string): string {
-  return assignColours(DEFAULT_PALETTE, assigned).colourFor(member);
 }

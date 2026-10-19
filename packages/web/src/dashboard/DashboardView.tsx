@@ -1,4 +1,10 @@
-import { keyToMarking, markFromLegend, markFromPanel, nameWriter } from '@wechart/charts';
+import {
+  DEFAULT_PALETTE,
+  keyToMarking,
+  markFromLegend,
+  markFromPanel,
+  nameWriter,
+} from '@wechart/charts';
 import { COLORS } from '@wechart/ui';
 import {
   addItemsWithinLimit,
@@ -75,7 +81,7 @@ import { hiddenMemberOf, TileUnavailable } from '../tiles/TileUnavailable';
 import { accelerationOf } from '../tiles/AccelerationBadge';
 import { RollupRefreshNote } from '../tiles/RollupRefreshNote';
 import { TileSkeleton } from '../tiles/TileSkeleton';
-import { colourOfMember, useDashboardColourAssignment } from './colours';
+import { useDashboardColourAssignment } from './colours';
 import { AddPanel } from './edit/AddPanel';
 import {
   CHART_MISSING,
@@ -3977,7 +3983,7 @@ export function DashboardView({
   // does not hand its colour to whoever is now first (AC-039).
   // The dashboard as the session has it: a tile added in it — a duplicate's
   // copy (T068) — is drawn, and coloured, before the dashboard is saved.
-  const { specs: coloured, assigned: colourAssignment } = useDashboardColourAssignment(
+  const { specs: coloured, members: sparklineColours } = useDashboardColourAssignment(
     live,
     withMarkings,
   );
@@ -4906,7 +4912,7 @@ export function DashboardView({
             attrs={attrs}
             formats={formats}
             // Its measure's dashboard colour (AC-039, AC-521).
-            colour={colourOfMember(colourAssignment, measure)}
+            colour={sparklineColours[measure] ?? DEFAULT_PALETTE[0]}
             context={preview}
           />
         );
