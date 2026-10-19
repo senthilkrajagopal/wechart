@@ -2343,11 +2343,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T982 (AC-598) Draw one line per member over min-to-max axes, the scale warning as text, and at most 1,000 lines with the cut said
 
-- [ ] T983 (AC-599) Brush along parallel axes to mark the members passing every brushed range, as a member list of at most 1,000, and cross-filter to them
-  - Files: `packages/charts/src/interaction/parallelBrush.ts` (+ test), `packages/charts/src/series/parallel.ts`.
-  - Failing test: `parallelBrush.test.ts`: brushing Margin % 22–26 % marks the 6 Products inside it; adding Return rate 0–2 % with Ctrl keeps both brushes and marks the 4 passing both; the stored marking is a Product list; the chip reads "Product: 6 brushed in Margin %" (AC-599).
-  - Depends on: T982
-  - Waits on: research: ECharts 6.1's `parallel` brush events (`axisareaselected` and what it reports).
+- [x] T983 (AC-599) Brush along parallel axes to mark the members passing every brushed range, as a member list of at most 1,000, and cross-filter to them
 
 - [ ] T984 (AC-600) A From and a To slider per parallel axis, named after its measure, setting its brush from the keyboard
   - Files: `packages/web/src/tiles/ParallelSliders.tsx` (+ test).

@@ -1,9 +1,12 @@
 import {
+  brushedWords,
   DEFAULT_PALETTE,
   keyToMarking,
   markFromLegend,
   markFromPanel,
+  membersBrushed,
   nameWriter,
+  withBrush,
 } from '@wechart/charts';
 import { COLORS } from '@wechart/ui';
 import {
@@ -47,6 +50,7 @@ import {
   drillOptions,
   granularitiesOf,
   type MemberFormats,
+  type ParallelBrush,
   type RenderSpec,
   CHART_TYPE_NAMES,
   withMemberLabels,
@@ -645,6 +649,16 @@ function withKeyboardItem(
   return spec === undefined || item === undefined ? spec : { ...spec, keyboardFocus: item };
 }
 
+/** Parallel coordinates' brushes in effect on a tile, drawn as bands (T983, AC-599). */
+function withBrushes(
+  spec: RenderSpec | undefined,
+  brushes: readonly ParallelBrush[] | undefined,
+): RenderSpec | undefined {
+  return spec === undefined || brushes === undefined || brushes.length === 0
+    ? spec
+    : { ...spec, parallelBrushes: brushes };
+}
+
 function TileBody({
   tile,
   spec,
@@ -663,6 +677,7 @@ function TileBody({
   onItemClick,
   onShapeMark,
   onAxisRange,
+  onBrush,
   rangeStripes,
   onContextMenuAt,
   rowMarking,
@@ -707,6 +722,8 @@ function TileBody({
   onShapeMark?: ChartTileProps['onShapeMark'];
   /** A drag along its x axis, in a marking's range mode (T386, AC-093). */
   onAxisRange?: ChartTileProps['onAxisRange'];
+  /** A drag along a parallel axis, brushing it (T983, AC-599). */
+  onBrush?: ChartTileProps['onBrush'];
   /** Its marking's ranges, striped along its x axis (AC-093). */
   rangeStripes?: ChartTileProps['rangeStripes'];
   /** A right-click on its chart: its menu, at the pointer (T266, AC-246). */
@@ -890,6 +907,7 @@ function TileBody({
           {...(onItemClick === undefined ? {} : { onItemClick })}
           {...(onShapeMark === undefined ? {} : { onShapeMark })}
           {...(onAxisRange === undefined ? {} : { onAxisRange })}
+          {...(onBrush === undefined ? {} : { onBrush })}
           {...(rangeStripes === undefined ? {} : { rangeStripes })}
           {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
@@ -1088,6 +1106,15 @@ interface TileCharts {
     | ((tileId: string, chartId: string, range: { from: string; to: string }, add: boolean) => void)
     | undefined;
   readonly rangeMarks?: ((tileId: string, chartId: string) => boolean) | undefined;
+  /**
+   * A drag along a parallel-coordinates tile's axis (T983, AC-599): a brush,
+   * marking the members passing every brush, or, cross-filtering, filtering
+   * the other tiles to them; Ctrl or ⌘ adds it to the tile's brushes.
+   */
+  readonly onBrush?:
+    ((tileId: string, chartId: string, brush: ParallelBrush, add: boolean) => void) | undefined;
+  /** The brushes in effect on a tile, while what they marked or filtered still stands. */
+  readonly brushesOn?: ((tileId: string) => readonly ParallelBrush[] | undefined) | undefined;
   /** The marked ranges to stripe along a tile's x axis (AC-093). */
   readonly rangeStripesOn?:
     | ((
@@ -1761,7 +1788,10 @@ function Elements({
               // A drilled view marks nothing, so draws no keyboard item (T270, T306).
               spec={
                 drill === undefined
-                  ? withKeyboardItem(charts.specs[chartId], charts.keyboardFocusOn?.(element.id))
+                  ? withBrushes(
+                      withKeyboardItem(charts.specs[chartId], charts.keyboardFocusOn?.(element.id)),
+                      charts.brushesOn?.(element.id),
+                    )
                   : drill.spec
               }
               error={drill === undefined ? charts.errors[chartId] : drill.error}
@@ -1878,6 +1908,16 @@ function Elements({
                 : {
                     onAxisRange: (range: { from: string; to: string }, add: boolean) => {
                       charts.onMarkRange?.(element.id, chartId, range, add);
+                    },
+                  })}
+              // Parallel coordinates' brush, marking or cross-filtering (T983, AC-599).
+              {...(charts.onBrush === undefined ||
+              drill !== undefined ||
+              charts.specs[chartId]?.chartType !== 'parallel'
+                ? {}
+                : {
+                    onBrush: (brush: ParallelBrush, add: boolean) => {
+                      charts.onBrush?.(element.id, chartId, brush, add);
                     },
                   })}
               {...(() => {
@@ -2854,15 +2894,18 @@ export function DashboardView({
       string,
       {
         from: string;
-        part: { member: string; value: string };
+        part: { member: string; value: string; values?: readonly string[] };
         chartIds: string[];
         textIds: string[];
       }
     >();
-    // A tuple's every member, each a filter (a Sankey link, T988, AC-612).
+    // A tuple's every member, each a filter (a Sankey link, T988, AC-612); a
+    // brush's every member passing it, as one (T983, AC-599).
     const entriesOf = (selection: CrossSelection) =>
-      selectionParts(selection).map((part) => {
-        const key = `${selection.from}:${part.member}:${part.value}`;
+      selectionParts(selection).map((one, at) => {
+        const part: { member: string; value: string; values?: readonly string[] } =
+          at === 0 && selection.values !== undefined ? { ...one, values: selection.values } : one;
+        const key = `${selection.from}:${part.member}:${JSON.stringify(part.values ?? part.value)}`;
         const entry = byKey.get(key) ?? {
           from: selection.from,
           part,
@@ -2890,7 +2933,7 @@ export function DashboardView({
         member: part.member,
         scope: { kind: 'tiles' as const, tileIds: [...tilesOf(chartIds), ...textIds] },
       },
-      value: { kind: 'values' as const, values: [part.value] },
+      value: { kind: 'values' as const, values: [...(part.values ?? [part.value])] },
     }));
   }, [crossEffects, live]);
 
@@ -3224,8 +3267,10 @@ export function DashboardView({
     [setCrossSelections],
   );
   /** A cross-filter in words, by its field's title: "Category is Beverages". */
-  const crossWords = (selection: Pick<CrossSelection, 'member' | 'value' | 'also'>) =>
-    // A tuple's every member (T988, AC-612): "Channel is Web and Region is EMEA".
+  const crossWords = (selection: Pick<CrossSelection, 'member' | 'value' | 'also' | 'words'>) =>
+    // A brush's own words (T983, AC-599); a tuple's every member (T988,
+    // AC-612): "Channel is Web and Region is EMEA".
+    selection.words ??
     selectionParts(selection)
       .map((part) => `${memberTitle?.(part.member) ?? part.member} is ${String(part.value)}`)
       .join(' and ');
@@ -3396,6 +3441,88 @@ export function DashboardView({
         }),
       );
     }
+  };
+
+  /**
+   * Parallel coordinates' brushes, by tile (T983, AC-599; decision T983-1):
+   * held here, not stored — what is stored is what they marked, a member
+   * list — with what they marked or filtered, so they are drawn only while
+   * that still stands.
+   */
+  const [brushed, setBrushed] = useState<
+    Readonly<Record<string, { readonly brushes: readonly ParallelBrush[]; readonly made: string }>>
+  >({});
+  const brushesOn = (tileId: string): readonly ParallelBrush[] | undefined => {
+    const held = brushed[tileId];
+    if (held === undefined) return undefined;
+    if (crossFiltering) {
+      const selection = crossSelections.find((each) => each.from === tileId);
+      return JSON.stringify(selection?.values ?? null) === held.made ? held.brushes : undefined;
+    }
+    const tile = elementAt(live, tileId);
+    const markingId = tile !== null && isTile(tile) ? marksWithOf(tile) : undefined;
+    if (!marking || markingId === undefined) return undefined;
+    return JSON.stringify(markingOf(marks, markingId).items) === held.made
+      ? held.brushes
+      : undefined;
+  };
+  /**
+   * A drag along a parallel axis (T983, AC-599): a brush, plain replacing
+   * the tile's others and with Ctrl or ⌘ added to them; the members whose
+   * lines pass through every brush are the tile's marking, a member list of
+   * at most 1,000 (AC-102), or, cross-filtering, what the other tiles are
+   * filtered to, in one chip ("Product: 6 brushed in Margin %").
+   */
+  const onBrush = (tileId: string, chartId: string, brush: ParallelBrush, add: boolean) => {
+    const spec = withFiltered.specs[chartId] ?? drawn.specs[chartId];
+    const lineBy = spec === undefined ? undefined : memberOn(spec.encoding, 'x');
+    if (spec === undefined || lineBy === undefined) return;
+    const brushes = withBrush(brushesOn(tileId) ?? [], brush, add);
+    const members = membersBrushed(spec, brushes);
+    // In the model's titles, as the tile draws them (AC-220).
+    const words = brushedWords(formatted[chartId] ?? spec, brushes, members.length);
+    const from = chartTitleOf(chartId);
+
+    if (crossFiltering) {
+      const values = members.map((member) => String(member));
+      const [first] = values;
+      setCrossSelections((before) => {
+        const others = before.filter((each) => each.from !== tileId);
+        return first === undefined
+          ? others
+          : [...others, { from: tileId, member: lineBy, value: first, values, words }];
+      });
+      setBrushed((before) => ({
+        ...before,
+        [tileId]: { brushes, made: JSON.stringify(first === undefined ? null : values) },
+      }));
+      sayAfresh(setCrossSaid, filterChangeSaid({ kind: 'cross-filter', what: words, from }));
+      return;
+    }
+
+    const tile = elementAt(live, tileId);
+    const markingId = tile !== null && isTile(tile) ? marksWithOf(tile) : undefined;
+    if (markingId === undefined) return;
+    const grown = addItemsWithinLimit(
+      { ...EMPTY_PREDICATE },
+      members.map((member) => [{ member: lineBy, value: member as string | number }]),
+    );
+    setMarks((now) => withMarking(now, markingId, grown.predicate));
+    noteSource(markingId, tileId);
+    setBrushed((before) => ({
+      ...before,
+      [tileId]: { brushes, made: JSON.stringify(grown.predicate.items) },
+    }));
+    const named = markings.find((each) => each.id === markingId);
+    const said =
+      named === undefined
+        ? undefined
+        : announceMarking({
+            marking: named,
+            markedCount: markedCount(grown.predicate),
+            ...(from === undefined ? {} : { tileName: from }),
+          });
+    setMarkSaid([`${words}.`, said, grown.message].filter((part) => part !== undefined).join(' '));
   };
 
   /**
@@ -4393,6 +4520,8 @@ export function DashboardView({
      * a click picks the tile up.
      */
     ...(crossFiltering ? { onItemClick: onItemClickSaid } : {}),
+    // Parallel coordinates' brush, in either mode (T983, AC-599).
+    ...(crossFiltering || marking ? { onBrush, brushesOn } : {}),
     ...(marking
       ? {
           onMarkClick,

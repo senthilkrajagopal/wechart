@@ -9,6 +9,7 @@ import {
 import { isTrellisType } from '../layout/trellis';
 import { isBoxplotType } from '../series/boxplot';
 import { isHeatmapType } from '../series/heatmap';
+import { isParallelType } from '../series/parallel';
 import { isSankeyType, withSankeyMarks } from '../series/sankey';
 import { isScatterType, scatterSeriesOf } from '../series/scatter';
 import type { EChartsOption } from '../theme';
@@ -50,6 +51,9 @@ export function withMarks(option: EChartsOption, spec: RenderSpec): EChartsOptio
   // A Sankey's flows and nodes by their rows as drawn, partly marked flows
   // keeping their width (T988, AC-612).
   if (isSankeyType(spec.chartType)) return withSankeyMarks(option, spec);
+  // A parallel-coordinate line by its member: marked at full strength, the
+  // rest faded (T983, AC-599).
+  if (isParallelType(spec.chartType)) return withParallelMarks(option, spec);
   // Its items partly marked, where the marked share was answered apart (T387).
   if (drawsPartialMarks(spec)) return withPartialMarks(option, spec);
 
@@ -234,3 +238,49 @@ function colourOfSeries(one: Series): string {
   const style = one['itemStyle'] as { color?: string } | undefined;
   return style?.color ?? '';
 }
+
+/**
+ * Parallel coordinates under a marking (T983, AC-599): each line by the row
+ * of the member it carries, at full strength where the marking holds it and
+ * at 0.28 of its own opacity where it doesn't; nothing faded where the
+ * marking holds nothing.
+ */
+function withParallelMarks(option: EChartsOption, spec: RenderSpec): EChartsOption {
+  const marking = spec.marking;
+  if (marking === undefined) return option;
+  if (marking.whole !== true && isEmptyPredicate(marking.predicate)) return option;
+  const lineBy = memberOn(spec.encoding, 'x');
+  if (lineBy === undefined) return option;
+  const rowOf = new Map<string, Row>();
+  for (const row of spec.rows) {
+    const key = String(row[lineBy] ?? '');
+    if (!rowOf.has(key)) rowOf.set(key, row);
+  }
+  const series = (option['series'] as Series[] | undefined) ?? [];
+  return {
+    ...option,
+    series: series.map((one) => {
+      const own = numberOrOne((one['lineStyle'] as { opacity?: unknown } | undefined)?.opacity);
+      return {
+        ...one,
+        data: (one.data ?? []).map((item) => {
+          const object = asObject(item);
+          const marks = object['marks'] as readonly { value?: unknown }[] | undefined;
+          const row = rowOf.get(String(marks?.[0]?.value ?? ''));
+          if (row === undefined) return item;
+          const marked = marking.whole === true || matchesPredicate(marking.predicate, row);
+          return {
+            ...object,
+            lineStyle: {
+              ...((object['lineStyle'] as object | undefined) ?? {}),
+              opacity: marked ? 1 : own * UNMARKED_OPACITY,
+            },
+          };
+        }),
+      };
+    }),
+  };
+}
+
+const numberOrOne = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 1;

@@ -162,6 +162,10 @@ const NAME_INK = COLORS.light['text-secondary'];
 
 const widthOf = (text: string): number => format.getTextRect(text, TITLE_FONT).width;
 
+/** A brush's band: 10 px across its axis, the marking's colour at 0.3, as ECharts' own is drawn. */
+const BRUSH_PX = 10;
+const BRUSH_OPACITY = 0.3;
+
 /**
  * Heights moved apart so no two are nearer than `gap`, each as near its own
  * as that allows, within `[top, bottom]`: pushed down in order of height,
@@ -258,6 +262,10 @@ export function parallelOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS
       max,
       // Ticks at the two ends alone: the axis is read by its ends, not a grid.
       interval: max - min,
+      // ECharts' own brush kept from starting: wechart brushes (T983,
+      // research/echarts-parallel-brush.md), and a band of no width holds
+      // no pointer.
+      areaSelectStyle: { width: 0 },
       axisTick: { show: false },
       axisLine: { lineStyle: { width: 1 } },
       // Its minimum, under the axis's lower end; no other tick is labelled.
@@ -275,6 +283,17 @@ export function parallelOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS
   const lineOf = (row: Row) => ({
     name: name === undefined ? '' : name(row[lineBy ?? '']),
     value: axes.map((member) => numberOf(row[member])),
+    // What a click on it marks: its member, as the row holds it (AC-599).
+    ...(lineBy === undefined
+      ? {}
+      : {
+          marks: [
+            {
+              member: lineBy,
+              value: typeof row[lineBy] === 'number' ? row[lineBy] : String(row[lineBy] ?? ''),
+            },
+          ],
+        }),
   });
   const lineStyle = (colourOf: string) => ({
     width: PARALLEL_LINE_PX,
@@ -343,13 +362,39 @@ export function parallelOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS
     },
   }));
 
+  // Each brush in effect as a band on its axis, in the marking's colour
+  // (T983, AC-599), under the lines' names.
+  const bands = (spec.parallelBrushes ?? []).flatMap((brush) => {
+    const at = axes.indexOf(brush.member);
+    if (at < 0) return [];
+    const { min, max } = ends[at]!;
+    const yOf = (value: number) => PLOT_TOP_PX + ((max - value) / (max - min || 1)) * plotHeight;
+    const [top, bottom] = [yOf(Math.min(brush.to, max)), yOf(Math.max(brush.from, min))];
+    return [
+      {
+        type: 'rect' as const,
+        name: 'parallel-brush',
+        silent: true,
+        z: 0,
+        shape: {
+          x: left + at * apart - BRUSH_PX / 2,
+          y: top,
+          width: BRUSH_PX,
+          height: Math.max(bottom - top, 1),
+        },
+        style: { fill: spec.marking?.colour ?? NAME_INK, opacity: BRUSH_OPACITY },
+      },
+    ];
+  });
+  const drawnGraphic = [...bands, ...graphic];
+
   return {
     animation: false,
     // Room above for each axis's two-line title, below for its minimum, and
     // at each side for half the outer axes' widest text, or at the right for
     // the lines' names.
     parallel: { left, right, top: PLOT_TOP_PX, bottom: PLOT_BOTTOM_PX },
-    ...(graphic.length === 0 ? {} : { graphic }),
+    ...(drawnGraphic.length === 0 ? {} : { graphic: drawnGraphic }),
     parallelAxis,
     series,
   };

@@ -49,6 +49,8 @@ export interface ChartTileProps {
   readonly onShapeMark?: ChartCanvasProps['onShapeMark'];
   /** A drag along the x axis, where the tile's marking is in range mode (T386, AC-093). */
   readonly onAxisRange?: ChartCanvasProps['onAxisRange'];
+  /** A drag along a parallel axis, brushing it (T983, AC-599). */
+  readonly onBrush?: ChartCanvasProps['onBrush'];
   /** The marked ranges shown as stripes along the x axis (AC-093). */
   readonly rangeStripes?: ChartCanvasProps['rangeStripes'];
   /** A right-click on the chart: its menu, at the pointer (T266, AC-246). */
@@ -166,6 +168,7 @@ interface ChartBodyProps {
   /** A shape dragged over it, while the tile marks (AC-088). */
   readonly onShapeMark?: ChartCanvasProps['onShapeMark'];
   readonly onAxisRange?: ChartCanvasProps['onAxisRange'];
+  readonly onBrush?: ChartCanvasProps['onBrush'];
   readonly rangeStripes?: ChartCanvasProps['rangeStripes'];
   readonly onContextMenuAt?: ChartCanvasProps['onContextMenuAt'];
   readonly legendOverlay?: ChartCanvasProps['legendOverlay'];
@@ -197,6 +200,7 @@ function ChartBody({
   onItemClick,
   onShapeMark,
   onAxisRange,
+  onBrush,
   rangeStripes,
   onContextMenuAt,
   legendOverlay,
@@ -274,6 +278,7 @@ function ChartBody({
         {...(onItemClick === undefined ? {} : { onItemClick })}
         {...(onShapeMark === undefined ? {} : { onShapeMark })}
         {...(onAxisRange === undefined ? {} : { onAxisRange })}
+        {...(onBrush === undefined ? {} : { onBrush })}
         {...(rangeStripes === undefined ? {} : { rangeStripes })}
         {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
         {...(legendOverlay === undefined ? {} : { legendOverlay })}
@@ -306,6 +311,7 @@ export function ChartTile({
   onItemClick,
   onShapeMark,
   onAxisRange,
+  onBrush,
   rangeStripes,
   onContextMenuAt,
   legendOverlay,
@@ -518,6 +524,7 @@ export function ChartTile({
           {...(onItemClick === undefined ? {} : { onItemClick })}
           {...(onShapeMark === undefined ? {} : { onShapeMark })}
           {...(onAxisRange === undefined ? {} : { onAxisRange })}
+          {...(onBrush === undefined ? {} : { onBrush })}
           {...(rangeStripes === undefined ? {} : { rangeStripes })}
           {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
           {...(legendOverlay === undefined ? {} : { legendOverlay })}

@@ -406,24 +406,23 @@ async function sankeyDashboard(request: APIRequestContext, mode: 'markings' | 'c
 
 /** A place inside a Sankey's link (its first, or the nth) that no other link covers, on the page. */
 async function insideALink(page: Page, tile: string, nth = 0): Promise<{ x: number; y: number }> {
-  const spot = await page
-    .locator(`[data-tile="${tile}"] svg path[fill-opacity]`)
-    .nth(nth)
-    .evaluate((shape) => {
-      const path = shape as SVGGeometryElement;
-      const box = path.getBBox();
-      const matrix = path.getScreenCTM();
-      if (matrix === null) return undefined;
-      // The middle of the band where it crosses its middle, clear of its edges.
-      const inside: { x: number; y: number }[] = [];
-      for (let y = box.y; y <= box.y + box.height; y += 0.5) {
-        const point = new DOMPoint(box.x + box.width / 2, y);
-        if (!path.isPointInFill(point)) continue;
-        const at = point.matrixTransform(matrix);
-        if (document.elementFromPoint(at.x, at.y) === path) inside.push({ x: at.x, y: at.y });
-      }
-      return inside[Math.floor(inside.length / 2)];
-    });
+  const links = page.locator(`[data-tile="${tile}"] svg path[fill-opacity]`);
+  await links.nth(nth).scrollIntoViewIfNeeded();
+  const spot = await links.nth(nth).evaluate((shape) => {
+    const path = shape as SVGGeometryElement;
+    const box = path.getBBox();
+    const matrix = path.getScreenCTM();
+    if (matrix === null) return undefined;
+    // The middle of the band where it crosses its middle, clear of its edges.
+    const inside: { x: number; y: number }[] = [];
+    for (let y = box.y; y <= box.y + box.height; y += 0.5) {
+      const point = new DOMPoint(box.x + box.width / 2, y);
+      if (!path.isPointInFill(point)) continue;
+      const at = point.matrixTransform(matrix);
+      if (document.elementFromPoint(at.x, at.y) === path) inside.push({ x: at.x, y: at.y });
+    }
+    return inside[Math.floor(inside.length / 2)];
+  });
   if (spot === undefined) throw new Error('no place inside a link');
   return spot;
 }
@@ -517,9 +516,210 @@ test('a Sankey marks a link as its tuple and a node as its member, says a marked
   await page.goto(`/explore/dashboards/${crossing.id}`);
   await expect(page.getByRole('heading', { name: crossing.title })).toBeVisible();
   await expect(sankey.locator('svg path[fill-opacity="0.4"]').first()).toBeVisible();
+  // Laid out once its links stand still.
+  await expect
+    .poll(() => sankey.locator('svg path[fill-opacity="0.4"]').first().boundingBox())
+    .not.toBeNull();
   const crossLink = await insideALink(page, 'tile-sankey');
   await page.mouse.click(crossLink.x, crossLink.y);
   const chips = page.getByTestId('cross-filter-chip');
   await expect(chips).toHaveCount(1);
   await expect(chips.locator('.cross-chip__what')).toHaveText(/^.*Status: \S+ · .*Category: .+$/);
+});
+
+/** A dashboard of parallel coordinates (customers across three measures) and a bar by country. */
+async function parallelDashboard(request: APIRequestContext, mode: 'markings' | 'crossFilter') {
+  const title = `Parallel ${mode} ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/api/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const items = [];
+  for (const [tile, chartType, measures, dimensions] of [
+    [
+      'tile-parallel',
+      'parallel',
+      ['orders.count', 'orders.total_amount', 'orders.average_amount'],
+      // A line an order: 240 of them, enough to brush.
+      ['orders.id'],
+    ],
+    ['tile-country', 'bar', ['orders.count'], ['customers.country']],
+  ] as const) {
+    const chart = (await (
+      await request.post(`${API}/api/documents`, {
+        data: { kind: 'chart', title: tile, ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`${API}/api/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: tile,
+          owner: 'admin',
+          localToDashboardId: dashboard.id,
+          chart: {
+            source: { cube: 'orders' },
+            wells: { measures: [...measures], dimensions: [...dimensions], timeDimensions: [] },
+            chartType,
+          },
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    items.push({ id: tile, kind: 'chart', w: 6, h: 40, chartId: chart.id });
+  }
+  const placed = await request.put(`${API}/api/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: {
+          width: 'fixed',
+          interactions:
+            mode === 'markings'
+              ? { mode: 'markings' }
+              : { mode: 'crossFilter', crossFilter: { defaultAction: 'filter' } },
+        },
+        markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
+        pages: [{ id: 'only', title: 'Only', items }],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  return { id: dashboard.id, title };
+}
+
+/**
+ * Each line of a parallel tile as drawn — in the page a 1.5 px path through
+ * the axes (T982's e2e) — its points on the page, axis by axis, and its opacity.
+ */
+const linesOf = (page: Page, tile: string) =>
+  page
+    .locator(`[data-tile="${tile}"] svg path[stroke-width="1.5"][fill="none"]`)
+    .evaluateAll((all) =>
+      all.map((line) => {
+        const matrix = (line as SVGGraphicsElement).getScreenCTM();
+        const numbers = (line.getAttribute('d') ?? '').match(/-?[\d.]+/g)?.map(Number) ?? [];
+        const points: { x: number; y: number }[] = [];
+        for (let at = 0; at + 1 < numbers.length; at += 2) {
+          const point = new DOMPoint(numbers[at], numbers[at + 1]);
+          const on = matrix === null ? point : point.matrixTransform(matrix);
+          points.push({ x: on.x, y: on.y });
+        }
+        return { points, opacity: Number(line.getAttribute('stroke-opacity') ?? 1) };
+      }),
+    );
+
+/** A press, a path and a release, with the keys held throughout. */
+async function dragAlong(
+  page: Page,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  keys: 'ControlOrMeta'[] = [],
+) {
+  for (const key of keys) await page.keyboard.down(key);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 6 });
+  await page.mouse.up();
+  for (const key of keys) await page.keyboard.up(key);
+}
+
+/**
+ * T983 / AC-599: THE SYSTEM SHALL mark a parallel-coordinate line as its
+ * member on a click; and WHEN the author drags along an axis, brush that
+ * range, marking the members whose lines pass through every brushed range,
+ * Ctrl/⌘ adding a brush, stored as a member list of at most 1,000 (AC-102),
+ * not a measure range; and as a cross-filter source filter the others to the
+ * brushed members with one chip ("Product: 6 brushed in Margin %").
+ * `Fails when: a member whose line misses a brushed range is marked; the
+ * marking stores a measure range; a second brush replaces the first while
+ * Ctrl/⌘ is held; or the chip reads otherwise.`
+ */
+test('parallel coordinates mark a line by a click, brush along axes with Ctrl adding a brush, and cross-filter by the brushed members', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await parallelDashboard(request, 'markings');
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-parallel"]');
+  const badge = tile.getByTestId('mark-badge');
+  const drawnLines = tile.locator('svg path[stroke-width="1.5"][fill="none"]');
+  await expect(drawnLines.first()).toBeVisible();
+  const lines = await linesOf(page, 'tile-parallel');
+  expect(lines.length).toBeGreaterThan(5);
+  const base = lines[0]!.opacity;
+
+  // Where each axis stands, and its ends: the highest and lowest of its lines.
+  const axis = (at: number) => {
+    const ys = lines.map((line) => line.points[at]!.y);
+    return { x: lines[0]!.points[at]!.x, top: Math.min(...ys), bottom: Math.max(...ys) };
+  };
+  /** The lines whose point on this axis is between these heights, inclusive. */
+  const within = (at: number, top: number, bottom: number, slack: number) =>
+    lines
+      .map((line, index) => ({ index, y: line.points[at]!.y }))
+      .filter(({ y }) => y >= top - slack && y <= bottom + slack)
+      .map(({ index }) => index);
+
+  // A click on a line marks its member.
+  const lonely = lines[0]!.points[0]!;
+  await page.mouse.click(lonely.x, lonely.y);
+  await expect(badge).toContainText('1 marked');
+
+  // A drag along Total Amount brushes it: the lines through it, and only them.
+  const total = axis(1);
+  const [top, bottom] = [
+    total.top + (total.bottom - total.top) * 0.2,
+    total.top + (total.bottom - total.top) * 0.8,
+  ];
+  await dragAlong(page, { x: total.x, y: top }, { x: total.x, y: bottom });
+  const inside = within(1, top, bottom, -1);
+  const loose = within(1, top, bottom, 1);
+  expect(inside.length).toBeGreaterThan(1);
+  const count = async () =>
+    Number(/(\d+) marked/.exec((await badge.textContent()) ?? '')?.[1] ?? -1);
+  await expect.poll(count).toBeGreaterThanOrEqual(inside.length);
+  const marked = await count();
+  expect(marked).toBeGreaterThan(1);
+  expect(marked).toBeLessThanOrEqual(loose.length);
+  // Drawn: its band on the axis, the marked lines as they were, the rest faded.
+  await expect(tile.locator('svg path[fill-opacity="0.3"]')).toHaveCount(1);
+  const drawn = await linesOf(page, 'tile-parallel');
+  expect(drawn.filter((line) => line.opacity < base).length).toBe(lines.length - marked);
+
+  // With Ctrl, a brush on Average Amount is added, not in place of the first:
+  // the lines through both.
+  const average = axis(2);
+  const [low, high] = [
+    average.top + (average.bottom - average.top) * 0.4,
+    average.top + (average.bottom - average.top) * 1,
+  ];
+  await dragAlong(page, { x: average.x, y: low }, { x: average.x, y: high + 2 }, ['ControlOrMeta']);
+  await expect(tile.locator('svg path[fill-opacity="0.3"]')).toHaveCount(2);
+  const both = inside.filter((index) => within(2, low, high, -1).includes(index));
+  const bothLoose = loose.filter((index) => within(2, low, high, 1).includes(index));
+  await expect.poll(count).toBeLessThanOrEqual(Math.min(bothLoose.length, marked));
+  expect(await count()).toBeGreaterThanOrEqual(both.length);
+  // The marking is the members, said by name, not a range of an amount.
+  await expect(page.getByTestId('mark-chip')).toContainText(/ID: /);
+  await expect(page.getByTestId('mark-chip')).not.toContainText(/ to /);
+
+  // Cross-filtering, a brush filters the other tile to its members, in one chip.
+  const crossing = await parallelDashboard(request, 'crossFilter');
+  await page.goto(`/explore/dashboards/${crossing.id}`);
+  await expect(page.getByRole('heading', { name: crossing.title })).toBeVisible();
+  await expect(drawnLines.first()).toBeVisible();
+  await dragAlong(page, { x: total.x, y: top }, { x: total.x, y: bottom });
+  const chips = page.getByTestId('cross-filter-chip');
+  await expect(chips).toHaveCount(1);
+  await expect(chips.locator('.cross-chip__what')).toHaveText(
+    /^.*ID: \d+ brushed in .*Total Amount$/,
+  );
 });

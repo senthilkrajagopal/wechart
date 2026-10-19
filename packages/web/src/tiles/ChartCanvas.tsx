@@ -14,6 +14,7 @@ import {
   legendEntryAt,
   legendGlyphBoxes,
   optionFor,
+  parallelBrushOf,
   themed,
   withScrollKept,
   type Canvas,
@@ -21,7 +22,7 @@ import {
   type LegendGlyphBox,
   type Point,
 } from '@wechart/charts';
-import { seriesOf, type MarkingSlot, type RenderSpec } from '@wechart/core';
+import { seriesOf, type MarkingSlot, type ParallelBrush, type RenderSpec } from '@wechart/core';
 import { COLORS } from '@wechart/ui';
 import {
   useCallback,
@@ -77,6 +78,13 @@ export interface ChartCanvasProps {
    */
   readonly onAxisRange?: ((range: { from: string; to: string }, add: boolean) => void) | undefined;
   /**
+   * A drag along one of parallel coordinates' axes (T983, AC-599): the range
+   * of its measure it covers, and whether Ctrl or ⌘ was held, which adds the
+   * brush rather than replacing the others. In place of `onShapeMark` on
+   * parallel coordinates, whose lines a shape can't be read against.
+   */
+  readonly onBrush?: ((brush: ParallelBrush, add: boolean) => void) | undefined;
+  /**
    * The marked ranges to show as coloured stripes along the x axis (AC-093),
    * each in its marking's colour, placed from their stored bounds alone.
    */
@@ -127,6 +135,7 @@ export function ChartCanvas({
   onItemClick,
   onShapeMark,
   onAxisRange,
+  onBrush,
   rangeStripes,
   onContextMenuAt,
   describedBy,
@@ -211,6 +220,13 @@ export function ChartCanvas({
   useEffect(() => {
     ranged.current = onAxisRange;
   }, [onAxisRange]);
+  /** The latest, read at the end of a drag along a parallel axis (T983), with the spec it reads. */
+  const brushed = useRef(onBrush);
+  const brushedSpec = useRef(spec);
+  useEffect(() => {
+    brushed.current = onBrush;
+    brushedSpec.current = spec;
+  }, [onBrush, spec]);
   /**
    * Whether the press under way has become a drag (AC-088): its release is
    * then the end of a shape, never a click on empty plot area that would
@@ -392,6 +408,21 @@ export function ChartCanvas({
     let toggleOnRelease = false;
     const gesture = dragGesture((shape) => {
       /**
+       * Along a parallel axis (T983, AC-599): a range of its measure, read
+       * off the axes as laid out (`parallelBrushOf`); near no axis, nothing.
+       */
+      const onBrushed = brushed.current;
+      if (onBrushed !== undefined) {
+        const brush = parallelBrushOf(
+          brushedSpec.current,
+          chart.getOption() as EChartsOption,
+          { width: chart.getWidth(), height: chart.getHeight() },
+          shape,
+        );
+        if (brush !== undefined) onBrushed(brush, toggleOnRelease);
+        return;
+      }
+      /**
        * In range mode (T386, AC-093): the buckets under the drag's two ends,
        * read off the x axis as drawn (`convertFromPixel`, research/echarts.md).
        */
@@ -507,12 +538,17 @@ export function ChartCanvas({
     };
     element.addEventListener('contextmenu', onContextMenu);
     const onPress = (event: MouseEvent) => {
-      if (event.button !== 0 || (shaped.current === undefined && ranged.current === undefined))
+      if (
+        event.button !== 0 ||
+        (shaped.current === undefined &&
+          ranged.current === undefined &&
+          brushed.current === undefined)
+      )
         return;
       const box = element.getBoundingClientRect();
       origin = { left: box.left, top: box.top };
-      // A range is a span, never a lasso.
-      lasso = event.altKey && ranged.current === undefined;
+      // A range is a span, never a lasso; and so is a brush (T983).
+      lasso = event.altKey && ranged.current === undefined && brushed.current === undefined;
       dragging.current = false;
       const [x, y] = local(event);
       path = [[x, y]];
@@ -793,7 +829,7 @@ export function ChartCanvas({
       }
       // Positioned, so a shape being dragged is drawn over the chart (AC-088).
       style={{ height: `${String(height)}px`, width: '100%', position: 'relative' }}
-      data-marks-shapes={onShapeMark === undefined ? undefined : 'true'}
+      data-marks-shapes={onShapeMark === undefined && onBrush === undefined ? undefined : 'true'}
       // A drag marks a span of the x axis, in a marking's range mode (T386).
       data-marks-range={onAxisRange === undefined ? undefined : 'true'}
       /**

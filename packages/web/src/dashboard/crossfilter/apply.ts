@@ -27,6 +27,14 @@ export interface CrossSelection {
    * AC-612): each filters too, as one selection, said in one chip.
    */
   readonly also?: readonly { readonly member: string; readonly value: string }[];
+  /**
+   * Every value of its member it stands for, where it is more than one: the
+   * members a parallel-coordinates brush passes (T983, AC-599), `value` being
+   * the first. Said in one chip by `words`.
+   */
+  readonly values?: readonly string[];
+  /** Its chip's words, where its values are too many to list ("Product: 6 brushed in Margin %"). */
+  readonly words?: string;
 }
 
 /** A selection's members and values, its tuple's rest after its first. */
@@ -38,10 +46,13 @@ export function selectionParts(
 
 /** Whether two selections are the same one: every member and value alike. */
 export function sameSelection(
-  a: Pick<CrossSelection, 'member' | 'value' | 'also'>,
-  b: Pick<CrossSelection, 'member' | 'value' | 'also'>,
+  a: Pick<CrossSelection, 'member' | 'value' | 'also' | 'values'>,
+  b: Pick<CrossSelection, 'member' | 'value' | 'also' | 'values'>,
 ): boolean {
-  return JSON.stringify(selectionParts(a)) === JSON.stringify(selectionParts(b));
+  return (
+    JSON.stringify([selectionParts(a), a.values ?? []]) ===
+    JSON.stringify([selectionParts(b), b.values ?? []])
+  );
 }
 
 /**
@@ -49,9 +60,10 @@ export function sameSelection(
  * each with its value, "Channel: Web · Region: EMEA" (T988, AC-612).
  */
 export function crossChipWords(
-  selection: Pick<CrossSelection, 'member' | 'value' | 'also'>,
+  selection: Pick<CrossSelection, 'member' | 'value' | 'also' | 'words'>,
   memberTitle?: (member: string) => string | undefined,
 ): string {
+  if (selection.words !== undefined) return selection.words;
   const field = (member: string) => memberTitle?.(member) ?? member;
   if (selection.also === undefined || selection.also.length === 0)
     return `${field(selection.member)} = ${selection.value}`;

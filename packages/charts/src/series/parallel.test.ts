@@ -156,7 +156,12 @@ describe('parallel coordinates’ lines (T982, AC-598)', () => {
     expect(series!.type).toBe('parallel');
     expect(series!.lineStyle.width).toBe(1.5);
     expect(series!.lineStyle.opacity).toBe(1);
-    expect(series!.data[0]).toEqual({ name: 'Product 1', value: [1000, 0.1, 50] });
+    // Its member too, which a click on it marks (T983, AC-599).
+    expect(series!.data[0]).toEqual({
+      name: 'Product 1',
+      value: [1000, 0.1, 50],
+      marks: [{ member: 'products.name', value: 'Product 1' }],
+    });
   });
 
   it('draws 60 lines at 0.6, so crossings read', () => {

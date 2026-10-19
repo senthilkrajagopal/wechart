@@ -44,6 +44,12 @@ Lane CHARTS-B's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Failing test: `boxplotMarking.test.ts`: clicking a point marks its Order ID; a lasso over 1,200 points refuses as AC-102 says; a box marks its Region; (describe) adds "Points: every order, as a beeswarm. Violin: …"; (table view) "View points" lists the orders and their values (AC-593).
   - Depends on: T991
 
+- [x] T983 (AC-599) Brush along parallel axes to mark the members passing every brushed range, as a member list of at most 1,000, and cross-filter to them
+  - Files: `packages/charts/src/interaction/parallelBrush.ts` (+ test), `packages/charts/src/series/parallel.ts`.
+  - Failing test: `parallelBrush.test.ts`: brushing Margin % 22–26 % marks the 6 Products inside it; adding Return rate 0–2 % with Ctrl keeps both brushes and marks the 4 passing both; the stored marking is a Product list; the chip reads "Product: 6 brushed in Margin %" (AC-599).
+  - Depends on: T982
+  - Waits on: research: ECharts 6.1's `parallel` brush events (`axisareaselected` and what it reports).
+
 - [x] T987 (AC-611) Draw the Sankey's nodes and links, split a repeated member as "‹member› (2)", and fold flows past 50 into "Other"
   - Files: `packages/charts/src/series/sankey.ts` (+ test).
   - Failing test: `sankey.test.ts` (series): nodes 12 px wide; the colouring step's nodes in their members' colours, others `text-secondary`; links at 0.4, emphasis 0.6; EMEA in steps 1 and 3 yields a node "EMEA (2)" and the note; 214 flows keep each step's members carrying its top 50 and fold the rest into "Other" with the note (AC-611).

@@ -294,6 +294,20 @@ export interface RenderSpec {
    * while the tile has the keyboard; absent otherwise.
    */
   readonly keyboardFocus?: string | undefined;
+  /**
+   * Parallel coordinates' brushes in effect (T983, AC-599): a range a
+   * measure's axis, drawn as bands on its axes; the members passing all of
+   * them are what the tile marks or filters by. Held by the dashboard, not
+   * stored: the marking is the members.
+   */
+  readonly parallelBrushes?: readonly ParallelBrush[];
+}
+
+/** One brush along a parallel axis: its measure, from and to in its own units, inclusive. */
+export interface ParallelBrush {
+  readonly member: string;
+  readonly from: number;
+  readonly to: number;
 }
 
 export interface ChartMarking {

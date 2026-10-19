@@ -186,7 +186,8 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
   }
   // A Sankey's node is its member and its link its tuple (AC-612); "Other",
   // or anything else that carries nothing, is no member of anything.
-  if (spec.chartType === 'sankey') {
+  // A parallel-coordinate line is its member as its row holds it (T983, AC-599).
+  if (spec.chartType === 'sankey' || (spec.chartType === 'parallel' && item.marks !== undefined)) {
     const [first, ...rest] = item.marks ?? [];
     if (first === undefined) return undefined;
     const said = (part: MarkedItem[number]) => ({
@@ -226,7 +227,8 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
  */
 export function clickedMarkItem(spec: RenderSpec, item: ClickedItem): MarkedItem | undefined {
   // What the item stands for as drawn, its values as its rows hold them (AC-612).
-  if (spec.chartType === 'sankey') return item.marks;
+  if (spec.chartType === 'sankey' || (spec.chartType === 'parallel' && item.marks !== undefined))
+    return item.marks;
   const clicked = clickedValue(spec, item);
   if (clicked === undefined) return undefined;
   // A point's entity as its row holds it, so the row matches (AC-593).

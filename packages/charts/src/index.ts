@@ -67,6 +67,14 @@ export {
 } from './interaction/itemClick';
 export { insideShape, touchesSpan, type Point, type Shape } from './interaction/hitTest';
 export { itemsInShape, type PixelConverter, type ShapeItem } from './interaction/itemsInShape';
+export {
+  brushedWords,
+  membersBrushed,
+  parallelAxesOf,
+  parallelBrushOf,
+  withBrush,
+  type ParallelAxisPlace,
+} from './interaction/parallelBrush';
 export { axisEmphasis, emphasisPatch } from './interaction/axisEmphasis';
 export { legendEntryAt, legendGlyphBoxes, type LegendGlyphBox } from './combo/legendGlyphs';
 export { dragGesture, type DragEvent, type DragGesture } from './interaction/dragOverlay';

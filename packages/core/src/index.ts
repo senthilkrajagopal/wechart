@@ -107,6 +107,7 @@ export {
   type ChartMarking,
   type ComboAxis,
   type ComboMark,
+  type ParallelBrush,
   type RenderSpec,
   type SeriesData,
   type SeriesOptions,
