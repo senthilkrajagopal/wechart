@@ -1733,12 +1733,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
   - Failing test: `sql-cube.test.ts`: a read-write member gets the group with no switch; a run is cut at 10,000 rows and stopped at 30 seconds by aborting the request; it leaves an audit event marked "Cube" with the SQL's literals replaced, and a History row (AC-481); a run holding `{{x}}` is refused before Cube is called (AC-482). `makeFrom.test.ts`: on a Cube result both are disabled, saying the rows already come from cubes (AC-481). `ParameterStrip.test.tsx`: Run is held on a Cube tab with a parameter, saying why (AC-482).
   - Depends on: T825, T809, T817, T819
 
-- [ ] T827 (AC-480) Ctrl+Q opens a tab on the current source, with Control on macOS too, in the workspace only; tabs are chosen with the tab bar; no key closes a tab
-  - Lane: SQL
-  - ~~Waits on: `docs/research/keyboard-shortcuts-sql-runner.md`~~ Settled 2026-10-17: the research (e32d86e5) found Ctrl+Alt+[ and ] unreachable on many Windows layouts and taken by VoiceOver; the user chose "Drop it; tab bar only (Recommended)". Match Ctrl+Q on `event.key`, falling back to `code === 'KeyQ'` for non-Latin layouts, Control without Alt, Meta or Shift (the research's sketch).
-  - Files: `packages/web/src/workspaces/sql/tabKeys.ts` (+ test), `packages/web/src/workspaces/sql/SqlWorkspace.tsx`, `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: `tabKeys.test.ts`: in the workspace, Ctrl+Q opens a tab on the current source, on a macOS platform with Control and not ⌘; Ctrl+Alt+[ and ] select no tab; no key closes a tab. The e2e: outside the workspace none of these keys does anything new (AC-480).
-  - Depends on: T800
+- [x] T827 (AC-480) Ctrl+Q opens a tab on the current source, with Control on macOS too, in the workspace only; tabs are chosen with the tab bar; no key closes a tab
 
 ## P2.25 The compact dashboard header (F43, added 2026-10-17, `[R79]`)
 

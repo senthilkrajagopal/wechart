@@ -1830,3 +1830,78 @@ test.describe('a tab whose source is turned off, or whose access is lost, mid-se
     }
   });
 });
+
+/**
+ * T827 (AC-480): in the workspace, Ctrl+Q (Control on macOS too, never ⌘)
+ * opens a new tab on the current source; tabs are chosen with the tab bar,
+ * so Ctrl+Alt+[ and ] select none; no key closes a tab; and outside the
+ * workspace none of these keys does anything new.
+ */
+test.describe('the tab key, Ctrl+Q (T827, AC-480)', () => {
+  const tabs = (page: Page) => page.getByRole('tablist', { name: 'SQL tabs' }).getByRole('tab');
+  /** Whether a page handler kept the browser from acting on `key`, dispatched where focus is. */
+  interface Press {
+    readonly key: string;
+    readonly code: string;
+    readonly ctrlKey?: boolean;
+    readonly altKey?: boolean;
+    readonly metaKey?: boolean;
+  }
+  const prevented = (page: Page, init: Press) =>
+    page.evaluate((options: Press) => {
+      const event = new KeyboardEvent('keydown', { ...options, bubbles: true, cancelable: true });
+      (document.activeElement ?? document.body).dispatchEvent(event);
+      return event.defaultPrevented;
+    }, init);
+
+  test('opens a tab on the current source from the editor and the panes; Ctrl+Alt+[ ] and Ctrl+W do nothing; nothing outside the workspace', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'manager');
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(`/sql?source=${world.sources.on}`);
+      await expect(page).toHaveURL(/\/sql\?tab=[0-9a-f]{8}$/);
+      const before = await tabs(page).count();
+
+      // From the editor, a real key press.
+      await page.locator('.sql-editor .cm-content').click();
+      await page.keyboard.press('Control+q');
+      await expect(tabs(page)).toHaveCount(before + 1);
+      const opened = tabs(page).nth(before);
+      await expect(opened).toHaveAttribute('aria-selected', 'true');
+      await expect(opened).toHaveAttribute('aria-label', new RegExp(`^Query \\d+, Not run yet, on ${SOURCES.on}$`));
+      // Typed nothing into the editor: the new tab's is empty, its placeholder shown.
+      await expect(page.locator('.sql-editor .cm-placeholder')).toBeVisible();
+      await expect(page.locator('.sql-editor .cm-line')).toHaveText(['SELECT … or EXPLAIN SELECT …']);
+
+      // From the left pane's picker button too: anywhere in the workspace.
+      await leftPane(page).getByRole('button', { name: /^Data source (?!and)/ }).focus();
+      await page.keyboard.press('Control+q');
+      await expect(tabs(page)).toHaveCount(before + 2);
+
+      // ⌘Q is the browser's, never the workspace's; Ctrl+Alt+[ ] choose no tab; no key closes one.
+      expect(await prevented(page, { key: 'q', code: 'KeyQ', metaKey: true })).toBe(false);
+      for (const [key, code] of [
+        ['[', 'BracketLeft'],
+        [']', 'BracketRight'],
+      ] as const)
+        expect(await prevented(page, { key, code, ctrlKey: true, altKey: true })).toBe(false);
+      expect(await prevented(page, { key: 'w', code: 'KeyW', ctrlKey: true })).toBe(false);
+      await expect(tabs(page)).toHaveCount(before + 2);
+      await expect(tabs(page).nth(before + 1)).toHaveAttribute('aria-selected', 'true');
+
+      // Outside the workspace: nothing new.
+      await page.goto('/explore');
+      await expect(page.getByRole('button', { name: /theme/i })).toBeVisible();
+      expect(await prevented(page, { key: 'q', code: 'KeyQ', ctrlKey: true })).toBe(false);
+      for (const [key, code] of [
+        ['[', 'BracketLeft'],
+        [']', 'BracketRight'],
+      ] as const)
+        expect(await prevented(page, { key, code, ctrlKey: true, altKey: true })).toBe(false);
+    } finally {
+      await context.close();
+    }
+  });
+});

@@ -515,6 +515,42 @@ describe('tabs kept in this browser, the open one in the address (T801, AC-451, 
     expect(onOpenTab).toHaveBeenLastCalledWith(stored.tabs[1]?.id);
   });
 
+  // T827 (AC-480): Ctrl+Q, in the workspace only, a new tab on the current source.
+  it('opens a new tab on the open tab’s source on Ctrl+Q anywhere in the workspace, and nothing on Ctrl+Alt+] or Ctrl+W', () => {
+    const onSource = { ...kept, tabs: kept.tabs.map((each) => ({ ...each, sourceId: 'ds-7' })) };
+    localStorage.setItem('wechart.sql.tabs.wren@example.com', JSON.stringify(onSource));
+    openAt(wren, 'a1b2c3d4');
+    const region = screen.getByRole('region', { name: 'SQL runner' });
+
+    const pressed = new KeyboardEvent('keydown', { key: 'q', code: 'KeyQ', ctrlKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      region.dispatchEvent(pressed);
+    });
+
+    expect(pressed.defaultPrevented).toBe(true);
+    expect(names()).toEqual(['orders check', 'Query 2', 'Query 3']);
+    const stored = JSON.parse(localStorage.getItem('wechart.sql.tabs.wren@example.com') ?? '{}') as {
+      tabs: { id: string; sourceId: string }[];
+      active: string;
+    };
+    expect(stored.tabs[2]?.sourceId).toBe('ds-7');
+    expect(stored.active).toBe(stored.tabs[2]?.id);
+
+    for (const [key, code, altKey] of [
+      [']', 'BracketRight', true],
+      ['[', 'BracketLeft', true],
+      ['w', 'KeyW', false],
+    ] as const) {
+      const other = new KeyboardEvent('keydown', { key, code, ctrlKey: true, altKey, bubbles: true, cancelable: true });
+      act(() => {
+        region.dispatchEvent(other);
+      });
+      expect(other.defaultPrevented).toBe(false);
+    }
+    expect(names()).toEqual(['orders check', 'Query 2', 'Query 3']);
+    expect(screen.getByRole('tab', { selected: true }).textContent).toBe('Query 3');
+  });
+
   // T823 (AC-464): "Open in SQL runner" from a data source's page and its rows' ⋯.
   it('opens a new tab on the data source the address names, `/sql?source=…`, once, and names it there', () => {
     localStorage.setItem('wechart.sql.tabs.wren@example.com', JSON.stringify(kept));

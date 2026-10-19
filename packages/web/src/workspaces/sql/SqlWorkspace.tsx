@@ -42,6 +42,7 @@ import { SaveKeyContext, useSaveKeyScope } from './saveKey';
 import type { SqlSourceRow } from './sources';
 import type { SqlSource } from './sqlSource';
 import { firstTabs, newTabId, type SqlTab, type TabsAction, type TabsState } from './tabs';
+import { tabKeyOf } from './tabKeys';
 import { TabStrip } from './TabStrip';
 import { keepTabs, keptTabs } from './tabStore';
 import {
@@ -559,6 +560,19 @@ function Workbench({
       element?.removeEventListener('keydown', onKeyDown);
     };
   }, [saveKeys.onKeyDown]);
+  /** Ctrl+Q anywhere in the workspace: a new tab on the open tab's source (T827, AC-480). */
+  useEffect(() => {
+    const element = workspace.current;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (tabKeyOf(event) !== 'new') return;
+      event.preventDefault();
+      dispatch({ kind: 'add' });
+    };
+    element?.addEventListener('keydown', onKeyDown);
+    return () => {
+      element?.removeEventListener('keydown', onKeyDown);
+    };
+  }, [dispatch]);
   const below = useRef<HTMLDivElement>(null);
   const split = useRef<{ readonly y: number; readonly from: number } | null>(null);
   const leftShown = leftFolded ? LEFT_PANE.rail : left;
