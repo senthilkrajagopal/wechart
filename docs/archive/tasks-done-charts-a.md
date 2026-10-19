@@ -258,3 +258,21 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - **Table view:** `tiles/tableView/bullet.ts`. It is the first entry in `TABLE_VIEWS`, and `DataTable` now draws a type's own table view in place of its rows.
     - **Fixed here:** a bullet chart is now drawn by its first plain dimension, never by a time dimension. `defaultEncoding` had laid it out as a bar and drew it per day; `table-view.spec.ts`'s walk found this. The walk now also takes `bullet`, setting a Target in its fixture, and `bullet` comes out of `AWAITING_TABLE_VIEW`.
     - **AC-583** is ticked on `e2e/new-charts-a.spec.ts`, "a bullet chart's tile names the chart and each bullet…" (a 5-column dashboard tile), with `table-view.spec.ts`'s bullet walk, both on headless Chromium.
+
+- [x] T972 (AC-559, AC-037, AC-098, AC-568, AC-573, ~~AC-578,~~ AC-582~~, AC-589~~) Design 23's screen 2 on a running dashboard: a KPI tiled by Region marks EMEA, and the graphical table~~, waterfall,~~ and bullet chart ~~and histogram~~ each show it their way (the waterfall and histogram parts parked, the user, 2026-10-18)
+  - Files: `e2e/new-charts-a.spec.ts`.
+  - Failing test: `new-charts-a.spec.ts`: an author picks each ~~lane A~~ started lane A type from the gallery's shelves and saves it on one dashboard; in Markings mode, clicking EMEA's KPI tile outlines it; the graphical table's Beverages reads "· $310K marked" and its tile "● EMEA's share shown"; ~~the waterfall's steps and the histogram's bins draw EMEA's part from their base;~~ the bullet chart's EMEA bullet is outlined; reloading draws the same (AC-559, AC-037, AC-098, AC-568, AC-573, ~~AC-578,~~ AC-582~~, AC-589~~).
+  - Depends on: T941, T946, ~~T951,~~ T955, ~~T963,~~ T970
+  - Parked (the user, 2026-10-18): the waterfall's and the histogram's parts, struck through above, go with T951 and T963 (§"Parked" below).
+  - Done (2026-10-19), decision T972-1:
+    - **The e2e:** `e2e/new-charts-a.spec.ts`, "design 23's screen 2: lane A's types, picked from the gallery…", passes on headless Chromium.
+    - **The gallery:** it walks every shelf in AC-559's order, each shelf's cards with none parked, a new card's needs ("summed" for the 100 % stacked bar), and a "gauge" search (Bullet chart and KPI).
+    - **Four charts:** the author makes them from their shelves (`chooseFromShelf`) and saves each from its editor: a KPI tiled by country, a graphical table of statuses with a Value column, a bullet chart by country, and a 100 % stacked bar of status by category.
+    - **The dashboard:** the four go on one dashboard through the API, in Markings mode. Clicking Germany's KPI tile gives four results:
+      - the KPI tile is outlined, with "● Marked";
+      - each graphical-table row is partly marked, its Value cell reads "· $… marked", and the tile's badge reads "Marking: Germany's share shown";
+      - Germany's bullet is outlined, stroke 1.5;
+      - the 100 % stack's badge reads "Marking: Germany's share shown", never "0 marked".
+    - **After a reload:** each tile draws as saved and marks the same again. Markings don't outlive a reload, by design (`markings.spec.ts` "from a clean marking"), so "reloading draws the same" means the tiles redraw and mark the same.
+    - **Sample data:** the sample's countries stand for design 23's regions, and its statuses for the categories.
+    - **ACs ticked:** AC-559, now on the real gallery, after T934's unit tests. AC-098, building on lane CLOSE's e0f40277 and with a parking-narrowing note. AC-568, AC-573 and AC-582 were already ticked. AC-037 also holds lane B's types and the combo, so it is left for the coordinator.

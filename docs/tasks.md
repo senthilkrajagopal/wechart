@@ -2206,11 +2206,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T971 (AC-563) Keyboard marking on KPI tiles~~, bullets, waterfall steps and histogram bins~~ and bullets, with §7a's keys in their order (the waterfall and histogram parts parked, the user, 2026-10-18)
 
-- [ ] T972 (AC-559, AC-037, AC-098, AC-568, AC-573, ~~AC-578,~~ AC-582~~, AC-589~~) Design 23's screen 2 on a running dashboard: a KPI tiled by Region marks EMEA, and the graphical table~~, waterfall,~~ and bullet chart ~~and histogram~~ each show it their way (the waterfall and histogram parts parked, the user, 2026-10-18)
-  - Files: `e2e/new-charts-a.spec.ts`.
-  - Failing test: `new-charts-a.spec.ts`: an author picks each ~~lane A~~ started lane A type from the gallery's shelves and saves it on one dashboard; in Markings mode, clicking EMEA's KPI tile outlines it; the graphical table's Beverages reads "· $310K marked" and its tile "● EMEA's share shown"; ~~the waterfall's steps and the histogram's bins draw EMEA's part from their base;~~ the bullet chart's EMEA bullet is outlined; reloading draws the same (AC-559, AC-037, AC-098, AC-568, AC-573, ~~AC-578,~~ AC-582~~, AC-589~~).
-  - Depends on: T941, T946, ~~T951,~~ T955, ~~T963,~~ T970
-  - Parked (the user, 2026-10-18): the waterfall's and the histogram's parts, struck through above, go with T951 and T963 (§"Parked" below).
+- [x] T972 (AC-559, AC-037, AC-098, AC-568, AC-573, ~~AC-578,~~ AC-582~~, AC-589~~) Design 23's screen 2 on a running dashboard: a KPI tiled by Region marks EMEA, and the graphical table~~, waterfall,~~ and bullet chart ~~and histogram~~ each show it their way (the waterfall and histogram parts parked, the user, 2026-10-18)
 
 ### Lane CHARTS-B: the Map
 

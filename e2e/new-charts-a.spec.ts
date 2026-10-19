@@ -2552,3 +2552,260 @@ test('a KPI says a period comparison needs Time, its + Time reaching the well, a
   await result.getByRole('button', { name: '+ Time' }).click();
   await expect(page.getByTestId('well-kpi-time').locator('select').first()).toBeFocused();
 });
+
+/** The gallery's shelf, then its card, as an author picks a type (AC-559). */
+async function chooseFromShelf(page: Page, shelf: string, card: string) {
+  await page.getByTestId('chart-type-change').click();
+  const gallery = page.getByRole('dialog', { name: 'Choose chart type' });
+  await gallery
+    .getByRole('navigation', { name: 'Chart purposes' })
+    .getByRole('button', { name: shelf, exact: true })
+    .click();
+  await gallery.getByTestId(`type-card-${card}`).click();
+  await expect(gallery).toHaveCount(0);
+}
+
+/**
+ * T972 (AC-559, AC-037, AC-098, AC-568, AC-573, AC-582): design 23's screen
+ * 2 on a running dashboard. An author picks each of lane A's started types
+ * from the gallery's shelves and saves it; on one dashboard in Markings
+ * mode, a KPI tiled by country marks Germany (the sample's countries stand
+ * for design 23's regions), and the graphical table, the bullet chart and
+ * the 100 % stacked bar each show it their own way; reloaded, the
+ * dashboard draws each the same, and marks the same again.
+ *
+ * AC-559: the gallery lists its nine purposes in order with their cards,
+ * the parked ones left out, and a search for "gauge" lists Bullet chart and
+ * KPI. AC-098: every tile with the marking says so beyond colour — a count,
+ * or "‹marking›: Germany's share shown" where every item is only partly
+ * marked, never "0 marked".
+ */
+test('design 23’s screen 2: lane A’s types, picked from the gallery, each show Germany marked from a KPI tile their own way', async ({
+  page,
+  request,
+}) => {
+  // AC-559: the shelves, in order, each with its cards, none parked.
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+  await page.getByTestId('chart-type-change').click();
+  const gallery = page.getByRole('dialog', { name: 'Choose chart type' });
+  const shelves = gallery.getByRole('navigation', { name: 'Chart purposes' }).getByRole('button');
+  // The recommender's and every card, then the nine purposes.
+  await expect(shelves).toHaveText([
+    /^Recommended \(\d+\)$/,
+    'All charts',
+    'Evolution over time',
+    'Ranking and comparison',
+    'Part of a whole',
+    'Flow',
+    'Distribution and matrix',
+    'Correlation',
+    'Geography',
+    'KPI',
+    'Table',
+  ]);
+  const cardsOn = async (shelf: string) => {
+    await shelves.filter({ hasText: new RegExp(`^${shelf}$`) }).click();
+    return gallery
+      .locator('[data-testid^="type-card-"]')
+      .evaluateAll((all) => all.map((one) => one.getAttribute('data-testid')?.slice(10)));
+  };
+  expect(await cardsOn('Evolution over time')).toEqual([
+    'line',
+    'area',
+    'multiLine',
+    'stackedArea',
+    'combo',
+    'stackedArea100',
+  ]);
+  expect(await cardsOn('Ranking and comparison')).toEqual([
+    'bar',
+    'hbar',
+    'groupedBar',
+    'stackedBar',
+    'bullet',
+  ]);
+  expect(await cardsOn('Part of a whole')).toEqual([
+    'pie',
+    'donut',
+    'treemap',
+    'stackedBar',
+    'stackedArea',
+    'stackedBar100',
+    'stackedArea100',
+  ]);
+  expect(await cardsOn('Flow')).toEqual(['sankey']);
+  expect(await cardsOn('Distribution and matrix')).toEqual([
+    'boxplot',
+    'heatmap',
+    'pivot',
+    'trellis',
+  ]);
+  expect(await cardsOn('Correlation')).toEqual(['scatter', 'parallel']);
+  expect(await cardsOn('Geography')).toEqual(['map']);
+  expect(await cardsOn('KPI')).toEqual(['kpi', 'bullet']);
+  expect(await cardsOn('Table')).toEqual(['table', 'pivot', 'graphicalTable']);
+  // A new card's purpose and needs, "summed" where the measure must add up.
+  await expect(gallery.getByTestId('type-card-graphicalTable')).toContainText(
+    'Needs a dimension and a measure',
+  );
+  await cardsOn('Part of a whole');
+  await expect(
+    gallery.getByTestId('type-card-stackedBar100').locator('.type-card__needs'),
+  ).toContainText('summed');
+  // No gauge: a search for one lists Bullet chart and KPI.
+  await gallery.getByRole('searchbox', { name: 'Search chart types' }).fill('gauge');
+  await expect(gallery.locator('[data-testid^="type-card-"]')).toHaveCount(2);
+  await expect(gallery.getByTestId('type-card-bullet')).toBeVisible();
+  await expect(gallery.getByTestId('type-card-kpi')).toBeVisible();
+  await gallery.getByRole('button', { name: 'Close' }).click();
+
+  // Each of lane A's types, picked from its shelf and saved.
+  const made = async (
+    name: string,
+    fields: { measures: string[]; dimensions: string[] },
+    shelf: string,
+    card: string,
+    drawn: string,
+    settle?: () => Promise<void>,
+  ) => {
+    await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+    await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
+    const id = /\/explore\/charts\/([^/]+)\/edit/.exec(page.url())?.[1] ?? '';
+    await cubePicker(page).selectOption({ label: 'Orders' });
+    await expect(page.getByTestId('member-orders.count')).toBeVisible();
+    for (const measure of fields.measures) await wellPicker(page, 'measures').selectOption(measure);
+    for (const dimension of fields.dimensions)
+      await wellPicker(page, 'dimensions').selectOption(dimension);
+    await chooseFromShelf(page, shelf, card);
+    await expectChartType(page, drawn);
+    await settle?.();
+    const head = page.getByTestId('editor-bar');
+    await head.getByLabel('Chart title').fill(`${name} ${String(Date.now())}`);
+    await head.getByRole('button', { name: '← Back to Explore' }).click();
+    await expect(page).toHaveURL(new RegExp(`/explore/charts/${id}$`));
+    return id;
+  };
+  const kpi = await made(
+    'Orders by country',
+    { measures: ['orders.count'], dimensions: [] },
+    'KPI',
+    'kpi',
+    'kpi',
+    async () => {
+      await page
+        .getByRole('combobox', { name: 'Tile by', exact: true })
+        .selectOption({ label: 'Customers Country' });
+    },
+  );
+  const table = await made(
+    'Statuses at a glance',
+    { measures: ['orders.total_amount'], dimensions: ['orders.status'] },
+    'Table',
+    'graphicalTable',
+    'graphicalTable',
+    async () => {
+      await page
+        .getByTestId('well-graphicalTable-columns')
+        .getByRole('button', { name: 'Add a column' })
+        .click();
+      await page.getByRole('menuitem', { name: 'Value' }).click();
+    },
+  );
+  const bullet = await made(
+    'Orders against target',
+    { measures: ['orders.count'], dimensions: ['customers.country'] },
+    'KPI',
+    'bullet',
+    'bullet',
+    async () => {
+      await page
+        .getByTestId('well-bullet-target')
+        .getByRole('combobox', { name: 'Target', exact: true })
+        .selectOption('customers.count');
+    },
+  );
+  const mix = await made(
+    'Category mix by status',
+    { measures: ['orders.total_amount'], dimensions: ['orders.status', 'products.category'] },
+    'Part of a whole',
+    'stackedBar100',
+    'stackedBar',
+  );
+
+  // On one dashboard, in Markings mode.
+  const title = `Screen 2 ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed', interactions: { mode: 'markings' } },
+        markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [
+              { id: 'tile-kpi', kind: 'chart', w: 12, h: 24, chartId: kpi },
+              { id: 'tile-table', kind: 'chart', w: 6, h: 40, chartId: table },
+              // Tall enough for its four countries' bullets without scrolling.
+              { id: 'tile-bullet', kind: 'chart', w: 6, h: 64, chartId: bullet },
+              { id: 'tile-mix', kind: 'chart', w: 12, h: 40, chartId: mix },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+
+  const kpiTile = page.locator('[data-tile="tile-kpi"]');
+  const tableTile = page.locator('[data-tile="tile-table"]');
+  const bulletTile = page.locator('[data-tile="tile-bullet"]');
+  const mixTile = page.locator('[data-tile="tile-mix"]');
+  const outlines = bulletTile.locator('svg path[stroke-width="1.5"]');
+
+  /** Germany marked from its KPI tile, and how each other tile shows it. */
+  const marksGermany = async () => {
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    const germany = kpiTile.getByRole('listitem', { name: /^Germany:/ });
+    await expect(kpiTile.getByRole('listitem')).toHaveCount(4);
+    await expect(outlines).toHaveCount(0);
+    await germany.click();
+    await expect(page.getByTestId('mark-chip')).toContainText('Germany');
+    // The KPI tile outlined, "● Marked" (AC-568).
+    await expect(germany).toHaveClass(/kpi-tile--marked/);
+    await expect(germany).toHaveCSS('box-shadow', / 0px 0px 0px 1\.5px inset$/);
+    await expect(germany.getByTestId('kpi-tile-marked')).toHaveText('● Marked');
+    await expect(kpiTile.getByTestId('mark-badge')).toContainText('1 marked');
+    // The graphical table: each status partly Germany's, its marked amount
+    // in the cell (AC-573), and its tile saying the share is shown (AC-098).
+    const rows = tableTile.locator('tbody tr');
+    await expect(rows).toHaveCount(3);
+    for (const row of await rows.all()) {
+      await expect(row).toHaveAttribute('data-marked', 'partly');
+      await expect(row.locator('td').first()).toHaveText(/^\$[\d,.]+ · \$[\d,.]+ marked$/);
+    }
+    await expect(tableTile.getByTestId('mark-badge')).toHaveText("Marking: Germany's share shown");
+    // The bullet chart: Germany's bullet outlined, its member marked whole (AC-582).
+    await expect.poll(() => outlines.count()).toBeGreaterThan(0);
+    await expect(bulletTile.getByTestId('mark-badge')).toContainText('1 marked');
+    // The 100 % stack: Germany's share in each segment, said so (AC-098).
+    await expect(mixTile.getByTestId('mark-badge')).toHaveText("Marking: Germany's share shown");
+    await expect(mixTile.getByTestId('mark-badge')).not.toContainText('0 marked');
+  };
+
+  await page.goto(`/explore/dashboards/${dashboard.id}`);
+  await marksGermany();
+  // Reloaded: each tile drawn as saved, and marked the same again.
+  await page.reload();
+  await marksGermany();
+});
