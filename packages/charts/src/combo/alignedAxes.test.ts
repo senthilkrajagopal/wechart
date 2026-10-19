@@ -296,6 +296,13 @@ describe("an axis's fixed minimum and maximum, unsynchronized (AC-219, AC-499)",
       ] as const) {
         if (given.fixedMin !== undefined) expect(axis.min).toBeCloseTo(given.fixedMin, 9);
         if (given.fixedMax !== undefined) expect(axis.max).toBeCloseTo(given.fixedMax, 9);
+        // A whole number of intervals: ticks rounded to a count would hide
+        // an axis whose last interval falls short (T849's review).
+        const intervals = (axis.max - axis.min) / axis.interval;
+        expect(Math.abs(intervals - Math.round(intervals))).toBeLessThan(1e-6);
+        // And its data covered, where no fixed end cuts it off.
+        if (given.fixedMin === undefined) expect(axis.min).toBeLessThanOrEqual(given.min);
+        if (given.fixedMax === undefined) expect(axis.max).toBeGreaterThanOrEqual(given.max);
       }
     }
   });

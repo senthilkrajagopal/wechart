@@ -307,6 +307,15 @@ describe('Synchronize axes (AC-501)', () => {
     expect(canSynchronize([REVENUE, COST], {}, formats, label).available).toBe(false);
   });
 
+  it("is not offered while every series is on the right, the left's scale unused (T849's review)", () => {
+    const options = { series: { [REVENUE]: { axis: 'right' }, [COST]: { axis: 'right' } } };
+
+    expect(canSynchronize([REVENUE, COST], options, formats, label)).toEqual({
+      available: false,
+      reason: 'Every series is on the right axis.',
+    });
+  });
+
   it('is off by default, on once chosen, and off again while the formats differ', () => {
     const right = { series: { [COST]: { axis: 'right' } } };
 

@@ -181,7 +181,7 @@ export type SynchronizeState =
 
 /**
  * Whether a combo's two axes can show one scale (AC-501, design 20 Q12 (a)):
- * only while a series is on the right, and only while both axes share a
+ * only while a series is on each axis, and only while both axes share a
  * number format. Each axis is written in its first measure's format
  * (decision T846-2), so those are the two compared; the reason names both
  * ("Revenue is in $ and Margin % in %").
@@ -198,8 +198,13 @@ export function canSynchronize(
   if (right === undefined) {
     return { available: false, reason: 'Every series is on the left axis.' };
   }
-  // No series on the left: the right's scale is the only one drawn.
-  if (left === undefined) return { available: true };
+  /**
+   * No series on the left: the right's scale is the only one read, and
+   * following the unused left's would only throw it away (T849's review).
+   */
+  if (left === undefined) {
+    return { available: false, reason: 'Every series is on the right axis.' };
+  }
   if (scaleOf(formats[left.measure]) === scaleOf(formats[right.measure])) {
     return { available: true };
   }
