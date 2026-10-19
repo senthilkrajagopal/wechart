@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { CHART_TYPE_MODULES } from './index';
 import {
   BOUNDARY_SETS,
+  countMeasureOf,
   mapLayersOf,
   mapModule,
   mapPointsQuery,
   mapSettingsOf,
+  mapUnlocatedQuery,
   pointsAsDensity,
 } from './map';
 
@@ -131,6 +133,40 @@ describe('the Points layer’s own query (AC-625)', () => {
       dimensions: ['stores.format', 'stores.location'],
       total: true,
     });
+  });
+
+  /**
+   * Checkpoint 4's review: "312 stores have no location." counts entities,
+   * not the one grouped row they collapse into — the location's cube's count
+   * measure, with the location not set. (Ungrouped, Cube asks for the cube's
+   * primary key, which a model need not give.)
+   */
+  it('counts the rows with no location by the cube’s count, the location not set', () => {
+    expect(
+      mapUnlocatedQuery(tile, { location: 'stores.location', size: 'orders.revenue' }, 'stores.count'),
+    ).toEqual({
+      measures: ['stores.count'],
+      filters: [...tile.filters, { member: 'stores.location', operator: 'notSet' }],
+      timeDimensions: [{ dimension: 'orders.created_at', dateRange: 'Last year' }],
+    });
+  });
+
+  it('finds the location’s cube’s count measure in /v1/meta, or none', () => {
+    const meta = {
+      cubes: [
+        {
+          name: 'stores',
+          measures: [
+            { name: 'stores.revenue', aggType: 'sum' },
+            { name: 'stores.count', aggType: 'count' },
+          ],
+        },
+        { name: 'orders', measures: [{ name: 'orders.count', aggType: 'count' }] },
+      ],
+    };
+    expect(countMeasureOf(meta, 'stores.location')).toBe('stores.count');
+    expect(countMeasureOf(meta, 'regions.location')).toBeUndefined();
+    expect(countMeasureOf(undefined, 'stores.location')).toBeUndefined();
   });
 
   it('draws the points as density on "Draw as density"', () => {

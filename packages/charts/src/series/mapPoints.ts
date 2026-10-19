@@ -130,7 +130,9 @@ export function mapPointsOf(spec: RenderSpec): MapPointsDrawn | undefined {
   });
   return {
     points,
-    unlocated: answer.rows.length - located.length,
+    // As Cube counted them apart, where it was asked (checkpoint 4's review):
+    // grouped by place they collapse into one row.
+    unlocated: answer.unlocated ?? answer.rows.length - located.length,
     shown: answer.rows.length,
     ...(answer.total === undefined ? {} : { total: answer.total }),
     noun: nounOf(layer.location),

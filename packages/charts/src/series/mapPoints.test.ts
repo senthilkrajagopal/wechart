@@ -203,6 +203,18 @@ describe('the Points layer (AC-625)', () => {
     expect(drawn.noun).toBe('stores');
   });
 
+  // Checkpoint 4's review: entities, not the one grouped row they collapse into.
+  it('counts the rows with no location as Cube counted them apart, not as one grouped row', () => {
+    const drawn = mapPointsOf(
+      map(SIZED, {
+        rows: [...pointsRows(), { 'stores.location': null, 'orders.revenue': 3_120 }],
+        unlocated: 312,
+      }),
+    )!;
+    expect(drawn.unlocated).toBe(312);
+    expect(drawn.points).toHaveLength(10);
+  });
+
   it('draws nothing of its own before its answer is in, or without the layer', () => {
     expect(mapPointsOf(map(SIZED, undefined))).toBeUndefined();
     const noLayer: RenderSpec = { ...map(SIZED, { rows: pointsRows() }), options: {} };

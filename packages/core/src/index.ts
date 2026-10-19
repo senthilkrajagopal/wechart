@@ -430,11 +430,13 @@ export {
 } from './chart-types/boxplotDistribution';
 export {
   BOUNDARY_SETS,
+  countMeasureOf,
   DEFAULT_MAP,
   mapLayersOf,
   mapModule,
   mapPointsQuery,
   mapSettingsOf,
+  mapUnlocatedQuery,
   pointsAsDensity,
   type BoundarySet,
   type DensityLayer,

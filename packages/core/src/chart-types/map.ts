@@ -125,6 +125,45 @@ export function mapPointsQuery(
 }
 
 /**
+ * How many rows have no location (AC-625, checkpoint 4's review): grouped by
+ * place, every row without one collapses into one, so they are counted
+ * apart — by the location's cube's count measure, the location not set,
+ * with the tile's filters and date ranges. (Ungrouped, Cube refuses a cube
+ * whose model gives no primary key.)
+ */
+export function mapUnlocatedQuery(
+  tile: Readonly<Record<string, unknown>>,
+  points: PointsLayer,
+  count: string,
+): Record<string, unknown> {
+  const asked = mapPointsQuery(tile, { location: points.location });
+  const filters = Array.isArray(asked['filters']) ? (asked['filters'] as unknown[]) : [];
+  return {
+    measures: [count],
+    filters: [...filters, { member: points.location, operator: 'notSet' }],
+    ...(asked['timeDimensions'] === undefined ? {} : { timeDimensions: asked['timeDimensions'] }),
+    ...(asked['segments'] === undefined ? {} : { segments: asked['segments'] }),
+  };
+}
+
+/**
+ * The count measure of a location's cube (or view), as `/v1/meta` lists its
+ * `aggType`, which counts the rows with no location; none where it has none.
+ */
+export function countMeasureOf(meta: unknown, location: string): string | undefined {
+  const cube = location.split('.')[0];
+  const cubes = (meta as { cubes?: unknown } | null | undefined)?.cubes;
+  const own = (Array.isArray(cubes) ? cubes : []).find(
+    (one) => (one as { name?: unknown }).name === cube,
+  ) as { measures?: unknown } | undefined;
+  const measures = Array.isArray(own?.measures) ? own.measures : [];
+  const count = measures.find((one) => (one as { aggType?: unknown }).aggType === 'count') as
+    | { name?: unknown }
+    | undefined;
+  return typeof count?.name === 'string' ? count.name : undefined;
+}
+
+/**
  * "Draw as density" (T976, AC-625): the Points layer's location drawn as the
  * Density layer instead, the points gone. Settings with no Points layer as
  * they are.

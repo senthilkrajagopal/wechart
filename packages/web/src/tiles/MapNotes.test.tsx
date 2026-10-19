@@ -41,6 +41,22 @@ describe('the Points layer’s notes (AC-625)', () => {
     expect(screen.queryByTestId('map-points-cut')).toBeNull();
   });
 
+  // Checkpoint 4's review: grouped by place, 312 stores with none are one row.
+  it('counts the stores with no location as Cube counted them apart', () => {
+    render(
+      <MapNotes
+        spec={{
+          ...spec([...located(10), { 'stores.location': null, 'orders.revenue': 312 }]),
+          mapPoints: {
+            rows: [...located(10), { 'stores.location': null, 'orders.revenue': 312 }],
+            unlocated: 312,
+          },
+        }}
+      />,
+    );
+    expect(screen.getByTestId('map-unlocated').textContent).toBe('312 stores have no location.');
+  });
+
   it('says a cut at Cube’s row limit, with Draw as density and Filter', async () => {
     const onDensity = vi.fn();
     const onFilter = vi.fn();

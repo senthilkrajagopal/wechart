@@ -33,11 +33,12 @@ const model = (cube: string) =>
     '          sql: lat',
     '        longitude:',
     '          sql: lng',
-    // The same, with French Guiana's sale nowhere: a row with no location.
-    '      - name: location_but_guf',
+    // The same, with French Guiana's and Singapore's sales nowhere: two rows
+    // with no location, which grouped by place are one (AC-625).
+    '      - name: location_some_unknown',
     '        type: geo',
     '        latitude:',
-    "          sql: \"CASE WHEN iso3 = 'GUF' THEN NULL ELSE lat END\"",
+    "          sql: \"CASE WHEN iso3 IN ('GUF', 'SGP') THEN NULL ELSE lat END\"",
     '        longitude:',
     '          sql: lng',
     '      - name: iso3',
@@ -62,6 +63,9 @@ const model = (cube: string) =>
     '      - name: total',
     '        sql: amount',
     '        type: sum',
+    // The sales, which counts those with no location (AC-625).
+    '      - name: count',
+    '        type: count',
     '',
   ].join('\n');
 

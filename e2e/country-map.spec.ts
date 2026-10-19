@@ -210,16 +210,17 @@ test('a Points layer draws each place from a geo dimension over the regions, siz
   expect(northToSouth).toEqual([...northToSouth].sort((one, other) => one - other));
   await expect(result.getByTestId('map-unlocated')).toHaveCount(0);
 
-  // A location with a row of none: four drawn, the fifth counted under the map.
+  // A location two rows have none of: three drawn, the two counted under the
+  // map, though grouped by place they are one row (checkpoint 4's review).
   await page
     .getByTestId('map-layer-points')
     .getByRole('button', { name: /^Remove .* from Points layer$/ })
     .click();
   await page.getByTestId('add-mapPoints').click();
-  await page.getByTestId(`pick-${cube}.location_but_guf`).click();
-  await expect(points).toHaveCount(4);
+  await page.getByTestId(`pick-${cube}.location_some_unknown`).click();
+  await expect(points).toHaveCount(3);
   await expect(result.getByTestId('map-unlocated')).toHaveText(
-    /^1 of the country sales \S+ has no location\.$/,
+    /^2 country sales \S+ have no location\.$/,
   );
 });
 

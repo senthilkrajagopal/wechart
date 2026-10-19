@@ -314,6 +314,8 @@ export interface RenderSpec {
 export interface MapPointsAnswer {
   readonly rows: readonly Record<string, unknown>[];
   readonly total?: number;
+  /** How many rows have no location, counted apart (`mapUnlocatedQuery`): grouped, they are one row. */
+  readonly unlocated?: number;
 }
 
 /** One brush along a parallel axis: its measure, from and to in its own units, inclusive. */
