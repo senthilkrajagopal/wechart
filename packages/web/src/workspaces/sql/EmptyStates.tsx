@@ -24,6 +24,22 @@ export function ChooseASource({ lost = false }: { readonly lost?: boolean }) {
   );
 }
 
+/**
+ * A tab whose source was found no longer the user's by its Run (T824,
+ * AC-466; design 17's L2): said without naming it again.
+ */
+export function AccessLost() {
+  return (
+    <div className="sql-empty" data-testid="sql-access-lost">
+      <StatusIcon kind="info" />
+      <p>
+        <span className="sql-empty__line">This tab’s data source isn’t available to you.</span>
+        <span className="sql-empty__line">Choose a data source: this one isn’t available to you.</span>
+      </p>
+    </div>
+  );
+}
+
 /** A member who may run SQL on no data source (H2), with the way to their own. */
 export function NoSourceToRun() {
   return (

@@ -1719,11 +1719,7 @@ F41 lets Claude Code read wechart, edit in its owner's My workspace and propose,
 
 - [x] T823 (AC-464, AC-373) The data source page's "SQL runner" tab holds the off panel or the switch's record, with Turn off and who may run, plus "Open in SQL runner", and no editor; "Open in SQL runner" in the page head's ⋯ and in each row's ⋯
 
-- [ ] T824 (AC-466, AC-373) A tab whose source is switched off, or whose folder access is lost, can't run, saying so without naming the source again
-  - Lane: SQL
-  - Files: `packages/web/src/workspaces/sql/QueryTab.tsx` (+ test), `e2e/security/sql-workspace.spec.ts`.
-  - Failing test: the e2e: with a tab open on a source, a Super-Admin turns its runner off and the tab's Run says "The SQL runner was turned off for ‹source›" and can't start; with the member's group removed from the folder, Run says the source "isn't available to you" without naming it again; the API refuses a run in both (AC-466, AC-373).
-  - Depends on: T802
+- [x] T824 (AC-466, AC-373) A tab whose source is switched off, or whose folder access is lost, can't run, saying so without naming the source again
 
 - [ ] T825 (AC-467) The "Cube" group: run a tab's SQL through Cube's `/v1/cubesql` as the user, say so on the run line in place of the warning, and list the cubes and views the user may query in the left pane
   - Lane: SQL

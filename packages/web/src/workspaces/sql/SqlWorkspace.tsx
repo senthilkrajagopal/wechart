@@ -16,7 +16,7 @@ import { ME_QUERY } from '../../shell/me';
 import { StateLine } from '../../shell/StatusIcon';
 import { hiddenWorkspacesFor } from '../../shell/WorkspaceSwitcher';
 import { sourceQuery } from '../data-sources/SourceSettings';
-import { ChooseASource, NoSourceToRun } from './EmptyStates';
+import { AccessLost, ChooseASource, NoSourceToRun } from './EmptyStates';
 import { OffPanel } from './OffPanel';
 import { placeOf, SQL_SOURCES_QUERY } from './sources';
 import { SourcePicker } from './SourcePicker';
@@ -230,7 +230,9 @@ function ChosenOn({
           inWorkspace: page.data.inWorkspace,
           sqlRunner: { on: false, tab: false, runs: false, ...page.data.sqlRunner, ...page.data.sqlAccess },
         };
-  if (source !== undefined && source.sqlRunner.runs)
+  // Turned off since the tab opened, found by its Run or this read of its
+  // page: the tab, its Run held, saying so (T824, AC-466; design 17's L1).
+  if (source !== undefined && (source.sqlRunner.runs || source.sqlRunner.tab))
     return <QueryTab tab={tab} source={source} dispatch={dispatch} grip={grip} {...run} />;
   if (source !== undefined)
     return (
@@ -688,7 +690,8 @@ function Workbench({
           id={`${ids}-panel-${tabs.active}`}
           aria-labelledby={`${ids}-tab-${tabs.active}`}
         >
-          {chosenRow?.runner === 'off' ? (
+          {/* Off when chosen: the off panel; found off by the tab's Run, the tab held (T824, L1). */}
+          {chosenRow?.runner === 'off' && openTab?.turnedOff !== true ? (
             // In the editor's place: nothing here runs (design 17, B2).
             <div className="sql-centre__off">
               <ChosenOff id={chosenRow.id} superAdmin={superAdmin} />
@@ -728,7 +731,9 @@ function Workbench({
           ) : (
             <>
               <div className="sql-centre__editor" data-testid="sql-editor-area">
-                {sources.data === undefined ? null : openTab?.sourceLost === true ? (
+                {sources.data === undefined ? null : openTab?.accessLost === true ? (
+                  <AccessLost />
+                ) : openTab?.sourceLost === true ? (
                   <ChooseASource lost />
                 ) : runsAny ? (
                   <ChooseASource />

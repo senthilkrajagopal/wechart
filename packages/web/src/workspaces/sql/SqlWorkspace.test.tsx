@@ -1626,3 +1626,141 @@ describe('Make a cube… from a run (T820, AC-462)', () => {
     expect(workspaceOf().style.getPropertyValue('--sql-right')).toBe('320px');
   });
 });
+
+/**
+ * T824 (AC-466, AC-373; design 17's L): WHILE a tab is open on a source
+ * whose runner is turned off, or whose folder access the user loses, its Run
+ * SHALL say "The SQL runner was turned off for ‹source›", or that the source
+ * "isn't available to you", without naming it again. The next Run finds out.
+ */
+describe('a tab whose source is turned off, or whose access is lost, mid-session (T824, AC-466, AC-373)', () => {
+  afterEach(() => {
+    cleanup();
+    forgetLiveTabs();
+  });
+  const page = (runs: boolean) => ({
+    id: 'emea',
+    folderId: 'f-sales',
+    name: 'emea_replica',
+    driver: 'postgres',
+    authMethod: 'password',
+    fields: { host: 'emea-host', port: 5432, database: 'sales', user: 'cube_reader', ssl: false },
+    secrets: {},
+    targetFolderId: null,
+    origin: null,
+    version: 1,
+    updatedAt: '2026-10-17T10:00:00Z',
+    folderPath: [{ id: 'f-sales', title: 'Sales' }],
+    canWrite: true,
+    inWorkspace: false,
+    description: null,
+    sqlRunner: { on: runs },
+    sqlAccess: { tab: true, runs },
+  });
+  const row = (runner: 'on' | 'off') => ({
+    id: 'emea',
+    name: 'emea_replica',
+    driver: 'postgres',
+    cubeStore: false,
+    folderId: 'f-sales',
+    folderPath: [{ id: 'f-sales', title: 'Sales' }],
+    inWorkspace: false,
+    runner,
+  });
+  const finished = {
+    outcome: 'finished',
+    columns: [{ name: 'one', type: 'int4' }],
+    rows: [[1]],
+    rowCount: 1,
+    truncated: null,
+    durationMs: 12,
+    statement: 'select',
+  };
+
+  /** wechart's API: on, until `lose` says the source is now off or gone. */
+  function api() {
+    let now: 'on' | 'off' | 'gone' = 'on';
+    const posts: string[] = [];
+    const json = (body: unknown, status = 200) =>
+      Promise.resolve(new Response(JSON.stringify(body), { status }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url === '/api/sql/sources') return json(now === 'gone' ? [] : [row(now === 'on' ? 'on' : 'off')]);
+        if (url === '/api/data-sources/emea')
+          return now === 'gone' ? json({ error: 'Not found' }, 404) : json(page(now === 'on'));
+        if (url === '/api/data-sources/emea/sql' && init?.method === 'POST') {
+          posts.push(url);
+          if (now === 'on') return json(finished);
+          return now === 'off'
+            ? json({ error: 'The SQL runner is off for this data source: a Super-Admin turns it on.' }, 403)
+            : json({ error: 'Not found' }, 404);
+        }
+        if (url === '/api/sql-runs/going') return json({ going: null });
+        return json([], 404);
+      }),
+    );
+    return {
+      posts,
+      lose: (to: 'off' | 'gone') => {
+        now = to;
+      },
+    };
+  }
+  const writer = signedIn({ name: 'Wren', identity: 'wren-t824@example.com', readWrite: true });
+  async function ranOnce() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(ME_QUERY.queryKey, writer);
+    render(
+      <QueryClientProvider client={client}>
+        <SqlWorkspace />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /^Data source (?!and schema)/ }));
+    await userEvent.click(screen.getByRole('option', { name: /emea_replica/ }));
+    await screen.findByTestId('sql-warning');
+    const view = EditorView.findFromDOM(document.querySelector<HTMLElement>('.sql-editor .cm-editor')!)!;
+    act(() => {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'SELECT 1 AS one' } });
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await screen.findByRole('table', { name: 'Result: 1 row, 1 column' });
+    return view;
+  }
+
+  it('says “The SQL runner was turned off for ‹source›” on Run, which can’t start, the tab keeping its text and result', async () => {
+    const server = api();
+    const view = await ranOnce();
+    server.lose('off');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    const held = await screen.findByRole('button', { name: 'The SQL runner was turned off for emea_replica.' });
+    expect(held.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText('The tab keeps its text and its last result. Choosing another source from the picker lets it run again.').tagName).toBe('P');
+    // Its text and its last result kept; nothing more sent.
+    expect(view.state.doc.toString()).toBe('SELECT 1 AS one');
+    expect(screen.getAllByRole('table', { name: 'Result: 1 row, 1 column' })).toHaveLength(1);
+    expect(server.posts).toHaveLength(2);
+    // The run line says it's off.
+    expect(screen.getByTestId('sql-runner-off').textContent).toBe('Off');
+  });
+
+  it('says the source “isn’t available to you” on Run, never naming it again, once access is lost', async () => {
+    const server = api();
+    await ranOnce();
+    server.lose('gone');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    expect((await screen.findByTestId('sql-access-lost')).textContent).toBe(
+      'This tab’s data source isn’t available to you.Choose a data source: this one isn’t available to you.',
+    );
+    // Named nowhere: not on the tab, nor the picker, nor the centre.
+    const tab = screen.getByRole('tab', { selected: true });
+    expect(tab.getAttribute('aria-label')).toBe('Query 1, Not run yet');
+    expect(screen.getByRole('button', { name: /^Data source (?!and schema)/ }).textContent).toContain('Choose…');
+    expect(screen.getByRole('region', { name: 'SQL runner' }).textContent).not.toContain('emea_replica');
+    expect(screen.queryByRole('button', { name: 'Run' })).toBeNull();
+  });
+});

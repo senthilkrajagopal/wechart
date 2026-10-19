@@ -58,6 +58,12 @@ export function RunLine({ source, warningId }: { readonly source: SqlSource; rea
               </>
             )}
           </span>
+        ) : !runner.runs ? (
+          // Turned off since the tab was opened (T824, AC-466; design 17's L1).
+          <span className="status status--idle" data-testid="sql-runner-off">
+            <StatusIcon kind="idle" />
+            Off
+          </span>
         ) : null}
       </div>
       <p id={warningId} className="notebar notebar--warn sql-runner__warning" data-testid="sql-warning">

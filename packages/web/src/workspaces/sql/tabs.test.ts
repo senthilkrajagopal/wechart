@@ -93,6 +93,50 @@ describe('a tab, bound to one data source (T800, AC-450)', () => {
     expect(added.active).toBe('c');
   });
 
+  // T824 (AC-466, AC-373): the next Run found the source turned off, or no longer the user's.
+  it('keeps a tab’s text and last result when its source is found turned off, and marks it so', () => {
+    const before = { kind: 'done' as const, outcome: { outcome: 'busy' as const, error: 'Busy' }, sql: 'SELECT 1', at: 1 };
+    const state: TabsState = {
+      tabs: [{ ...tab({ id: 'a', name: 'Query 1', sourceId: 'fx' }), sql: 'SELECT 1', run: { kind: 'running', at: 2 } }],
+      active: 'a',
+    };
+
+    const lost = tabsReducer(state, { kind: 'lost', id: 'a', sourceId: 'fx', at: 2, why: 'off', run: before }, ids);
+
+    expect(lost.tabs[0]?.turnedOff).toBe(true);
+    expect(lost.tabs[0]?.sourceId).toBe('fx');
+    expect(lost.tabs[0]?.sql).toBe('SELECT 1');
+    expect(lost.tabs[0]?.run).toEqual(before);
+  });
+
+  it('drops a tab’s source, its result and its name for it when access to it is lost, keeping its text', () => {
+    const state: TabsState = {
+      tabs: [{ ...tab({ id: 'a', name: 'Query 1', sourceId: 'fx' }), sql: 'SELECT 1', run: { kind: 'running', at: 2 } }],
+      active: 'a',
+    };
+
+    const lost = tabsReducer(state, { kind: 'lost', id: 'a', sourceId: 'fx', at: 2, why: 'access', run: null }, ids);
+
+    expect(lost.tabs[0]?.accessLost).toBe(true);
+    expect(lost.tabs[0]?.sourceId).toBe('');
+    expect(lost.tabs[0]?.sql).toBe('SELECT 1');
+    expect(lost.tabs[0]?.run).toBeNull();
+    // Another source chosen: neither mark stays.
+    const chosen = tabsReducer(lost, { kind: 'source', id: 'a', sourceId: 'emea' }, ids);
+    expect(chosen.tabs[0]?.accessLost).toBeUndefined();
+    expect(chosen.tabs[0]?.turnedOff).toBeUndefined();
+  });
+
+  it('marks nothing for a run of before the tab moved to another source, or another run', () => {
+    const state: TabsState = {
+      tabs: [{ ...tab({ id: 'a', name: 'Query 1', sourceId: 'emea' }), run: { kind: 'running', at: 5 } }],
+      active: 'a',
+    };
+
+    expect(tabsReducer(state, { kind: 'lost', id: 'a', sourceId: 'fx', at: 5, why: 'off', run: null }, ids)).toBe(state);
+    expect(tabsReducer(state, { kind: 'lost', id: 'a', sourceId: 'emea', at: 4, why: 'off', run: null }, ids)).toBe(state);
+  });
+
   // T823 (AC-464): "Open in SQL runner" opens a new tab on that data source.
   it('opens a new tab on a given data source, after the others, and selects it', () => {
     const state: TabsState = {

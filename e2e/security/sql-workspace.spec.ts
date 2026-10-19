@@ -1653,3 +1653,134 @@ test.describe('a run going, across tabs and away (T804, AC-452, AC-379)', () => 
     }
   });
 });
+
+/**
+ * T824 (AC-466, AC-373; design 17's L): a tab open on a source whose runner
+ * a Super-Admin turns off, or whose folder access the member loses, can't
+ * run; its next Run says so, without naming a lost source again, and the API
+ * refuses a run in both. In a folder of its own, so the file's others keep
+ * theirs.
+ */
+test.describe('a tab whose source is turned off, or whose access is lost, mid-session (T824, AC-466, AC-373)', () => {
+  const LOST = { off: `sqlws_lostoff_${RUN}`, gone: `sqlws_gone_${RUN}` };
+  const lost = { folderId: '', off: '', gone: '' };
+  /** The editor's text replaced by `sql`, typed as a person types it. */
+  async function typeSql(page: Page, sql: string) {
+    await page.locator('.sql-editor .cm-content').click();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.press('Delete');
+    await page.keyboard.type(sql);
+  }
+
+  test.beforeAll(async ({ browser }) => {
+    const admin = await signedIn(browser, 'super');
+    try {
+      const request = admin.page.request;
+      const made = await request.post('/api/documents', {
+        data: { kind: 'folder', title: `SQL lost ${RUN}`, folderId: 'root' },
+      });
+      expect(made.status()).toBe(201);
+      lost.folderId = ((await made.json()) as { id: string }).id;
+      const access = await request.put(`/api/folders/${lost.folderId}/access`, {
+        data: { readOnly: [], readWrite: ['managers'] },
+      });
+      expect(access.status()).toBe(200);
+      for (const which of ['off', 'gone'] as const) {
+        const source = await request.post('/api/data-sources', {
+          data: await testedSource(request, {
+            folderId: lost.folderId,
+            name: LOST[which],
+            driver: 'postgres',
+            authMethod: 'password',
+            fields: FIELDS,
+            sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', FIELDS, 'sample') },
+          }),
+        });
+        expect(source.status(), await source.text()).toBe(201);
+        lost[which] = ((await source.json()) as { id: string }).id;
+        const on = await request.put(`/api/data-sources/${lost[which]}/sql-runner`, {
+          data: { on: true, readOnlyConfirmed: true },
+        });
+        expect(on.status(), await on.text()).toBe(200);
+      }
+    } finally {
+      await admin.context.close();
+    }
+  });
+
+  test.afterAll(async ({ browser }) => {
+    const admin = await signedIn(browser, 'super');
+    try {
+      for (const id of [lost.off, lost.gone])
+        if (id !== '') await admin.page.request.delete(`/api/data-sources/${id}`);
+      if (lost.folderId !== '')
+        await admin.page.request.delete(`/api/documents/folder/${lost.folderId}`);
+    } finally {
+      await admin.context.close();
+    }
+  });
+
+  test('Run says the runner was turned off for the source, or that it isn’t available, and can’t start; the API refuses both', async ({
+    browser,
+  }) => {
+    const { context, page } = await signedIn(browser, 'manager');
+    const admin = await signedIn(browser, 'super');
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      // A tab on the first, which runs.
+      await page.goto(`/sql?source=${lost.off}`);
+      await expect(page).toHaveURL(/\/sql\?tab=[0-9a-f]{8}$/);
+      await typeSql(page, 'SELECT 1 AS one');
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+      await expect(page.getByRole('table', { name: 'Result: 1 row, 1 column' })).toBeVisible();
+
+      // A Super-Admin turns its runner off: the tab's next Run says so, and can't start.
+      const off = await admin.page.request.put(`/api/data-sources/${lost.off}/sql-runner`, {
+        data: { on: false },
+      });
+      expect(off.status(), await off.text()).toBe(200);
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+      const held = page.getByRole('button', {
+        name: `The SQL runner was turned off for ${LOST.off}.`,
+      });
+      await expect(held).toBeDisabled();
+      await expect(page.getByTestId('sql-runner-off')).toHaveText('Off');
+      // Its text and its last result kept.
+      await expect(page.locator('.sql-editor .cm-content')).toHaveText('SELECT 1 AS one');
+      await expect(page.getByRole('table', { name: 'Result: 1 row, 1 column' })).toBeVisible();
+      const refusedOff = await page.request.post(`/api/data-sources/${lost.off}/sql`, {
+        data: { sql: 'SELECT 1' },
+      });
+      expect(refusedOff.status()).toBe(403);
+
+      // A tab on the second, which runs.
+      await page.goto(`/sql?source=${lost.gone}`);
+      await expect(page).toHaveURL(/\/sql\?tab=[0-9a-f]{8}$/);
+      await typeSql(page, 'SELECT 2 AS two');
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+      await expect(page.getByRole('table', { name: 'Result: 1 row, 1 column' })).toBeVisible();
+
+      // The member's group taken off the folder: the next Run says the source
+      // isn't available, naming it nowhere.
+      const access = await admin.page.request.put(`/api/folders/${lost.folderId}/access`, {
+        data: { readOnly: [], readWrite: [] },
+      });
+      expect(access.status(), await access.text()).toBe(200);
+      await page.getByRole('button', { name: 'Run', exact: true }).click();
+      await expect(page.getByTestId('sql-access-lost')).toHaveText(
+        'This tab’s data source isn’t available to you.Choose a data source: this one isn’t available to you.',
+      );
+      await expect(page.getByRole('button', { name: 'Run', exact: true })).toHaveCount(0);
+      const open = page.getByRole('tablist', { name: 'SQL tabs' }).getByRole('tab', { selected: true });
+      await expect(open).toHaveAttribute('aria-label', /^Query \d+, Not run yet$/);
+      await expect(workspace(page)).not.toContainText(LOST.gone);
+      const refusedGone = await page.request.post(`/api/data-sources/${lost.gone}/sql`, {
+        data: { sql: 'SELECT 1' },
+      });
+      expect([403, 404]).toContain(refusedGone.status());
+    } finally {
+      await admin.context.close();
+      await context.close();
+    }
+  });
+});

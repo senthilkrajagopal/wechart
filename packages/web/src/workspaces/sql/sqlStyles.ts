@@ -148,6 +148,8 @@ main:has(.sql-workspace) {
 .sql-empty > svg { flex: none; margin-top: 3px; color: var(--wc-text-muted); }
 .sql-empty > p { flex: 1 1 240px; margin: 0; max-width: 60ch; }
 .sql-empty > .btn { flex: none; }
+/* Lost access: two sentences, one a line (design 17, L2). */
+.sql-empty__line { display: block; }
 /* An off source chosen: its panel in the editor's place (design 17, B2). */
 .sql-centre__off { flex: 1; min-height: 0; overflow: auto; padding: var(--wc-surface-padding); }
 

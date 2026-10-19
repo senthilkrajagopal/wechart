@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useId, useRef, useState, type Dispatch, type ReactNode } from 'react';
 
 import { clockOf } from '../../shell/formatTime';
@@ -23,7 +23,8 @@ import { MakeFromButtons, type MakeKind } from './ResultHead';
 import { RunLine } from './RunLine';
 import { runState, type RunState } from './runState';
 import { dialectFor, statementAt } from './statementAt';
-import { routeOf, type SqlSource } from './sqlSource';
+import { SQL_SOURCES_QUERY } from './sources';
+import { pageKeyOf, routeOf, type SqlSource } from './sqlSource';
 import { SaveDialog } from './SaveDialog';
 import { SAVED_QUERIES } from './SavedList';
 import { SaveKeyContext } from './saveKey';
@@ -65,6 +66,32 @@ function outcomeOf(status: number, body: unknown): SqlOutcome {
     outcome: 'error',
     error: typeof said.error === 'string' ? said.error : `The run failed (${String(status)}).`,
   };
+}
+
+/** A refusal of who may run there (403, or 404 for one no longer seen), with no run's outcome. */
+const refusedBefore = (status: number, body: unknown): boolean =>
+  (status === 403 || status === 404) &&
+  typeof (body as { outcome?: unknown } | null)?.outcome !== 'string';
+
+/**
+ * Whether the tab's source was turned off, or taken from the user, since it
+ * was opened (T824, AC-466; design 17's L): the picker's list read again, as
+ * the API's own rule lists it, and the source's page read again. None where
+ * the list still has it on, or can't be read.
+ */
+async function lostSince(
+  queryClient: QueryClient,
+  source: SqlSource,
+): Promise<'off' | 'access' | null> {
+  const rows = await queryClient
+    .fetchQuery({ ...SQL_SOURCES_QUERY, staleTime: 0 })
+    .catch(() => undefined);
+  if (rows === undefined) return null;
+  const row = rows.find((each) => each.id === source.id);
+  const lost = row === undefined ? 'access' : row.runner === 'off' ? 'off' : null;
+  // Its page says so too, for the tab drawn from it.
+  if (lost !== null) await queryClient.invalidateQueries({ queryKey: pageKeyOf(source) });
+  return lost;
 }
 
 /** A finished run's rows, or a stopped one's read before its stop (T545); none otherwise. */
@@ -285,14 +312,18 @@ export function QueryTab({
   const parametersHold = (names: readonly string[]) =>
     names.length === 0 ? null : (unbound ?? heldFor(missingValues(names, tab.params)));
 
+  /** Turned off since the tab was opened (T824, AC-466; design 17's L1): Run held. */
+  const off = !source.sqlRunner.runs;
   const run = async (sql: string) => {
     // One run per person, across every tab: held while another goes (AC-452, AC-379).
-    if (running || hold !== null || sending.current || sql.trim() === '') return;
+    if (off || running || hold !== null || sending.current || sql.trim() === '') return;
     // Held while a parameter has no value, or can't be bound, ⌘/Ctrl+Enter included (T809, T810).
     if (parametersHold(parameterNames(tab.sql, dialect)) !== null) return;
     sending.current = true;
     setCancelFailed(null);
     const at = Date.now();
+    /** Its result of before: kept if the run finds the source turned off (L1). */
+    const before = tab.run;
     dispatch({ kind: 'run-start', id: tab.id, sql, at });
     setSaid('Running');
     // Its values beside it, for xcube to bind, never written in; only those of
@@ -309,7 +340,23 @@ export function QueryTab({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(parameters.length > 0 ? { sql, parameters } : { sql }),
       });
-      outcome = outcomeOf(response.status, await response.json().catch(() => null));
+      const body: unknown = await response.json().catch(() => null);
+      // Refused before a run: has the source been turned off, or taken from
+      // the user, since the tab opened? The picker's list says (T824, AC-466).
+      if (refusedBefore(response.status, body)) {
+        const lost = await lostSince(queryClient, source);
+        if (lost !== null) {
+          sending.current = false;
+          dispatch({ kind: 'lost', id: tab.id, sourceId: source.id, at, why: lost, run: before });
+          setSaid(
+            lost === 'off'
+              ? `The SQL runner was turned off for ${source.name}.`
+              : 'This tab’s data source isn’t available to you.',
+          );
+          return;
+        }
+      }
+      outcome = outcomeOf(response.status, body);
     } catch {
       // The page is being left, which drops its request, not the run: the
       // tab keeps it going, for the next page to follow (T804, AC-452).
@@ -554,10 +601,17 @@ export function QueryTab({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={running || held || wanting !== null || toRun.trim() === ''}
+            disabled={off || running || held || wanting !== null || toRun.trim() === ''}
             onClick={() => void run(toRun)}
           >
-            {running ? 'Running…' : selected === '' ? 'Run' : 'Run selection'}
+            {/* Held, saying why, once found turned off (T824, AC-466; L1). */}
+            {off
+              ? `The SQL runner was turned off for ${source.name}.`
+              : running
+                ? 'Running…'
+                : selected === ''
+                  ? 'Run'
+                  : 'Run selection'}
           </button>
           {held ? <span className="sql-runner__note">held while your other run goes</span> : null}
           {!running && wanting !== null ? (
@@ -583,6 +637,12 @@ export function QueryTab({
             {LIMITS}
           </span>
         </div>
+        {off ? (
+          <p className="sql-runner__note" data-testid="sql-turned-off-help">
+            The tab keeps its text and its last result. Choosing another source from the picker lets
+            it run again.
+          </p>
+        ) : null}
       </div>
       {grip}
       <div className="sql-centre__results sql-query__results" data-testid="sql-results-area">

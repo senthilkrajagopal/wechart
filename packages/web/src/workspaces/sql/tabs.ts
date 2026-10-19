@@ -63,6 +63,16 @@ export interface SqlTab {
    * on, none chosen since: its empty state says so (T814, AC-459).
    */
   readonly sourceLost?: true;
+  /**
+   * Its source's runner was found turned off by its next Run (T824, AC-466;
+   * design 17's L1): Run held, saying so, its text and last result kept.
+   */
+  readonly turnedOff?: true;
+  /**
+   * Its source was found no longer the user's by its next Run (T824, AC-466;
+   * L2): none chosen, and that source never named again.
+   */
+  readonly accessLost?: true;
   readonly sql: string;
   /** Its parameters' values, by name (AC-451). */
   readonly params: Readonly<Record<string, string>>;
@@ -147,6 +157,19 @@ export type TabsAction =
   /** A saved query renamed in the Saved tab: the tabs holding it take the name (T813). */
   | { readonly kind: 'saved-renamed'; readonly savedId: string; readonly name: string }
   | { readonly kind: 'run-start'; readonly id: string; readonly sql: string; readonly at: number }
+  /**
+   * The run started at `at` on `sourceId` was refused, and its source found
+   * turned off or no longer the user's (T824, AC-466): `run` is the tab's
+   * result of before, which an `off` tab keeps.
+   */
+  | {
+      readonly kind: 'lost';
+      readonly id: string;
+      readonly sourceId: string;
+      readonly at: number;
+      readonly why: 'off' | 'access';
+      readonly run: TabRun | null;
+    }
   /** The page came back from the browser's cache: runs going lost their answer (T804). */
   | { readonly kind: 'runs-kept'; readonly at: number }
   | {
@@ -286,9 +309,9 @@ export function tabsReducer(
             ...state,
             tabs: state.tabs.map((tab) => {
               if (tab !== target) return tab;
-              // One chosen: no longer the lost one's (T814).
+              // One chosen: no longer the lost one's (T814, T824).
               // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              const { sourceLost, ...rest } = tab;
+              const { sourceLost, turnedOff, accessLost, ...rest } = tab;
               return { ...rest, sourceId: action.sourceId, run: null };
             }),
           };
@@ -347,6 +370,25 @@ export function tabsReducer(
         : change(state, target, { paramTypes: { ...target.paramTypes, [action.name]: action.type } });
     case 'run-start':
       return change(state, target, { run: { kind: 'running', at: action.at }, lastRunSql: action.sql });
+    case 'lost': {
+      // Only for the run going now, on the source it went on (as run-done).
+      if (
+        target?.sourceId !== action.sourceId ||
+        target.run?.kind !== 'running' ||
+        target.run.at !== action.at
+      )
+        return state;
+      if (action.why === 'off') return change(state, target, { turnedOff: true, run: action.run });
+      // Never named again: no source, no result (L2).
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { sourceLost, turnedOff, ...rest } = target;
+      return {
+        ...state,
+        tabs: state.tabs.map((tab) =>
+          tab === target ? { ...rest, sourceId: '', accessLost: true as const, run: null } : tab,
+        ),
+      };
+    }
     case 'runs-kept': {
       const going = state.tabs.filter((tab) => tab.run?.kind === 'running' && tab.run.kept === undefined);
       if (going.length === 0) return state;

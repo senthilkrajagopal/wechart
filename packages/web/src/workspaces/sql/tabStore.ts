@@ -54,6 +54,8 @@ function tabOf(value: unknown): SqlTab | null {
     name: kept.name,
     sourceId: kept.sourceId,
     ...(kept.sourceLost === true && kept.sourceId === '' ? { sourceLost: true as const } : {}),
+    // Its source never named again, after a reload too (T824, AC-466).
+    ...(kept.accessLost === true && kept.sourceId === '' ? { accessLost: true as const } : {}),
     sql: kept.sql,
     params: params as Record<string, string>,
     ...typesOf(kept.paramTypes),
