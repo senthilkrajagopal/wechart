@@ -1844,10 +1844,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T866 (AC-511) Below 1,024 px, keep axis titles above their axes, compact ticks, thinned category labels, a wrapped legend and reference labels without values
 
-- [ ] T867 (AC-037, AC-497, AC-499) A combo of three measures on two axes, made in the editor, saved, reopened and drawn the same on its dashboard
-  - Files: `e2e/combo.spec.ts`.
-  - Failing test: `combo.spec.ts`: in the chart editor, a combo of Revenue (bars), Revenue target (points) and Margin % (line, right) saves; reopened, Customize › Series shows the same; on the dashboard the tile's two zero lines are within 1 px of each other and the right axis's ticks fall on the left's gridlines (AC-037, AC-497, AC-499).
-  - Depends on: T858, T861
+- [x] T867 (AC-037, AC-497, AC-498, AC-499) A combo of three measures on two axes, made in the editor, saved, reopened and drawn the same on its dashboard
 
 ### Lane TEXT: the document
 
@@ -2675,7 +2672,7 @@ The chart types not started are parked: the waterfall (T948–T952), the histogr
 | AC-496 | T829, T843 | AC-196 (again, the compact header, `[R79]`) | T828, T829 | AC-200 (again, compact chips, `[R79]`) | T838 |
 | AC-119 (again, compact chips and Escape's order, `[R79]`) | T834, T838 | AC-352 (again, design 19) | T844 | AC-343 (again, design 19) | T844 |
 | AC-187 (design 19 counts as conformance) | T844 | AC-195, AC-206, AC-056, AC-098, AC-304 (held, retested with the compact header) | T830, T836, T838, T842 | | |
-| AC-497 | T845, T846, T855, T856, T857, T867 | AC-498 | T845, T855 | AC-499 | T847, T858, T867 |
+| AC-497 | T845, T846, T855, T856, T857, T867 | AC-498 | T845, T855, T867 | AC-499 | T847, T858, T867 |
 | AC-500 | T848, T857 | AC-501 | T849, T858 | AC-502 | T850, T858 |
 | AC-503 | T851, T859 | AC-504 | T852, T855, T860 | AC-505 | T853, T860 |
 | AC-506 | T854 | AC-507 | T862 | AC-508 | T863 |

@@ -22,7 +22,7 @@ const TEXT_SECONDARY = '#5c5b57';
  */
 async function comboDashboard(
   request: APIRequestContext,
-  chart: { wells?: object; options?: object; granularities?: object } = {},
+  chart: { wells?: object; options?: object; granularities?: object; chartType?: string } = {},
 ) {
   const title = `Combo ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = (await (
@@ -51,7 +51,7 @@ async function comboDashboard(
             timeDimensions: [],
           },
           ...(chart.granularities === undefined ? {} : { granularities: chart.granularities }),
-          chartType: 'combo',
+          chartType: chart.chartType ?? 'combo',
           options: chart.options ?? {
             series: { 'orders.count': { mark: 'point', axis: 'right' } },
           },
@@ -80,7 +80,7 @@ async function comboDashboard(
     },
   });
   expect(placed.ok(), await placed.text()).toBe(true);
-  return { id: dashboard.id, title };
+  return { id: dashboard.id, title, chartId: made.id };
 }
 
 /** The tile's text, each with where it is and its fill. */
@@ -813,6 +813,161 @@ test('adds, lists and deletes a combo’s reference lines in Customize, with Und
   await expect(rows.nth(0).getByTestId('reference-outside')).toHaveCount(0);
   await expect.poll(dashed).toBe(2);
   await expect.poll(() => canvas.locator('svg text').allTextContents()).not.toContain('Far away');
+});
+
+/**
+ * T867 (AC-037, AC-497, AC-498, AC-499; design 20 end to end): a combo of
+ * three measures on two axes made in the dashboard's chart editor: Auto first,
+ * bars then lines, all on the left; a choice kept through a measure removed
+ * and added again; Back to Auto restoring a row; saved with the dashboard and
+ * reopened the same; and drawn on the dashboard with its two zero lines level
+ * and the right axis's ticks on the left's gridlines.
+ */
+test('makes a combo of three measures on two axes in the editor, saves it, reopens it the same, and draws it aligned on its dashboard (T867)', async ({
+  page,
+  request,
+}) => {
+  const { id, title, chartId } = await comboDashboard(request, {
+    chartType: 'bar',
+    wells: { measures: ['orders.total_amount'], dimensions: [], timeDimensions: ['orders.ordered_at'] },
+    granularities: { 'orders.ordered_at': 'month' },
+    options: {},
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-combo"]');
+  await expect(tile.getByTestId('chart-canvas')).toHaveAttribute('data-chart-type', 'bar');
+
+  const editor = page.getByTestId('chart-editor-overlay');
+  await page.getByTestId('edit-chart-tile-combo').click();
+  await expect(editor).toBeVisible();
+  await wellPicker(editor, 'measures').selectOption('orders.average_amount');
+  await wellPicker(editor, 'measures').selectOption('orders.count');
+  await chooseChartType(page, 'combo');
+
+  // Each measure by its title, as the dashboard's editor names it.
+  const TOTAL = 'Orders Total Amount';
+  const AVERAGE = 'Orders Average Amount';
+  const COUNT = 'Orders Count';
+  const group = (name: string) => editor.getByRole('radiogroup', { name, exact: true });
+
+  /** Each series' row in Customize › Series: its mark and axis as checked. */
+  const openSeries = async () => {
+    await editor.getByRole('tab', { name: 'Customize' }).click();
+    const rows = group(`${TOTAL} mark`);
+    if (!(await rows.isVisible())) await editor.locator('summary', { hasText: /^Series/ }).click();
+    await expect(rows).toBeVisible();
+  };
+  const checked = (name: string) =>
+    group(name).getByRole('radio', { checked: true }).getAttribute('aria-label');
+  const rowsAre = async (expected: Record<string, [string, string]>) => {
+    for (const [name, [mark, axis]] of Object.entries(expected)) {
+      await expect.poll(() => checked(`${name} mark`)).toBe(mark);
+      await expect.poll(() => checked(`${name} axis`)).toBe(axis);
+    }
+  };
+  const backToAuto = editor.getByRole('button', { name: /^Back to Auto for / });
+
+  // Auto: the first as bars, the rest as lines, all on the left (AC-498).
+  await openSeries();
+  await rowsAre({
+    [TOTAL]: ['Bar', 'Left'],
+    [AVERAGE]: ['Line', 'Left'],
+    [COUNT]: ['Line', 'Left'],
+  });
+  await expect(backToAuto).toHaveCount(0);
+
+  // Count on the right: its row offers Back to Auto (AC-497, AC-498).
+  await group(`${COUNT} axis`).getByRole('radio', { name: 'Right' }).check();
+  await expect(backToAuto).toHaveAccessibleName(`Back to Auto for ${COUNT}: line, left`);
+  // The pill and Customize agree (AC-497).
+  await editor.getByRole('tab', { name: 'Data' }).click();
+  await expect(editor.getByTestId('in-measures-orders.count').getByTestId('pill-axis')).toHaveText(
+    'R',
+  );
+
+  // Another measure removed and added again: Count stays where it was put.
+  await editor
+    .getByTestId('in-measures-orders.average_amount')
+    .getByRole('button', { name: /Change mark or axis$/ })
+    .click();
+  await page.getByRole('menuitem', { name: 'Remove' }).click();
+  await expect(editor.getByTestId('in-measures-orders.average_amount')).toHaveCount(0);
+  await wellPicker(editor, 'measures').selectOption('orders.average_amount');
+  await openSeries();
+  await rowsAre({ [COUNT]: ['Line', 'Right'] });
+
+  // Average Amount as points; Total Amount as an area, then Back to Auto.
+  await group(`${AVERAGE} mark`).getByRole('radio', { name: 'Point' }).check();
+  await group(`${TOTAL} mark`).getByRole('radio', { name: 'Area' }).check();
+  await editor
+    .getByRole('button', { name: `Back to Auto for ${TOTAL}: bar, left`, exact: true })
+    .click();
+  const saved = {
+    [TOTAL]: ['Bar', 'Left'],
+    [AVERAGE]: ['Point', 'Left'],
+    [COUNT]: ['Line', 'Right'],
+  } satisfies Record<string, [string, string]>;
+  await rowsAre(saved);
+  await expect(editor.getByRole('button', { name: `Back to Auto for ${TOTAL}` })).toHaveCount(0);
+
+  // Saved with the dashboard: the chart as stored says the same (AC-037).
+  await editor.getByRole('button', { name: 'Save dashboard', exact: true }).click();
+  await expect(editor).toBeHidden();
+  await expect
+    .poll(async () => {
+      const document = (await (await request.get(`${API}/documents/chart/${chartId}`)).json()) as {
+        body: { chart: { chartType?: string; options?: { series?: unknown } } };
+      };
+      return { type: document.body.chart.chartType, series: document.body.chart.options?.series };
+    })
+    .toEqual({
+      type: 'combo',
+      series: {
+        'orders.average_amount': { mark: 'point' },
+        'orders.count': { axis: 'right' },
+      },
+    });
+
+  // Reopened after a reload: Customize › Series shows the same.
+  await page.reload();
+  await expect(tile.getByTestId('chart-canvas')).toHaveAttribute('data-chart-type', 'combo');
+  await page.getByTestId('edit-chart-tile-combo').click();
+  await expect(editor).toBeVisible();
+  await openSeries();
+  await rowsAre(saved);
+  await page.getByTestId('editor-back').click();
+  await expect(editor).toBeHidden();
+
+  // The tile draws each with its mark on its axis, as its text alternative
+  // says: by legend name, in the Metrics well's order, Average Amount last
+  // since it was added again.
+  await expect(tile.getByTestId('chart-text-alternative')).toHaveText(
+    'Combo, by month. Total Amount: bars, left axis, dollars. Count: line, right axis, numbers. Average Amount: points, left axis, dollars. Axes aligned at zero. 3 series.',
+  );
+
+  // On the dashboard: both zero lines level, within 1 px; as many ticks on
+  // the right as on the left, each on one of the left's gridlines (AC-499).
+  await expect.poll(async () => (await textsIn(page)).map((one) => one.text)).toContain('(right)');
+  const plot = (await tile.locator('svg').first().boundingBox())!;
+  const texts = await textsIn(page);
+  const left = texts.filter((one) => /^\$\d/.test(one.text) && one.x < plot.x + plot.width / 2);
+  const right = texts.filter((one) => /^\d/.test(one.text) && one.x > plot.x + plot.width * 0.8);
+  expect(left.length).toBeGreaterThan(1);
+  expect(right).toHaveLength(left.length);
+  const leftZero = left.find((one) => one.text === '$0');
+  const rightZero = right.find((one) => one.text === '0');
+  expect(Math.abs(leftZero!.y - rightZero!.y)).toBeLessThanOrEqual(1);
+  const gridlines = await tile.locator('svg path').evaluateAll(
+    (nodes, width) =>
+      nodes
+        .map((node) => node.getBoundingClientRect())
+        .filter((box) => box.height <= 1 && box.width > width / 2)
+        .map((box) => box.top + box.height / 2),
+    plot.width,
+  );
+  for (const tick of right)
+    expect(Math.min(...gridlines.map((line) => Math.abs(line - tick.y)))).toBeLessThanOrEqual(1);
 });
 
 /**

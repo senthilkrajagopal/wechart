@@ -111,3 +111,9 @@ Lane COMBO's ticked tasks from `docs/tasks.md` §P2.26 (F44), their sub-lines wo
   - Files: `packages/charts/src/series/combo.ts`, `packages/charts/src/combo/references.ts`, `e2e/combo.spec.ts`.
   - Failing test: the e2e at 390 px: a combo tile's axis titles sit above their axes; no two category labels' boxes overlap; the reference label reads "Monthly plan" alone and its tooltip "$100K"; the document doesn't scroll sideways (AC-511).
   - Depends on: T848, T863
+
+- [x] T867 (AC-037, AC-497, AC-498, AC-499) A combo of three measures on two axes, made in the editor, saved, reopened and drawn the same on its dashboard
+  - Files: `e2e/combo.spec.ts`.
+  - Failing test: `combo.spec.ts`: in the chart editor, a combo of Revenue (bars), Revenue target (points) and Margin % (line, right) saves; reopened, Customize › Series shows the same; on the dashboard the tile's two zero lines are within 1 px of each other and the right axis's ticks fall on the left's gridlines (AC-037, AC-497, AC-499).
+  - Depends on: T858, T861
+  - Added 2026-10-19 (lane COMBO): AC-498 joins the line. The same e2e shows Auto drawing bars and then lines, all on the left; Count kept on the right while Average Amount is removed and added again; and Back to Auto restoring Total Amount's bar. The sample model has no Revenue target or Margin %, so Total Amount (bars), Average Amount (points) and Count (line, right) stand in for them.
