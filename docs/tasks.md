@@ -2270,10 +2270,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T973 (AC-622, AC-305, AC-037) One Map type in place of the Country map: a boundary set and Regions, Points and Density layers in its spec, and saved country maps opening as Regions on Countries, unchanged
 
-- [ ] T974 (AC-623) A region key for every boundary set, from its values or the model's mark, and every unplaced value named in the page's text
-  - Files: `packages/core/src/geo/regionKeys.ts` (+ test), `packages/core/src/geo/iso3.ts`, `packages/web/src/workspaces/model/form/ObjectForm.tsx`, `packages/web/src/workspaces/model/form/regionKey.test.tsx`, `packages/web/src/tiles/UnplacedCodes.tsx`.
-  - Failing test: `regionKeys.test.ts`: a dimension whose values are all keys of a set is its key; `meta.wechart.regionKey` naming the set counts whatever the values, and `false` never counts; ISO-3 dimensions keep AC-313's behaviour; `regionKey.test.tsx`: the model form sets and clears the mark; `UnplacedCodes.test.tsx`: "Online" is listed under the map as "Not on the map: "Online" (no territory)" in the DOM (AC-623). Since R83: an Admin-1 region counts by its ISO 3166-2 code and by its English name ("DE-BY", "Bavaria"), and a value matching more than one region is named "(matches more than one region)" and never placed.
-  - Depends on: T973
+- [x] T974 (AC-623) A region key for every boundary set, from its values or the model's mark, and every unplaced value named in the page's text
 
 - [ ] T975 (AC-624) Draw a Regions layer on the Admin-1 boundary set with the sequential ramp, the "No data" swatch and 0.5 px surface boundaries
   - Files: `packages/charts/src/geo/admin1.ts`, `packages/charts/src/geo/` (the dataset), `packages/charts/src/series/map.ts`, `packages/charts/src/series/mapRegions.test.ts`.
