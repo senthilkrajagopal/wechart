@@ -535,6 +535,24 @@ describe('the members a Text document names (T872)', () => {
     expect(textDocumentProblems(renamed)).toEqual([]);
   });
 
+  // T872's review: a stored or posted document is read before it is checked,
+  // so only what is a member's name is named, as a token's is.
+  it('names nothing that isn’t a member, cube.member', () => {
+    const odd = {
+      version: TEXT_DOCUMENT_VERSION,
+      doc: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'value', attrs: { measure: 'x y.z', time: 'nodot' } }],
+          },
+        ],
+      },
+    } as TextDocument;
+    expect(textDocumentMembers(odd)).toEqual([]);
+  });
+
   it('gives back the same document when nothing is renamed', () => {
     expect(textDocumentRenamed(named, (member) => member)).toBe(named);
   });

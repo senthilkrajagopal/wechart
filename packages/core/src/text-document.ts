@@ -527,7 +527,9 @@ function membersOfElement(node: TextNode): string[] {
   const target = attrs['target'];
   if (isRecord(target) && target['kind'] === 'measure' && typeof target['measure'] === 'string')
     found.push(target['measure']);
-  return found;
+  // Read before the document is checked (T871), so only what is a member's
+  // name is named, as a token's is (T872's review).
+  return found.filter(isMember);
 }
 
 /**
