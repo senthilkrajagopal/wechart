@@ -127,6 +127,16 @@ describe('the interaction mode', () => {
     expect(read).toBe(BOTH);
   });
 
+  it('reads a stored mode with no cross-filter configuration as the default one, as saved or imported dashboards carry it (AC-117)', () => {
+    // The checkpoint's crash: `{ mode: 'crossFilter' }` alone, and the first
+    // cross-filter click read `pairs` of undefined.
+    const stored = { mode: 'crossFilter' } as unknown as Interactions;
+
+    const read = interactionsOf({ width: 'fixed', interactions: stored });
+
+    expect(read).toEqual({ mode: 'crossFilter', crossFilter: DEFAULT_INTERACTIONS.crossFilter });
+  });
+
   it('offers exactly the two modes direction.md names, and no third', () => {
     // Rule 13: "Every dashboard uses exactly one interaction mode … Markings
     // or Cross-filtering." A third would have no section in the settings nav

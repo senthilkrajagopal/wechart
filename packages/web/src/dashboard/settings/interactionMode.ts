@@ -37,7 +37,19 @@ export type { CrossFilterConfig, InteractionMode, Interactions, PairAction } fro
  * creation, in the API.
  */
 export function interactionsOf(settings: DashboardSettings): Interactions {
-  return settings.interactions ?? DEFAULT_INTERACTIONS;
+  const stored = settings.interactions as Partial<Interactions> | undefined;
+  if (stored === undefined) return DEFAULT_INTERACTIONS;
+  /**
+   * A saved or imported dashboard can carry a mode with no cross-filter
+   * configuration, `{ mode: 'crossFilter' }`, and the first cross-filter
+   * click read its pairs of undefined (AC-117; the checkpoint's crash). Such a
+   * part is at its default; a whole one is returned as it is, by identity.
+   */
+  if (stored.mode !== undefined && stored.crossFilter !== undefined) return stored as Interactions;
+  return {
+    mode: stored.mode ?? DEFAULT_INTERACTIONS.mode,
+    crossFilter: stored.crossFilter ?? DEFAULT_INTERACTIONS.crossFilter,
+  };
 }
 
 /**
