@@ -225,6 +225,34 @@ describe('a Text tile through MCP (T891, AC-527)', () => {
     ]);
   });
 
+  // Checkpoint 3 (AC-527, AC-512): a Large value came back a paragraph from
+  // every change_item, on tiles the client never touched.
+  it('keeps a Large value through a full read and write, on a tile changed and one untouched', async () => {
+    const large = doc(
+      { type: 'largeValue', content: [{ type: 'value', attrs: { measure: 'orders.revenue' } }] },
+      p({ type: 'text', text: 'Revenue this quarter' }),
+    );
+    const { call, sent } = webApp([
+      textTile({ id: 'kept', document: large }),
+      textTile({ id: 'changed', document: large }),
+    ]);
+    const read = dataOf(await tool('read_dashboard').run({ id: ID }, call));
+    const body = structuredClone(read.dashboard.body) as ReturnType<typeof dashboard>;
+    const section = body.pages[0]?.items[1] as { items: { markdown: string }[] };
+    const changed = section.items[1] as { markdown: string };
+    changed.markdown = changed.markdown.replace('this quarter', 'this year');
+    await tool('change_item').run({ kind: 'dashboard', id: ID, version: 1, body }, call);
+    const saved = (sent[0]?.body as { body: ReturnType<typeof dashboard> }).body;
+    const tiles = (saved.pages[0]?.items[1] as { items: { document: TextDocument }[] }).items;
+    expect(tiles[0]?.document).toEqual(large);
+    expect(tiles[1]?.document).toEqual(
+      doc(
+        { type: 'largeValue', content: [{ type: 'value', attrs: { measure: 'orders.revenue' } }] },
+        p({ type: 'text', text: 'Revenue this year' }),
+      ),
+    );
+  });
+
   it('matches the second token of a kind and source to the second stored one', async () => {
     const twice = doc(
       p(

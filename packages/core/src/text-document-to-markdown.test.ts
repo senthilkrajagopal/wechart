@@ -114,7 +114,8 @@ describe('a Text document written as markdown (T870, AC-527)', () => {
         '',
         '### Notes',
         '',
-        '{{measure:orders.revenue}}',
+        // A Large value (checkpoint 3: it was written as a paragraph).
+        '#### {{measure:orders.revenue}}',
         '',
         'Revenue is {{change:orders.revenue | vs:previous_period}} on last quarter, {{sparkline:orders.revenue}} and {{icon:orders.revenue}} against plan.\\',
         'Margin sits at {{bullet-graph:orders.margin}}, as of {{as-of:orders.revenue}}.',
@@ -169,6 +170,49 @@ describe('a Text document written as markdown (T870, AC-527)', () => {
         p(text('to '), text('Detail', bold, link('/explore/dashboards/d-42'))),
       ),
     );
+  });
+
+  // Checkpoint 3 (AC-527): a Large value was written as a paragraph, so a
+  // tile read and written back through MCP lost its Large value.
+  it('writes a Large value as #### and reads it back as a Large value; a legacy tile’s #### stays a heading', () => {
+    const large = doc(
+      { type: 'largeValue', content: [value] },
+      { type: 'largeValue', content: [text('$1.27M '), text('flat', bold)] },
+      p(text('#### typed, not a Large value')),
+    );
+    const markdown = textDocumentToMarkdown(large);
+    expect(markdown).toBe(
+      [
+        '#### {{measure:orders.revenue}}',
+        '',
+        '#### $1.27M **flat**',
+        '',
+        '\\#### typed, not a Large value',
+      ].join('\n'),
+    );
+    expect(roundTrip(large)).toEqual(large);
+    // A markdown tile saved before R80 is read as its tile drew it (AC-512).
+    expect(
+      textDocumentFromMarkdown('## Head\n\n#### Small').doc.content?.map((n) => n.type),
+    ).toEqual(['heading', 'heading']);
+  });
+
+  // Checkpoint 3 (AC-527): a label or an id holding a brace broke its token.
+  it('escapes a token’s words, so a label or id with braces, a bar or stars reads back whole', () => {
+    const odd = doc(
+      p(
+        el('actionButton', { label: 'Go {to} }} | **Detail**' }),
+        text(' '),
+        el('filterControl', { filter: 'f{1}' }),
+        text(' '),
+        el('parameterControl', { parameter: 'p_1}' }),
+        text(' '),
+        el('value', { measure: 'orders.revenue', marking: 'Picks {a}' }),
+        text(' '),
+        el('marking', { marking: 'Picks } b', show: 'count' }),
+      ),
+    );
+    expect(roundTrip(odd)).toEqual(odd);
   });
 
   it('keeps every element in the markdown, and its kind and source when read back as text', () => {

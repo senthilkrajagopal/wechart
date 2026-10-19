@@ -293,6 +293,12 @@ export function textDocumentFromMarkdown(
     if (heading !== null) {
       flushParagraph();
       flushList();
+      // Exported, `####` is a Large value (T870 writes one so); a markdown
+      // tile's `####` is a heading by its rank, as the tile drew it.
+      if (exported && (heading[1] ?? '').length === 4) {
+        blocks.push(withContent({ type: 'largeValue' }, inline(heading[2] ?? '')));
+        continue;
+      }
       const level = levelOf((heading[1] ?? '#').length);
       blocks.push(withContent({ type: 'heading', attrs: { level } }, inline(heading[2] ?? '')));
       continue;

@@ -23,12 +23,22 @@
  */
 import type { TextDocument, TextMark, TextNode } from './text-document';
 
+/**
+ * A token's words — a label, a filter's or a parameter's id, a marking's
+ * name — with every character that could end the token or read as markdown
+ * escaped (checkpoint 3: a `}` in a Button's label broke its token). T869
+ * reads a backslash before punctuation as that character, inside a token as
+ * elsewhere. A member's name is written as it is: it holds none of them.
+ */
+const tokenWords = (words: string) => words.replace(/[\\{}|*_`[\]]/g, '\\$&');
+
 /** An element's token: its kind and its source. */
 function tokenOf(node: TextNode): string {
   const attrs = node.attrs ?? {};
   const said = (key: string) => {
     const value = attrs[key];
-    return typeof value === 'string' ? value : '';
+    if (typeof value !== 'string') return '';
+    return key === 'measure' ? value : tokenWords(value);
   };
   switch (node.type) {
     case 'value':
@@ -230,8 +240,12 @@ function blockOf(node: TextNode): string {
         .map((item, index) => listItemOf(item, `${String(start + index)}.`))
         .join('\n');
     }
+    case 'largeValue':
+      // `####`, which exported markdown reads back as a Large value; its own
+      // headings stop at `###` (checkpoint 3: a Large value written as a
+      // paragraph was demoted by every MCP write).
+      return `#### ${inlineOf(node.content)}`;
     default:
-      // A paragraph, and a Large value, which has no markdown form of its own.
       return inlineOf(node.content);
   }
 }

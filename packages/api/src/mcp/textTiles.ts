@@ -130,10 +130,16 @@ export function dashboardFromMcp(
     if (tile['kind'] !== 'text' || typeof tile['markdown'] !== 'string') return tile;
     const { markdown, ...rest } = tile;
     const id = typeof tile['id'] === 'string' ? tile['id'] : '';
-    const document = withStoredSettings(
-      textDocumentFromMarkdown(markdown as string, { exported: true }),
-      storedDocuments.get(id),
-    );
+    const before = storedDocuments.get(id);
+    // A tile whose markdown is as read is stored as it was: nothing the
+    // markdown can't say is lost by a write that never touched it.
+    const document =
+      before !== undefined && textDocumentToMarkdown(before) === markdown
+        ? before
+        : withStoredSettings(
+            textDocumentFromMarkdown(markdown as string, { exported: true }),
+            before,
+          );
     const problems = textDocumentProblems(document);
     if (problems.length > 0)
       refused ??= `The Text tile "${id}" can't be saved: ${problems.join(' ')}`;
