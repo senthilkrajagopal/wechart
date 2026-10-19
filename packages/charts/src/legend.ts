@@ -56,7 +56,8 @@ export function seriesCount(spec: RenderSpec): number {
     return category === undefined ? 0 : distinctValues(spec.rows, category).length;
   }
 
-  return seriesOf(spec).series.length;
+  // By name: a split combo draws each member once per measure, under one entry (T852).
+  return new Set(seriesOf(spec).series.map((one) => one.name)).size;
 }
 
 /**

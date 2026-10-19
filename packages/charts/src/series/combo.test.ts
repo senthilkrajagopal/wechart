@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import type { RenderSpec } from '@wechart/core';
 
 import { comboOption, logScaleOmissions, withLineHalos } from './combo';
+import { seriesCount } from '../legend';
 import { optionFor } from '../optionFor';
 import { labelsOf, marksOf, renderToSvg, strokesOf, untitled } from '../testing/renderToSvg';
 
@@ -415,6 +416,22 @@ describe('a combo split across every measure (AC-504)', () => {
 
     expect(halos).toHaveLength(4);
     expect(halos.every((one) => one.yAxisIndex === 1)).toBe(true);
+  });
+
+  it('writes each data label in its own measure’s format (T852’s review)', () => {
+    const series = optionFor(split({ dataLabels: true }))['series'] as (Drawn & {
+      label?: { formatter?: (params: { value: unknown }) => string };
+    })[];
+    const margin = series.find((one) => one.type === 'line' && one.tooltip === undefined);
+
+    expect(margin?.label?.formatter?.({ value: 0.05 })).toMatch(/^5(\.0+)?%$/);
+  });
+
+  it('counts a member once for its legend, however many measures draw it (T852’s review)', () => {
+    const one = { ...split(), rows: split().rows.filter((row) => row[REGION] === 'EMEA') };
+
+    expect(seriesCount(one)).toBe(1);
+    expect(seriesCount(split())).toBe(4);
   });
 
   it('writes each value in its own measure’s format in the tooltip, naming the measure', () => {

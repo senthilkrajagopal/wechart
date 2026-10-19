@@ -261,7 +261,14 @@ function labelFor(spec: RenderSpec, one: Series, inside: boolean): Record<string
   // A heatmap's measure is its colour; its y is a grouping (T242's review).
   const measures = membersOn(spec.encoding, spec.chartType === 'heatmap' ? 'color' : 'y');
   const name = typeof one.name === 'string' ? one.name : '';
-  const measure = measures.includes(name) ? name : (measures[0] ?? '');
+  // A split combo's series carries its measure; its name is its member's (T852).
+  const carried = typeof one['measure'] === 'string' ? one['measure'] : undefined;
+  const measure =
+    carried !== undefined && measures.includes(carried)
+      ? carried
+      : measures.includes(name)
+        ? name
+        : (measures[0] ?? '');
   const chosen = spec.options?.['valueFormat'];
   const write =
     (typeof chosen === 'string' ? VALUE_FORMATTERS[chosen] : undefined) ??

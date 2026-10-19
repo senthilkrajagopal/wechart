@@ -114,7 +114,9 @@ describe('a combo split across every measure (AC-504)', () => {
 
   it('draws EMEA in the colour the dashboard gave it, in its bars and its line', () => {
     const assignment = assignColours();
-    // The bar chart first, as a dashboard's earlier tile.
+    // An earlier tile's member first, so EMEA's colour isn't its default
+    // slot (T852's review), then the bar chart, as the dashboard's tiles.
+    assignment.colourFor('Online');
     colouredMembersOf(bar).forEach((member) => assignment.colourFor(member));
     const colours = assignment.assigned();
     const drawn = optionFor({ ...combo, colours })['series'] as {
