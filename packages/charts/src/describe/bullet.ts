@@ -61,6 +61,9 @@ export function describeBullet(spec: RenderSpec): string | undefined {
 
   const each = bullets.map(({ member, value, target: goal }) => {
     const shown = value === null ? 'no value' : format(value);
+    // No value against a target is still against it (checkpoint 2's review).
+    if (value === null && goal !== null)
+      return `${memberName(member)}: no value, against a ${formatTarget(goal)} target.`;
     const band = bulletBandOf(value, goal, bands);
     if (goal === null || band === undefined) return `${memberName(member)}: ${shown}, no target.`;
     return `${memberName(member)}: ${shown} of ${formatTarget(goal)} target (${String(band.percent)} %), in the ${band.band} band.`;

@@ -68,6 +68,16 @@ describe('the bullet chart’s text alternative (AC-583)', () => {
     );
   });
 
+  // Checkpoint 2's review: a member with a target but no value keeps its target.
+  it('says a bullet with no value has none, and still names its target', () => {
+    const blank = spec([['EMEA', 412000, 450000]]);
+    const said = describeBullet({
+      ...blank,
+      rows: [...blank.rows, { [REGION]: 'LATAM', [REVENUE]: null, [TARGET]: '200000' }],
+    });
+    expect(said).toMatch(/ LATAM: no value, against a \$200,000 target\.$/);
+  });
+
   it('says one member in the singular', () => {
     expect(describeBullet(spec([['EMEA', 500000, 450000]]))).toMatch(
       /^1 region; 1 above target \(EMEA\)\. /,
