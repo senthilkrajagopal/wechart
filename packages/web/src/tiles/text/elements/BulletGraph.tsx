@@ -138,7 +138,7 @@ export function BulletGraphElement({
 }) {
   const answer = useElementAnswer(query, context);
   // Its states (T889, AC-525): a skeleton its own width.
-  if (answer.pending) return <ElementSkeleton pixels={WIDTH} />;
+  if (answer.pending) return <ElementSkeleton pixels={WORD_WIDTH} />;
   if (answer.error !== undefined)
     return <ElementUnavailable measure={title} error={answer.error} />;
   const row = answer.rows[0] ?? {};
