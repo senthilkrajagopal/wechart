@@ -12,14 +12,16 @@ hook('stop-continue', 'feedback', ({ session_id: session }) => {
   const scripts = JSON.parse(read(abs('package.json')) ?? '{}').scripts ?? {};
   if (!open.length || !scripts.test) return;
 
+  // No test run here (the user, 2026-10-18: the full suite on every stop held the session ~10 minutes under
+  // the lanes' load). Tests run at the coordinator's ~20-task checkpoints instead ("lets batch 20
+  // implementations into test runs"). Set HARNESS_STOP_RUNS_TESTS=1 to bring the run back.
   const pm = existsSync(abs('pnpm-lock.yaml')) ? 'pnpm' : 'npm';
-  // Under the API suite's lock, as every other run against wechart_test is, never waited for: a run already
-  // going leaves the suite unjudged, so the stop is allowed (the user, 2026-10-07). Long enough not to cut it short.
-  // -k keeps the lock file: without it lockf unlinks the file, and the next locker takes a new inode while a
-  // holder of the old one runs on, so two runs overlap (found 2026-10-08).
-  const tests = run('lockf', ['-k', '-s', '-t', '0', '/private/tmp/wechart-api-tests.lock', pm, 'test'],
-    { timeout: 900_000, env: { ...process.env, CI: '1', COMPOSE_PROJECT_NAME: 'wechart' } });
-  if (tests.status !== 0) return; // failing, locked or timed out: allow the stop so a person sees the state
+  if (process.env.HARNESS_STOP_RUNS_TESTS === '1') {
+    // Under the API suite's lock, never waited for; -k keeps the lock file (found 2026-10-08).
+    const tests = run('lockf', ['-k', '-s', '-t', '0', '/private/tmp/wechart-api-tests.lock', pm, 'test'],
+      { timeout: 900_000, env: { ...process.env, CI: '1', COMPOSE_PROJECT_NAME: 'wechart' } });
+    if (tests.status !== 0) return; // failing, locked or timed out: allow the stop so a person sees the state
+  }
 
   let state = {};
   try { state = JSON.parse(read(STATE) ?? '{}'); } catch { /* a corrupt counter counts as zero */ }
@@ -32,6 +34,6 @@ hook('stop-continue', 'feedback', ({ session_id: session }) => {
   }
   save(count + 1);
   const ids = open.slice(0, 5).map((a) => a.id).join(', ') + (open.length > 5 ? ', …' : '');
-  block(`${open.length} acceptance criteria in docs/spec.md are still unchecked (${ids}) and \`${pm} test\` passes. ` +
+  block(`${open.length} acceptance criteria in docs/spec.md are still unchecked (${ids}). ` +
     `This is continuation ${count + 1} of ${MAX} since the last newly checked criterion.`);
 });
