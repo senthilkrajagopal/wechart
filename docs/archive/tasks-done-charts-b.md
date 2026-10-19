@@ -97,3 +97,8 @@ Lane CHARTS-B's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Failing test: `mapDensity.test.ts`: a heatmap series on `geo` whose ramp runs from transparent to §5's darkest blue; while it shows, regions have no fill and a 1 px `border-strong` edge; a click or lasso on it changes no marking; the layer row and tooltip read "Density can't be marked; it shows where points gather" (AC-626).
   - Depends on: T976
   - Waits on: research: the shape of a Cube `geo` value (as T976).
+
+- [x] T978 (AC-627) Mark a map's regions and points, the lasso taking points or, with none, regions, by outline and fade, and cross-filter by region or point
+  - Files: `packages/charts/src/interaction/itemsInShape.ts`, `packages/charts/src/series/mapMarking.test.ts`.
+  - Failing test: `mapMarking.test.ts`: a lasso over 3 stores marks those 3 and no region; with no Points layer it marks the regions it touches; a marked region keeps its fill and gains the outline while others fade; in cross-filter mode a region filters to its member and a store to its store (AC-627).
+  - Depends on: T976

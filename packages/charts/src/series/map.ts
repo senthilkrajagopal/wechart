@@ -228,7 +228,13 @@ export function mapOption(spec: RenderSpec, map: CountryMap | undefined): EChart
         type: 'map' as const,
         map: regions.mapName,
         nameProperty: regions.nameProperty,
-        data: placed.map(({ name, value }) => ({ name, value })),
+        // Each region by its key, carrying the value its row holds, which a
+        // click and a marking read it by (T978, AC-627).
+        data: placed.map(({ name, value, member }) => ({
+          name,
+          value,
+          category: String(member),
+        })),
         projection: {
           project: (point: [number, number]) => projection(point),
           unproject: (point: [number, number]) => projection.invert?.(point),

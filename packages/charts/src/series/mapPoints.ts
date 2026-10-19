@@ -25,6 +25,7 @@ import {
   type RenderSpec,
 } from '@wechart/core';
 
+import { markedItemStyle } from '../marking/render';
 import { DEFAULT_PALETTE, DEFAULT_SURFACE, type EChartsOption } from '../theme';
 
 export const POINT_MIN_PX = 8;
@@ -153,25 +154,43 @@ export function withMapPoints(option: EChartsOption, spec: RenderSpec): EChartsO
   const layer = mapSettingsOf(spec.options).points!;
   const format = layer.size === undefined ? undefined : formatterFor(layer.size, spec.formats ?? {});
   const surface = spec.surface ?? DEFAULT_SURFACE;
+  const marking = spec.marking;
   const sizeTitle = layer.size === undefined ? '' : (spec.titles?.[layer.size] ?? layer.size);
 
   const points = {
     type: 'scatter' as const,
+    // Named, as ECharts' own default ("series\u00000") holds the separator
+    // a click's item is read by (T978).
+    name: spec.titles?.[layer.location] ?? layer.location,
     coordinateSystem: 'geo',
     geoIndex: 0,
     z: 3,
     emphasis: { disabled: true },
-    data: drawn.points.map((point) => ({
-      name: point.location,
-      value: [point.lng, point.lat, point.value ?? null],
-      symbolSize: point.diameter,
-      itemStyle: {
-        color: point.colour,
-        opacity: POINT_OPACITY,
-        borderColor: surface,
-        borderWidth: 1,
-      },
-    })),
+    data: drawn.points.map((point) => {
+      // Marked by outline and fade, never by fill (T978, AC-627): a marked
+      // point keeps its 0.72 and gains the marking's outline; the rest fade.
+      const style =
+        marking === undefined
+          ? undefined
+          : markedItemStyle({ [layer.location]: point.location }, point.colour, marking);
+      return {
+        name: point.location,
+        value: [point.lng, point.lat, point.value ?? null],
+        symbolSize: point.diameter,
+        // What it marks and filters by: its place (T978).
+        marks: [{ member: layer.location, value: point.location }],
+        itemStyle: {
+          color: point.colour,
+          opacity: POINT_OPACITY * (style?.opacity ?? 1),
+          borderColor:
+            style?.borderWidth !== undefined && style.borderWidth > 0
+              ? (style.borderColor ?? surface)
+              : surface,
+          borderWidth:
+            style?.borderWidth !== undefined && style.borderWidth > 0 ? style.borderWidth : 1,
+        },
+      };
+    }),
     tooltip: {
       trigger: 'item',
       formatter: (params: { name?: string; value?: unknown }) => {

@@ -65,6 +65,16 @@ const model = (cube: string) =>
     '',
   ].join('\n');
 
+/** The cube published, for charts saved through the API (T978). */
+export async function publishCountryCube(
+  request: APIRequestContext,
+  project: string,
+): Promise<string> {
+  const cube = countryCubeFor(project);
+  await ownCubeFile(request, cube, model(cube));
+  return cube;
+}
+
 /** The cube published, and a new chart open in the editor on it with its measure. */
 export async function newChartOnCountries(
   page: Page,

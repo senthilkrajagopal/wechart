@@ -2243,10 +2243,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T977 (AC-626) A Density layer on the ramp fading to transparent, regions as outlines while it shows, never markable, saying so
 
-- [ ] T978 (AC-627) Mark a map's regions and points, the lasso taking points or, with none, regions, by outline and fade, and cross-filter by region or point
-  - Files: `packages/charts/src/interaction/itemsInShape.ts`, `packages/charts/src/series/mapMarking.test.ts`.
-  - Failing test: `mapMarking.test.ts`: a lasso over 3 stores marks those 3 and no region; with no Points layer it marks the regions it touches; a marked region keeps its fill and gains the outline while others fade; in cross-filter mode a region filters to its member and a store to its store (AC-627).
-  - Depends on: T976
+- [x] T978 (AC-627) Mark a map's regions and points, the lasso taking points or, with none, regions, by outline and fade, and cross-filter by region or point
 
 - [ ] T979 (AC-628) A read-write member uploads a custom GeoJSON boundary set into their My workspace, checked for polygons, the key property and unique keys; it lands in the folder through a proposal and is offered in Boundary set along the folder path
   - Files: `packages/core/src/geo/boundarySet.ts` (+ test); the folder-item kind, its route and its storage as the research places them, through the existing My workspace and proposal paths (F29, F30); the upload page.

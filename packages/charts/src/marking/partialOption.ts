@@ -516,7 +516,10 @@ export function withPartialMarks(option: EChartsOption, spec: RenderSpec): EChar
         data: (one.data ?? []).map((raw) => {
           const item = asItem(raw);
           const total = numberOf(item['value']);
-          const row = dimension === undefined ? undefined : firstRows.get(String(item['name']));
+          // By the value its row holds, which a region carries apart from its
+          // key ("Bavaria" for DE-BY, T978); a country's is its code.
+          const held = typeof item['category'] === 'string' ? item['category'] : item['name'];
+          const row = dimension === undefined ? undefined : firstRows.get(String(held));
           if (row === undefined || total === undefined) return raw;
           const marked = sumOf(matcher(row), measure);
           const kind = kindOf(measure, total, marked, '');

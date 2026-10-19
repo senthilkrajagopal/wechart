@@ -198,12 +198,12 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
   // tiled KPI's tile its member (AC-568); "Other", or anything else that
   // carries nothing, is no member of anything. A parallel-coordinate line is
   // its member as its row holds it (T983, AC-599), and so is a graphical
-  // table's row (T946, AC-573).
+  // table's row (T946, AC-573). A map's point is its place (T978, AC-627).
   if (
     spec.chartType === 'sankey' ||
     spec.chartType === 'kpi' ||
     spec.chartType === 'graphicalTable' ||
-    (spec.chartType === 'parallel' && item.marks !== undefined)
+    ((spec.chartType === 'parallel' || spec.chartType === 'map') && item.marks !== undefined)
   ) {
     const [first, ...rest] = item.marks ?? [];
     if (first === undefined) return undefined;

@@ -442,10 +442,12 @@ export function ChartCanvas({
       }
       const items = itemsInShape(chart, chart.getOption() as EChartsOption, shape);
       shaped.current?.(
-        items.map(({ name, seriesName, entity }) => ({
+        items.map(({ name, seriesName, entity, marks }) => ({
           name,
           seriesName,
           ...(entity === undefined ? {} : { entity }),
+          // A map's point, by its place (T978, AC-627).
+          ...(marks === undefined ? {} : { marks }),
         })),
         toggleOnRelease,
       );

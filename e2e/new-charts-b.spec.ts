@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
+import { publishCountryCube } from './countries';
 import { cubePicker } from './cubePicker';
 import { viewAs } from './tileMenu';
 import { wellPicker } from './wells';
@@ -631,6 +632,155 @@ const linesOf = (page: Page, tile: string) =>
     );
 
 /** A press, a path and a release, with the keys held throughout. */
+/**
+ * A dashboard of a Map on the e2e countries cube (`countries.ts`), with or
+ * without its Points layer, beside a bar of the same cube's total by
+ * country, in Markings or cross-filter mode (T978).
+ */
+async function mapDashboard(
+  request: APIRequestContext,
+  project: string,
+  mode: 'markings' | 'crossFilter',
+  points: boolean,
+) {
+  const cube = await publishCountryCube(request, project);
+  const title = `Map ${mode} ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/api/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const items = [];
+  for (const [tile, chartType, options] of [
+    [
+      'tile-map',
+      'map',
+      points
+        ? { map: { points: { location: `${cube}.location`, size: `${cube}.total` } } }
+        : undefined,
+    ],
+    ['tile-bar', 'bar', undefined],
+  ] as const) {
+    const chart = (await (
+      await request.post(`${API}/api/documents`, {
+        data: { kind: 'chart', title: tile, ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`${API}/api/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: tile,
+          owner: 'admin',
+          localToDashboardId: dashboard.id,
+          chart: {
+            source: { cube },
+            wells: { measures: [`${cube}.total`], dimensions: [`${cube}.iso3`], timeDimensions: [] },
+            chartType,
+            ...(options === undefined ? {} : { options }),
+          },
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    items.push({ id: tile, kind: 'chart', w: 6, h: 40, chartId: chart.id });
+  }
+  const placed = await request.put(`${API}/api/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: {
+          width: 'fixed',
+          interactions:
+            mode === 'markings'
+              ? { mode: 'markings' }
+              : { mode: 'crossFilter', crossFilter: { defaultAction: 'filter' } },
+        },
+        markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
+        pages: [{ id: 'only', title: 'Only', items }],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  return { id: dashboard.id, title, cube };
+}
+
+/** A map tile's points as drawn: slot 2's circles, by size, with their centres. */
+const pointsOn = async (page: Page) =>
+  (
+    await page
+      .locator('[data-tile="tile-map"] svg path[fill="#eb6834"]')
+      .evaluateAll((paths) =>
+        paths.map((path) => {
+          const box = path.getBoundingClientRect();
+          return { size: box.width, x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        }),
+      )
+  ).sort((one, other) => one.size - other.size);
+
+/**
+ * T978 / AC-627: THE SYSTEM SHALL mark a region as its member and a point as
+ * its member; a rectangle or lasso marking the points inside it, or, with no
+ * Points layer, the regions it touches; marking drawn with outline and fade,
+ * never by fill; and as a cross-filter source a region or point filters the
+ * others to its member.
+ * `Fails when: a lasso marks points outside it, or regions while a Points
+ * layer shows; a marked region changes fill; or a region or point doesn't
+ * filter.`
+ */
+test('a map marks the points a rectangle takes in, else the regions it touches, and cross-filters by a region or a point', async ({
+  page,
+  request,
+}, testInfo) => {
+  const withPoints = await mapDashboard(request, testInfo.project.name, 'markings', true);
+  await page.goto(`/explore/dashboards/${withPoints.id}`);
+  await expect(page.getByRole('heading', { name: withPoints.title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-map"]');
+  const badge = tile.getByTestId('mark-badge');
+  await expect.poll(async () => (await pointsOn(page)).length).toBe(5);
+  // By size: GUF 10, SGP 40, NOR 80, FRA 120, USA 300. Round Oslo and Paris.
+  const [, , oslo, paris] = await pointsOn(page);
+  const box = {
+    x0: Math.min(oslo!.x, paris!.x) - 14,
+    y0: Math.min(oslo!.y, paris!.y) - 14,
+    x1: Math.max(oslo!.x, paris!.x) + 14,
+    y1: Math.max(oslo!.y, paris!.y) + 14,
+  };
+  await dragAlong(page, { x: box.x0, y: box.y0 }, { x: box.x1, y: box.y1 });
+  await expect(badge).toContainText('2 marked');
+  // The two marked, outlined; the rest faded; no region marked (their fills kept).
+  await expect(page.getByTestId('mark-chip')).toContainText(/Location/);
+
+  // With no Points layer, the same rectangle marks the regions it touches.
+  const regionsOnly = await mapDashboard(request, testInfo.project.name, 'markings', false);
+  await page.goto(`/explore/dashboards/${regionsOnly.id}`);
+  await expect(page.getByRole('heading', { name: regionsOnly.title })).toBeVisible();
+  await expect(tile.locator('svg path[fill^="rgb"]').first()).toBeAttached();
+  await dragAlong(page, { x: box.x0, y: box.y0 }, { x: box.x1, y: box.y1 });
+  await expect(badge).toContainText('2 marked');
+  await expect(page.getByTestId('mark-chip')).toContainText(/Iso3/);
+
+  // Cross-filtering, a point filters the bar to its place's country.
+  const crossing = await mapDashboard(request, testInfo.project.name, 'crossFilter', true);
+  await page.goto(`/explore/dashboards/${crossing.id}`);
+  await expect(page.getByRole('heading', { name: crossing.title })).toBeVisible();
+  await expect.poll(async () => (await pointsOn(page)).length).toBe(5);
+  const bars = page.locator('[data-tile="tile-bar"] svg');
+  await expect(bars).toContainText('USA');
+  const [, , , france] = await pointsOn(page);
+  await page.mouse.click(france!.x, france!.y);
+  const chips = page.getByTestId('cross-filter-chip');
+  await expect(chips).toHaveCount(1);
+  await expect(chips.locator('.cross-chip__what')).toContainText('48.8566,2.3522');
+  await expect(bars).not.toContainText('USA');
+  await expect(bars).toContainText('FRA');
+});
+
 async function dragAlong(
   page: Page,
   from: { x: number; y: number },

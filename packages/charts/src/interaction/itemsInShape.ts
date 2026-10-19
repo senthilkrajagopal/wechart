@@ -1,3 +1,4 @@
+import { echarts } from '../echarts';
 import { laidBarWidth } from '../series/bar';
 import type { EChartsOption } from '../theme';
 import { insideShape, touchesRect, type Shape } from './hitTest';
@@ -43,6 +44,8 @@ export interface ShapeItem {
    * written as the point carries it; a point is then itself, not its category.
    */
   readonly entity?: string;
+  /** What the item marks as drawn, where it says so itself: a map's point its place (T978). */
+  readonly marks?: readonly { readonly member: string; readonly value: string | number }[];
 }
 
 type Axis = { readonly type?: string; readonly data?: readonly unknown[] };
@@ -76,6 +79,9 @@ export function itemsInShape(
   option: EChartsOption,
   shape: Shape,
 ): ShapeItem[] {
+  // A map's points, or with none its regions (T978, AC-627).
+  const onMap = mapItemsInShape(chart, option, shape);
+  if (onMap !== undefined) return onMap;
   const xAxes = list<Axis>(option['xAxis']);
   const yAxes = list<Axis>(option['yAxis']);
   const out: ShapeItem[] = [];
@@ -236,3 +242,115 @@ export function itemsInShape(
 
   return out;
 }
+
+type GeoConverter = {
+  convertToPixel(finder: { readonly seriesIndex: number }, value: readonly number[]): unknown;
+};
+type Ring = readonly (readonly number[])[];
+type Geometry =
+  | { readonly type: 'Polygon'; readonly coordinates: readonly Ring[] }
+  | { readonly type: 'MultiPolygon'; readonly coordinates: readonly (readonly Ring[])[] };
+type Feature = { readonly properties?: Record<string, unknown>; readonly geometry?: Geometry };
+
+/** Whether a pixel is inside a polygon's outer ring, by ray casting. */
+function insideRing(ring: readonly [number, number][], x: number, y: number): boolean {
+  let inside = false;
+  for (let at = 0, before = ring.length - 1; at < ring.length; before = at, at += 1) {
+    const [xa, ya] = ring[at]!;
+    const [xb, yb] = ring[before]!;
+    if (ya > y !== yb > y && x < ((xb - xa) * (y - ya)) / (yb - ya) + xa) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * The items a shape takes in on a map (T978, AC-627; design 23 sheet 6): the
+ * Points layer's points inside it, each its place; or, with no Points
+ * layer, the regions it touches — any of a region's drawn vertices inside
+ * it, or the shape inside the region — each as its row holds it. The
+ * Density layer is never taken (T977). None of a chart that isn't a map.
+ */
+function mapItemsInShape(
+  chart: PixelConverter,
+  option: EChartsOption,
+  shape: Shape,
+): ShapeItem[] | undefined {
+  const series = list<Series & Record<string, unknown>>(option['series']);
+  const regionsAt = series.findIndex((one) => one.type === 'map');
+  if (regionsAt < 0) return undefined;
+  const geo = chart as unknown as GeoConverter;
+  const pixel = (at: number, lngLat: readonly number[]) => {
+    const point = geo.convertToPixel({ seriesIndex: at }, lngLat);
+    return Array.isArray(point) && point.length >= 2
+      ? ([Number(point[0]), Number(point[1])] as [number, number])
+      : undefined;
+  };
+  const out: ShapeItem[] = [];
+
+  const pointsAt = series.findIndex(
+    (one) => one.type === 'scatter' && one.coordinateSystem === 'geo',
+  );
+  if (pointsAt >= 0) {
+    // The scatter sits on the hidden geo, laid out as the regions' own, so
+    // the regions' series converts its coordinates (research `echarts-geo-points.md`).
+    for (const item of series[pointsAt]!.data ?? []) {
+      const own = asItem(item);
+      const value = own['value'];
+      if (!Array.isArray(value)) continue;
+      const at = pixel(regionsAt, [Number(value[0]), Number(value[1])]);
+      if (at === undefined || !insideShape(shape, at[0], at[1])) continue;
+      const marks = own['marks'] as ShapeItem['marks'];
+      out.push({
+        name: String(own['name'] ?? ''),
+        seriesName: String(series[pointsAt]!.name ?? ''),
+        ...(marks === undefined ? {} : { marks }),
+      });
+    }
+    return out;
+  }
+
+  const regions = series[regionsAt]!;
+  const mapName = String(regions['map'] ?? '');
+  const nameProperty = String(regions['nameProperty'] ?? 'name');
+  const features =
+    (echarts.getMap(mapName) as { geoJSON?: { features?: readonly Feature[] } } | null)?.geoJSON
+      ?.features ?? [];
+  const byKey = new Map<string, Feature[]>();
+  for (const feature of features) {
+    const key = String(feature.properties?.[nameProperty] ?? '');
+    byKey.set(key, [...(byKey.get(key) ?? []), feature]);
+  }
+  const probe: [number, number] =
+    shape.kind === 'rect'
+      ? [(shape.x0 + shape.x1) / 2, (shape.y0 + shape.y1) / 2]
+      : [shape.points[0]?.[0] ?? Number.NaN, shape.points[0]?.[1] ?? Number.NaN];
+  for (const item of regions.data ?? []) {
+    const own = asItem(item);
+    // Only the regions a row placed, which carry their row's value:
+    // ECharts appends the others to the series' data as it draws.
+    if (typeof own['category'] !== 'string') continue;
+    const key = String(own['name'] ?? '');
+    const polygons = (byKey.get(key) ?? []).flatMap((feature) =>
+      feature.geometry === undefined
+        ? []
+        : feature.geometry.type === 'Polygon'
+          ? [feature.geometry.coordinates]
+          : feature.geometry.coordinates,
+    );
+    const touched = polygons.some((rings) => {
+      const outer = (rings[0] ?? [])
+        .map((lngLat) => pixel(regionsAt, lngLat))
+        .filter((at): at is [number, number] => at !== undefined);
+      return (
+        outer.some(([x, y]) => insideShape(shape, x, y)) || insideRing(outer, probe[0], probe[1])
+      );
+    });
+    if (touched) out.push({ name: own['category'], seriesName: String(regions.name ?? '') });
+  }
+  return out;
+}
+
+const asItem = (item: unknown): Record<string, unknown> =>
+  typeof item === 'object' && item !== null && !Array.isArray(item)
+    ? (item as Record<string, unknown>)
+    : { value: item };
