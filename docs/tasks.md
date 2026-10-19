@@ -1923,10 +1923,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `text-tile.spec.ts`: opening a dashboard with two Text tiles in view mode requests no script whose name holds the editor chunk's; double-clicking a tile in edit mode then requests it (AC-514).
   - Depends on: T876
 
-- [ ] T878 (AC-515) The toolbar: block style in §3's sizes, bold, italic, both lists, link, Insert and the element count, and nothing for colour, font or size
-  - Files: `packages/web/src/tiles/text/TextToolbar.tsx` (+ test).
-  - Failing test: `TextToolbar.test.tsx`: a `toolbar` with one Tab stop and ← → along it, holding in order the block-style menu button, Bold, Italic, Bulleted list, Numbered list, Link, Insert and "3 / 10 elements"; the block-style menu lists Paragraph, Heading small, Heading medium, Heading large and Large value, each in its own size; choosing Heading medium makes the line an `h4` at 20 px (AC-515).
-  - Depends on: T876
+- [x] T878 (AC-515) The toolbar: block style in §3's sizes, bold, italic, both lists, link, Insert and the element count, and nothing for colour, font or size
 
 - [ ] T879 (AC-516) Convert markdown patterns as typed, undone by the next Undo, and let only ⌘B, ⌘I and ⌘Z act inside the text
   - Files: `packages/web/src/tiles/text/editorExtensions.ts` (the input rules and the keymap), `packages/web/src/tiles/text/keys.test.ts`.

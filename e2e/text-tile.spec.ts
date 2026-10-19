@@ -167,6 +167,12 @@ test('a Text tile’s text is edited on the canvas, left by a click, Esc or Tab,
   expect(border.width).toBe('2px');
   expect(border.colour).toBe(border.accent);
 
+  // Its toolbar above it (AC-302, AC-515).
+  const bar = tile.getByRole('toolbar', { name: 'Text formatting' });
+  const barBox = await bar.boundingBox();
+  const textBox = await textbox.boundingBox();
+  expect(barBox !== null && textBox !== null && barBox.y + barBox.height <= textBox.y).toBe(true);
+
   // Focus is at the text's end: what's typed follows it.
   await page.keyboard.type(' fast, and margins held');
   await expect(textbox).toHaveText('Revenue grew fast, and margins held');
@@ -201,4 +207,69 @@ test('a Text tile’s text is edited on the canvas, left by a click, Esc or Tab,
   expect(
     await page.evaluate(() => document.activeElement?.closest('[contenteditable]') ?? null),
   ).toBeNull();
+});
+
+/**
+ * T878 / AC-515: while the text is edited, a 40 px toolbar above it holds,
+ * in order, the block style, Bold, Italic, both lists, Link, Insert and the
+ * count; each block style is shown in its own type, §3's 14, 16, 20, 24 and
+ * 32 px; Heading medium makes the line an h4 at 20 px; nothing sets colour,
+ * font or size.
+ */
+test('the Text tile’s toolbar: its controls in order, and each block style at §3’s size', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWith(request, 'Orders {{measure:orders.count}} so far');
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+
+  const tile = page.locator('[data-tile="tile-text"]');
+  await tile.locator('.text-tile').dblclick();
+  const textbox = tile.getByRole('textbox');
+  await expect(textbox).toBeFocused();
+
+  const bar = tile.getByRole('toolbar', { name: 'Text formatting' });
+  expect((await bar.boundingBox())?.height).toBe(40);
+  expect(
+    await bar
+      .getByRole('button')
+      .evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label'))),
+  ).toEqual([
+    'Block style: Paragraph',
+    'Bold',
+    'Italic',
+    'Bulleted list',
+    'Numbered list',
+    'Link',
+    'Insert',
+  ]);
+  await expect(bar.getByTestId('text-toolbar-count')).toHaveText('1 / 10 elements');
+  await expect(bar.getByRole('button', { name: /colou?r|font|size/i })).toHaveCount(0);
+
+  await bar.getByRole('button', { name: 'Block style: Paragraph' }).click();
+  const menu = tile.getByRole('menu', { name: 'Block style' });
+  const sizes = await menu
+    .getByRole('menuitemradio')
+    .evaluateAll((items) =>
+      items.map((item) => [item.textContent, getComputedStyle(item).fontSize]),
+    );
+  expect(sizes).toEqual([
+    ['Paragraph', '14px'],
+    ['Heading small', '16px'],
+    ['Heading medium', '20px'],
+    ['Heading large', '24px'],
+    ['Large value', '32px'],
+  ]);
+
+  await menu.getByRole('menuitemradio', { name: 'Heading medium' }).click();
+  const line = textbox.locator('h4');
+  await expect(line).toContainText('Orders');
+  expect(await line.evaluate((element) => getComputedStyle(element).fontSize)).toBe('20px');
+  await expect(textbox).toBeFocused();
+
+  // Left, it reads as the tile draws a Heading medium.
+  await page.keyboard.press('Escape');
+  await expect(tile.locator('.text-tile h4')).toContainText('Orders');
 });

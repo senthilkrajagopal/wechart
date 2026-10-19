@@ -23,10 +23,15 @@ export const TEXT_CSS = `
 .text-tile h3,
 .text-tile h4,
 .text-tile h5 { margin: 0 0 4px; font-weight: 600; }
-.text-tile [data-type='text-xl'] { font-size: var(--wc-text-xl-size); line-height: var(--wc-text-xl-line); }
-.text-tile [data-type='text-lg'] { font-size: var(--wc-text-lg-size); line-height: var(--wc-text-lg-line); }
-.text-tile [data-type='text-md'] { font-size: var(--wc-text-md-size); line-height: var(--wc-text-md-line); }
-.text-tile [data-type='text-kpi'] {
+.text-tile [data-type='text-xl'],
+.text-style-menu [data-type='text-xl'] { font-size: var(--wc-text-xl-size); line-height: var(--wc-text-xl-line); }
+.text-tile [data-type='text-lg'],
+.text-style-menu [data-type='text-lg'] { font-size: var(--wc-text-lg-size); line-height: var(--wc-text-lg-line); }
+.text-tile [data-type='text-md'],
+.text-style-menu [data-type='text-md'] { font-size: var(--wc-text-md-size); line-height: var(--wc-text-md-line); }
+.text-style-menu [data-type='text-sm'] { font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); }
+.text-tile [data-type='text-kpi'],
+.text-style-menu [data-type='text-kpi'] {
   font-size: var(--wc-text-kpi-size);
   line-height: var(--wc-text-kpi-line);
   font-weight: 600;
@@ -52,6 +57,76 @@ export const TEXT_CSS = `
 .text-tile--empty { margin: 0; color: var(--wc-text-muted); }
 /* Double-click's target in edit mode; no box of its own (T876). */
 .text-tile-host { display: contents; }
+/* While its text is edited, the tile stacks its head, the toolbar and the
+   text, the text scrolling in what's left. */
+.grid-tile:has(> .text-tile-host > .text-editor) { display: flex; flex-direction: column; }
+.text-editor {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+.text-editor__content { flex: 1 1 0; min-height: 0; overflow: auto; }
+/* The toolbar (AC-515; direction §7h): a 40 px strip of 32 px buttons, radius 6;
+   the block-style button 128 px wide. */
+.text-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 40px;
+  padding: 0 4px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+.text-toolbar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--wc-text-primary);
+  font-size: var(--wc-text-sm-size);
+}
+.text-toolbar__button:hover { background: var(--wc-bg-hover); }
+.text-toolbar__button[aria-pressed='true'] { background: var(--wc-bg-accent-soft); color: var(--wc-accent); }
+.text-toolbar__block { width: 128px; justify-content: space-between; }
+.text-toolbar__count { margin-left: auto; padding: 0 4px; white-space: nowrap; }
+/* The block-style menu, under its button, each style in its own type. */
+.text-style-menu {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  z-index: 3;
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-raised);
+  box-shadow: var(--wc-shadow-pop);
+}
+.text-style-menu__item {
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--wc-text-primary);
+  cursor: default;
+}
+.text-style-menu__item[data-type='text-kpi'] { font-variant-numeric: tabular-nums; }
+.text-style-menu__item:is(:hover, :focus-visible) { background: var(--wc-bg-hover); }
+.text-style-menu__item[aria-checked='true'] { color: var(--wc-accent); }
+/* Link's address, under the toolbar. */
+.text-link-form { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.text-link-form label { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.text-link-form input { flex: 1 1 160px; height: 28px; }
+.text-link-form__problem { flex-basis: 100%; margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-status-error); }
 /* The text edited in place: a 2 px accent border (AC-302; design 21 pin 1). */
 .text-editor__text {
   box-sizing: border-box;

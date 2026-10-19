@@ -870,7 +870,8 @@ function TileBody({
         <>
           {editing ? (
             <KindHead kind="Text">
-              {count > 0 ? (
+              {/* While its text is edited, the count is the toolbar's (T878). */}
+              {count > 0 && !inPlace ? (
                 // Over the limit, a converted tile says so (decision T875-1).
                 <span
                   className="text-tile__count"

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { TextDocument } from '@wechart/core';
 
 import { storedDocumentOf, textEditorExtensions } from './editorExtensions';
+import { TextToolbar } from './TextToolbar';
 
 /**
  * How the text was left (AC-302): by Esc; by focus going to another control
@@ -84,6 +85,9 @@ export default function TextEditor({ document, name, onLeave }: TextEditorProps)
   }, [editor]);
 
   return (
+    // Not a control: its handlers only see keys and focus leave the text,
+    // the toolbar and the editor's menus inside it, which are the controls.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="text-editor"
       /**
@@ -95,13 +99,22 @@ export default function TextEditor({ document, name, onLeave }: TextEditorProps)
         if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey)
           event.stopPropagation();
       }}
+      // Esc from the toolbar leaves the text too; the text's own Esc, and a
+      // menu's or the link field's, is handled where it's pressed.
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        event.preventDefault();
+        leave('escape');
+      }}
       onBlur={(event) => {
         const to = event.relatedTarget;
         if (to !== null && event.currentTarget.contains(to)) return;
         leave(to === null ? 'nowhere' : 'away');
       }}
     >
-      <EditorContent editor={editor} />
+      {/* Above the text (AC-515). */}
+      <TextToolbar editor={editor} />
+      <EditorContent editor={editor} className="text-editor__content" />
     </div>
   );
 }

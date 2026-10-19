@@ -46,3 +46,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/tiles/text/TextEditor.tsx` (+ test; loaded with `React.lazy`), `packages/web/src/tiles/text/editorExtensions.ts`, `packages/web/src/dashboard/edit/TileProperties.tsx` (the first control; no markdown textarea), `packages/web/src/dashboard/edit/EditChrome.tsx`, `e2e/text-tile.spec.ts`.
   - Failing test: `TextEditor.test.tsx`: the editor is a `textbox` with `aria-multiline="true"` named after the tile; Esc leaves it with the tile selected and focused, Tab moves to the next control; the e2e: Enter on a focused Text tile then Enter on "Edit text on the canvas" puts focus at the text's end with a 2 px `accent` border; typing then clicking outside and pressing the edit bar's Undo once restores the old text whole; Properties has no textarea (AC-302).
   - Depends on: T875
+
+- [x] T878 (AC-515) The toolbar: block style in §3's sizes, bold, italic, both lists, link, Insert and the element count, and nothing for colour, font or size
+  - Files: `packages/web/src/tiles/text/TextToolbar.tsx` (+ test).
+  - Failing test: `TextToolbar.test.tsx`: a `toolbar` with one Tab stop and ← → along it, holding in order the block-style menu button, Bold, Italic, Bulleted list, Numbered list, Link, Insert and "3 / 10 elements"; the block-style menu lists Paragraph, Heading small, Heading medium, Heading large and Large value, each in its own size; choosing Heading medium makes the line an `h4` at 20 px (AC-515).
+  - Depends on: T876
