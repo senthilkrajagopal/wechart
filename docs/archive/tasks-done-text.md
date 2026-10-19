@@ -102,3 +102,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/dashboard/settings/CrossFilterMatrix.tsx`, `packages/web/src/tiles/text/elementQueries.ts` (+ test), `packages/web/src/dashboard/crossfilter/` (targets).
   - Failing test: `elementQueries.test.ts`: three Values of `orders` measures under the same filters make one `/load` query; a fourth with its own filter makes a second; `CrossFilterMatrix` test: a Text tile's Highlight is disabled with "Text has no marks to highlight" and it isn't listed as a source; with Filter, a click on a bar changes the tile's Value (AC-523).
   - Depends on: T884
+
+- [x] T888 (AC-524) View mode: values as text in their sentence's type and weight, focusable, with a dotted underline and a tooltip that is their accessible description
+  - Files: `packages/web/src/tiles/text/ElementTooltip.tsx` (+ test), `packages/web/src/tiles/text/readMapping.tsx`.
+  - Failing test: `ElementTooltip.test.tsx`: a Value in a Heading large is 24 px at the heading's weight with `font-variant-numeric: tabular-nums` and no background or border; Tab reaches it; on focus it shows a dotted `text-muted` underline and a tooltip naming "Change · Revenue", "This quarter against the previous", the tile's and its own filters, "Marking: none" and "as of 14:05 · pre-aggregation", the same text as its `aria-describedby` (AC-524).
+  - Depends on: T884, T873

@@ -138,6 +138,7 @@ import type { CopilotOffer, InsertSources } from '../tiles/text/InsertMenu';
 import { insertSourcesOf } from '../tiles/text/insertSources';
 import { copilotOfferFor } from '../tiles/text/copilotOffer';
 import type { ElementRender } from '../tiles/text/readMapping';
+import { AnsweredTooltip } from '../tiles/text/elements/AnsweredTooltip';
 import { AsOfElement } from '../tiles/text/elements/AsOfElement';
 import { FilterValueText, filterValueWords } from '../tiles/text/elements/FilterValueElement';
 import { IconElement } from '../tiles/text/elements/IconElement';
@@ -4297,6 +4298,27 @@ export function DashboardView({
       .map((range) => ({ from: range.from, to: range.to, slot: marking.slot }));
   };
 
+  /**
+   * The filters in effect on a Text tile's value, in words, for its tooltip
+   * (T888, AC-524): the tile's, then the element's own.
+   */
+  const textFilterWords = (tileId: string, own: unknown): string[] => {
+    const titled = (member: string | undefined) =>
+      member === undefined ? 'Value' : (shortTitles?.[member] ?? memberTitle?.(member) ?? member);
+    const tiles = textFiltersOf(tileId).map(({ filter, value }) =>
+      filter.id.startsWith('mark:')
+        ? 'Marked rows'
+        : `${titled(filter.member)} ${filterValueWords(value, titled(filter.member))}`,
+    );
+    const owns = (Array.isArray(own) ? (own as unknown[]) : []).flatMap((each) => {
+      if (typeof each !== 'object' || each === null) return [];
+      const { member, operator, values } = each as Record<string, unknown>;
+      if (typeof member !== 'string' || !Array.isArray(values)) return [];
+      const words = values.filter((one) => typeof one === 'string').join(', ');
+      return [`${titled(member)} ${operator === 'notEquals' ? 'not ' : ''}${words}`];
+    });
+    return [...tiles, ...owns];
+  };
   /** The marking a Text element follows, by its name, as a token found one (AC-116). */
   const markingNamed = (attrs: Readonly<Record<string, unknown>>) => {
     const named = typeof attrs['marking'] === 'string' ? attrs['marking'] : undefined;
@@ -4996,18 +5018,24 @@ export function DashboardView({
         );
       }
       // An Icon (T886, AC-522): its rules against its measure, or its share of another.
-      if (node.type === 'icon')
-        return (
-          <IconElement
-            key={key}
-            query={sentFor(withFilters(iconQueryOf(node, predicate), textFiltersOf(tileId)))}
-            member={measure}
-            attrs={attrs}
-            context={preview}
-          />
-        );
       // Its measure by its short title, as a one-source chart's legend names it.
       const title = shortTitles?.[measure] ?? memberTitle?.(measure) ?? measure;
+      /** What a value's tooltip says of it, besides its data (T888, AC-524). */
+      const facts = (kind: 'value' | 'change' | 'icon') => ({
+        kind,
+        measure: title,
+        period: typeof attrs['period'] === 'string' ? attrs['period'] : undefined,
+        filters: textFilterWords(tileId, attrs['filters']),
+        marking: found?.name,
+      });
+      if (node.type === 'icon') {
+        const query = sentFor(withFilters(iconQueryOf(node, predicate), textFiltersOf(tileId)));
+        return (
+          <AnsweredTooltip key={key} query={query} context={preview} facts={facts('icon')}>
+            <IconElement query={query} member={measure} attrs={attrs} context={preview} />
+          </AnsweredTooltip>
+        );
+      }
       if (node.type === 'sparkline') {
         const time = timeOf(node, model);
         return (
@@ -5041,36 +5069,36 @@ export function DashboardView({
           />
         );
       if (node.type === 'value') {
-        const asked = valueQueryOf(node, predicate);
+        const own = valueQueryOf(node, predicate);
+        const asked =
+          'query' in own ? { query: sentFor(withFilters(own.query, textFiltersOf(tileId))) } : own;
         return (
-          <ValueElement
+          <AnsweredTooltip
             key={key}
-            asked={
-              'query' in asked
-                ? { query: sentFor(withFilters(asked.query, textFiltersOf(tileId))) }
-                : asked
-            }
-            member={measure}
-            formats={formats}
+            query={'query' in asked ? asked.query : undefined}
             context={preview}
-          />
+            facts={facts('value')}
+          >
+            <ValueElement asked={asked} member={measure} formats={formats} context={preview} />
+          </AnsweredTooltip>
         );
       }
       if (node.type === 'change') {
         const time = timeOf(node, model);
+        const query =
+          time === undefined
+            ? undefined
+            : withFilters(changeQueryOf(node, time, predicate), textFiltersOf(tileId));
         return (
-          <ChangeElement
-            key={key}
-            query={
-              time === undefined
-                ? undefined
-                : withFilters(changeQueryOf(node, time, predicate), textFiltersOf(tileId))
-            }
-            member={measure}
-            attrs={attrs}
-            formats={formats}
-            context={preview}
-          />
+          <AnsweredTooltip key={key} query={query} context={preview} facts={facts('change')}>
+            <ChangeElement
+              query={query}
+              member={measure}
+              attrs={attrs}
+              formats={formats}
+              context={preview}
+            />
+          </AnsweredTooltip>
         );
       }
       return undefined;

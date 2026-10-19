@@ -64,6 +64,50 @@ export const TEXT_CSS = `
 .text-change[data-tone='success'] { color: var(--wc-status-success); }
 .text-change[data-tone='error'] { color: var(--wc-status-error); }
 .text-change[data-tone='neutral'] { color: var(--wc-text-secondary); }
+/* A value in view mode (T888, AC-524; rule 132): the sentence's own type
+   and weight, no chip; on hover or focus a dotted text-muted underline and
+   its tooltip, which is also its description. */
+.text-element-read {
+  position: relative;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  background: none;
+  border: 0;
+  border-radius: 2px;
+}
+.text-element-read:hover,
+.text-element-read:focus,
+.text-element-read[data-open='true'] {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--wc-text-muted);
+  text-underline-offset: 3px;
+}
+.text-element-tip {
+  /* Under the value, placed where it is (ElementTooltip). */
+  position: fixed;
+  z-index: 30;
+  pointer-events: none;
+  display: grid;
+  gap: 2px;
+  width: max-content;
+  max-width: 300px;
+  padding: 8px 10px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-raised, var(--wc-bg-surface));
+  box-shadow: var(--wc-shadow-pop);
+  color: var(--wc-text-primary);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: 400;
+  font-style: normal;
+  text-align: left;
+  text-decoration: none;
+  white-space: normal;
+}
+.text-element-tip[hidden] { display: none; }
+.text-element-tip__line:first-child { font-weight: 600; }
 /* An Icon: its status icon and its word, in the status's text (rule 3). */
 .text-icon { display: inline-flex; align-items: center; gap: 4px; vertical-align: -2px; }
 .text-icon[data-tone='success'] { color: var(--wc-status-success); }

@@ -860,6 +860,120 @@ test('a Text tile of 10 elements: Insert, the menu and a paste each refuse an el
 });
 
 /**
+ * T888 / AC-524: in view mode a Change in a Heading large reads at 24 px in
+ * the heading's weight, tabular, with no chip; Tab reaches it; on focus it
+ * takes a dotted text-muted underline and shows its tooltip — its kind and
+ * measure, what it compares, its filters, its marking and its data — which
+ * is its accessible description. A Value with its own filter lists it.
+ */
+test('a value reads in its sentence’s type, and on focus shows what it is, as its description', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWithText(request, [
+    {
+      type: 'heading',
+      attrs: { level: 1 },
+      content: [
+        { type: 'text', text: 'Revenue ' },
+        {
+          type: 'change',
+          attrs: { measure: 'orders.total_amount', period: 'month', direction: 'higher' },
+        },
+      ],
+    },
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: 'Shipped ' },
+        {
+          type: 'value',
+          attrs: {
+            measure: 'orders.count',
+            marking: 'Picks',
+            filters: [{ member: 'orders.status', operator: 'equals', values: ['shipped'] }],
+          },
+        },
+      ],
+    },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-text"] .text-tile');
+  const heading = tile.locator('h3[data-type="text-xl"]');
+  const change = heading.locator('.text-element-read');
+  await expect(change.locator('.text-change')).toHaveText(/^(▲|▼) \d+\.\d%$|^0\.0%$/);
+  // The tooltip's words are never the sentence's.
+  await expect(heading).toHaveText(/^Revenue (▲|▼)? ?\d+\.\d%$/);
+
+  const read = await change.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const heading = getComputedStyle(element.closest('h3') as Element);
+    return {
+      size: style.fontSize,
+      weight: style.fontWeight,
+      headingWeight: heading.fontWeight,
+      numerals: style.fontVariantNumeric,
+      background: style.backgroundColor,
+      border: style.borderTopWidth,
+    };
+  });
+  expect(read.size).toBe('24px');
+  expect(read.weight).toBe(read.headingWeight);
+  expect(read.numerals).toBe('tabular-nums');
+  expect(read.background).toBe('rgba(0, 0, 0, 0)');
+  expect(read.border).toBe('0px');
+
+  // Tab reaches it; focused, it's underlined and shows its tooltip.
+  await page.getByRole('heading', { name: title }).click();
+  let reached = false;
+  for (let step = 0; step < 40 && !reached; step += 1) {
+    await page.keyboard.press('Tab');
+    reached = await change.evaluate((element) => element === document.activeElement);
+  }
+  expect(reached).toBe(true);
+  const underline = await change.evaluate((element) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--wc-text-muted)';
+    element.parentElement?.append(probe);
+    const muted = getComputedStyle(probe).color;
+    probe.remove();
+    const style = getComputedStyle(element);
+    return {
+      line: style.textDecorationLine,
+      style: style.textDecorationStyle,
+      colour: style.textDecorationColor,
+      muted,
+    };
+  });
+  expect(underline.line).toBe('underline');
+  expect(underline.style).toBe('dotted');
+  expect(underline.colour).toBe(underline.muted);
+
+  const tooltip = page.getByRole('tooltip').filter({ visible: true });
+  await expect(tooltip).toHaveCount(1);
+  await expect(tooltip).toContainText('Change · Total Amount');
+  await expect(tooltip).toContainText('This month against the previous');
+  await expect(tooltip).toContainText('Filters: none');
+  await expect(tooltip).toContainText('Marking: none');
+  await expect(tooltip).toContainText(/Data: as of \S+.* · (pre-aggregation|database)/);
+  const description = (await tooltip.textContent()) ?? '';
+  await expect(change).toHaveAccessibleDescription(description);
+
+  // Esc hides it (APG tooltip).
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('tooltip').filter({ visible: true })).toHaveCount(0);
+
+  // A Value lists its own filter and the marking it follows.
+  const value = tile.locator('p .text-element-read');
+  await value.hover();
+  const valueTip = page.getByRole('tooltip').filter({ visible: true });
+  await expect(valueTip).toContainText('Value · Count');
+  await expect(valueTip).toContainText('Filters: Status shipped');
+  await expect(valueTip).toContainText('Marking: Picks');
+});
+
+/**
  * T877 / AC-514: a dashboard of two Text tiles opened in view mode requests
  * no script of the editor's chunk (`text-editor-…`, named in
  * `vite.config.ts`), and none of the scripts it loads holds ProseMirror's
