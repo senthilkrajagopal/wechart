@@ -22,10 +22,13 @@ import {
   type ParallelScale,
   type RenderSpec,
 } from '@wechart/core';
+import { format } from 'echarts/core';
 
 import { colourFor } from '../colours';
-import { nameWriter, titleOf } from '../modelWriter';
+import { labelOf, nameWriter, titleOf } from '../modelWriter';
 import type { EChartsOption } from '../theme';
+import { CHART_FONT } from '../themed';
+import { DEFAULT_CANVAS, type Canvas } from './bar';
 
 export function isParallelType(chartType: string): boolean {
   return chartType === 'parallel';
@@ -126,7 +129,26 @@ function extentOf(values: readonly (number | null)[]): [number, number] {
   return min === max ? [min - 1, max + 1] : [min, max];
 }
 
-export function parallelOption(spec: RenderSpec): EChartsOption {
+/** The axes' titles and ends: ECharts' 12 px, in the chart's face. */
+const TITLE_FONT = `12px ${CHART_FONT}`;
+/** The least room between two neighbouring axes' titles. */
+const TITLE_GAP_PX = 8;
+/** The room kept between the outer axes' widest text and the tile's edge. */
+const EDGE_PX = 4;
+
+const widthOf = (text: string): number => format.getTextRect(text, TITLE_FONT).width;
+
+/** A title cut short with "…" to fit its room; as it is where it fits. */
+function fitted(text: string, room: number): string {
+  if (widthOf(text) <= room) return text;
+  for (let length = text.length - 1; length > 0; length -= 1) {
+    const cut = `${text.slice(0, length).trimEnd()}…`;
+    if (widthOf(cut) <= room) return cut;
+  }
+  return '…';
+}
+
+export function parallelOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EChartsOption {
   if (!isParallelType(spec.chartType))
     throw new Error(`${spec.chartType} is not parallel coordinates`);
   const { lineBy, colour, axes, scale, rows } = parallelLinesOf(spec);
@@ -136,14 +158,43 @@ export function parallelOption(spec: RenderSpec): EChartsOption {
   // By the lines drawn, a row each (T982's review).
   const opacity = rows.length > FADED_PAST ? FADED_OPACITY : 1;
 
-  const parallelAxis = axes.map((member, dim) => {
+  // Each axis's title is centred over it (the coordinator's fix: "ales lines
+  // Revenue", cut at the tile's edge). The outer two are cut short to a slot
+  // of the canvas shared equally by the axes, and set in from the edges by
+  // half their widest text, so nothing is drawn past the tile; the axes
+  // between are then at least a slot apart, and each inner title is cut
+  // short to the room between its axis and its neighbours'. Short titles
+  // where the chart is one cube's (AC-220).
+  const last = axes.length - 1;
+  const slot = Math.max(canvas.width / Math.max(axes.length, 1) - TITLE_GAP_PX, 0);
+  const ends = axes.map((member) => {
     const [min, max] = scale === 'shared' ? shared : extentOf(valuesOf(member));
-    const write = formatterFor(member, spec.formats ?? {});
+    return { min, max, write: formatterFor(member, spec.formats ?? {}) };
+  });
+  const sideOf = (at: number) => {
+    const { min, max, write } = ends[at]!;
+    const title = fitted(labelOf(spec, axes[at]!), slot);
+    return Math.ceil(
+      Math.max(widthOf(title), widthOf(write(max)), widthOf(write(min))) / 2 + EDGE_PX,
+    );
+  };
+  const left = last < 0 ? 0 : sideOf(0);
+  const right = last < 0 ? 0 : sideOf(last);
+  const apart = last > 0 ? (canvas.width - left - right) / last : canvas.width;
+  const titleOfAxis = (at: number) =>
+    fitted(
+      labelOf(spec, axes[at]!),
+      at === 0 || at === last ? slot : Math.max(apart - TITLE_GAP_PX, slot),
+    );
+
+  const parallelAxis = axes.map((_member, dim) => {
+    const { min, max, write } = ends[dim]!;
+    const title = titleOfAxis(dim);
     return {
       dim,
       type: 'value',
       // Its measure above, and under that its maximum (rule 159).
-      name: `${titleOf(spec, member)}\n${write(max)}`,
+      name: `${title}\n${write(max)}`,
       nameLocation: 'end',
       nameGap: 8,
       nameTextStyle: { fontSize: 12, lineHeight: 16, align: 'center' },
@@ -205,8 +256,9 @@ export function parallelOption(spec: RenderSpec): EChartsOption {
 
   return {
     animation: false,
-    // Room above for each axis's two-line title, and below for its minimum.
-    parallel: { left: 48, right: 48, top: 56, bottom: 32 },
+    // Room above for each axis's two-line title, below for its minimum, and
+    // at each side for half the outer axes' widest text.
+    parallel: { left, right, top: 56, bottom: 32 },
     parallelAxis,
     series,
   };

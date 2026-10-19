@@ -83,8 +83,26 @@ test('parallel coordinates take their wells, refuse Shared across formats, and d
   await expect.poll(() => lines.count()).toBeGreaterThanOrEqual(3);
   for (const d of await lines.evaluateAll((all) => all.map((one) => one.getAttribute('d') ?? '')))
     expect(d.match(/L/g), d).toHaveLength(2);
-  const statuses = await page.getByTestId('editor-result').locator('svg text').allTextContents();
-  expect(statuses).toEqual(expect.arrayContaining(['Orders Count', 'Orders Average Amount']));
+  // Each axis titled by its short title, as the chart is one cube's (AC-220),
+  // and every title, maximum and minimum drawn inside the chart (the
+  // coordinator's fix: the first title was cut at the tile's left edge).
+  const texts = canvas.locator('svg text');
+  const titles = await texts.allTextContents();
+  expect(titles).toEqual(expect.arrayContaining(['Count', 'Total Amount', 'Average Amount']));
+  const outside = await canvas
+    .locator('svg')
+    .first()
+    .evaluate((svg) => {
+      const box = svg.getBoundingClientRect();
+      return [...svg.querySelectorAll('text')]
+        .filter((text) => (text.textContent ?? '') !== '')
+        .filter((text) => {
+          const own = text.getBoundingClientRect();
+          return own.left < box.left - 0.5 || own.right > box.right + 0.5;
+        })
+        .map((text) => text.textContent);
+    });
+  expect(outside).toEqual([]);
   await expect(page.getByTestId('parallel-scale-warning')).toHaveText(
     "Each axis runs from its own minimum to its maximum. Don't compare a line's height on one axis with its height on another.",
   );

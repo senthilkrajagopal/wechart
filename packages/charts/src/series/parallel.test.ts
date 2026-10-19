@@ -1,7 +1,9 @@
 import { formatterFor, type RenderSpec } from '@wechart/core';
+import { format } from 'echarts/core';
 import { describe, expect, it } from 'vitest';
 
 import { optionFor } from '../optionFor';
+import { CHART_FONT } from '../themed';
 import { renderToSvg } from '../testing/renderToSvg';
 import { PARALLEL_LINE_CAP, parallelLinesOf, parallelOption } from './parallel';
 
@@ -254,5 +256,95 @@ describe('parallel coordinates’ lines (T982, AC-598)', () => {
 
   it('is drawable through optionFor, as every chart is', () => {
     expect(() => renderToSvg(optionFor(spec(rowsOf(14))))).not.toThrow();
+  });
+});
+
+/**
+ * AC-598's titles, on a dashboard tile (the coordinator's Sales dashboard: on
+ * a 4-column tile the first axis's title read "ales lines Revenue", cut at
+ * the tile's left edge, and every title was the member's full title). Each
+ * axis is titled by its short title where the chart is one cube's, as every
+ * other chart's labels are (`labelOf`, AC-220), and every title, maximum and
+ * minimum is drawn inside the tile, a title too long for its axis's room cut
+ * short with "…".
+ */
+describe('parallel coordinates’ titles on a tile (AC-598)', () => {
+  const SALES = [
+    'sales_lines.revenue',
+    'sales_lines.units_sold',
+    'sales_lines.avg_order_value',
+    'sales_lines.discount_rate',
+  ];
+  const sales = (titles: Record<string, string>, short?: Record<string, string>): RenderSpec => ({
+    chartType: 'parallel',
+    encoding: { x: ['sales_lines.category'], y: SALES },
+    rows: ['Beverages', 'Condiments', 'Confections', 'Dairy Products'].map((category, at) => ({
+      'sales_lines.category': category,
+      'sales_lines.revenue': String(120000 + at * 31000),
+      'sales_lines.units_sold': String(5000 + at * 700),
+      'sales_lines.avg_order_value': String(400 + at * 17),
+      'sales_lines.discount_rate': String(0.04 + at / 100),
+    })),
+    formats: { 'sales_lines.revenue': 'currency', 'sales_lines.discount_rate': 'percent' },
+    titles: { 'sales_lines.category': 'Sales lines Category', ...titles },
+    ...(short === undefined ? {} : { shortTitles: short }),
+  });
+  const FULL = {
+    'sales_lines.revenue': 'Sales lines Revenue',
+    'sales_lines.units_sold': 'Sales lines Units Sold',
+    'sales_lines.avg_order_value': 'Sales lines Avg Order Value',
+    'sales_lines.discount_rate': 'Sales lines Discount Rate',
+  };
+  const SHORT = {
+    'sales_lines.revenue': 'Revenue',
+    'sales_lines.units_sold': 'Units Sold',
+    'sales_lines.avg_order_value': 'Avg Order Value',
+    'sales_lines.discount_rate': 'Discount Rate',
+  };
+  // A 4-column tile on a 12-column dashboard at 1,280 px, less its padding.
+  const TILE = { width: 380, height: 260 };
+
+  /** Every text drawn, with its box across the canvas, as the SSR string places it. */
+  const textsOf = (svg: string) =>
+    [...svg.matchAll(/<text ([^>]*)>([^<]*)<\/text>/g)].map(([, attributes = '', text = '']) => {
+      const x = Number(/translate\(([-\d.]+) /.exec(attributes)?.[1] ?? 'NaN');
+      const anchor = /text-anchor="(\w+)"/.exec(attributes)?.[1] ?? 'start';
+      const width = format.getTextRect(text, `12px ${CHART_FONT}`).width;
+      const left = anchor === 'middle' ? x - width / 2 : anchor === 'end' ? x - width : x;
+      return { text, left, right: left + width };
+    });
+
+  it('titles each axis by its short title where the chart is one cube’s', () => {
+    const names = axesOf(parallelOption(sales(FULL, SHORT), TILE)).map(
+      (axis) => axis.name.split('\n')[0],
+    );
+    expect(names).toEqual(['Revenue', 'Units Sold', 'Avg Order Value', 'Discount Rate']);
+  });
+
+  it('draws every title, maximum and minimum inside the tile', () => {
+    const texts = textsOf(renderToSvg(optionFor(sales(FULL, SHORT), TILE), TILE));
+    expect(texts.map((one) => one.text)).toEqual(
+      expect.arrayContaining(['Revenue', 'Discount Rate']),
+    );
+    for (const one of texts) {
+      expect(one.left, `${one.text} starts inside the tile`).toBeGreaterThanOrEqual(0);
+      expect(one.right, `${one.text} ends inside the tile`).toBeLessThanOrEqual(TILE.width);
+    }
+  });
+
+  it('cuts a title too long for its axis’s room short with “…”, inside the tile and clear of its neighbours', () => {
+    const texts = textsOf(renderToSvg(optionFor(sales(FULL), TILE), TILE));
+    const titles = texts.filter((one) => one.text.startsWith('Sales lines'));
+    expect(titles).toHaveLength(4);
+    expect(titles.some((one) => one.text.endsWith('…'))).toBe(true);
+    for (const one of titles) {
+      expect(one.left, `${one.text} starts inside the tile`).toBeGreaterThanOrEqual(0);
+      expect(one.right, `${one.text} ends inside the tile`).toBeLessThanOrEqual(TILE.width);
+    }
+    const across = [...titles].sort((a, b) => a.left - b.left);
+    for (let at = 1; at < across.length; at += 1)
+      expect(across[at]!.left, `${across[at]!.text} clears ${across[at - 1]!.text}`).toBeGreaterThan(
+        across[at - 1]!.right,
+      );
   });
 });
