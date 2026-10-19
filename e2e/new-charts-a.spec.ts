@@ -811,3 +811,52 @@ test('a bullet chart on a 5-column tile marks a bullet as its member, and splits
   await expect(chip).toContainText('Germany');
   await expect.poll(() => ink.count()).toBeGreaterThan(6);
 });
+
+/**
+ * T956 / AC-583: THE SYSTEM SHALL name each bullet "‹member›: ‹value› of
+ * ‹target› target (‹p› %), in the ‹band› band", the chart "‹n› regions; ‹k›
+ * above target (‹members›).", and give a table view of member, value,
+ * target, percentage of target and band.
+ * `Fails when: a bullet's name or the chart's summary lacks a part, or the
+ * table lacks a column.` (Every part: `charts/src/describe/bullet.test.ts`,
+ * `web/src/tiles/tableView/bullet.test.tsx`.) On a 5-column dashboard tile.
+ */
+test('a bullet chart’s tile names the chart and each bullet, and its table view lists target, share and band', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await bulletDashboard(request);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-value"]');
+
+  // Orders by status against 75: the chart summed up, then each bullet.
+  const said = tile.getByTestId('chart-text-alternative');
+  await expect(said).toHaveText(
+    /^3 orders statuses; (none|\d) above target.*\. (completed|shipped|processing): \d+ of 75 target \(\d+ %\), in the [^.]+ band\./,
+  );
+  await expect(tile.getByTestId('chart-canvas')).toHaveAttribute(
+    'aria-describedby',
+    (await said.getAttribute('id')) ?? '',
+  );
+
+  await viewAs(tile, 'table');
+  const table = tile.getByTestId('data-table');
+  await expect(table.getByRole('columnheader')).toHaveText([
+    'Orders Status',
+    'Orders Count',
+    'Target',
+    '% of target',
+    'Band',
+  ]);
+  await expect(table.getByTestId('table-row')).toHaveCount(3);
+  for (const cells of await table
+    .getByTestId('table-row')
+    .evaluateAll((rows) =>
+      rows.map((row) => [...row.querySelectorAll('td')].map((cell) => cell.textContent ?? '')),
+    )) {
+    expect(cells[2]).toBe('75');
+    expect(cells[3]).toMatch(/^\d+%$/);
+    expect(cells[4]).toMatch(/ %$/);
+  }
+});

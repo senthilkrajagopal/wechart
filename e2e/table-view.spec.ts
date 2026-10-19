@@ -39,6 +39,12 @@ async function openEditorWithEveryWellFilled(page: Page, chartType: string) {
   await expect(page.getByTestId('result-row-count')).toBeVisible();
 
   await chooseChartType(page, chartType);
+  // A bullet chart also needs its Target (T953, AC-580): a measure of the cube.
+  if (chartType === 'bullet')
+    await page
+      .getByTestId('well-bullet-target')
+      .getByRole('combobox', { name: 'Target', exact: true })
+      .selectOption('orders.total_amount');
   // Every type must be drawable from these fields, or the fixture is wrong.
   await expect(page.getByTestId('missing-fields')).toBeHidden();
 }

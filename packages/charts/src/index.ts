@@ -7,6 +7,7 @@ export const PACKAGE_NAME = '@wechart/charts';
 export { barOption, isBarType, type BarType, type Canvas } from './series/bar';
 export { lineOption, isLineType, type LineType } from './series/line';
 export { scatterOption, isScatterType } from './series/scatter';
+export { bulletsOf } from './series/bullet';
 export { pieOption, isPieType, type PieType } from './series/pie';
 export { treemapOption, isTreemapType } from './series/treemap';
 export { heatmapOption, isHeatmapType } from './series/heatmap';

@@ -114,6 +114,30 @@ export function withBulletOptions(
 }
 
 /**
+ * A bullet's value as a share of its target, rounded, and the band it is in
+ * (T956, AC-583; design 23 sheet 8's legend): "below 80 %" under the lowest
+ * edge, "80–100 %" between two, "above 120 %" past the highest, an edge
+ * belonging to the band above it. Nothing without a value or a target.
+ */
+export function bulletBandOf(
+  value: number | null,
+  target: number | null,
+  bands: readonly number[],
+): { readonly percent: number; readonly band: string } | undefined {
+  if (value === null || target === null || target === 0) return undefined;
+  const share = (value / target) * 100;
+  const above = bands.filter((edge) => share >= edge).length;
+  const [first] = bands;
+  const band =
+    above === 0
+      ? `below ${String(first ?? 0)} %`
+      : above === bands.length
+        ? `above ${String(bands.at(-1) ?? 0)} %`
+        : `${String(bands[above - 1] ?? 0)}–${String(bands[above] ?? 0)} %`;
+  return { percent: Math.round(share), band };
+}
+
+/**
  * The measures a type's own settings draw beside its Metrics, which its query
  * asks Cube for (T954, AC-581): a bullet chart's Target measure. None for a
  * target value, no target, or any other type.

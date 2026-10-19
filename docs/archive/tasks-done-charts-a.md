@@ -81,3 +81,14 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
       - The bands and the target are left as they are.
       - An average is hatched, with "Marked: …" in its tooltip.
     - **AC-582** is ticked on `e2e/new-charts-a.spec.ts`, "a bullet chart on a 5-column tile marks a bullet as its member…", on headless Chromium, with the unit tests named.
+
+- [x] T956 (AC-583) Name each bullet and the chart, and give the bullet chart its table view
+  - Files: `packages/charts/src/describe/bullet.ts` (+ test), `packages/web/src/tiles/tableView/bullet.ts` (+ test).
+  - Failing test: `bullet.test.ts` (describe): "EMEA: $412K of $450K target (92 %), in the 80–100 % band." and "4 regions; 1 above target (North America)."; (table view) Region, Revenue, Target, % of target, Band (AC-583).
+  - Depends on: T954
+  - Done (2026-10-18), decision T956-1:
+    - **Band:** core `bulletBandOf` gives the share of target and its band.
+    - **Text alternative:** `describe/bullet.ts`, registered in `DESCRIBE`. It gives the chart's summary first, then each bullet.
+    - **Table view:** `tiles/tableView/bullet.ts`. It is the first entry in `TABLE_VIEWS`, and `DataTable` now draws a type's own table view in place of its rows.
+    - **Fixed here:** a bullet chart is now drawn by its first plain dimension, never by a time dimension. `defaultEncoding` had laid it out as a bar and drew it per day; `table-view.spec.ts`'s walk found this. The walk now also takes `bullet`, setting a Target in its fixture, and `bullet` comes out of `AWAITING_TABLE_VIEW`.
+    - **AC-583** is ticked on `e2e/new-charts-a.spec.ts`, "a bullet chart's tile names the chart and each bullet…" (a 5-column dashboard tile), with `table-view.spec.ts`'s bullet walk, both on headless Chromium.

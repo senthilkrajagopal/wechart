@@ -1,5 +1,6 @@
 import type { ChartType, RenderSpec } from '@wechart/core';
 
+import { describeBullet } from './bullet';
 import { describeStack100 } from './stack100';
 
 /**
@@ -13,6 +14,7 @@ export type Describe = (spec: RenderSpec) => string | undefined;
 
 /** Each type with a text alternative of its own, by its type. One line per type. */
 export const DESCRIBE: Partial<Record<ChartType, Describe>> = {
+  bullet: describeBullet,
   stackedArea: describeStack100,
   stackedBar: describeStack100,
 };

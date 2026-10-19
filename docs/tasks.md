@@ -2305,10 +2305,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T955 (AC-582) Mark and cross-filter a bullet as its member, drawing another tile's marked share on the value bar from zero
 
-- [ ] T956 (AC-583) Name each bullet and the chart, and give the bullet chart its table view
-  - Files: `packages/charts/src/describe/bullet.ts` (+ test), `packages/web/src/tiles/tableView/bullet.ts` (+ test).
-  - Failing test: `bullet.test.ts` (describe): "EMEA: $412K of $450K target (92 %), in the 80–100 % band." and "4 regions; 1 above target (North America)."; (table view) Region, Revenue, Target, % of target, Band (AC-583).
-  - Depends on: T954
+- [x] T956 (AC-583) Name each bullet and the chart, and give the bullet chart its table view
 
 ### Lane CHARTS-A: 100 % stacking
 

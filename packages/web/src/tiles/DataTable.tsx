@@ -13,7 +13,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
 
-import { addedColumnsOf } from './tableView';
+import { addedColumnsOf, tableViewOf } from './tableView';
 
 /**
  * The table (AC-037), and the table view every chart can switch to (AC-178).
@@ -158,11 +158,61 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
    * (T958, AC-585). Once per answer, not once per scroll.
    */
   const added = useMemo(() => addedColumnsOf(spec), [spec]);
+  /**
+   * A type's own table view, where it has one (T956; AC-178, rule 166): the
+   * numbers behind its marks — a bullet's target, share and band — in place
+   * of its rows as queried.
+   */
+  const view = useMemo(() => tableViewOf(spec), [spec]);
 
   if (rows.length === 0) {
     return (
       <div className="data-table" data-testid="data-table">
         <p data-testid="table-empty">No rows.</p>
+      </div>
+    );
+  }
+
+  if (view !== undefined) {
+    const figures = new Set(view.figures ?? []);
+    return (
+      <div
+        className="data-table"
+        data-testid="data-table"
+        style={{ height: `${String(height)}px`, overflow: 'auto' }}
+        // A scrolling region, focusable and named, as the rows' table is (T182).
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+        tabIndex={0}
+        role="region"
+        aria-label={label === undefined ? 'Table' : `${label}, table`}
+      >
+        <table className="grid-table comfy">
+          <thead>
+            <tr>
+              {view.columns.map((column, at) => (
+                <th scope="col" key={column} className={figures.has(at) ? 'num' : undefined}>
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {view.rows.map((row, index) => (
+              <tr
+                // Its first cell names it; its place keeps two alike apart.
+                key={`${String(index)} ${row[0] ?? ''}`}
+                data-testid="table-row"
+                style={{ height: `${String(ROW_HEIGHT)}px` }}
+              >
+                {row.map((cell, at) => (
+                  <td key={view.columns[at] ?? at} className={figures.has(at) ? 'num' : undefined}>
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     );
   }

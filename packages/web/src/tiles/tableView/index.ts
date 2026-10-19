@@ -1,5 +1,6 @@
 import type { ChartType, RenderSpec } from '@wechart/core';
 
+import { bulletTableView } from './bullet';
 import { stack100Columns } from './stack100';
 
 /**
@@ -11,12 +12,16 @@ import { stack100Columns } from './stack100';
 export interface TableView {
   readonly columns: readonly string[];
   readonly rows: readonly (readonly string[])[];
+  /** The columns of figures, by place, set right as a measure's are (T956). */
+  readonly figures?: readonly number[];
 }
 
 export type TableViewOf = (spec: RenderSpec) => TableView;
 
 /** Each type with a table view of its own, by its type. One line per type. */
-export const TABLE_VIEWS: Partial<Record<ChartType, TableViewOf>> = {};
+export const TABLE_VIEWS: Partial<Record<ChartType, TableViewOf>> = {
+  bullet: bulletTableView,
+};
 
 /** A chart's own table view, where its type has one; the rows as queried otherwise. */
 export function tableViewOf(spec: RenderSpec): TableView | undefined {

@@ -26,7 +26,6 @@ export const AWAITING_TABLE_VIEW: ReadonlySet<string> = new Set([
   'histogram',
   'bubble',
   'parallel',
-  'bullet',
   'sankey',
   'funnel',
   'timeline',

@@ -417,6 +417,7 @@ export {
 export {
   BULLET_NO_TARGET,
   bandsRefusal,
+  bulletBandOf,
   bulletModule,
   bulletOptionsOf,
   DEFAULT_BANDS,
