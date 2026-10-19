@@ -17,6 +17,8 @@ export interface InsertSources {
     readonly name: string;
     readonly title: string;
     readonly measures: readonly InsertMeasure[];
+    /** Its dimensions, which an element's own filter is on (checkpoint 2). */
+    readonly dimensions?: readonly InsertMeasure[];
   }[];
   readonly markings: readonly { readonly name: string }[];
   readonly filters: readonly { readonly id: string; readonly name: string }[];

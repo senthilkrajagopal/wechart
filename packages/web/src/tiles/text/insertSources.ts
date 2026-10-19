@@ -36,6 +36,10 @@ export function insertSourcesOf({
         measures: membersOf(model, cube.name)
           .filter((member) => member.kind === 'measure')
           .map((member) => ({ name: member.name, title: member.shortTitle })),
+        dimensions: membersOf(model, cube.name)
+          // A string field: an own filter is one of its values, or not (T868-1).
+          .filter((member) => member.kind === 'dimension' && member.type === 'string')
+          .map((member) => ({ name: member.name, title: member.shortTitle })),
       }))
       .filter((cube) => cube.measures.length > 0),
     markings: (dashboard.markings ?? []).map((marking) => ({ name: marking.name })),

@@ -6515,6 +6515,7 @@ export function DashboardView({
                       elements={live?.elements ?? (stored === undefined ? [] : elementsOf(stored))}
                       selected={live?.selected ?? null}
                       names={namesFrom(textSources)}
+                      sources={textSources}
                       onSelect={(index) => {
                         if (session.saving) return;
                         if (editingText !== tile.id) {

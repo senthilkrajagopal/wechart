@@ -338,6 +338,15 @@ export const TEXT_CSS = `
 .text-element-settings__line { display: grid; grid-template-columns: 72px 1fr; gap: 8px; font-size: var(--wc-text-sm-size); }
 .text-element-settings dt { color: var(--wc-text-secondary); }
 .text-element-settings dd { margin: 0; }
+/* An element's own filter (checkpoint 2): listed, then a new one's field,
+   test and values, each control on its own line in the narrow panel. */
+.text-element-settings__own { margin: 8px 0 0; padding: 0; border: 0; }
+.text-element-settings__own legend { padding: 0; font-weight: 600; font-size: var(--wc-text-sm-size); }
+.text-element-settings__own-list { margin: 4px 0; padding: 0; list-style: none; font-size: var(--wc-text-sm-size); }
+.text-element-settings__own-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.text-element-settings__own-new { display: grid; gap: 4px; font-size: var(--wc-text-sm-size); }
+.text-element-settings__own-new label { color: var(--wc-text-secondary); }
+.text-element-settings__own-new .btn { justify-self: start; }
 /* Under its kind head in edit mode, the text fills the rest, as the markdown
    tile's did. */
 .grid-tile > .tile-head--kind ~ .text-tile { flex: 1 1 0; min-height: 0; height: auto; }

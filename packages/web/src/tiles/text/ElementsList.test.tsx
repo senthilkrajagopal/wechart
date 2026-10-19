@@ -229,3 +229,110 @@ describe('the Elements list (T882, AC-519)', () => {
     expect(within(settings).getByText('Orders › Revenue')).toBeTruthy();
   });
 });
+
+/**
+ * Checkpoint 2's review (AC-522, AC-520, AC-521): what was set only through
+ * the API is set in Properties too — an Icon's measure it's a share of, a
+ * Bullet graph's measure as its target, and an element's own filter.
+ */
+describe('the settings once set only through the API (checkpoint 2)', () => {
+  const SOURCES = {
+    cubes: [
+      {
+        name: 'orders',
+        title: 'Orders',
+        measures: [
+          { name: 'orders.revenue', title: 'Revenue' },
+          { name: 'orders.margin', title: 'Margin %' },
+        ],
+        dimensions: [
+          { name: 'orders.status', title: 'Status' },
+          { name: 'orders.country', title: 'Country' },
+        ],
+      },
+    ],
+    markings: [],
+    filters: [],
+  };
+  const settingsOf = (element: TextNode) => {
+    const onChange = vi.fn();
+    render(
+      <ElementsList
+        elements={[element]}
+        selected={0}
+        names={names}
+        sources={SOURCES}
+        onSelect={vi.fn()}
+        onChange={onChange}
+      />,
+    );
+    return onChange;
+  };
+
+  it('sets the measure an Icon is a share of, and takes it away', async () => {
+    const onChange = settingsOf({ type: 'icon', attrs: { measure: 'orders.revenue' } });
+    const of = screen.getByLabelText('As a share of');
+    expect(
+      within(of)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Nothing: its own value', 'Revenue', 'Margin %']);
+    await userEvent.selectOptions(of, 'orders.margin');
+    expect(onChange).toHaveBeenLastCalledWith(0, { of: 'orders.margin' });
+    await userEvent.selectOptions(of, '');
+    expect(onChange).toHaveBeenLastCalledWith(0, { of: null });
+  });
+
+  it('sets a measure as a Bullet graph’s target', async () => {
+    const onChange = settingsOf({ type: 'bulletGraph', attrs: { measure: 'orders.revenue' } });
+    await userEvent.click(screen.getByRole('radio', { name: 'A measure' }));
+    await userEvent.selectOptions(screen.getByLabelText('Target measure'), 'orders.margin');
+    expect(onChange).toHaveBeenLastCalledWith(0, {
+      target: { kind: 'measure', measure: 'orders.margin' },
+    });
+  });
+
+  it('shows a Bullet graph’s measure target as chosen', () => {
+    settingsOf({
+      type: 'bulletGraph',
+      attrs: { measure: 'orders.revenue', target: { kind: 'measure', measure: 'orders.margin' } },
+    });
+    expect((screen.getByRole('radio', { name: 'A measure' }) as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect((screen.getByLabelText('Target measure') as HTMLSelectElement).value).toBe(
+      'orders.margin',
+    );
+  });
+
+  it('lists an element’s own filter, removes it, and adds one on its cube’s fields', async () => {
+    const SHIPPED = { member: 'orders.status', operator: 'equals', values: ['shipped'] };
+    const onChange = settingsOf({
+      type: 'value',
+      attrs: { measure: 'orders.revenue', filters: [SHIPPED] },
+    });
+    const own = screen.getByRole('list', { name: 'Own filter' });
+    expect(
+      within(own)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Status is shipped×']);
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Status is shipped' }));
+    expect(onChange).toHaveBeenLastCalledWith(0, { filters: null });
+
+    await userEvent.selectOptions(screen.getByLabelText('Filter field'), 'orders.country');
+    await userEvent.selectOptions(screen.getByLabelText('Filter test'), 'notEquals');
+    await userEvent.type(screen.getByLabelText('Filter values'), 'DE, FR');
+    await userEvent.click(screen.getByRole('button', { name: 'Add filter' }));
+    expect(onChange).toHaveBeenLastCalledWith(0, {
+      filters: [SHIPPED, { member: 'orders.country', operator: 'notEquals', values: ['DE', 'FR'] }],
+    });
+  });
+
+  it('adds no filter without a value', async () => {
+    const onChange = settingsOf({ type: 'change', attrs: { measure: 'orders.revenue' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Add filter' }));
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toBe('Type a value to filter by.');
+  });
+});

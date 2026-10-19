@@ -4,6 +4,7 @@ import { TEXT_ELEMENT_LIMIT, type TextNode } from '@wechart/core';
 
 import { elementName, elementParts, type ElementNames } from './elementName';
 import { rangesProblem } from './elements/BulletGraph';
+import type { InsertSources } from './InsertMenu';
 
 /**
  * A Text tile's Elements in Properties (T882, AC-519; design 21 pin 13,
@@ -15,6 +16,7 @@ export function ElementsList({
   selected,
   names,
   markings = [],
+  sources,
   onSelect,
   onChange,
 }: {
@@ -25,6 +27,8 @@ export function ElementsList({
   readonly names: ElementNames;
   /** The dashboard's markings, which a Value may be limited by (AC-116). */
   readonly markings?: readonly { readonly name: string }[];
+  /** The measures and fields an element's settings choose among (checkpoint 2). */
+  readonly sources?: InsertSources | undefined;
   readonly onSelect: (index: number) => void;
   /** Settings changed for the element at this place; a null takes one away (T884). */
   readonly onChange?: ((index: number, settings: Record<string, unknown>) => void) | undefined;
@@ -77,6 +81,7 @@ export function ElementsList({
           element={chosen}
           names={names}
           markings={markings}
+          cubes={sources?.cubes ?? []}
           onChange={change}
         />
       )}
@@ -93,11 +98,13 @@ function ElementSettings({
   element,
   names,
   markings,
+  cubes,
   onChange,
 }: {
   element: TextNode;
   names: ElementNames;
   markings: readonly { readonly name: string }[];
+  cubes: InsertSources['cubes'];
   onChange: (settings: Record<string, unknown>) => void;
 }) {
   const attrs = element.attrs ?? {};
@@ -136,9 +143,20 @@ function ElementSettings({
       ) : element.type === 'sparkline' ? (
         <SparklineSettings attrs={attrs} onChange={onChange} />
       ) : element.type === 'bulletGraph' ? (
-        <BulletSettings attrs={attrs} onChange={onChange} />
+        <BulletSettings attrs={attrs} cubes={cubes} onChange={onChange} />
       ) : element.type === 'icon' ? (
-        <IconSettings attrs={attrs} onChange={onChange} />
+        <>
+          <MeasureSelect
+            label="As a share of"
+            none="Nothing: its own value"
+            cubes={cubes}
+            value={text(attrs['of'])}
+            onChoose={(of) => {
+              onChange({ of: of ?? null });
+            }}
+          />
+          <IconSettings attrs={attrs} onChange={onChange} />
+        </>
       ) : element.type === 'marking' ? (
         <Choices
           label="Show"
@@ -152,7 +170,195 @@ function ElementSettings({
           }}
         />
       ) : null}
+      {measure !== undefined && OWN_FILTER_KINDS.has(element.type) ? (
+        <OwnFilters
+          attrs={attrs}
+          fields={cubes.find((cube) => cube.name === measure.split('.')[0])?.dimensions ?? []}
+          onChange={onChange}
+        />
+      ) : null}
     </section>
+  );
+}
+
+/** The kinds that take an own filter, added to the tile's (AC-520; decision T868-1). */
+const OWN_FILTER_KINDS = new Set(['value', 'change', 'sparkline', 'icon', 'bulletGraph']);
+
+/** A measure chosen from the dashboard's cubes, or none. */
+function MeasureSelect({
+  label,
+  none,
+  cubes,
+  value,
+  onChoose,
+}: {
+  label: string;
+  /** What choosing no measure says. */
+  none?: string | undefined;
+  cubes: InsertSources['cubes'];
+  value: string | undefined;
+  onChoose: (measure: string | undefined) => void;
+}) {
+  const id = useId();
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <select
+        id={id}
+        value={value ?? ''}
+        onChange={(event) => {
+          onChoose(event.target.value === '' ? undefined : event.target.value);
+        }}
+      >
+        {none === undefined ? (
+          <option value="" disabled>
+            Choose a measure
+          </option>
+        ) : (
+          <option value="">{none}</option>
+        )}
+        {cubes.map((cube) => (
+          <optgroup key={cube.name} label={cube.title}>
+            {cube.measures.map((each) => (
+              <option key={each.name} value={each.name}>
+                {each.title}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+type OwnFilter = { member: string; operator: 'equals' | 'notEquals'; values: string[] };
+
+const ownFiltersOf = (value: unknown): OwnFilter[] =>
+  Array.isArray(value)
+    ? (value as unknown[]).flatMap((each) => {
+        if (typeof each !== 'object' || each === null) return [];
+        const { member, operator, values } = each as Record<string, unknown>;
+        return typeof member === 'string' &&
+          (operator === 'equals' || operator === 'notEquals') &&
+          Array.isArray(values)
+          ? [{ member, operator, values: values.filter((one) => typeof one === 'string') }]
+          : [];
+      })
+    : [];
+
+/**
+ * An element's own filter, added to its tile's (AC-520; design 21 C1 "Own
+ * filter"): each listed as words with its ×; a new one on a field of its
+ * measure's cube, is or is not, and its values, added once it has one.
+ */
+function OwnFilters({
+  attrs,
+  fields,
+  onChange,
+}: {
+  attrs: Readonly<Record<string, unknown>>;
+  fields: readonly { readonly name: string; readonly title: string }[];
+  onChange: (settings: Record<string, unknown>) => void;
+}) {
+  const ids = { field: useId(), test: useId(), values: useId() };
+  const filters = ownFiltersOf(attrs['filters']);
+  const [field, setField] = useState(fields[0]?.name ?? '');
+  const [test, setTest] = useState<OwnFilter['operator']>('equals');
+  const [typed, setTyped] = useState('');
+  const [problem, setProblem] = useState<string | undefined>(undefined);
+  const titleOf = (member: string) => fields.find((each) => each.name === member)?.title ?? member;
+  const wordsOf = (filter: OwnFilter) =>
+    `${titleOf(filter.member)} ${filter.operator === 'notEquals' ? 'is not' : 'is'} ${filter.values.join(', ')}`;
+  const set = (next: readonly OwnFilter[]) => {
+    onChange({ filters: next.length === 0 ? null : next });
+  };
+  return (
+    <fieldset className="text-element-settings__own">
+      <legend>Own filter</legend>
+      <ul aria-label="Own filter" className="text-element-settings__own-list">
+        {filters.map((filter, at) => (
+          // Kept in their order, one per place.
+          <li key={`own-${String(at)}`}>
+            {wordsOf(filter)}
+            <button
+              type="button"
+              className="btn-ghost btn-sm"
+              aria-label={`Remove ${wordsOf(filter)}`}
+              onClick={() => {
+                set(filters.filter((_, index) => index !== at));
+              }}
+            >
+              ×
+            </button>
+          </li>
+        ))}
+      </ul>
+      {fields.length === 0 ? (
+        <p className="text-element-settings__note">Its cube has no text fields to filter on.</p>
+      ) : (
+        <div className="text-element-settings__own-new">
+          <label htmlFor={ids.field}>Filter field</label>
+          <select
+            id={ids.field}
+            value={field}
+            onChange={(event) => {
+              setField(event.target.value);
+            }}
+          >
+            {fields.map((each) => (
+              <option key={each.name} value={each.name}>
+                {each.title}
+              </option>
+            ))}
+          </select>
+          <label htmlFor={ids.test}>Filter test</label>
+          <select
+            id={ids.test}
+            value={test}
+            onChange={(event) => {
+              setTest(event.target.value === 'notEquals' ? 'notEquals' : 'equals');
+            }}
+          >
+            <option value="equals">is</option>
+            <option value="notEquals">is not</option>
+          </select>
+          <label htmlFor={ids.values}>Filter values</label>
+          <input
+            id={ids.values}
+            type="text"
+            value={typed}
+            placeholder="Values, separated by commas"
+            onChange={(event) => {
+              setTyped(event.target.value);
+            }}
+          />
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => {
+              const values = typed
+                .split(',')
+                .map((one) => one.trim())
+                .filter((one) => one !== '');
+              if (values.length === 0) {
+                setProblem('Type a value to filter by.');
+                return;
+              }
+              setProblem(undefined);
+              setTyped('');
+              set([...filters, { member: field, operator: test, values }]);
+            }}
+          >
+            Add filter
+          </button>
+          {problem === undefined ? null : (
+            <p role="alert" className="text-element-settings__problem">
+              {problem}
+            </p>
+          )}
+        </div>
+      )}
+    </fieldset>
   );
 }
 
@@ -365,33 +571,59 @@ function SparklineSettings({
 }
 
 /**
- * A Bullet graph's: a fixed target, its ranges — up to 3, low to high — and
- * its minimum and maximum (design 21 C4). A measure as its target is set
- * through the API for now (decision T885-1).
+ * A Bullet graph's: its target, a fixed value or a measure, its ranges — up
+ * to 3, low to high — and its minimum and maximum (design 21 C4).
  */
 function BulletSettings({
   attrs,
+  cubes,
   onChange,
 }: {
   attrs: Readonly<Record<string, unknown>>;
+  cubes: InsertSources['cubes'];
   onChange: (settings: Record<string, unknown>) => void;
 }) {
-  const target = attrs['target'] as { kind?: unknown; value?: unknown } | undefined;
+  const target = attrs['target'] as
+    { kind?: unknown; value?: unknown; measure?: unknown } | undefined;
   const fixed = target?.kind === 'fixed' && typeof target.value === 'number' ? target.value : '';
+  /** A measure as its target: chosen next, nothing set until it is. */
+  const [byMeasure, setByMeasure] = useState(target?.kind === 'measure');
   const ranges = Array.isArray(attrs['ranges']) ? (attrs['ranges'] as unknown[]).join(', ') : '';
   const listed = (typed: string) =>
     typed === '' ? [] : typed.split(',').map((part) => Number(part.trim()));
   return (
     <>
-      <NumberField
-        label="Target"
-        value={String(fixed)}
-        check={notANumber}
-        onSet={(typed) => {
-          const value = asNumber(typed);
-          onChange({ target: value === undefined ? null : { kind: 'fixed', value } });
+      <Choices
+        label="Target is"
+        options={[
+          ['fixed', 'A value'],
+          ['measure', 'A measure'],
+        ]}
+        value={byMeasure ? 'measure' : 'fixed'}
+        onChoose={(kind) => {
+          setByMeasure(kind === 'measure');
         }}
       />
+      {byMeasure ? (
+        <MeasureSelect
+          label="Target measure"
+          cubes={cubes}
+          value={target?.kind === 'measure' ? text(target.measure) : undefined}
+          onChoose={(measure) => {
+            if (measure !== undefined) onChange({ target: { kind: 'measure', measure } });
+          }}
+        />
+      ) : (
+        <NumberField
+          label="Target"
+          value={String(fixed)}
+          check={notANumber}
+          onSet={(typed) => {
+            const value = asNumber(typed);
+            onChange({ target: value === undefined ? null : { kind: 'fixed', value } });
+          }}
+        />
+      )}
       <NumberField
         label="Ranges, low to high"
         value={ranges}

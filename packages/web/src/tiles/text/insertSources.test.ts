@@ -76,11 +76,15 @@ describe('what the insert menu offers (T881, AC-517)', () => {
           { name: 'orders.revenue', title: 'Revenue' },
           { name: 'orders.count', title: 'Count' },
         ],
+        // Its string fields, which an element's own filter is on (checkpoint 2).
+        // (Its short title: this model gives the field none, so its title.)
+        dimensions: [{ name: 'orders.country', title: 'Orders Country' }],
       },
       {
         name: 'products',
         title: 'Products',
         measures: [{ name: 'products.count', title: 'Count' }],
+        dimensions: [],
       },
     ]);
     expect(sources.markings).toEqual([{ name: 'Picks' }]);

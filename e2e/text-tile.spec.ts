@@ -974,6 +974,70 @@ test('a value reads in its sentence’s type, and on focus shows what it is, as 
 });
 
 /**
+ * Checkpoint 2's fix (AC-522, AC-520): an Icon's "As a share of" and a
+ * Value's own filter, set in Properties, are what the tile then reads, and
+ * are saved with it.
+ */
+test('an Icon’s share of a measure and a Value’s own filter are set in Properties', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWithText(request, [
+    {
+      type: 'paragraph',
+      content: [
+        {
+          type: 'icon',
+          attrs: {
+            measure: 'orders.count',
+            rules: [
+              { op: '>=', value: 2, state: 'success', label: 'Many' },
+              { op: 'otherwise', state: 'error', label: 'Few' },
+            ],
+          },
+        },
+        { type: 'text', text: ' with ' },
+        { type: 'value', attrs: { measure: 'orders.count' } },
+      ],
+    },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-text"]');
+  const icon = tile.locator('.text-tile .text-icon');
+  const value = tile.locator('.text-tile .text-value');
+  await expect(icon).toHaveText('Many');
+  await expect(value).toHaveText('240');
+
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await tile.locator('.text-tile').dblclick();
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  const elements = sidebar.getByRole('list', { name: 'Elements' });
+  await elements.getByRole('button', { name: /^Icon/ }).click();
+  // 240 as a share of itself is 1: below the first rule's 2.
+  await sidebar.getByLabel('As a share of').selectOption('orders.count');
+  await elements.getByRole('button', { name: /^Value/ }).click();
+  await sidebar.getByLabel('Filter field').selectOption('orders.status');
+  await sidebar.getByLabel('Filter values').fill('shipped');
+  await sidebar.getByRole('button', { name: 'Add filter' }).click();
+  await expect(sidebar.getByRole('list', { name: 'Own filter' })).toContainText('is shipped');
+
+  await tile.locator('.tile-head__kind').click();
+  await expect(tile.getByRole('textbox')).toHaveCount(0);
+  await toolbar(page).getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(toolbar(page)).toBeHidden();
+
+  const reads = async () => {
+    await expect(icon).toHaveText('Few');
+    await expect(value).toHaveText(/^\d+$/);
+    await expect(value).not.toHaveText('240');
+  };
+  await reads();
+  await page.reload();
+  await reads();
+});
+
+/**
  * T877 / AC-514: a dashboard of two Text tiles opened in view mode requests
  * no script of the editor's chunk (`text-editor-…`, named in
  * `vite.config.ts`), and none of the scripts it loads holds ProseMirror's
