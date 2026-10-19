@@ -6,6 +6,7 @@ import {
 
 import { dataResult, refusal, routeRefusal } from '../result';
 import type { McpCall, McpTool, WebAnswer } from '../server';
+import { dashboardForMcp } from '../textTiles';
 
 /**
  * Reading and exploring through MCP (T782, AC-437, AC-432, AC-469): each
@@ -98,12 +99,19 @@ export function refusedBy(answer: WebAnswer): CallToolResult {
  * about another one, such as a static route's beside it
  * (`/api/data-sources/sealing-key`), is none (T782's review).
  */
-async function read(call: McpCall, url: string, key: string, id?: string): Promise<CallToolResult> {
+async function read(
+  call: McpCall,
+  url: string,
+  key: string,
+  id?: string,
+  /** What the answer is given as, where it isn't as the route gives it. */
+  shown: (body: unknown) => unknown = (body) => body,
+): Promise<CallToolResult> {
   const answer = await call.ask(url);
   if (answer.status !== 200) return refusedBy(answer);
   if (id !== undefined && (answer.body as { id?: unknown } | null)?.id !== id)
     return refusal(NOT_THERE);
-  return dataResult({ [key]: answer.body });
+  return dataResult({ [key]: shown(answer.body) });
 }
 
 const idOf = (args: unknown) => (args as { id: string }).id;
@@ -162,7 +170,8 @@ export const READ_TOOLS: readonly McpTool[] = [
   },
   {
     name: 'read_dashboard',
-    description: 'Reads a dashboard’s definition: its pages, tiles, filters and settings.',
+    description:
+      'Reads a dashboard’s definition: its pages, tiles, filters and settings. A Text tile’s content is its markdown, each live element a {{…}} token naming its kind and source.',
     scope: 'read',
     inputSchema: BY_ID,
     annotations: READ_ONLY,
@@ -172,6 +181,13 @@ export const READ_TOOLS: readonly McpTool[] = [
         `/api/documents/dashboard/${encodeURIComponent(idOf(args))}`,
         'dashboard',
         idOf(args),
+        // Its Text tiles as markdown with tokens (T891, AC-527).
+        (record) => {
+          const body = (record as { body?: unknown } | null)?.body;
+          return typeof body === 'object' && body !== null && !Array.isArray(body)
+            ? { ...(record as object), body: dashboardForMcp(body as Record<string, unknown>) }
+            : record;
+        },
       ),
   },
   {

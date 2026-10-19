@@ -35,7 +35,7 @@ import {
   type TextMark,
   type TextNode,
 } from './text-document';
-import { elementOfToken, firstTokenIn, textPartsOf } from './text-tokens';
+import { elementPartsOf, firstTokenIn } from './text-tokens';
 
 // A block's content runs to the line's end, or, in exported markdown, past a
 // line break joined into it (`joinedAtBreaks`).
@@ -99,11 +99,11 @@ const textNode = (text: string, marks: readonly TextMark[]): TextNode => ({
 });
 
 /** Text with its line breaks, and any token in it as its element. */
-function plainRun(text: string, marks: readonly TextMark[]): TextNode[] {
+function plainRun(text: string, marks: readonly TextMark[], exported: boolean): TextNode[] {
   const nodes: TextNode[] = [];
   text.split('\n').forEach((line, index) => {
     if (index > 0) nodes.push({ type: 'hardBreak' });
-    for (const part of textPartsOf(line))
+    for (const part of elementPartsOf(line, exported))
       if (typeof part === 'string') nodes.push(textNode(part, marks));
       else nodes.push(asElement(part, marks));
   });
@@ -111,9 +111,8 @@ function plainRun(text: string, marks: readonly TextMark[]): TextNode[] {
 }
 
 /** A token's element, carrying the emphasis around it; never a link (the schema's rule). */
-function asElement(token: Parameters<typeof elementOfToken>[0], marks: readonly TextMark[]) {
+function asElement(read: TextNode, marks: readonly TextMark[]) {
   const kept = marks.filter((mark) => mark.type !== 'link');
-  const read = elementOfToken(token);
   const element: TextNode = {
     ...read,
     attrs: Object.fromEntries(
@@ -136,8 +135,11 @@ function literalRun(text: string, marks: readonly TextMark[]): TextNode[] {
   return nodes;
 }
 
-function inlineOf(text: string, marks: readonly TextMark[]): TextNode[] {
+/** Inline markdown as nodes; `exported`, every element kind's token read (T891). */
+function inlineOf(text: string, marks: readonly TextMark[], exported: boolean): TextNode[] {
   if (text === '') return [];
+  const inline = (part: string, under: readonly TextMark[]) => inlineOf(part, under, exported);
+  const plain = (part: string, under: readonly TextMark[]) => plainRun(part, under, exported);
   let earliest: { match: RegExpExecArray; kind: Kind } | undefined;
   for (const { pattern, kind } of MARKS) {
     const match = pattern.exec(text);
@@ -146,16 +148,16 @@ function inlineOf(text: string, marks: readonly TextMark[]): TextNode[] {
   }
   // A token before the first mark is read first, so a `*` in a marking's
   // name never splits it (T389's review); one inside a mark is read there.
-  const token = firstTokenIn(text);
+  const token = firstTokenIn(text, exported);
   if (token !== undefined && (earliest === undefined || token.index < earliest.match.index)) {
     const end = token.index + token.length;
     return [
-      ...inlineOf(text.slice(0, token.index), marks),
-      ...plainRun(text.slice(token.index, end), marks),
-      ...inlineOf(text.slice(end), marks),
+      ...inline(text.slice(0, token.index), marks),
+      ...plain(text.slice(token.index, end), marks),
+      ...inline(text.slice(end), marks),
     ];
   }
-  if (earliest === undefined) return plainRun(text, marks);
+  if (earliest === undefined) return plain(text, marks);
 
   const { match, kind } = earliest;
   const inner = match[1] ?? '';
@@ -167,23 +169,19 @@ function inlineOf(text: string, marks: readonly TextMark[]): TextNode[] {
     // the tile drew them, emphasis and tokens too (T869's review).
     marked =
       textLinkProblem(href) === undefined
-        ? inlineOf(inner, withMark(marks, { type: 'link', attrs: { href } }))
-        : [
-            textNode('[', marks),
-            ...inlineOf(inner, marks),
-            textNode(`](${match[2] ?? ''})`, marks),
-          ];
+        ? inline(inner, withMark(marks, { type: 'link', attrs: { href } }))
+        : [textNode('[', marks), ...inline(inner, marks), textNode(`](${match[2] ?? ''})`, marks)];
   } else {
     const added: TextMark[] =
       kind === 'both'
         ? [{ type: 'bold' }, { type: 'italic' }]
         : [{ type: kind === 'strong' ? 'bold' : 'italic' }];
-    marked = inlineOf(inner, added.reduce(withMark, [...marks]));
+    marked = inline(inner, added.reduce(withMark, [...marks]));
   }
   return [
-    ...plainRun(text.slice(0, match.index), marks),
+    ...plain(text.slice(0, match.index), marks),
     ...marked,
-    ...inlineOf(text.slice(match.index + match[0].length), marks),
+    ...inline(text.slice(match.index + match[0].length), marks),
   ];
 }
 
@@ -245,7 +243,7 @@ export function textDocumentFromMarkdown(
   { exported = false }: { readonly exported?: boolean } = {},
 ): TextDocument {
   const inline = (text: string) =>
-    joined(inlineOf(exported ? hidden(cleaned(text)) : cleaned(text), []));
+    joined(inlineOf(exported ? hidden(cleaned(text)) : cleaned(text), [], exported));
   const split = markdown.replace(/\r\n?/g, '\n').split('\n');
   const lines = exported ? joinedAtBreaks(split) : split;
   const ranks = [

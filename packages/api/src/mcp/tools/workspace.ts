@@ -5,8 +5,9 @@ import {
 } from '@modelcontextprotocol/server';
 
 import { workspaceIdOf } from '../../repos/catalog';
-import { dataResult, refusal } from '../result';
+import { dataResult, refusal, routeRefusal } from '../result';
 import type { McpCall, McpTool, WebAnswer } from '../server';
+import { dashboardFromMcp } from '../textTiles';
 import { ID, refusedBy } from './read';
 
 /**
@@ -189,10 +190,25 @@ export const ITEM_TOOLS: readonly McpTool[] = [
           : { folderId: body['folderId'] };
       if ('refused' in then) return refusedBy(then.refused);
       if (!(await inMyWorkspace(call, then.folderId))) return outside();
+      // Its Text tiles given in markdown, made documents keeping the stored
+      // elements' settings (T891, AC-527); one that fails is refused here.
+      let sending = body;
+      if (kind === 'dashboard') {
+        const now = await call.ask(`/api/documents/dashboard/${encodeURIComponent(id)}`);
+        const stored = (now.body as { body?: unknown } | null)?.body;
+        const made = dashboardFromMcp(
+          body,
+          now.status === 200 && typeof stored === 'object' && stored !== null
+            ? (stored as Record<string, unknown>)
+            : undefined,
+        );
+        if ('refused' in made) return routeRefusal(made.refused);
+        sending = made.body;
+      }
       return changed(
         await call.ask(`/api/documents/${kind}/${encodeURIComponent(id)}`, {
           method: 'PUT',
-          body: { body, version },
+          body: { body: sending, version },
         }),
         'item',
       );

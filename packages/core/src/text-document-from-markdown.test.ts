@@ -223,6 +223,85 @@ describe('a markdown tile’s text as a Text document (T869, AC-512)', () => {
   });
 });
 
+/**
+ * T891 / AC-527, decision T891-1: exported markdown — what an MCP client
+ * reads (T870) and sends back — reads every element kind's token as its
+ * element, not only a Value's and a Marking's; a markdown tile's text never
+ * did, and still doesn't.
+ */
+describe('exported markdown’s tokens, every kind (T891, AC-527)', () => {
+  const exported = (markdown: string) => {
+    const result = textDocumentFromMarkdown(markdown, { exported: true });
+    expect(textDocumentProblems(result)).toEqual([]);
+    return result;
+  };
+  const element = (type: string, attrs: Record<string, unknown>): TextNode => ({ type, attrs });
+
+  it('reads each kind’s token as its element, by its source', () => {
+    expect(
+      exported(
+        [
+          '{{change:orders.revenue | vs:previous_period}}',
+          '{{sparkline:orders.revenue}}',
+          '{{icon:orders.count}}',
+          '{{bullet-graph:orders.margin}}',
+          '{{as-of:orders.count}}',
+          '{{filter-value:f-country}}',
+          '{{filter-control:f-country}}',
+          '{{parameter-control:p-metric}}',
+          '{{button:Go to Detail}}',
+          '{{measure:orders.count | marking:Picks}}',
+        ].join(' '),
+      ),
+    ).toEqual(
+      doc(
+        p(
+          element('change', { measure: 'orders.revenue' }),
+          text(' '),
+          element('sparkline', { measure: 'orders.revenue' }),
+          text(' '),
+          element('icon', { measure: 'orders.count' }),
+          text(' '),
+          element('bulletGraph', { measure: 'orders.margin' }),
+          text(' '),
+          element('asOf', { measure: 'orders.count' }),
+          text(' '),
+          element('filterValue', { filter: 'f-country' }),
+          text(' '),
+          element('filterControl', { filter: 'f-country' }),
+          text(' '),
+          element('parameterControl', { parameter: 'p-metric' }),
+          text(' '),
+          element('actionButton', { label: 'Go to Detail' }),
+          text(' '),
+          element('value', { measure: 'orders.count', marking: 'Picks' }),
+        ),
+      ),
+    );
+    expect(exported('{{marking:Picks.summary}}')).toEqual(
+      doc(p(element('marking', { marking: 'Picks', show: 'summary' }))),
+    );
+  });
+
+  it('keeps emphasis around such a token, and reads it in a heading', () => {
+    expect(exported('## **{{button:Go}}** now')).toEqual(
+      doc(h(2, { type: 'actionButton', attrs: { label: 'Go' }, marks: [bold] }, text(' now'))),
+    );
+  });
+
+  it('leaves them as text in a markdown tile’s text, which never had them', () => {
+    expect(converted('{{button:Go}} {{icon:orders.count}}')).toEqual(
+      doc(p(text('{{button:Go}} {{icon:orders.count}}'))),
+    );
+  });
+
+  it('leaves an unknown kind, or one with no source, as text', () => {
+    expect(exported('{{gauge:orders.count}} {{button: }} {{icon:revenue}}')).toEqual(
+      doc(p(text('{{gauge:orders.count}} {{button: }} {{icon:revenue}}'))),
+    );
+  });
+});
+
 describe('a markdown tile’s tokens as elements (T869, AC-512, AC-116)', () => {
   it('reads a measure limited by a marking as a Value limited by it', () => {
     expect(converted('{{measure:orders.revenue | marking:Marking}}')).toEqual(

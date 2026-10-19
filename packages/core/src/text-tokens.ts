@@ -46,6 +46,86 @@ function tokenOf(inside: string): TextToken | undefined {
   };
 }
 
+/** A member as Cube names one, for exported tokens' sources. */
+const MEMBER_NAME = /^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/;
+/** The kinds whose exported token names a measure: T870's names, the schema's kinds. */
+const BY_MEASURE: Readonly<Record<string, string>> = {
+  sparkline: 'sparkline',
+  icon: 'icon',
+  'bullet-graph': 'bulletGraph',
+  'as-of': 'asOf',
+};
+
+/**
+ * The element an exported token names that a markdown tile never had (T870,
+ * decision T891-1): a Change, a Sparkline, an Icon, a Bullet graph, an As
+ * of, a Filter value, a Filter control, a Parameter control or a Button, by
+ * its source; or none.
+ */
+function exportedElementOf(inside: string): TextNode | undefined {
+  const text = inside.trim();
+  const colon = text.indexOf(':');
+  if (colon < 0) return undefined;
+  const kind = text.slice(0, colon);
+  const source = text.slice(colon + 1).trim();
+  if (source === '') return undefined;
+  if (kind === 'change') {
+    const change = /^(\S+)\s*\|\s*vs:\s*previous_period$/.exec(source);
+    const measure = change?.[1];
+    return measure !== undefined && MEMBER_NAME.test(measure)
+      ? { type: 'change', attrs: { measure } }
+      : undefined;
+  }
+  const byMeasure = BY_MEASURE[kind];
+  if (byMeasure !== undefined)
+    return MEMBER_NAME.test(source) ? { type: byMeasure, attrs: { measure: source } } : undefined;
+  switch (kind) {
+    case 'filter-value':
+      return { type: 'filterValue', attrs: { filter: source } };
+    case 'filter-control':
+      return { type: 'filterControl', attrs: { filter: source } };
+    case 'parameter-control':
+      return { type: 'parameterControl', attrs: { parameter: source } };
+    case 'button':
+      return { type: 'actionButton', attrs: { label: source } };
+    default:
+      return undefined;
+  }
+}
+
+/** The element a `{{…}}` names, every kind where `exported`, a markdown tile's two otherwise. */
+function elementOf(inside: string, exported: boolean): TextNode | undefined {
+  const token = tokenOf(inside);
+  if (token !== undefined) return elementOfToken(token);
+  return exported ? exportedElementOf(inside) : undefined;
+}
+
+/**
+ * A run of text, split into its plain text and the elements its tokens name,
+ * in order: a markdown tile's tokens, or, `exported`, every kind's (T891).
+ */
+export function elementPartsOf(text: string, exported = false): (string | TextNode)[] {
+  const parts: (string | TextNode)[] = [];
+  let plain = '';
+  let at = 0;
+  for (const found of text.matchAll(TOKEN)) {
+    const element = elementOf(found[1] ?? '', exported);
+    const end = found.index + found[0].length;
+    if (element === undefined) {
+      plain += text.slice(at, end);
+    } else {
+      plain += text.slice(at, found.index);
+      if (plain !== '') parts.push(plain);
+      plain = '';
+      parts.push(element);
+    }
+    at = end;
+  }
+  plain += text.slice(at);
+  if (plain !== '') parts.push(plain);
+  return parts;
+}
+
 /** A run of text, split into its plain text and its tokens, in order. */
 export function textPartsOf(text: string): (string | TextToken)[] {
   const parts: (string | TextToken)[] = [];
@@ -72,9 +152,11 @@ export function textPartsOf(text: string): (string | TextToken)[] {
 /** Where the text's first token is, and how long: for keeping it whole among the inline marks. */
 export function firstTokenIn(
   text: string,
+  /** Every kind's token, as exported markdown has them (T891). */
+  exported = false,
 ): { readonly index: number; readonly length: number } | undefined {
   for (const found of text.matchAll(TOKEN))
-    if (tokenOf(found[1] ?? '') !== undefined)
+    if (elementOf(found[1] ?? '', exported) !== undefined)
       return { index: found.index, length: found[0].length };
   return undefined;
 }
