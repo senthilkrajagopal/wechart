@@ -83,6 +83,63 @@ describe('Synchronize axes (T858)', () => {
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
   });
 
+  /**
+   * Checkpoint 2's review (AC-501): Undo takes back what turning Synchronize
+   * on did, the switch and the right's cleared ends, and keeps every edit
+   * made since.
+   */
+  it('keeps an edit made after turning it on when Undo restores the right’s ends', async () => {
+    const start = {
+      series: { [COST]: { axis: 'right' } },
+      axes: { right: { max: 500 } },
+    };
+    function Edited() {
+      const [options, setOptions] = useState<Record<string, unknown>>(start);
+      const onOptions = (patch: Readonly<Record<string, unknown>>) =>
+        setOptions((current) => {
+          const next: Record<string, unknown> = { ...current, ...patch };
+          for (const [key, value] of Object.entries(patch))
+            if (value === undefined) delete next[key];
+          return next;
+        });
+      return (
+        <>
+          <SynchronizeSwitch
+            measures={[REVENUE, COST]}
+            options={options}
+            formats={formats}
+            label={label}
+            onOptions={onOptions}
+          />
+          <button
+            type="button"
+            onClick={() =>
+              setOptions((current) => ({
+                ...current,
+                axes: { ...(current['axes'] as object), y: { title: 'Money', log: true } },
+                legend: { show: false },
+              }))
+            }
+          >
+            Edit the left axis
+          </button>
+          <pre data-testid="options">{JSON.stringify(options)}</pre>
+        </>
+      );
+    }
+    render(<Edited />);
+
+    await userEvent.click(screen.getByRole('switch', { name: 'Synchronize axes' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Edit the left axis' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+    expect(options()).toEqual({
+      series: { [COST]: { axis: 'right' } },
+      axes: { right: { max: 500 }, y: { title: 'Money', log: true } },
+      legend: { show: false },
+    });
+  });
+
   it('turns on with no toast when the right has no fixed ends', async () => {
     render(<Held measures={[REVENUE, COST]} start={{ series: { [COST]: { axis: 'right' } } }} />);
 

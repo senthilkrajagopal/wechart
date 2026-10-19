@@ -27,14 +27,18 @@ export interface SynchronizeSwitchProps {
   readonly onOptions: (patch: Readonly<Record<string, unknown>>) => void;
 }
 
-/** Whether the right axis has an end of its own, which turning Synchronize on clears. */
-function rightHasEnds(options: Readonly<Record<string, unknown>>): boolean {
-  const axes = options['axes'];
-  if (typeof axes !== 'object' || axes === null) return false;
-  const right = (axes as Record<string, unknown>)['right'];
-  if (typeof right !== 'object' || right === null) return false;
-  const { min, max } = right as Record<string, unknown>;
-  return min !== undefined || max !== undefined;
+const record = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+/** The right axis's own ends, which turning Synchronize on clears, or none. */
+function rightEndsOf(
+  options: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> | undefined {
+  const { min, max } = record(record(options['axes'])['right']);
+  if (min === undefined && max === undefined) return undefined;
+  return { ...(min === undefined ? {} : { min }), ...(max === undefined ? {} : { max }) };
 }
 
 export function SynchronizeSwitch({
@@ -47,17 +51,28 @@ export function SynchronizeSwitch({
   const id = useId();
   const state = canSynchronize(measures, options, formats, label);
   const on = isSynchronized(measures, options, formats);
-  /** The options' combo and axes as they were before turning it on, for Undo. */
-  const [undo, setUndo] = useState<Readonly<Record<string, unknown>> | undefined>(undefined);
+  /**
+   * The right axis's ends that turning it on cleared, for Undo, which takes
+   * back only that and the switch, on the options as they are by then, so
+   * an edit made since is kept (checkpoint 2's review).
+   */
+  const [cleared, setCleared] = useState<Readonly<Record<string, unknown>> | undefined>(
+    undefined,
+  );
 
   const toggle = () => {
     const next = withSynchronize(options, !on);
-    if (!on && rightHasEnds(options)) {
-      setUndo({ combo: options['combo'], axes: options['axes'] });
-    } else {
-      setUndo(undefined);
-    }
+    setCleared(on ? undefined : rightEndsOf(options));
     onOptions({ combo: next['combo'], axes: next['axes'] });
+  };
+  const undo = (ends: Readonly<Record<string, unknown>>) => {
+    const off = withSynchronize(options, false);
+    const axes = record(options['axes']);
+    onOptions({
+      combo: off['combo'],
+      axes: { ...axes, right: { ...record(axes['right']), ...ends } },
+    });
+    setCleared(undefined);
   };
 
   return (
@@ -84,17 +99,10 @@ export function SynchronizeSwitch({
           {state.reason}
         </p>
       )}
-      {undo === undefined ? null : (
+      {cleared === undefined || !on ? null : (
         <div role="status" className="combo-toast">
           Right axis now follows the left axis ·{' '}
-          <button
-            type="button"
-            className="btn-link"
-            onClick={() => {
-              onOptions(undo);
-              setUndo(undefined);
-            }}
-          >
+          <button type="button" className="btn-link" onClick={() => undo(cleared)}>
             Undo
           </button>
         </div>
