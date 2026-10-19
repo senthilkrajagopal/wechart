@@ -1773,6 +1773,70 @@ test('one measure over time is drawn as a Line in Auto, "KPI with trend" next, a
 });
 
 /**
+ * T969 / AC-561: WHEN the chart's fields change, THE SYSTEM SHALL offer as a
+ * runner-up, never the top pick, each with its reason of at most 80
+ * characters: … 100 % stacked bar …, beside Stacked bar …, for at most 8
+ * stacked members of a summed measure ("Channel mix in each Region, every
+ * bar adding to 100 %."); … Graphical table, for one dimension of more than
+ * 8 members, a measure and a time dimension …; KPI tiled, for one measure, a
+ * time dimension and a dimension of at most 20 members ….
+ * `Fails when: one of those signatures lacks its runner-up, or makes it the
+ * top pick; a reason passes 80 characters; or a runner-up is offered
+ * outside its rule …`
+ */
+test('the editor offers 100 % stacked bar, Graphical table and KPI tiled as runners-up with their reasons, and picks them', async ({
+  page,
+}) => {
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await expect(page.getByTestId('member-orders.total_amount')).toBeVisible();
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await wellPicker(page, 'dimensions').selectOption('customers.country');
+  await expect(page.getByTestId('result-row-count')).toBeVisible();
+  const why = page.getByRole('button', { name: 'Why this recommendation?' });
+  await why.click();
+
+  // A summed measure stacked by 4 countries: 100 % stacked bar, never first.
+  await expect(page.getByTestId('picked-type')).not.toHaveAttribute(
+    'data-chart-type',
+    'stackedBar',
+  );
+  await expect(page.getByTestId('runner-up-stackedBar-100')).toHaveText(
+    '100 % stacked bar — Customers Country mix in each Orders Status, every bar adding to 100 %.',
+  );
+  const picks = page.getByRole('group', { name: 'Quick picks' });
+  await picks.getByRole('button', { name: '100 % stacked bar', exact: true }).click();
+  await expectChartType(page, 'stackedBar');
+  await expect(
+    picks.getByRole('button', { name: '100 % stacked bar', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  await expect(
+    page.getByRole('radiogroup', { name: 'Stack' }).getByRole('radio', { name: '100 %' }),
+  ).toBeChecked();
+  await page.getByRole('tab', { name: 'Data' }).click();
+
+  // Over time by 240 orders: Graphical table; by 4 countries: KPI tiled.
+  await page.getByRole('button', { name: 'Auto', exact: true }).click();
+  if ((await why.getAttribute('aria-expanded')) !== 'true') await why.click();
+  await page.getByRole('button', { name: /^Remove (Orders )?Status from / }).click();
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+  await expect(page.getByTestId('runner-up-kpi')).toHaveText(
+    'KPI — A KPI per Customers Country: 4 tiles, each this period’s number and its trend.',
+  );
+  await page.getByRole('button', { name: /^Remove (Customers )?Country from / }).click();
+  await wellPicker(page, 'dimensions').selectOption('orders.id');
+  await expect(page.getByTestId('runner-up-graphicalTable')).toHaveText(
+    /^Graphical table — 240 orders ids, each with a trend: a row per orders id, with sparkl/,
+  );
+  await expect(page.getByTestId('picked-type')).not.toHaveAttribute(
+    'data-chart-type',
+    'graphicalTable',
+  );
+});
+
+/**
  * A dashboard of graphical tables of orders, each its Rows and columns, or
  * any other chart of orders; with `interactions`, in that mode with one
  * default marking, "Marking".

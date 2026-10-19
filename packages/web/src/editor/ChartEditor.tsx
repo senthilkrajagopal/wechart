@@ -26,6 +26,7 @@ import {
   onOneScale,
   pointsAsDensity,
   removeFromWell,
+  stackOf,
   swapMeasure,
   targetCount,
   targetMeasuresOf,
@@ -49,8 +50,10 @@ import {
   describeMissing,
   explain,
   recommend,
+  runnerUpReasonFor,
   warningsFor,
   type ChartType,
+  type Recommendation,
   type Signature,
   type WellName,
 } from '@wechart/recommender';
@@ -618,7 +621,8 @@ function EditorBody({
       // Each measure's scale from the model's formats: metrics on different
       // scales are drawn as small multiples (T510, R67), as on a tile.
       // Its Target too, a bullet chart's or a KPI's (T968, AC-560).
-      ...signatureOf(spec, rows, countryMarking, formats, options),
+      // And each measure's aggregation, for a 100 % stack (T969, AC-561).
+      ...signatureOf(spec, rows, countryMarking, formats, options, measureTypes),
       // More than half a bar's labels hidden at that size: the horizontal bar
       // offered second (T516; R67). The pick itself never turns on it.
       hiddenLabels: hiddenLabelsAt(previewDocument, rows, drawnAt, formats),
@@ -634,6 +638,7 @@ function EditorBody({
       drawnAt?.height,
       formats,
       options,
+      measureTypes,
     ],
   );
   /** What the fields are, for what a type needs (AC-033): a map's country codes too (T398). */
@@ -688,12 +693,16 @@ function EditorBody({
       ? undefined
       : dataReasonFor(recommendation.top.candidate, (name) => titles[name] ?? name);
   /** The quick picks (EDI-06): the top pick and runners-up, each with its reason (AC-028). */
+  const pickKey = (each: Recommendation) =>
+    `${each.candidate.chartType}:${each.candidate.stack ?? ''}`;
   const picks = [...(recommendation.top ? [recommendation.top] : []), ...recommendation.runnersUp]
-    .filter(
-      (each, at, all) =>
-        all.findIndex((other) => other.candidate.chartType === each.candidate.chartType) === at,
-    )
-    .map((each) => ({ type: each.candidate.chartType, reason: each.reason }));
+    .filter((each, at, all) => all.findIndex((other) => pickKey(other) === pickKey(each)) === at)
+    .map((each) => ({
+      type: each.candidate.chartType,
+      // An R81 runner-up's reason from the data, by its fields' titles (T969, AC-561).
+      reason: runnerUpReasonFor(each.candidate, (name) => titles[name] ?? name) ?? each.reason,
+      ...(each.candidate.stack === undefined ? {} : { stack: each.candidate.stack }),
+    }));
   /** The recommender's pick and runners-up, suggested in the gallery (AC-217). */
   const suggested = [
     ...new Set(
@@ -1439,21 +1448,32 @@ function EditorBody({
                     // and keeps focus (T689's review).
                     if (from === 'use') changeType.current?.focus();
                   }}
+                  // Which of a stacked type's two picks is pressed (T969).
+                  shownStack={stackOf(options)}
                   // A quick pick: that type, by hand (EDI-06); "KPI with
-                  // trend" with its Time, so it draws its trend (T968).
-                  onPick={(type) => {
+                  // trend" with its Time, so it draws its trend (T968); a
+                  // stacked type at Sum or at 100 %, as its pick says (T969).
+                  onPick={(type, pickedStack) => {
                     const withTrend = optionsOnPick(
                       type,
                       recommendation,
                       options,
                       spec.granularities,
                     );
-                    if (withTrend === undefined) setChartTypeState(chooseType(type));
+                    const stacking = stackChoice(
+                      type,
+                      pickedStack === undefined ? undefined : { stack: pickedStack },
+                    );
+                    if (withTrend === undefined && stacking === undefined)
+                      setChartTypeState(chooseType(type));
                     else
                       change((current) => ({
                         ...current,
                         chartType: chooseType(type),
-                        options: withTrend,
+                        options:
+                          stacking === undefined
+                            ? (withTrend ?? current.options)
+                            : withStack(current.options, stacking),
                       }));
                   }}
                 />
@@ -1615,10 +1635,9 @@ function EditorBody({
                     picked={{
                       type: recommendation.top.candidate.chartType,
                       reason: pickReason ?? recommendation.top.reason,
-                      runnersUp: recommendation.runnersUp.map((runnerUp) => ({
-                        type: runnerUp.candidate.chartType,
-                        reason: runnerUp.reason,
-                      })),
+                      // The quick picks past the top: each runner-up once, a
+                      // 100 % stack by its own name (T969).
+                      runnersUp: picks.slice(1),
                     }}
                   />
                 </div>

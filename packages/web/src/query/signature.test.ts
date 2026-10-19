@@ -176,6 +176,14 @@ describe('a chart’s Target in its signature (T968, AC-560)', () => {
     expect(signatureOf(byStatus, rows).target).toBeUndefined();
   });
 
+  it('gives each measure its aggregation, where the model says it (T969)', () => {
+    const { fields } = signatureOf(byStatus, rows, undefined, undefined, undefined, {
+      'orders.count': 'count',
+    });
+    expect(fields.find((field) => field.name === 'orders.count')?.aggType).toBe('count');
+    expect(signatureOf(byStatus, rows).fields[0]?.aggType).toBeUndefined();
+  });
+
   it('picks a Bullet chart for a Target by one dimension, as the dashboard picks it', () => {
     expect(recommendedTypeOf(byStatus, rows, undefined, bulletTarget)).toBe('bullet');
     expect(recommendedTypeOf(byStatus, rows)).toBe('bar');

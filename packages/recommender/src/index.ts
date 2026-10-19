@@ -16,7 +16,7 @@ export {
   type Recommendation,
   type Recommendations,
 } from './recommend';
-export { dataReasonFor } from './reason';
+export { dataReasonFor, runnerUpReasonFor } from './reason';
 export {
   explain,
   SECOND_AXIS_BY_HAND,

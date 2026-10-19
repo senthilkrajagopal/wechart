@@ -27,6 +27,12 @@ export interface Field {
    * one value axis. None reads as a plain number.
    */
   readonly scale?: string;
+  /**
+   * A measure's aggregation, as the model declares it (T969): whether its
+   * shares of a total mean anything — a 100 % stack's need it summed.
+   * Unknown reads as not summed.
+   */
+  readonly aggType?: string;
 }
 
 export interface Signature {
@@ -80,6 +86,11 @@ export interface Candidate {
    * one in through an encoding the rules do not know about.
    */
   readonly valueAxisCount: number;
+  /**
+   * A stacked bar or area at 100 %, each stack adding to the whole (T969,
+   * AC-561): the same type as at Sum, offered beside it as its own pick.
+   */
+  readonly stack?: 'percent';
 }
 
 export interface RuleOutcome {

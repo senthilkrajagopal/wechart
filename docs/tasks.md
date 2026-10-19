@@ -2212,11 +2212,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T968 (AC-560, AC-031, AC-028) The new top picks: ~~histogram, bubble,~~ parallel coordinates, bullet and KPI with a target; line kept for one measure over time with KPI with trend next; and R81's caps on ~~bubbles and~~ KPI tiles (the histogram and bubble parts parked, the user, 2026-10-18)
 
-- [ ] T969 (AC-561, AC-031) Runners-up with their reasons: ~~waterfall,~~ 100 % stacked, graphical table, KPI tiled and parallel coordinates for 4+ measures over at most 8 members (the waterfall part parked, the user, 2026-10-18)
-  - Files: `packages/recommender/src/recommend.ts`, `packages/recommender/src/reason.ts` (+ test), `packages/recommender/src/runnersUpR81.test.ts`.
-  - Failing test: `runnersUpR81.test.ts`: ~~Gross margin changing sign across 6 Categories offers Waterfall, never first, with "Two periods by Category: …" under 80 characters while Compare periods is set;~~ Revenue by Region and Channel of 5 offers 100 % stacked bar; 42 Categories with Revenue and month offer Graphical table; Revenue, month and 4 Regions offer KPI tiled, 21 Regions don't; an average offers no ~~waterfall or~~ 100 %; 4 measures by 6 Products offer Parallel coordinates as a runner-up (AC-561, AC-031).
-  - Parked (the user, 2026-10-18): the waterfall's runner-up, struck through above, goes with T948–T952 (§"Parked" below).
-  - Depends on: T968
+- [x] T969 (AC-561, AC-031) Runners-up with their reasons: ~~waterfall,~~ 100 % stacked, graphical table, KPI tiled and parallel coordinates for 4+ measures over at most 8 members (the waterfall part parked, the user, 2026-10-18)
 
 - [ ] T970 (AC-562, AC-028) Keep a chart saved in Auto before R81 drawing its saved type until its fields next change
   - Files: `packages/core/src/chart-spec.ts` (the recommender rules version), `packages/core/src/chart-migrations.ts` (+ test), `packages/web/src/editor/chartTypeState.ts` (+ test).

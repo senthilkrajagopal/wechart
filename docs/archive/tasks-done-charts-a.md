@@ -143,6 +143,25 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - **Seen:** unit tests red, then green; the recommender package's tests and the web's editor and query tests passed; `e2e/new-charts-a.spec.ts`, "one measure over time is drawn as a Line in Auto, 'KPI with trend' next…", on headless Chromium.
     - **ACs not ticked:** AC-560 also needs the Map's picks (lane B's T1012). AC-031 has the Sankey's and other caps still to come. AC-028 waits for AC-561 and AC-562 (T969, T970).
 
+- [x] T969 (AC-561, AC-031) Runners-up with their reasons: ~~waterfall,~~ 100 % stacked, graphical table, KPI tiled and parallel coordinates for 4+ measures over at most 8 members (the waterfall part parked, the user, 2026-10-18)
+  - Files: `packages/recommender/src/recommend.ts`, `packages/recommender/src/reason.ts` (+ test), `packages/recommender/src/runnersUpR81.test.ts`.
+  - Failing test: `runnersUpR81.test.ts`: ~~Gross margin changing sign across 6 Categories offers Waterfall, never first, with "Two periods by Category: …" under 80 characters while Compare periods is set;~~ Revenue by Region and Channel of 5 offers 100 % stacked bar; 42 Categories with Revenue and month offer Graphical table; Revenue, month and 4 Regions offer KPI tiled, 21 Regions don't; an average offers no ~~waterfall or~~ 100 %; 4 measures by 6 Products offer Parallel coordinates as a runner-up (AC-561, AC-031).
+  - Parked (the user, 2026-10-18): the waterfall's runner-up, struck through above, goes with T948–T952 (§"Parked" below).
+  - Depends on: T968
+  - Done (2026-10-19), decision T969-1:
+    - **Recommender:**
+      - `Field.aggType` and `Candidate.stack: 'percent'` are new.
+      - Enumerated: a stacked bar at 100 % (two dimensions), a stacked area at 100 % (over time by a dimension), both only for a summed measure (`sum` or `count`); a graphical table for one dimension of more than 8 members over time; a KPI tiled (`facetField`) for one measure over time by one dimension.
+      - Picks are told apart by type and stack (`pickKeyOf`). `runnerUpOnly` marks R81's offers. `withR81Picks` puts them after every other candidate, and `recommend` offers them after its usual two runners-up.
+      - `explain`'s traces carry `stack`.
+    - **Reasons:** `reason.ts`'s `runnerUpReasonFor(candidate, titleOf)` says each from the data, in AC-561's words, by the fields' titles: "‹Colour› mix in each ‹Category›, every bar adding to 100 %.", "‹n› ‹plural›, each with a trend: a row per ‹title›, with sparklines.", "A KPI per ‹Tile by›: ‹n› tiles, each this period's number and its trend." and "‹m› measures across ‹n› ‹title› values: a line per member.". `recommend`'s own reasons cover the cases with no titles.
+    - **Editor:**
+      - `signatureOf` takes the model's aggregations.
+      - The quick picks and "Why this recommendation?" use those reasons. A 100 % stack is its own pick, named as its gallery card (`pickNameOf`).
+      - `ChartTypeCard` presses a stacked pick by `shownStack`. `onPick` takes the stack, and the editor sets it with `withStack` (`stackChoice`).
+    - **Seen:** unit tests red, then green; the recommender package's tests and the web's editor and query tests passed; `e2e/new-charts-a.spec.ts`, "the editor offers 100 % stacked bar, Graphical table and KPI tiled as runners-up…", "one measure over time…" and `chart-editor.spec.ts`'s "recommends a chart with a runner-up", on headless Chromium.
+    - **AC-561 not ticked:** it also needs the Sankey's runner-up (lane B's T1012). AC-031 is still open.
+
 - [x] T953 (AC-580, AC-037) The bullet chart's spec and wells: Target, 2–3 bands at 80, 100 and 120 % by default, and its empty state
   - Files: `packages/core/src/chart-types/bullet.ts` (+ test), `packages/web/src/editor/wells/bullet.tsx` (+ test).
   - Failing test: `bullet.test.ts`: bands default to [80, 100, 120]; a fourth band is refused with "At most 3 bands: R80's three greys, and no fourth without a new colour."; one band is refused; `bullet.test.tsx` (wells): with Target emptied the tile says "A bullet chart compares each member with a target. Put a measure or a value in Target." with Target as its action (AC-580, AC-037).

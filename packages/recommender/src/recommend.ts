@@ -43,6 +43,13 @@ const timesOf = (signature: Signature) =>
 /** Unknown cardinality is treated as large: the optimistic guess is the one that misleads. */
 const cardinality = (field: Field | undefined) => field?.cardinality ?? Number.POSITIVE_INFINITY;
 
+/**
+ * A measure whose values add up (T969): Cube's `sum` and `count`, as
+ * charts' `isAdditive` reads them. Unknown isn't: a share of a total
+ * nobody knows to be one would be a claim about the data.
+ */
+const isSummed = (field: Field) => field.aggType === 'sum' || field.aggType === 'count';
+
 /** A measure's scale, a plain number where unknown (T510). */
 const scaleOfField = (field: Field) => field.scale ?? 'number';
 
@@ -113,6 +120,45 @@ export function enumerate(signature: Signature): Candidate[] {
     candidates.push(build('kpi', { valueFields: measures, categoryField: times[0]! }));
   if (measures.length >= 4 && dimensions.length === 1 && times.length === 0)
     candidates.push(build('parallel', { valueFields: measures, categoryField: dimensions[0]! }));
+
+  /**
+   * R81's runners-up (T969, AC-561), never first: a summed measure stacked
+   * at 100 % by at most 8 members, beside the stack at Sum; a measure over
+   * time by one dimension of more than 8 members, a row each with its trend;
+   * one measure over time by a dimension, a KPI tile per member.
+   */
+  const summed = measures[0] !== undefined && isSummed(measures[0]);
+  if (summed && dimensions.length === 2 && times.length === 0)
+    candidates.push(
+      build('stackedBar', {
+        valueFields: measures.slice(0, 1),
+        categoryField: dimensions[0]!,
+        colorField: dimensions[1]!,
+        stack: 'percent',
+      }),
+    );
+  if (summed && dimensions.length === 1 && times.length >= 1)
+    candidates.push(
+      build('stackedArea', {
+        valueFields: measures.slice(0, 1),
+        categoryField: times[0]!,
+        colorField: dimensions[0]!,
+        stack: 'percent',
+      }),
+    );
+  if (
+    measures.length >= 1 &&
+    times.length >= 1 &&
+    dimensions.length === 1 &&
+    cardinality(dimensions[0]) > 8
+  )
+    candidates.push(
+      build('graphicalTable', { valueFields: measures, categoryField: dimensions[0]! }),
+    );
+  if (measures.length === 1 && times.length >= 1 && dimensions.length === 1)
+    candidates.push(
+      build('kpi', { valueFields: measures, categoryField: times[0]!, facetField: dimensions[0]! }),
+    );
 
   // Over time. `compile` colours these by the first dimension where there is
   // one (`defaultEncoding`), so each carries it as its colour, and the colour
@@ -376,22 +422,29 @@ const REASONS: Record<ChartType, string> = {
   graphicalTable: 'A row per member, with its trend and target at a glance.',
 };
 
+/** A candidate's reason where its form says more than its type. */
+function formReasonOf(candidate: Candidate, signature: Signature): string | undefined {
+  const { chartType, categoryField, facetField } = candidate;
+  // Small multiples by metric, not by a member (T510).
+  if (chartType === 'trellis' && facetField === undefined && candidate.valueFields.length > 1)
+    return 'One small chart per metric, each on its own scale.';
+  // R81's runners-up (T969, AC-561), where no titles are at hand
+  // (`runnerUpReasonFor` says them from the data).
+  if (candidate.stack === 'percent') return 'Each stack adds to 100 %: the mix, not the totals.';
+  if (chartType === 'kpi' && facetField !== undefined)
+    return 'A KPI per member: each one’s number and its trend.';
+  // R81's KPI and bullet forms (T968, AC-560).
+  if (chartType === 'kpi' && categoryField?.kind === 'timeDimension')
+    return 'KPI with trend: this period’s number, its trend beneath.';
+  if (chartType === 'kpi' && signature.target === true && categoryField === undefined)
+    return 'One number against its target.';
+  if (chartType === 'bullet' && categoryField === undefined)
+    return 'A single bullet: the number against its target and bands.';
+  return undefined;
+}
+
 function reasonFor(candidate: Candidate, signature: Signature): string {
-  const { chartType, categoryField } = candidate;
-  const reason =
-    // Small multiples by metric, not by a member (T510).
-    chartType === 'trellis' &&
-    candidate.facetField === undefined &&
-    candidate.valueFields.length > 1
-      ? 'One small chart per metric, each on its own scale.'
-      : // R81's KPI and bullet forms (T968, AC-560).
-        chartType === 'kpi' && categoryField?.kind === 'timeDimension'
-        ? 'KPI with trend: this period’s number, its trend beneath.'
-        : chartType === 'kpi' && signature.target === true && categoryField === undefined
-          ? 'One number against its target.'
-          : chartType === 'bullet' && categoryField === undefined
-            ? 'A single bullet: the number against its target and bands.'
-            : REASONS[chartType];
+  const reason = formReasonOf(candidate, signature) ?? REASONS[candidate.chartType];
   return reason.length <= MAX_REASON_LENGTH ? reason : `${reason.slice(0, MAX_REASON_LENGTH - 1)}…`;
 }
 
@@ -411,6 +464,19 @@ const R81_TYPES: ReadonlySet<ChartType> = new Set<ChartType>([
 ]);
 
 type Is = (candidate: Candidate) => boolean;
+
+/**
+ * What is offered only as a runner-up but where AC-560 names it (T968,
+ * T969): R81's types, a stack at 100 %, a KPI tiled by a dimension.
+ */
+const runnerUpOnly: Is = (candidate) =>
+  R81_TYPES.has(candidate.chartType) ||
+  candidate.stack === 'percent' ||
+  (candidate.chartType === 'kpi' && candidate.facetField !== undefined);
+
+/** A pick's identity among the picks: its type, and a stack at 100 % apart from it at Sum. */
+const pickKeyOf = (candidate: Candidate) =>
+  candidate.stack === undefined ? candidate.chartType : `${candidate.chartType}:${candidate.stack}`;
 
 /**
  * AC-560's picks, by the signature, ahead of the scores (T968): the top pick
@@ -460,12 +526,16 @@ function withR81Picks<T extends { readonly candidate: Candidate }>(
     return found === undefined ? [] : [found];
   });
   const rest = ranked.filter((each) => !pinned.includes(each));
-  if (pinned.length === 0) {
-    // Never first where AC-560 doesn't name it: behind the first that isn't R81's.
-    const first = rest.findIndex((each) => !R81_TYPES.has(each.candidate.chartType));
-    if (first > 0) return [rest[first]!, ...rest.slice(0, first), ...rest.slice(first + 1)];
-  }
-  return [...pinned, ...rest];
+  /**
+   * Never first where AC-560 doesn't name it, nor ahead of the usual
+   * runners-up (T969): R81's offers come after every other candidate, in
+   * their own order, and `recommend` offers them past its count.
+   */
+  return [
+    ...pinned,
+    ...rest.filter((each) => !runnerUpOnly(each.candidate)),
+    ...rest.filter((each) => runnerUpOnly(each.candidate)),
+  ];
 }
 
 /**
@@ -486,10 +556,11 @@ export function recommend(signature: Signature, runnerUpCount = 2): Recommendati
     }))
     .sort((a, b) => a.score - b.score);
 
-  const seen = new Set<ChartType>();
+  const seen = new Set<string>();
   const distinct = withR81Picks(ranked, signature).filter((recommendation) => {
-    if (seen.has(recommendation.candidate.chartType)) return false;
-    seen.add(recommendation.candidate.chartType);
+    const key = pickKeyOf(recommendation.candidate);
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
 
@@ -506,5 +577,11 @@ export function recommend(signature: Signature, runnerUpCount = 2): Recommendati
     crowded && across > 0
       ? [rest[across]!, ...rest.slice(0, across), ...rest.slice(across + 1)]
       : rest;
-  return { top: top ?? null, runnersUp: ordered.slice(0, runnerUpCount) };
+  /**
+   * R81's runners-up are offered whenever their rule holds (AC-561), after
+   * the usual ones: past those, not left out for want of a place (T969).
+   */
+  const shown = ordered.slice(0, runnerUpCount);
+  const offered = ordered.slice(runnerUpCount).filter((each) => runnerUpOnly(each.candidate));
+  return { top: top ?? null, runnersUp: [...shown, ...offered] };
 }

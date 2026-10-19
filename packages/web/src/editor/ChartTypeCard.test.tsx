@@ -171,3 +171,40 @@ describe('a combo’s two scales on the type card (T861)', () => {
     expect(screen.queryByTestId('type-two-scales')).toBeNull();
   });
 });
+
+/**
+ * T969 / AC-561: 100 % stacked bar or area, beside Stacked bar or area, is
+ * offered as a runner-up: its own quick pick, by its own name, opening the
+ * stacked type at 100 %.
+ */
+describe('a 100 % stack among the quick picks (T969, AC-561)', () => {
+  const STACKS: ChartTypeCardProps['picks'] = [
+    { type: 'bar', reason: 'Compares values across categories.' },
+    { type: 'stackedBar', reason: 'Shows parts and the whole in one bar.' },
+    {
+      type: 'stackedBar',
+      stack: 'percent',
+      reason: 'Channel mix in each Region, every bar adding to 100 %.',
+    },
+  ];
+
+  it('is its own pick, named "100 % stacked bar", picking the stacked bar at 100 %', async () => {
+    const { onPick } = card({ picks: STACKS });
+    const percent = screen.getByRole('button', { name: '100 % stacked bar' });
+    expect(percent.getAttribute('title')).toBe(
+      '100 % stacked bar — Channel mix in each Region, every bar adding to 100 %.',
+    );
+    await userEvent.click(percent);
+    expect(onPick).toHaveBeenLastCalledWith('stackedBar', 'percent');
+    await userEvent.click(screen.getByRole('button', { name: 'Stacked bar' }));
+    expect(onPick).toHaveBeenLastCalledWith('stackedBar');
+  });
+
+  it('is pressed while the stacked bar is drawn by hand at 100 %, and the Sum pick isn’t', () => {
+    card({ picks: STACKS, shown: 'stackedBar', manual: true, shownStack: 'percent' });
+    const pressed = (name: string) =>
+      screen.getByRole('button', { name }).getAttribute('aria-pressed');
+    expect(pressed('100 % stacked bar')).toBe('true');
+    expect(pressed('Stacked bar')).toBe('false');
+  });
+});

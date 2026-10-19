@@ -61,6 +61,11 @@ export function signatureOf(
    * bullet chart or a KPI against it (T968, AC-560).
    */
   options?: Readonly<Record<string, unknown>>,
+  /**
+   * Each measure's aggregation from the model, where the caller has it: a
+   * 100 % stack is offered only for a summed measure (T969, AC-561).
+   */
+  aggTypes?: Readonly<Record<string, string>>,
 ): Signature {
   const distinct = (member: string) => new Set(rows.map((row) => String(row[member] ?? ''))).size;
   const target = targetCount(options) > 0 || kpiOptionsOf(options).target !== undefined;
@@ -76,6 +81,7 @@ export function signatureOf(
         name,
         kind: 'measure' as const,
         ...(formats === undefined ? {} : { scale: scaleOf(formats[name]) }),
+        ...(aggTypes?.[name] === undefined ? {} : { aggType: aggTypes[name] }),
       })),
       ...spec.dimensions.map((name) => ({
         name,

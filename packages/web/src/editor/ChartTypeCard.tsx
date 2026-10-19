@@ -2,6 +2,7 @@ import { CHART_TYPE_NAMES, type ChartType } from '@wechart/core';
 import { useId, type Ref } from 'react';
 
 import { StatusIcon } from '../shell/StatusIcon';
+import { CARD_NAMES } from './chartTypeCatalog';
 import { ChartTypeIcon } from './ChartTypeIcon';
 
 /**
@@ -27,15 +28,24 @@ export interface ChartTypeCardProps {
   readonly recommended: ChartType | null;
   /** The recommended pick's reason, built from the data (EDI-07). */
   readonly recommendedReason?: string | undefined;
-  /** The recommender's top pick and runners-up, each with its reason (AC-028). */
-  readonly picks: readonly { readonly type: ChartType; readonly reason: string }[];
+  /**
+   * The recommender's top pick and runners-up, each with its reason (AC-028);
+   * a stacked type at 100 % its own pick beside it at Sum (T969, AC-561).
+   */
+  readonly picks: readonly {
+    readonly type: ChartType;
+    readonly reason: string;
+    readonly stack?: 'percent' | undefined;
+  }[];
+  /** How the drawn stacked type stacks, for which of its picks is pressed (T969). */
+  readonly shownStack?: 'sum' | 'percent' | undefined;
   /** Why the manual choice strains these fields, each in a sentence. */
   readonly warnings: readonly string[];
   readonly onChange: () => void;
   /** Auto, or Use: back to the recommendation (AC-032). */
   readonly onAuto: (from: 'auto' | 'use') => void;
-  /** A quick pick: that type, chosen by hand. */
-  readonly onPick: (type: ChartType) => void;
+  /** A quick pick: that type, chosen by hand; a stacked type's at 100 % with its stack. */
+  readonly onPick: (type: ChartType, stack?: 'percent') => void;
   /** Change, for the gallery to give focus back to. */
   readonly changeRef?: Ref<HTMLButtonElement>;
   /**
@@ -46,12 +56,20 @@ export interface ChartTypeCardProps {
   readonly onSeeAxes?: (() => void) | undefined;
 }
 
+/** A pick by its name: a stacked type at 100 % as its gallery card names it (AC-559). */
+export function pickNameOf(type: ChartType, stack?: 'percent'): string {
+  if (stack === 'percent' && type === 'stackedBar') return CARD_NAMES.stackedBar100;
+  if (stack === 'percent' && type === 'stackedArea') return CARD_NAMES.stackedArea100;
+  return CHART_TYPE_NAMES[type];
+}
+
 export function ChartTypeCard({
   shown,
   manual,
   recommended,
   recommendedReason,
   picks,
+  shownStack,
   warnings,
   onChange,
   onAuto,
@@ -112,21 +130,29 @@ export function ChartTypeCard({
           >
             Auto
           </button>
-          {picks.map(({ type, reason }) => (
-            <button
-              key={type}
-              type="button"
-              className="type-card-field__pick"
-              aria-label={CHART_TYPE_NAMES[type]}
-              title={`${CHART_TYPE_NAMES[type]} — ${reason}`}
-              aria-pressed={manual && shown === type}
-              onClick={() => {
-                if (!(manual && shown === type)) onPick(type);
-              }}
-            >
-              <ChartTypeIcon type={type} />
-            </button>
-          ))}
+          {picks.map(({ type, reason, stack }) => {
+            const pickName = pickNameOf(type, stack);
+            // A stacked type's two picks: pressed by how it is stacked (T969).
+            const pressed =
+              manual && shown === type && (stack === 'percent') === (shownStack === 'percent');
+            return (
+              <button
+                key={stack === undefined ? type : `${type}:${stack}`}
+                type="button"
+                className="type-card-field__pick"
+                aria-label={pickName}
+                title={`${pickName} — ${reason}`}
+                aria-pressed={pressed}
+                onClick={() => {
+                  if (pressed) return;
+                  if (stack === undefined) onPick(type);
+                  else onPick(type, stack);
+                }}
+              >
+                <ChartTypeIcon type={type} />
+              </button>
+            );
+          })}
           <span className="type-card-field__suggested">Suggested for these fields</span>
         </div>
       )}

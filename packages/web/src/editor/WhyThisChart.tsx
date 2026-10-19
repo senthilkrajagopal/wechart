@@ -3,6 +3,7 @@ import type { Explanation } from '@wechart/recommender';
 import { useState } from 'react';
 
 import { StatusIcon } from '../shell/StatusIcon';
+import { pickNameOf } from './ChartTypeCard';
 
 /**
  * "Why this recommendation?" (AC-029 as amended by R76, chart-editor-Q3;
@@ -25,7 +26,12 @@ export interface WhyThisChartProps {
     | {
         readonly type: ChartType;
         readonly reason: string;
-        readonly runnersUp: readonly { readonly type: ChartType; readonly reason: string }[];
+        readonly runnersUp: readonly {
+          readonly type: ChartType;
+          readonly reason: string;
+          /** A stacked type at 100 %, by its own name (T969). */
+          readonly stack?: 'percent' | undefined;
+        }[];
       }
     | undefined;
   /** Each member's title from the model: the trace names fields by them (AC-220). */
@@ -118,14 +124,17 @@ export function WhyThisChart({ explanation, picked, titles = {} }: WhyThisChartP
                     <span aria-hidden="true" />
                     <span className="why-chart__runners">
                       Runners-up:{' '}
-                      {picked.runnersUp.map((runnerUp, at) => (
-                        <span key={runnerUp.type}>
-                          {at === 0 ? null : ' · '}
-                          <span data-testid={`runner-up-${runnerUp.type}`}>
-                            {nameOf(runnerUp.type)} — {runnerUp.reason}
+                      {picked.runnersUp.map((runnerUp, at) => {
+                        const id = `${runnerUp.type}${runnerUp.stack === undefined ? '' : '-100'}`;
+                        return (
+                          <span key={id}>
+                            {at === 0 ? null : ' · '}
+                            <span data-testid={`runner-up-${id}`}>
+                              {pickNameOf(runnerUp.type, runnerUp.stack)} — {runnerUp.reason}
+                            </span>
                           </span>
-                        </span>
-                      ))}
+                        );
+                      })}
                     </span>
                   </li>
                 )}
@@ -167,35 +176,36 @@ export function WhyThisChart({ explanation, picked, titles = {} }: WhyThisChartP
 
               <h4>Candidates</h4>
               <ul>
-                {explanation.candidates.map((candidate) => (
-                  <li key={candidate.chartType} data-testid={`trace-${candidate.chartType}`}>
-                    <p>
-                      {/* Icon plus word, never colour alone (direction.md rule 3). */}
-                      <span data-icon={candidate.legal ? 'pass' : 'fail'} aria-hidden="true">
-                        {candidate.legal ? '✓' : '✗'}
-                      </span>{' '}
-                      {/* By its name, never its id (AC-217). */}
-                      {nameOf(candidate.chartType)} —{' '}
-                      {candidate.legal
-                        ? `allowed, cost ${String(candidate.score ?? 0)}`
-                        : 'rejected'}
-                    </p>
-                    <ul>
-                      {candidate.rules.map((rule) => (
-                        <li
-                          key={rule.rule}
-                          data-testid={`trace-${candidate.chartType}-${rule.rule}`}
-                        >
-                          <span data-icon={rule.passed ? 'pass' : 'fail'} aria-hidden="true">
-                            {rule.passed ? '✓' : '✗'}
-                          </span>{' '}
-                          {rule.rule}
-                          {rule.passed ? ' passed' : `: ${rule.reason ?? 'failed'}`}
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
+                {explanation.candidates.map((candidate) => {
+                  // A 100 % stack apart from its type at Sum (T969).
+                  const id = `${candidate.chartType}${candidate.stack === undefined ? '' : '-100'}`;
+                  return (
+                    <li key={id} data-testid={`trace-${id}`}>
+                      <p>
+                        {/* Icon plus word, never colour alone (direction.md rule 3). */}
+                        <span data-icon={candidate.legal ? 'pass' : 'fail'} aria-hidden="true">
+                          {candidate.legal ? '✓' : '✗'}
+                        </span>{' '}
+                        {/* By its name, never its id (AC-217). */}
+                        {pickNameOf(candidate.chartType as ChartType, candidate.stack)} —{' '}
+                        {candidate.legal
+                          ? `allowed, cost ${String(candidate.score ?? 0)}`
+                          : 'rejected'}
+                      </p>
+                      <ul>
+                        {candidate.rules.map((rule) => (
+                          <li key={rule.rule} data-testid={`trace-${id}-${rule.rule}`}>
+                            <span data-icon={rule.passed ? 'pass' : 'fail'} aria-hidden="true">
+                              {rule.passed ? '✓' : '✗'}
+                            </span>{' '}
+                            {rule.rule}
+                            {rule.passed ? ' passed' : `: ${rule.reason ?? 'failed'}`}
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ) : null}

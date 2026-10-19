@@ -19,6 +19,8 @@ export interface FieldTrace {
 
 export interface CandidateTrace {
   readonly chartType: string;
+  /** A stacked type at 100 % (T969), traced apart from it at Sum. */
+  readonly stack?: 'percent';
   readonly legal: boolean;
   /** Every rule's verdict, passed and failed alike. */
   readonly rules: readonly RuleOutcome[];
@@ -58,6 +60,7 @@ export function explain(signature: Signature, drawn: DrawnByHand = {}): Explanat
 
     return {
       chartType: candidate.chartType,
+      ...(candidate.stack === undefined ? {} : { stack: candidate.stack }),
       legal,
       rules,
       score: legal ? score(candidate, signature) : null,
