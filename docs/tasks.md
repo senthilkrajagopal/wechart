@@ -1895,10 +1895,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T879 (AC-516) Convert markdown patterns as typed, undone by the next Undo, and let only ⌘B, ⌘I and ⌘Z act inside the text
 
-- [ ] T880 (AC-513) Strip what the schema doesn't allow from pasted content, and refuse unsafe links, in the editor
-  - Files: `packages/web/src/tiles/text/editorExtensions.ts` (`transformPastedHTML`, the Link mark's `isAllowedUri`), `e2e/text-tile.spec.ts`.
-  - Failing test: `text-tile.spec.ts`: pasting `<img src=x onerror="window.__xss=1"><script>window.__xss=2</script><iframe src="https://x.example"></iframe><a href="javascript:window.__xss=3">a</a>` leaves `window.__xss` undefined in edit mode and after saving and reloading in view mode; the tile's DOM holds no `img`, `script`, `iframe`, `on…` attribute or `javascript:` address; the text "a" remains (AC-513).
-  - Depends on: T876, T871
+- [x] T880 (AC-513) Strip what the schema doesn't allow from pasted content, and refuse unsafe links, in the editor
 
 - [x] T881 (AC-517) The insert menu, opened by `/`, `{{` or Insert: a combobox of kinds in three groups, then measures by cube
 

@@ -2,7 +2,13 @@ import { Extension, Node } from '@tiptap/core';
 import type { EditorView } from '@tiptap/pm/view';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 
-import { ELEMENT_KINDS, elementAttributeNames, type ElementKind } from '@wechart/core';
+import {
+  ELEMENT_KINDS,
+  elementAttributeNames,
+  TEXT_DOCUMENT_VERSION,
+  textDocumentProblems,
+  type ElementKind,
+} from '@wechart/core';
 
 import { elementName, type ElementNames } from '../elementName';
 import { ElementView } from './ElementView';
@@ -35,6 +41,24 @@ function settingsOf(kind: ElementKind, written: string | null): Record<string, u
 }
 
 /**
+ * Whether settings pasted for an element are ones the stored schema takes
+ * (AC-513, T880): checked as the save checks them, so a paste never puts in
+ * the text an element its save would refuse. One that fails is read as its
+ * words instead.
+ */
+function allowed(kind: ElementKind, settings: Record<string, unknown>): boolean {
+  return (
+    textDocumentProblems({
+      version: TEXT_DOCUMENT_VERSION,
+      doc: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: kind, attrs: settings }] }],
+      },
+    }).length === 0
+  );
+}
+
+/**
  * One element kind's node (T876, T882; decision T868-1; AC-519): an inline
  * atom, which may be bold or italic and never a link, declaring exactly the
  * attributes the schema gives its kind, none of them drawn onto the DOM. In
@@ -59,7 +83,10 @@ export const elementNode = (kind: ElementKind) =>
       return [
         {
           tag: `span[data-element="${kind}"]`,
-          getAttrs: (element) => settingsOf(kind, element.getAttribute('data-attrs')),
+          getAttrs: (element) => {
+            const settings = settingsOf(kind, element.getAttribute('data-attrs'));
+            return allowed(kind, settings) ? settings : false;
+          },
         },
       ];
     },

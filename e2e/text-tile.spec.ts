@@ -713,6 +713,75 @@ test('markdown typed in a Text tile converts, the next Undo reverses it, and onl
 });
 
 /**
+ * T880 / AC-513: pasting an image with an error handler, a script, an
+ * iframe and a `javascript:` link runs nothing, in edit mode or after saving
+ * and reloading in view mode; the tile's DOM holds none of them, no `on…`
+ * attribute and no `javascript:` address; the link's text "a" remains.
+ */
+test('a pasted image, script, iframe and javascript: link run nothing and leave only their text', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWithText(request, [
+    { type: 'paragraph', content: [{ type: 'text', text: 'Before ' }] },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const tile = page.locator('[data-tile="tile-text"]');
+  await tile.locator('.text-tile').dblclick();
+  const textbox = tile.getByRole('textbox');
+  await expect(textbox).toBeFocused();
+
+  const pasted = await textbox.evaluate((element) => {
+    const data = new DataTransfer();
+    data.setData(
+      'text/html',
+      '<img src=x onerror="window.__xss=1"><script>window.__xss=2</script>' +
+        '<iframe src="https://x.example"></iframe><a href="javascript:window.__xss=3">a</a>',
+    );
+    data.setData('text/plain', 'a');
+    const event = new ClipboardEvent('paste', {
+      clipboardData: data,
+      bubbles: true,
+      cancelable: true,
+    });
+    element.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  // The editor took the paste: the browser inserted nothing itself.
+  expect(pasted).toBe(true);
+  await expect(textbox).toContainText('Before a');
+
+  const clean = async (root: ReturnType<Page['locator']>) => {
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => (window as { __xss?: unknown }).__xss)).toBeUndefined();
+    await expect(root.locator('img, script, iframe')).toHaveCount(0);
+    expect(
+      await root.evaluate((element) =>
+        [element, ...element.querySelectorAll('*')].flatMap((node) =>
+          [...node.attributes]
+            .filter(
+              (attribute) =>
+                attribute.name.startsWith('on') || /javascript:/i.test(attribute.value),
+            )
+            .map((attribute) => attribute.name),
+        ),
+      ),
+    ).toEqual([]);
+  };
+  await clean(tile);
+
+  await page.keyboard.press('Escape');
+  await toolbar(page).getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(toolbar(page)).toBeHidden();
+  await page.reload();
+  const read = page.locator('[data-tile="tile-text"] .text-tile');
+  await expect(read).toHaveText('Before a');
+  await clean(read);
+});
+
+/**
  * T877 / AC-514: a dashboard of two Text tiles opened in view mode requests
  * no script of the editor's chunk (`text-editor-…`, named in
  * `vite.config.ts`), and none of the scripts it loads holds ProseMirror's

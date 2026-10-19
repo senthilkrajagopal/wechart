@@ -122,4 +122,27 @@ describe('an element on the clipboard (T876’s review)', () => {
       attrs: { measure: 'orders.count' },
     });
   });
+
+  /**
+   * T880 / AC-513: an element pasted with settings its kind doesn't allow —
+   * no source, a source of the wrong type, a filter that isn't one — is
+   * kept as its words, never as an element the save would refuse.
+   */
+  it.each([
+    ['no source', '{}'],
+    ['a source of the wrong type', '{"measure":42}'],
+    ['a filter that isn’t one', '{"measure":"orders.count","filters":"<script>"}'],
+    ['a bad marking choice', '{"measure":"orders.count","whenUnmarked":"javascript:x"}'],
+  ])('reads one pasted with %s as its words', (_name, settings) => {
+    const pasted = storedDocumentOf(
+      generateJSON(
+        `<p>Total <span data-element="value" data-attrs='${settings}'>Value · orders</span></p>`,
+        textEditorExtensions(),
+      ),
+    );
+    expect(textDocumentProblems(pasted)).toEqual([]);
+    expect(pasted.doc.content).toEqual([
+      { type: 'paragraph', content: [{ type: 'text', text: 'Total Value · orders' }] },
+    ]);
+  });
 });

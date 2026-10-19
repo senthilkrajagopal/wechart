@@ -86,3 +86,9 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/tiles/text/editorExtensions.ts` (the input rules and the keymap), `packages/web/src/tiles/text/keys.test.ts`.
   - Failing test: `keys.test.ts`: `## ` makes Heading medium, `- ` a bulleted list, `1. ` a numbered list, `**a**` bold, `*a*` italic, `[a](https://x.example)` a link, each reversed by the next ⌘Z; ⌘B and ⌘I toggle bold and italic and ⌘Z undoes typing; ⌘U, ⌘E, ⇧⌘X, ⌘⌥1 and ⇧⌘Z change nothing; with focus outside the text, ⌘B does nothing (AC-516).
   - Depends on: T876
+
+- [x] T880 (AC-513) Strip what the schema doesn't allow from pasted content, and refuse unsafe links, in the editor
+  - Files: `packages/web/src/tiles/text/editorExtensions.ts` (`transformPastedHTML`, the Link mark's `isAllowedUri`), `e2e/text-tile.spec.ts`.
+  - Failing test: `text-tile.spec.ts`: pasting `<img src=x onerror="window.__xss=1"><script>window.__xss=2</script><iframe src="https://x.example"></iframe><a href="javascript:window.__xss=3">a</a>` leaves `window.__xss` undefined in edit mode and after saving and reloading in view mode; the tile's DOM holds no `img`, `script`, `iframe`, `on…` attribute or `javascript:` address; the text "a" remains (AC-513).
+  - Depends on: T876, T871
+  - Done (decision T880-1): the paste e2e passed before any code, by the schema and `prosemirror-view` 1.42.3; the code added checks a pasted element's settings in `nodes/elementNodes.ts`, with `editorExtensions.test.ts` red first.
