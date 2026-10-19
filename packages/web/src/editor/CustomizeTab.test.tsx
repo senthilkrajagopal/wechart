@@ -358,3 +358,51 @@ describe('a box plot’s whiskers (AC-306)', () => {
     expect(screen.queryByRole('heading', { name: 'Distribution' })).toBeNull();
   });
 });
+
+/**
+ * T855 (AC-497, AC-219): a combo's Series section is a row per series with
+ * its mark and axis, in place of the plain list; any other chart keeps it.
+ */
+describe('a combo’s Series section (T855)', () => {
+  const combo = {
+    measures: [
+      { measure: 'orders.count', title: 'Orders Count' },
+      { measure: 'orders.amount', title: 'Orders Amount' },
+    ],
+  };
+
+  it('gives each series its Mark and Axis groups, and no order list', () => {
+    const onOptions = vi.fn();
+    render(
+      <CustomizeTab
+        options={{}}
+        onOptions={onOptions}
+        cartesian
+        valueAxes={['y']}
+        drawn
+        stackable
+        series={series}
+        colourOf={() => '#123456'}
+        combo={combo}
+      />,
+    );
+
+    expect(screen.getByRole('radiogroup', { name: 'Orders Amount mark' })).toBeTruthy();
+    expect(screen.getByRole('radiogroup', { name: 'Orders Amount axis' })).toBeTruthy();
+    expect(screen.queryByRole('list', { name: 'Series order' })).toBeNull();
+    fireEvent.click(
+      within(screen.getByRole('radiogroup', { name: 'Orders Amount axis' })).getByRole('radio', {
+        name: 'Right',
+      }),
+    );
+    expect(onOptions).toHaveBeenLastCalledWith({
+      series: { 'orders.amount': { axis: 'right' } },
+    });
+  });
+
+  it('keeps the order list for any other chart', () => {
+    tab();
+    expect(screen.queryByRole('radiogroup', { name: /mark$/ })).toBeNull();
+    expect(screen.getByRole('list', { name: 'Series order', hidden: true })).toBeTruthy();
+  });
+});

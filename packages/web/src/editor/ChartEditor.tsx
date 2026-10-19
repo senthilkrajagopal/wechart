@@ -7,6 +7,8 @@ import {
   distinctValues,
   emptySpec,
   isEmpty,
+  memberOn,
+  membersOn,
   onOneScale,
   removeFromWell,
   swapMeasure,
@@ -735,6 +737,23 @@ function EditorBody({
     }
   }, [drawnSpec, titles]);
   /**
+   * A combo's measures as drawn, and its split's members, for Customize ›
+   * Series' rows (T855, AC-497, AC-504).
+   */
+  const comboRows = useMemo(() => {
+    if (drawnSpec === undefined || drawnSpec.chartType !== 'combo') return undefined;
+    const own = (member: string) =>
+      (Object.hasOwn(titles, member) ? titles[member] : undefined) ?? member;
+    const measures = membersOn(onOneScale(drawnSpec).encoding, 'y').map((measure) => ({
+      measure,
+      title: own(measure),
+    }));
+    const splitBy = memberOn(drawnSpec.encoding, 'color');
+    return splitBy === undefined
+      ? { measures }
+      : { measures, split: { dimension: own(splitBy), members: drawnSeries } };
+  }, [drawnSpec, titles, drawnSeries]);
+  /**
    * A cell's colour in the results grid (T690, EDI-18): the colour
    * dimension's values each wear their series' colour as drawn — its own,
    * chosen in Customize, or the palette's by place, as Customize shows it.
@@ -1269,6 +1288,7 @@ function EditorBody({
               whiskers={shownType === 'boxplot'}
               eachPointIs={spec.eachPointIs !== undefined}
               sankey={shownType === 'sankey'}
+              {...(comboRows === undefined ? {} : { combo: comboRows })}
             />
           )}
         </div>

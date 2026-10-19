@@ -1838,10 +1838,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `undrawn.test.ts`: a combo of Revenue and Margin %, both on Auto, gives Margin % "not drawn · on another scale" with offers right axis, small multiples, table in that order; a line chart of the same gives small multiples and table only; `Wells.test.tsx`: pressing "Draw on a right axis" sets Margin %'s axis to right and its pill to its R tag (AC-506).
   - Depends on: T845
 
-- [ ] T855 (AC-497, AC-498, AC-504, AC-219) Customize › Series: a 28 px row per series with its Mark and Axis radio groups and Back to Auto, grouped by measure while split
-  - Files: `packages/web/src/editor/combo/SeriesRows.tsx` (+ test), `packages/web/src/editor/CustomizeTab.tsx`.
-  - Failing test: `SeriesRows.test.tsx`: three rows with radio groups named "Revenue mark" and "Revenue axis", four mark buttons named Bar, Line, Area and Point in their tooltips and accessible names; ← and → move along a group; choosing Point and Right for Margin % updates the spec and shows "Back to Auto for Margin %: line, left", which restores it; split by Region, rows group under each measure with member rows of swatch, name and visibility; Margin %'s Bar is disabled with "Revenue draws bars. While the chart is split by Region, each measure needs its own mark." (AC-497, AC-498, AC-504, AC-219).
-  - Depends on: T845, T852
+- [x] T855 (AC-497, AC-498, AC-504, AC-219) Customize › Series: a 28 px row per series with its Mark and Axis radio groups and Back to Auto, grouped by measure while split
 
 - [ ] T856 (AC-497) The Metrics pill's menu: Draw as and Axis as `menuitemradio` groups, Back to Auto, Format… and Remove; the pill's mark glyph and L or R tag
   - Files: `packages/web/src/editor/Wells.tsx`, `packages/web/src/editor/combo/PillMarkMenu.tsx` (+ test).

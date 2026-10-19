@@ -8,6 +8,8 @@ import {
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { AxisPanel } from './AxisPanel';
+import { ColourSetting } from './ColourSetting';
+import { SeriesRows, type SeriesRowsProps } from './combo/SeriesRows';
 import { BoxplotDistribution } from './wells/boxplotDistribution';
 import { SankeyColourLinks } from './wells/sankey';
 
@@ -43,6 +45,11 @@ export interface CustomizeTabProps {
   readonly eachPointIs?: boolean;
   /** A Sankey: Colour links by, Source or Target (T986, AC-610). */
   readonly sankey?: boolean;
+  /**
+   * A combo's measures and its split, where it has one: its Series section
+   * is then a row per series with its mark and axis (T855, AC-497).
+   */
+  readonly combo?: Pick<SeriesRowsProps, 'measures' | 'split'>;
 }
 
 const POSITIONS: readonly [LegendPosition, string][] = [
@@ -84,6 +91,7 @@ export function CustomizeTab({
   whiskers = false,
   eachPointIs = false,
   sankey = false,
+  combo,
 }: CustomizeTabProps) {
   const ids = useId();
   const axes = record(options['axes']) as AxesSettings;
@@ -237,7 +245,22 @@ export function CustomizeTab({
           <summary>
             <h3 id={`${ids}-series`}>Series ({series.length})</h3>
           </summary>
-          <ol className="customize-tab__series" aria-label="Series order">
+          {combo === undefined ? null : (
+            // A combo's series: each one's mark and axis, in place of the
+            // list below (T855, AC-497; design 20 screen 1 pin 2).
+            <SeriesRows
+              measures={combo.measures}
+              {...(combo.split === undefined ? {} : { split: combo.split })}
+              options={options}
+              onOptions={onOptions}
+              colourOf={colourOf}
+            />
+          )}
+          <ol
+            className="customize-tab__series"
+            aria-label="Series order"
+            hidden={combo !== undefined}
+          >
             {ordered.map(({ name, title }, index) => (
               <li key={name}>
                 <ColourSetting
@@ -268,7 +291,7 @@ export function CustomizeTab({
           <span className="visually-hidden" role="status">
             {said}
           </span>
-          {setOrder.length > 0 ? (
+          {setOrder.length > 0 && combo === undefined ? (
             // Back to the order the data comes in, said so rather than
             // guessed from a move that happens to match it.
             <button
@@ -370,50 +393,5 @@ export function CustomizeTab({
       ) : null}
       {sankey ? <SankeyColourLinks options={options} onOptions={onOptions} /> : null}
     </div>
-  );
-}
-
-/**
- * One series' colour (AC-219): picked, and set down as one change when the
- * picker closes — not one per shade dragged through — or put back to the
- * colour the dashboard gives its member (AC-039).
- */
-function ColourSetting({
-  title,
-  chosen,
-  drawn,
-  onChoose,
-}: {
-  title: string;
-  chosen: string | undefined;
-  drawn: string;
-  onChoose: (colour: string | undefined) => void;
-}) {
-  const [picking, setPicking] = useState<string | null>(null);
-  const setDown = () => {
-    if (picking === null) return;
-    setPicking(null);
-    if (picking !== (chosen ?? drawn)) onChoose(picking);
-  };
-  return (
-    <>
-      <input
-        type="color"
-        aria-label={`Colour of ${title}`}
-        value={picking ?? chosen ?? drawn}
-        onChange={(event) => setPicking(event.target.value)}
-        onBlur={setDown}
-      />
-      {chosen === undefined ? null : (
-        <button
-          type="button"
-          className="btn-ghost btn-sm"
-          aria-label={`Automatic colour for ${title}`}
-          onClick={() => onChoose(undefined)}
-        >
-          Auto
-        </button>
-      )}
-    </>
   );
 }
