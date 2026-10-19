@@ -319,3 +319,81 @@ describe('nothing offered breaks a hard rule (AC-030, AC-031)', () => {
     expect(offered.map((candidate) => candidate.chartType)).not.toContain('pie');
   });
 });
+
+/**
+ * T968 / AC-560 (R81): WHEN the chart's fields change, THE SYSTEM SHALL make
+ * one of R81's types the top pick only for: … 4 or more measures and one
+ * dimension of more than 8 members (Parallel coordinates); … a Target and
+ * one dimension (Bullet chart); and a Target and no dimension (KPI with its
+ * target, a single bullet its first runner-up); and one measure and a time
+ * dimension SHALL keep Line as the top pick, "KPI with trend" its first
+ * runner-up.
+ * `Fails when: for any of those signatures the top pick or the named first
+ * runner-up differs; any other of R81's types is a top pick; or one measure
+ * over time doesn't give Line, then KPI with trend.`
+ * Narrowed by the parking: no parked type (histogram, bubble …) is a top
+ * pick; the Map's picks are lane B's (T1012).
+ */
+describe('R81’s top picks (T968, AC-560)', () => {
+  const pick = (input: Signature) => recommend(input);
+  const products = (members: number) => dimension(members, 'products.name');
+
+  it('gives Parallel coordinates for 5 measures by 14 Products', () => {
+    const five = ['revenue', 'margin', 'count', 'discount', 'units'].map((name) =>
+      measure(`orders.${name}`),
+    );
+    expect(pick(signature(...five, products(14))).top?.candidate.chartType).toBe('parallel');
+    // 4 is enough; 3 isn't; a dimension of 8 or fewer isn't.
+    expect(pick(signature(...five.slice(0, 4), products(9))).top?.candidate.chartType).toBe(
+      'parallel',
+    );
+    expect(pick(signature(...five.slice(0, 3), products(14))).top?.candidate.chartType).not.toBe(
+      'parallel',
+    );
+    expect(pick(signature(...five, products(8))).top?.candidate.chartType).not.toBe('parallel');
+  });
+
+  it('gives a Bullet chart for a Target with Region', () => {
+    const withTarget = { ...signature(measure(), dimension(4, 'customers.region')), target: true };
+    expect(pick(withTarget).top?.candidate.chartType).toBe('bullet');
+    // Without the Target, as before.
+    expect(
+      pick(signature(measure(), dimension(4, 'customers.region'))).top?.candidate.chartType,
+    ).toBe('bar');
+  });
+
+  it('gives a KPI with its target for a Target and no dimension, a single bullet next', () => {
+    const { top, runnersUp } = pick({ ...signature(measure()), target: true });
+    expect(top?.candidate.chartType).toBe('kpi');
+    expect(top?.reason).toBe('One number against its target.');
+    expect(runnersUp[0]?.candidate.chartType).toBe('bullet');
+    expect(runnersUp[0]?.candidate.categoryField).toBeUndefined();
+    expect(runnersUp[0]?.reason).toBe('A single bullet: the number against its target and bands.');
+  });
+
+  it('keeps Line for Revenue by month, with "KPI with trend" next', () => {
+    const { top, runnersUp } = pick(signature(measure('orders.revenue'), time()));
+    expect(top?.candidate.chartType).toBe('line');
+    expect(runnersUp[0]?.candidate.chartType).toBe('kpi');
+    expect(runnersUp[0]?.candidate.categoryField?.kind).toBe('timeDimension');
+    expect(runnersUp[0]?.reason).toBe('KPI with trend: this period’s number, its trend beneath.');
+  });
+
+  it('makes no other of R81’s types the top pick', () => {
+    const R81 = [
+      'waterfall',
+      'histogram',
+      'bubble',
+      'parallel',
+      'bullet',
+      'sankey',
+      'funnel',
+      'timeline',
+      'calendar',
+      'icicle',
+      'graphicalTable',
+    ];
+    for (const [, input] of SIGNATURES)
+      expect(R81).not.toContain(recommend(input).top?.candidate.chartType);
+  });
+});

@@ -154,3 +154,30 @@ describe('the pick', () => {
     expect(recommendedTypeOf(spec, rows)).toBe(topTypeOf(recommend(signatureOf(spec, rows))));
   });
 });
+
+/**
+ * T968 / AC-560: a Target and one dimension make a Bullet chart the pick; a
+ * Target and none, a KPI against it. The chart's Target is its options' —
+ * a bullet chart's or a KPI's — whatever type it is drawn as, so Auto sees it.
+ */
+describe('a chart’s Target in its signature (T968, AC-560)', () => {
+  const byStatus = {
+    ...emptySpec('orders'),
+    measures: ['orders.count'],
+    dimensions: ['orders.status'],
+  };
+  const bulletTarget = { bullet: { target: { kind: 'value', value: 10 } } };
+  const kpiTarget = { kpi: { target: { kind: 'measure', member: 'orders.goal' } } };
+
+  it('says a bullet’s or a KPI’s Target is there, and nothing without one', () => {
+    expect(signatureOf(byStatus, rows, undefined, undefined, bulletTarget).target).toBe(true);
+    expect(signatureOf(byStatus, rows, undefined, undefined, kpiTarget).target).toBe(true);
+    expect(signatureOf(byStatus, rows, undefined, undefined, {}).target).toBeUndefined();
+    expect(signatureOf(byStatus, rows).target).toBeUndefined();
+  });
+
+  it('picks a Bullet chart for a Target by one dimension, as the dashboard picks it', () => {
+    expect(recommendedTypeOf(byStatus, rows, undefined, bulletTarget)).toBe('bullet');
+    expect(recommendedTypeOf(byStatus, rows)).toBe('bar');
+  });
+});

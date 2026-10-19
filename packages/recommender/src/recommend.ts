@@ -94,6 +94,26 @@ export function enumerate(signature: Signature): Candidate[] {
     if (measures.length > 1) candidates.push(build('table', { valueFields: measures }));
   }
 
+  /**
+   * R81's (T968, AC-560): a Target makes a bullet per member of one
+   * dimension, or a single bullet with none; one measure over time is also
+   * a KPI with its trend; 4 or more measures by one dimension are lines
+   * across their axes.
+   */
+  if (signature.target === true && measures.length >= 1 && times.length === 0) {
+    if (dimensions.length <= 1)
+      candidates.push(
+        build('bullet', {
+          valueFields: measures.slice(0, 1),
+          ...(dimensions[0] === undefined ? {} : { categoryField: dimensions[0] }),
+        }),
+      );
+  }
+  if (measures.length === 1 && times.length >= 1 && dimensions.length === 0)
+    candidates.push(build('kpi', { valueFields: measures, categoryField: times[0]! }));
+  if (measures.length >= 4 && dimensions.length === 1 && times.length === 0)
+    candidates.push(build('parallel', { valueFields: measures, categoryField: dimensions[0]! }));
+
   // Over time. `compile` colours these by the first dimension where there is
   // one (`defaultEncoding`), so each carries it as its colour, and the colour
   // cap applies to it (T305, AC-031).
@@ -356,15 +376,96 @@ const REASONS: Record<ChartType, string> = {
   graphicalTable: 'A row per member, with its trend and target at a glance.',
 };
 
-function reasonFor(candidate: Candidate): string {
-  // Small multiples by metric, not by a member (T510).
+function reasonFor(candidate: Candidate, signature: Signature): string {
+  const { chartType, categoryField } = candidate;
   const reason =
-    candidate.chartType === 'trellis' &&
+    // Small multiples by metric, not by a member (T510).
+    chartType === 'trellis' &&
     candidate.facetField === undefined &&
     candidate.valueFields.length > 1
       ? 'One small chart per metric, each on its own scale.'
-      : REASONS[candidate.chartType];
+      : // R81's KPI and bullet forms (T968, AC-560).
+        chartType === 'kpi' && categoryField?.kind === 'timeDimension'
+        ? 'KPI with trend: this period’s number, its trend beneath.'
+        : chartType === 'kpi' && signature.target === true && categoryField === undefined
+          ? 'One number against its target.'
+          : chartType === 'bullet' && categoryField === undefined
+            ? 'A single bullet: the number against its target and bands.'
+            : REASONS[chartType];
   return reason.length <= MAX_REASON_LENGTH ? reason : `${reason.slice(0, MAX_REASON_LENGTH - 1)}…`;
+}
+
+/** R81's types (T934): none is the top pick but where AC-560 names it. */
+const R81_TYPES: ReadonlySet<ChartType> = new Set<ChartType>([
+  'waterfall',
+  'histogram',
+  'bubble',
+  'parallel',
+  'bullet',
+  'sankey',
+  'funnel',
+  'timeline',
+  'calendar',
+  'icicle',
+  'graphicalTable',
+]);
+
+type Is = (candidate: Candidate) => boolean;
+
+/**
+ * AC-560's picks, by the signature, ahead of the scores (T968): the top pick
+ * and its named first runner-up, where the signature is one of R81's.
+ * Narrowed by the parking: the histogram's and the bubble's are parked, and
+ * the Map's are lane B's (T1012).
+ */
+function r81PicksOf(signature: Signature): { readonly top?: Is; readonly next?: Is } {
+  const measures = measuresOf(signature);
+  const dimensions = dimensionsOf(signature);
+  const times = timesOf(signature);
+  const is =
+    (type: ChartType, also: Is = () => true): Is =>
+    (candidate) =>
+      candidate.chartType === type && also(candidate);
+  if (signature.target === true && measures.length >= 1 && times.length === 0) {
+    // A Target and one dimension: a bullet per member.
+    if (dimensions.length === 1) return { top: is('bullet') };
+    // A Target and none: the KPI against it, a single bullet next.
+    if (dimensions.length === 0) return { top: is('kpi'), next: is('bullet') };
+  }
+  // 4 or more measures by one dimension of more than 8 members.
+  if (
+    measures.length >= 4 &&
+    dimensions.length === 1 &&
+    times.length === 0 &&
+    cardinality(dimensions[0]) > 8
+  )
+    return { top: is('parallel') };
+  // One measure over time: Line kept, KPI with trend next.
+  if (measures.length === 1 && times.length >= 1 && dimensions.length === 0)
+    return {
+      top: is('line'),
+      next: is('kpi', (candidate) => candidate.categoryField?.kind === 'timeDimension'),
+    };
+  return {};
+}
+
+/** The ranking with AC-560's picks put first, and no other R81 type first (T968). */
+function withR81Picks<T extends { readonly candidate: Candidate }>(
+  ranked: readonly T[],
+  signature: Signature,
+): T[] {
+  const { top, next } = r81PicksOf(signature);
+  const pinned = [top, next].flatMap((wanted) => {
+    const found = wanted === undefined ? undefined : ranked.find((each) => wanted(each.candidate));
+    return found === undefined ? [] : [found];
+  });
+  const rest = ranked.filter((each) => !pinned.includes(each));
+  if (pinned.length === 0) {
+    // Never first where AC-560 doesn't name it: behind the first that isn't R81's.
+    const first = rest.findIndex((each) => !R81_TYPES.has(each.candidate.chartType));
+    if (first > 0) return [rest[first]!, ...rest.slice(0, first), ...rest.slice(first + 1)];
+  }
+  return [...pinned, ...rest];
 }
 
 /**
@@ -381,12 +482,12 @@ export function recommend(signature: Signature, runnerUpCount = 2): Recommendati
     .map((candidate) => ({
       candidate,
       score: score(candidate, signature),
-      reason: reasonFor(candidate),
+      reason: reasonFor(candidate, signature),
     }))
     .sort((a, b) => a.score - b.score);
 
   const seen = new Set<ChartType>();
-  const distinct = ranked.filter((recommendation) => {
+  const distinct = withR81Picks(ranked, signature).filter((recommendation) => {
     if (seen.has(recommendation.candidate.chartType)) return false;
     seen.add(recommendation.candidate.chartType);
     return true;

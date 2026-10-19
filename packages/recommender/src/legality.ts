@@ -23,6 +23,8 @@ export const CAPS = {
   trellisPanels: 20,
   pieSlices: 6,
   heatmapCells: 200,
+  /** R81's (T968, AC-031; design 23 Q5 (a)): a KPI's tiles, at the trellis's panel cap. */
+  kpiTiles: 20,
 } as const;
 
 type Rule = (candidate: Candidate) => RuleOutcome;
@@ -111,6 +113,21 @@ const heatmapCapacity: Rule = (candidate) => {
     : pass('heatmap_cell_capacity');
 };
 
+/**
+ * A KPI tiled by a dimension (R81, T968, AC-031): a tile per member, at most
+ * as many as a trellis has panels. Ours; Draco has no KPI.
+ */
+const kpiTileCapacity: Rule = (candidate) => {
+  if (candidate.chartType !== 'kpi') return pass('kpi_tile_capacity');
+  const tiles = countFor(candidate.facetField);
+  return tiles !== null && tiles > CAPS.kpiTiles
+    ? fail(
+        'kpi_tile_capacity',
+        `A KPI shows ${String(CAPS.kpiTiles)} tiles at most; this needs ${describeCount(tiles)}.`,
+      )
+    : pass('kpi_tile_capacity');
+};
+
 /** Draco `pie_without_single_measure`-shaped: a pie shows one measure's parts. */
 const pieNeedsOneMeasure: Rule = (candidate) => {
   if (candidate.chartType !== 'pie' && candidate.chartType !== 'donut') {
@@ -135,6 +152,7 @@ export const HARD_RULES: readonly Rule[] = [
   pieCapacity,
   heatmapCapacity,
   pieNeedsOneMeasure,
+  kpiTileCapacity,
 ];
 
 /** Every rule's verdict, in order — this is what AC-029's trace shows. */

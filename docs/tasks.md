@@ -2216,11 +2216,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 ### Lane CHARTS-A: the recommender, saved charts, the keyboard and the e2e
 
-- [ ] T968 (AC-560, AC-031, AC-028) The new top picks: ~~histogram, bubble,~~ parallel coordinates, bullet and KPI with a target; line kept for one measure over time with KPI with trend next; and R81's caps on ~~bubbles and~~ KPI tiles (the histogram and bubble parts parked, the user, 2026-10-18)
-  - Files: `packages/recommender/src/recommend.ts` (+ test), `packages/recommender/src/legality.ts` (+ test), `packages/recommender/src/reason.ts`.
-  - Failing test: `recommend.test.ts`: ~~one numeric dimension alone gives Histogram; one measure with Each point is gives Histogram then Box plot; Revenue, Margin % and Order count by 12 Products give Bubble then Parallel coordinates;~~ 5 measures by 14 Products give Parallel coordinates; a Target with Region gives Bullet chart, and with no dimension KPI then a single bullet; Revenue by month gives Line then "KPI with trend"; `legality.test.ts`: ~~a bubble with Colour of 4 or Shape of 7, and~~ a KPI tiled by 21~~, are~~ is rejected (AC-560, AC-031, AC-028).
-  - Parked (the user, 2026-10-18, "any of the charts that you have not started implmentation put them in the parking lot for now"): the histogram's and the bubble's top picks and the bubble's caps, struck through above, go with T959–T967 and T1018 (§"Parked" below).
-  - Depends on: T934
+- [x] T968 (AC-560, AC-031, AC-028) The new top picks: ~~histogram, bubble,~~ parallel coordinates, bullet and KPI with a target; line kept for one measure over time with KPI with trend next; and R81's caps on ~~bubbles and~~ KPI tiles (the histogram and bubble parts parked, the user, 2026-10-18)
 
 - [ ] T969 (AC-561, AC-031) Runners-up with their reasons: ~~waterfall,~~ 100 % stacked, graphical table, KPI tiled and parallel coordinates for 4+ measures over at most 8 members (the waterfall part parked, the user, 2026-10-18)
   - Files: `packages/recommender/src/recommend.ts`, `packages/recommender/src/reason.ts` (+ test), `packages/recommender/src/runnersUpR81.test.ts`.

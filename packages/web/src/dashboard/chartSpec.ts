@@ -129,7 +129,7 @@ export function pickedWithFormats(
     return spec;
   }
   const rows = spec.answeredRows ?? spec.rows;
-  const picked = recommendedTypeOf(toChartSpec(document), rows, formats);
+  const picked = recommendedTypeOf(toChartSpec(document), rows, formats, document.chart.options);
   return picked === null || picked === spec.chartType
     ? spec
     : compile(document, { rows, chartType: picked });
@@ -159,7 +159,9 @@ export async function tileChartOf(
 
     const rows = await load(toCubeQuery(spec));
 
-    const chartType = document.chart.chartType ?? recommendedTypeOf(spec, rows, formats);
+    // Its Target, where its options hold one, as the editor reads it (T968).
+    const chartType =
+      document.chart.chartType ?? recommendedTypeOf(spec, rows, formats, document.chart.options);
     /**
      * Reached by a chart the recommender can place nowhere — one with only a
      * time dimension, say: every candidate needs a measure except a table,

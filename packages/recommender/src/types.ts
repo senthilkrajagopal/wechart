@@ -39,6 +39,12 @@ export interface Signature {
    * `hiddenLabelShare` in @wechart/charts, which this package can't import).
    */
   readonly hiddenLabels?: number;
+  /**
+   * The chart has a Target, a measure or a value (T968, AC-560): a bullet
+   * chart's or a KPI's, as its options hold it. With one dimension it makes
+   * a bullet chart the pick; with none, a KPI against it.
+   */
+  readonly target?: boolean;
 }
 
 /**

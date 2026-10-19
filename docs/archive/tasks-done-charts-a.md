@@ -128,6 +128,21 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - `graphicalTable` came out of `AWAITING_TABLE_VIEW`.
     - **AC-574** is ticked on `e2e/new-charts-a.spec.ts`, "a graphical table's table view lists the numbers behind every cell…" (fixed clock), and `table-view.spec.ts`'s graphicalTable walk, both on headless Chromium. Unit tests seen red, then green.
 
+- [x] T968 (AC-560, AC-031, AC-028) The new top picks: ~~histogram, bubble,~~ parallel coordinates, bullet and KPI with a target; line kept for one measure over time with KPI with trend next; and R81's caps on ~~bubbles and~~ KPI tiles (the histogram and bubble parts parked, the user, 2026-10-18)
+  - Files: `packages/recommender/src/recommend.ts` (+ test), `packages/recommender/src/legality.ts` (+ test), `packages/recommender/src/reason.ts`.
+  - Failing test: `recommend.test.ts`: ~~one numeric dimension alone gives Histogram; one measure with Each point is gives Histogram then Box plot; Revenue, Margin % and Order count by 12 Products give Bubble then Parallel coordinates;~~ 5 measures by 14 Products give Parallel coordinates; a Target with Region gives Bullet chart, and with no dimension KPI then a single bullet; Revenue by month gives Line then "KPI with trend"; `legality.test.ts`: ~~a bubble with Colour of 4 or Shape of 7, and~~ a KPI tiled by 21~~, are~~ is rejected (AC-560, AC-031, AC-028).
+  - Parked (the user, 2026-10-18, "any of the charts that you have not started implmentation put them in the parking lot for now"): the histogram's and the bubble's top picks and the bubble's caps, struck through above, go with T959–T967 and T1018 (§"Parked" below).
+  - Depends on: T934
+  - Done (2026-10-19), decision T968-1:
+    - **Signature:** `Signature.target`. The web's `signatureOf` and `recommendedTypeOf` take the chart's options and set it where a bullet chart's or a KPI's Target is there, whatever type the chart draws as. The editor and the dashboard's `chartSpec.ts` both pass the options.
+    - **Candidates:** a bullet per member of one dimension, or a single bullet, where a Target is set; a KPI with its time dimension ("KPI with trend") for one measure over time; parallel coordinates for 4 or more measures by one dimension.
+    - **Order:** `r81PicksOf` gives AC-560's top pick and named first runner-up by the signature, ahead of the scores. `withR81Picks` puts them first, and otherwise keeps every R81 type behind the first that isn't one. Reasons: "One number against its target.", "A single bullet: the number against its target and bands." and "KPI with trend: this period's number, its trend beneath."
+    - **Cap:** legality's `kpi_tile_capacity`, `CAPS.kpiTiles` 20, on a KPI's `facetField`.
+    - **Picking "KPI with trend":** the editor's quick pick sets the KPI's Time to the chart's time dimension at its grain, or the month (`editor/kpiTrendPick.ts`), so the trend is drawn.
+    - `reason.ts` needed no change: `dataReasonFor` names the type by `CHART_TYPE_NAMES`.
+    - **Seen:** unit tests red, then green; the recommender package's tests and the web's editor and query tests passed; `e2e/new-charts-a.spec.ts`, "one measure over time is drawn as a Line in Auto, 'KPI with trend' next…", on headless Chromium.
+    - **ACs not ticked:** AC-560 also needs the Map's picks (lane B's T1012). AC-031 has the Sankey's and other caps still to come. AC-028 waits for AC-561 and AC-562 (T969, T970).
+
 - [x] T953 (AC-580, AC-037) The bullet chart's spec and wells: Target, 2–3 bands at 80, 100 and 120 % by default, and its empty state
   - Files: `packages/core/src/chart-types/bullet.ts` (+ test), `packages/web/src/editor/wells/bullet.tsx` (+ test).
   - Failing test: `bullet.test.ts`: bands default to [80, 100, 120]; a fourth band is refused with "At most 3 bands: R80's three greys, and no fourth without a new colour."; one band is refused; `bullet.test.tsx` (wells): with Target emptied the tile says "A bullet chart compares each member with a target. Put a measure or a value in Target." with Target as its action (AC-580, AC-037).

@@ -1,7 +1,9 @@
 import {
   countryCodeMarkingOf,
   holdsCountryCodes,
+  kpiOptionsOf,
   scaleOf,
+  targetCount,
   type ChartSpec,
   type MemberFormats,
 } from '@wechart/core';
@@ -53,8 +55,15 @@ export function signatureOf(
    * different scales are drawn as small multiples (T510; R67, the user).
    */
   formats?: MemberFormats,
+  /**
+   * The chart's options, where the caller has them: a bullet chart's or a
+   * KPI's Target there, whatever the chart is drawn as, makes the pick a
+   * bullet chart or a KPI against it (T968, AC-560).
+   */
+  options?: Readonly<Record<string, unknown>>,
 ): Signature {
   const distinct = (member: string) => new Set(rows.map((row) => String(row[member] ?? ''))).size;
+  const target = targetCount(options) > 0 || kpiOptionsOf(options).target !== undefined;
   const countryCodes = (member: string) =>
     holdsCountryCodes(
       rows.map((row) => row[member]),
@@ -81,6 +90,7 @@ export function signatureOf(
       })),
     ],
     rowCount: rows.length,
+    ...(target ? { target: true } : {}),
   };
 }
 
@@ -101,6 +111,8 @@ export function recommendedTypeOf(
   spec: ChartSpec,
   rows: readonly Record<string, unknown>[],
   formats?: MemberFormats,
+  /** The chart's options, for its Target (T968). */
+  options?: Readonly<Record<string, unknown>>,
 ): ChartType | null {
-  return topTypeOf(recommend(signatureOf(spec, rows, undefined, formats)));
+  return topTypeOf(recommend(signatureOf(spec, rows, undefined, formats, options)));
 }

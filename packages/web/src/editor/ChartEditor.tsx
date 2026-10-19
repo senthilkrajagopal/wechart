@@ -93,6 +93,7 @@ import { undrawnWell } from './combo/undrawnWell';
 import { addToWellAs } from './combo/comboWells';
 import { comboWarningOf } from './combo/ComboWarning';
 import { kpiCustomize } from './wells/kpiTiles';
+import { optionsOnPick } from './kpiTrendPick';
 import { stackChoice, stackCustomize } from './wells/stack';
 import { requestCalculation } from './calcRequests';
 import { RequestCalcDialog } from './RequestCalcDialog';
@@ -593,14 +594,24 @@ function EditorBody({
     () => ({
       // Each measure's scale from the model's formats: metrics on different
       // scales are drawn as small multiples (T510, R67), as on a tile.
-      ...signatureOf(spec, rows, countryMarking, formats),
+      // Its Target too, a bullet chart's or a KPI's (T968, AC-560).
+      ...signatureOf(spec, rows, countryMarking, formats, options),
       // More than half a bar's labels hidden at that size: the horizontal bar
       // offered second (T516; R67). The pick itself never turns on it.
       hiddenLabels: hiddenLabelsAt(previewDocument, rows, drawnAt, formats),
     }),
     // `drawnAt` by its numbers, so a new object of the same size asks nothing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [spec, rows, countryMarking, previewDocument, drawnAt?.width, drawnAt?.height, formats],
+    [
+      spec,
+      rows,
+      countryMarking,
+      previewDocument,
+      drawnAt?.width,
+      drawnAt?.height,
+      formats,
+      options,
+    ],
   );
   /** What the fields are, for what a type needs (AC-033): a map's country codes too (T398). */
   const counts = {
@@ -1405,8 +1416,23 @@ function EditorBody({
                     // and keeps focus (T689's review).
                     if (from === 'use') changeType.current?.focus();
                   }}
-                  // A quick pick: that type, by hand (EDI-06).
-                  onPick={(type) => setChartTypeState(chooseType(type))}
+                  // A quick pick: that type, by hand (EDI-06); "KPI with
+                  // trend" with its Time, so it draws its trend (T968).
+                  onPick={(type) => {
+                    const withTrend = optionsOnPick(
+                      type,
+                      recommendation,
+                      options,
+                      spec.granularities,
+                    );
+                    if (withTrend === undefined) setChartTypeState(chooseType(type));
+                    else
+                      change((current) => ({
+                        ...current,
+                        chartType: chooseType(type),
+                        options: withTrend,
+                      }));
+                  }}
                 />
               </div>
               <div className="inspector-section" data-testid="inspector-wells">

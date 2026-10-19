@@ -1733,6 +1733,46 @@ test('graphical tables on 5- and 6-column tiles draw their cells, sections and e
 });
 
 /**
+ * T968 / AC-560: … one measure and a time dimension SHALL keep Line as the
+ * top pick, "KPI with trend" its first runner-up.
+ * `Fails when: … one measure over time doesn't give Line, then KPI with
+ * trend.` Picking it draws what it says: the KPI with its trend.
+ *
+ * On a fixed clock of 20 August 2026, as the sample orders end in August.
+ */
+test('one measure over time is drawn as a Line in Auto, "KPI with trend" next, and picking it draws the KPI’s trend', async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date('2026-08-20T12:00:00Z'));
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await expect(page.getByTestId('member-orders.count')).toBeVisible();
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+  await expect(page.getByTestId('result-row-count')).toBeVisible();
+  await expectChartType(page, 'line');
+
+  await page.getByRole('button', { name: 'Why this recommendation?' }).click();
+  const runnersUp = page.locator('[data-testid^="runner-up-"]');
+  await expect(runnersUp.first()).toHaveAttribute('data-testid', 'runner-up-kpi');
+  await expect(runnersUp.first()).toHaveText(
+    'KPI — KPI with trend: this period’s number, its trend beneath.',
+  );
+
+  // The quick pick after Auto and Line: the KPI, drawn with its trend.
+  const picks = page.getByRole('group', { name: 'Quick picks' }).getByRole('button');
+  await expect(picks.nth(2)).toHaveAccessibleName('KPI');
+  await picks.nth(2).click();
+  await expectChartType(page, 'kpi');
+  await expect(
+    page.getByTestId('editor-result').getByTestId('kpi-trend').locator('svg'),
+  ).toHaveAttribute(
+    'aria-label',
+    /^Count by month, last 12 months: from \d+ to \d+, low \d+, high \d+$/,
+  );
+});
+
+/**
  * A dashboard of graphical tables of orders, each its Rows and columns, or
  * any other chart of orders; with `interactions`, in that mode with one
  * default marking, "Marking".

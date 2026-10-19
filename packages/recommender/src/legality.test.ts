@@ -188,3 +188,32 @@ describe('the trace (AC-029 groundwork)', () => {
     ).toBe(false);
   });
 });
+
+/**
+ * T968 / AC-031 (R81): … a KPI tiled by more than 20 members … (design 23
+ * Q5 (a): "KPI tiles ≤ 20 (the panel cap)").
+ */
+describe('a KPI’s tiles (T968, AC-031)', () => {
+  const tiled = (members: number): Candidate => ({
+    chartType: 'kpi',
+    valueFields: [measure],
+    facetField: dimension(members, 'customers.region'),
+    valueAxisCount: 1,
+  });
+
+  it('accepts a KPI tiled by 20 members', () => {
+    expect(CAPS.kpiTiles).toBe(20);
+    expect(isLegal(tiled(20))).toBe(true);
+  });
+
+  it('rejects a KPI tiled by 21, saying why', () => {
+    const outcome = reasonFor(tiled(21), 'kpi_tile_capacity');
+    expect(outcome?.passed).toBe(false);
+    expect(outcome?.reason).toBe('A KPI shows 20 tiles at most; this needs 21.');
+    expect(isLegal(tiled(21))).toBe(false);
+  });
+
+  it('leaves a KPI of one number alone', () => {
+    expect(reasonFor(candidate({ chartType: 'kpi' }), 'kpi_tile_capacity')?.passed).toBe(true);
+  });
+});
