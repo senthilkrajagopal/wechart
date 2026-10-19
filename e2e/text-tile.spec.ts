@@ -1243,6 +1243,8 @@ test('an element its viewer may not query reads “Unavailable”, naming nothin
   // Nothing to focus for Details, and no tooltip naming it.
   await expect(refused).not.toHaveAttribute('tabindex', '0');
   await expect(page.getByRole('tooltip').filter({ hasText: 'Average' })).toHaveCount(0);
+  // Retry can't help a 403, so the tile offers no ⋯ for it (the coordinator, checkpoint 3).
+  await expect(text.getByRole('button', { name: 'More for this text' })).toHaveCount(0);
 });
 
 /**
