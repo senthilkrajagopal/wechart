@@ -241,6 +241,8 @@ function ChartBody({
         {...(kpiSolo === true ? { solo: true } : {})}
         {...(onAddTime === undefined ? {} : { onAddTime })}
         {...(query === undefined ? {} : { query })}
+        // A tiled KPI's tile marks or cross-filters its member (T941, AC-568).
+        {...(onItemClick === undefined ? {} : { onItemClick })}
       />
     );
   const DomChart = DOM_TYPES[spec.chartType];

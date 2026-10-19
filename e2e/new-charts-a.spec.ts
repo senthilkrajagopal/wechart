@@ -1378,6 +1378,169 @@ test('a tiled KPI’s tile order is set in Customize, and the tiles follow it', 
 });
 
 /**
+ * T941 / AC-568: WHILE a KPI is tiled, THE SYSTEM SHALL make each tile its
+ * member for marking: a click marks it and Ctrl/⌘+click toggles it
+ * (AC-087); the marked tile takes the 1.5 px marking outline and "● Marked",
+ * the others keeping their numbers in `text-secondary` and fading their
+ * micro-charts to 0.28; limited by a marking, every tile recomputes
+ * (AC-107); and as a cross-filter source a tile filters the other tiles to
+ * its member, and as a target with Highlight it shows "Selected: $X · p%"
+ * as the marked badge does.
+ * `Fails when: clicking a tile doesn't mark its member, or Ctrl/⌘ doesn't
+ * toggle; an unmarked tile's value fades below text-secondary; a limited
+ * KPI's tiles don't recompute; or a tile doesn't filter or highlight as said.`
+ */
+test('a tiled KPI on a 6-column tile marks, toggles, limits, cross-filters and highlights by its members', async ({
+  page,
+  request,
+}) => {
+  const title = `KPI marks ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const chartOf = async (chart: Record<string, unknown>) => {
+    const made = (await (
+      await request.post(`${API}/documents`, {
+        data: { kind: 'chart', title: 'chart', ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`${API}/documents/chart/${made.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: 'chart',
+          owner: 'admin',
+          localToDashboardId: dashboard.id,
+          chart: { source: { cube: 'orders' }, ...chart },
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    return made.id;
+  };
+  const tiledKpi = () =>
+    chartOf({
+      wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
+      chartType: 'kpi',
+      options: { kpi: { tileBy: 'orders.status' } },
+    });
+  const kpi = await tiledKpi();
+  const limited = await tiledKpi();
+  const country = await chartOf({
+    wells: { measures: ['orders.count'], dimensions: ['customers.country'], timeDimensions: [] },
+    chartType: 'bar',
+  });
+  const put = async (version: number, interactions: Record<string, unknown>) => {
+    const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+      data: {
+        version,
+        body: {
+          schemaVersion: 1,
+          title,
+          ...IN_MY_WORKSPACE,
+          owner: 'admin',
+          settings: { width: 'fixed', interactions },
+          markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
+          pages: [
+            {
+              id: 'only',
+              title: 'Only',
+              items: [
+                { id: 'tile-kpi', kind: 'chart', w: 6, h: 24, chartId: kpi },
+                {
+                  id: 'tile-limited',
+                  kind: 'chart',
+                  w: 6,
+                  h: 24,
+                  chartId: limited,
+                  marksWith: '',
+                  limitedBy: ['m1'],
+                },
+                { id: 'tile-country', kind: 'chart', w: 12, h: 40, chartId: country },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(placed.ok(), await placed.text()).toBe(true);
+  };
+  await put(1, { mode: 'markings', crossFilter: { defaultAction: 'filter' } });
+
+  await page.goto(`/explore/dashboards/${dashboard.id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tiles = page.locator('[data-tile="tile-kpi"]');
+  const tileOf = (status: string) =>
+    tiles.getByRole('listitem', { name: new RegExp(`^${status}:`) });
+  await expect(tiles.getByRole('listitem')).toHaveCount(3);
+
+  // A click marks shipped: outlined in the marking's colour, "● Marked".
+  await tileOf('shipped').click();
+  const chip = page.getByTestId('mark-chip');
+  await expect(chip).toContainText('shipped');
+  await expect(tileOf('shipped')).toHaveClass(/kpi-tile--marked/);
+  await expect(tileOf('shipped').getByTestId('kpi-tile-marked')).toHaveText('● Marked');
+  await expect(tileOf('shipped')).toHaveCSS('box-shadow', / 0px 0px 0px 1\.5px inset$/);
+  // The others in text-secondary, never fainter.
+  const secondary = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--wc-text-secondary)';
+    document.body.append(probe);
+    const read = getComputedStyle(probe).color;
+    probe.remove();
+    return read;
+  });
+  await expect(tileOf('completed').getByTestId('kpi-tile-value')).toHaveCSS('color', secondary);
+
+  // Ctrl/⌘ adds completed, and takes it off again.
+  await tileOf('completed').click({ modifiers: ['ControlOrMeta'] });
+  await expect(chip).toContainText('completed');
+  await expect(tileOf('completed')).toHaveClass(/kpi-tile--marked/);
+  // Limited by the marking, the other KPI's tiles are the marked statuses alone.
+  const limitedTiles = page.locator('[data-tile="tile-limited"]').getByRole('listitem');
+  await expect(limitedTiles).toHaveCount(2);
+  await tileOf('completed').click({ modifiers: ['ControlOrMeta'] });
+  await expect(chip).not.toContainText('completed');
+  await expect(limitedTiles).toHaveCount(1);
+
+  // Cross-filtering: a tile filters the others to its status.
+  const stored = (await (
+    await request.get(`${API}/documents/dashboard/${dashboard.id}`)
+  ).json()) as { version: number };
+  await put(stored.version, { mode: 'crossFilter', crossFilter: { defaultAction: 'filter' } });
+  const asked: string[] = [];
+  page.on('request', (sent) => {
+    if (sent.url().endsWith('/api/load') && sent.method() === 'POST')
+      asked.push(JSON.stringify((sent.postDataJSON() as { query?: unknown } | null)?.query));
+  });
+  await page.reload();
+  await expect(tiles.getByRole('listitem')).toHaveCount(3);
+  await tileOf('processing').click();
+  await expect(page.getByTestId('cross-filter-chip')).toContainText('processing');
+  await expect
+    .poll(() =>
+      asked.some((query) => query.includes('customers.country') && query.includes('"processing"')),
+    )
+    .toBe(true);
+
+  // As a Highlight target: a country's orders said on each tile.
+  const again = (await (
+    await request.get(`${API}/documents/dashboard/${dashboard.id}`)
+  ).json()) as { version: number };
+  await put(again.version, { mode: 'crossFilter', crossFilter: { defaultAction: 'highlight' } });
+  await page.reload();
+  await expect(tiles.getByRole('listitem')).toHaveCount(3);
+  await clickAbove(page, page.locator('[data-tile="tile-country"]'), 'Germany');
+  for (const status of ['completed', 'shipped', 'processing'])
+    await expect(tileOf(status).getByTestId('kpi-tile-selected')).toHaveText(
+      /^Selected: \d+ · \d+%$/,
+    );
+});
+
+/**
  * T939 / AC-566: IF a KPI's Compare to is Previous period or Same period last
  * year and Time is empty, THEN THE SYSTEM SHALL say "Compare to: ‹choice›
  * needs a time dimension in Time." with the Time well as its action; and IF

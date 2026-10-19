@@ -12,6 +12,7 @@ import {
 } from '@wechart/core';
 import { useContext } from 'react';
 
+import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 import { SecurityPreview } from '../query/securityPreview';
 import { KpiChange } from './kpi/KpiChange';
 import { comparedOf, numberOf, periodLabelOf, periodStartOf, targetOf } from './kpi/kpiFigures';
@@ -49,6 +50,8 @@ export interface KpiProps {
    * the same question by Time's grain. Absent, no trend is drawn.
    */
   readonly query?: Readonly<Record<string, unknown>> | undefined;
+  /** A click on a tiled KPI's tile: marking or cross-filtering its member (T941, AC-568). */
+  readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
 }
 
 /**
@@ -108,12 +111,14 @@ function KpiTilesLoaded({
   measure,
   tileBy,
   time,
+  onItemClick,
 }: {
   readonly query: Readonly<Record<string, unknown>>;
   readonly spec: RenderSpec;
   readonly measure: string;
   readonly tileBy: string;
   readonly time: KpiTime;
+  readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
 }) {
   const context = useContext(SecurityPreview);
   const answer = useElementAnswer(query, context);
@@ -126,7 +131,7 @@ function KpiTilesLoaded({
   const trends = new Map(
     [...byMember].map(([member, rows]) => [member, kpiTrendValues(rows, measure, time, now)]),
   );
-  return <KpiTiles spec={spec} measure={measure} trends={trends} />;
+  return <KpiTiles spec={spec} measure={measure} trends={trends} onItemClick={onItemClick} />;
 }
 
 /** A KPI's trend asked of Cube (T938): its value's own query by Time's grain. */
@@ -166,7 +171,7 @@ function KpiTrendLoaded({
   );
 }
 
-export function Kpi({ spec, solo = false, onAddTime, query }: KpiProps) {
+export function Kpi({ spec, solo = false, onAddTime, query, onItemClick }: KpiProps) {
   const [measured, box] = useBox();
   const [measuredCore, core] = useBox();
   const kpi = kpiOptionsOf(spec.options);
@@ -191,7 +196,7 @@ export function Kpi({ spec, solo = false, onAddTime, query }: KpiProps) {
     return (
       <div className={`${className} kpi--tiled`} data-testid="kpi">
         {trend === undefined || kpi.time === undefined ? (
-          <KpiTiles spec={spec} measure={measure} />
+          <KpiTiles spec={spec} measure={measure} onItemClick={onItemClick} />
         ) : (
           <KpiTilesLoaded
             query={trend}
@@ -199,6 +204,7 @@ export function Kpi({ spec, solo = false, onAddTime, query }: KpiProps) {
             measure={measure}
             tileBy={kpi.tileBy}
             time={kpi.time}
+            onItemClick={onItemClick}
           />
         )}
       </div>

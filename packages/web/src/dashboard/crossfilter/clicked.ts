@@ -1,6 +1,7 @@
 import {
   distinctValues,
   isPercentStack,
+  kpiOptionsOf,
   memberOn,
   onOneScale,
   OTHER_LABEL,
@@ -38,6 +39,15 @@ export function membersDrawn(spec: RenderSpec): string[] {
  * the chart type does not say: a bar chart draws one series per measure, or
  * one per value of its colour split (`charts/src/series/bar.ts`).
  */
+/**
+ * Whether a chart is a KPI tiled by a dimension (T941, AC-568): as a
+ * Highlight target it says the selection's share on each tile, where a
+ * single KPI is filtered, as Power BI does.
+ */
+export function isTiledKpi(spec: RenderSpec): boolean {
+  return spec.chartType === 'kpi' && kpiOptionsOf(spec.options).tileBy !== undefined;
+}
+
 export function seriesCountOf(spec: RenderSpec): number {
   try {
     // As drawn: a metric on another scale than the first is no series (T510).
@@ -184,10 +194,15 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
       ? undefined
       : { member: split, value: item.legend };
   }
-  // A Sankey's node is its member and its link its tuple (AC-612); "Other",
-  // or anything else that carries nothing, is no member of anything.
-  // A parallel-coordinate line is its member as its row holds it (T983, AC-599).
-  if (spec.chartType === 'sankey' || (spec.chartType === 'parallel' && item.marks !== undefined)) {
+  // A Sankey's node is its member and its link its tuple (AC-612), and a
+  // tiled KPI's tile its member (AC-568); "Other", or anything else that
+  // carries nothing, is no member of anything. A parallel-coordinate line is
+  // its member as its row holds it (T983, AC-599).
+  if (
+    spec.chartType === 'sankey' ||
+    spec.chartType === 'kpi' ||
+    (spec.chartType === 'parallel' && item.marks !== undefined)
+  ) {
     const [first, ...rest] = item.marks ?? [];
     if (first === undefined) return undefined;
     const said = (part: MarkedItem[number]) => ({
@@ -226,8 +241,14 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
  * (AC-090). A stack at Sum marks its segment's series, as it did.
  */
 export function clickedMarkItem(spec: RenderSpec, item: ClickedItem): MarkedItem | undefined {
-  // What the item stands for as drawn, its values as its rows hold them (AC-612).
-  if (spec.chartType === 'sankey' || (spec.chartType === 'parallel' && item.marks !== undefined))
+  // What the item stands for as drawn, its values as its rows hold them
+  // (AC-612): a Sankey's node or link, a tiled KPI's tile (AC-568), a
+  // parallel-coordinate line (T983, AC-599).
+  if (
+    spec.chartType === 'sankey' ||
+    spec.chartType === 'kpi' ||
+    (spec.chartType === 'parallel' && item.marks !== undefined)
+  )
     return item.marks;
   const clicked = clickedValue(spec, item);
   if (clicked === undefined) return undefined;

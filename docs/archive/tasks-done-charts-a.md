@@ -59,6 +59,17 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - **Order:** by value, highest first; the KPI's Tile by well offers "Tile order" (By value, highest first; By value, lowest first; By name), stored as `tileOrder` only when not the default.
     - **ACs:** AC-567 is ticked, and AC-565 with it (its tiled value at `text-kpi`, 32/40), on `e2e/new-charts-a.spec.ts`, "a KPI tiled by status draws a named tile per member by value…" (6- and 5-column tiles on a fixed clock), with T937–T939's KPI e2e tests, on headless Chromium; unit tests `KpiTiles.test.tsx`, `kpi.test.tsx` (wells) and `kpi.test.ts` (core) seen red, then green.
 
+- [x] T941 (AC-568) A KPI tile marks and cross-filters its member, the marked tile outlined and the others dimmed, every tile recomputing when limited
+  - Files: `packages/web/src/tiles/kpi/KpiTiles.tsx`, `packages/web/src/tiles/kpi/kpiMarking.test.tsx`.
+  - Failing test: `kpiMarking.test.tsx`: clicking EMEA's tile marks Region = EMEA; Ctrl-click on APAC adds it; the marked tile has the 1.5 px outline and "● Marked", the others' values in `text-secondary` and their sparklines at opacity 0.28; limited by a marking of Channel = Web every tile's query carries it; in cross-filter mode a tile filters the others to its Region, and as a Highlight target shows "Selected: $X · p%" (AC-568).
+  - Depends on: T940
+  - Done (2026-10-18), decision T941-1:
+    - **Click:** a tile's click reaches `onItemClick` as its member (`marks`, as a Sankey's node does), through `ChartTile` and `Kpi`. Ctrl/⌘ toggles. `clickedValue` and `clickedMarkItem` read a KPI's click as its member, for marking and for cross-filtering.
+    - **Drawing:** the marked tile (`matchesPredicate` on its row) takes a 1.5 px inset ring in the marking's colour and "● Marked". While any tile is marked, the others have their value in `text-secondary` and their micro-charts at 0.28.
+    - **Highlight:** a tiled KPI (`isTiledKpi`) is a share target (`highlightKind`'s new `tiledKpi`), each tile saying "Selected: $X · p%" as the marked badge does. A single KPI is still filtered.
+    - **Limits:** a limited KPI's value and trend queries carry the marking's limit, as every tile's query does.
+    - **AC-568** is ticked on `e2e/new-charts-a.spec.ts`, "a tiled KPI on a 6-column tile marks, toggles, limits, cross-filters and highlights…", with the whole spec green on headless Chromium; `kpiMarking.test.tsx` seen red, then green.
+
 - [x] T942 (AC-569) The KPI's table view and its sparkline's text alternative
   - Files: `packages/web/src/tiles/tableView/kpi.ts` (+ test).
   - Failing test: `kpi.test.ts` (table view): tiled by Region, rows read "EMEA · $412,000 · $395,000 · ▲ +4.2% · $450,000 · 92%"; each sparkline's alternative names the first, last, low and high values (AC-569).

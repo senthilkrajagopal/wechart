@@ -184,6 +184,7 @@ import {
   clickedMarkItem,
   clickedValue,
   clickMarksCategory,
+  isTiledKpi,
   membersDrawn,
   seriesCountOf,
   type ClickedItem,
@@ -2898,6 +2899,8 @@ export function DashboardView({
               // What it draws, not what its type suggests: a bar chart of two
               // measures draws two series (T123's review).
               seriesCount: seriesCountOf(spec),
+              // A tiled KPI says a highlight's share on each tile (T941, AC-568).
+              tiledKpi: isTiledKpi(spec),
             },
       );
 

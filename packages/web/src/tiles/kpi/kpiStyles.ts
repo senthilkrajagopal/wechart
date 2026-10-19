@@ -50,6 +50,20 @@ export const KPI_CSS = `
   border-radius: 4px;
 }
 .kpi-tile .kpi__label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A tile is its member (T941, AC-568): marked, the 1.5 px marking outline in
+   its colour (--kpi-mark, set inline), drawn as an inset ring a browser
+   doesn't round to whole pixels as it does a border or an outline, and
+   "● Marked"; the others, while any is, their
+   numbers in text-secondary and their micro-charts at 0.28. */
+.kpi-tiles__list .kpi-tile { cursor: pointer; }
+.kpi-tile--marked { box-shadow: inset 0 0 0 1.5px var(--kpi-mark); }
+.kpi-tile__marked {
+  font-size: var(--wc-text-xs-size);
+  line-height: 16px;
+  color: var(--wc-text-secondary);
+}
+.kpi-tile--dimmed .kpi-tile__value { color: var(--wc-text-secondary); }
+.kpi-tile--dimmed svg { opacity: 0.28; }
 .kpi-tile__value {
   font-size: 32px;
   line-height: 40px;

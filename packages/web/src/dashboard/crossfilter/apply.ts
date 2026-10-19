@@ -134,7 +134,10 @@ export function highlightKind(
    * not say (T123's review).
    */
   seriesCount = 1,
+  /** A KPI tiled by a dimension, which says the selection's share on each tile (T941, AC-568). */
+  tiledKpi = false,
 ): HighlightKind {
+  if (tiledKpi) return 'share';
   if (SHARE_TYPES.has(chartType) && seriesCount === 1) return 'share';
   if ((SHARE_TYPES.has(chartType) || FADE_TYPES.has(chartType)) && groupsByMember) return 'fade';
   return 'filter';
@@ -152,6 +155,8 @@ export interface TargetTile {
   readonly members: readonly string[];
   /** How many series it draws; the share's overlay needs exactly one. */
   readonly seriesCount?: number | undefined;
+  /** A KPI tiled by a dimension (T941, AC-568). */
+  readonly tiledKpi?: boolean | undefined;
 }
 
 export interface CrossEffects {
@@ -196,6 +201,7 @@ export function effectsOn(
                 tile.chartType,
                 tile.members.includes(selection.member),
                 tile.seriesCount,
+                tile.tiledKpi === true,
               );
         // A type that can show neither drawing is filtered instead, rather
         // than left unchanged: the pair asked for the selection to reach it.
