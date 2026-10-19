@@ -1217,6 +1217,59 @@ describe('opening a saved query whose source is no longer available (T814, AC-45
     expect(screen.getByRole('dialog', { name: 'Save query' })).toBeTruthy();
   });
 
+  // The checkpoint review of T827 (AC-480), as T816's review guarded ⌘/Ctrl+S:
+  // a new tab would unmount the open tab's Save…, and the name typed in it with it.
+  it('opens no tab on Ctrl+Q while Save… is open, keeping the name typed in it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+        if (url === '/api/sql/sources') return json(listed);
+        if (url === '/api/sql/saved') return json({ queries: [] });
+        if (url === '/api/data-sources/emea')
+          return json({
+            id: 'emea',
+            folderId: 'f-sales',
+            name: 'emea_replica',
+            driver: 'postgres',
+            authMethod: 'password',
+            fields: { host: 'h', port: 5432, database: 'sales', user: 'cube_reader', ssl: false },
+            secrets: {},
+            targetFolderId: null,
+            origin: null,
+            version: 1,
+            updatedAt: '2026-10-17T10:00:00Z',
+            folderPath: [{ id: 'f-sales', title: 'Sales' }],
+            canWrite: true,
+            inWorkspace: false,
+            description: null,
+            sqlRunner: { on: true },
+            sqlAccess: { tab: true, runs: true },
+          });
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+    renderAs(writer);
+    const picker = await screen.findByRole('button', { name: 'Data source Choose…' });
+    await userEvent.click(picker);
+    await userEvent.click(screen.getByRole('option', { name: /emea_replica/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Save…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Save query' });
+    const name = within(dialog).getByRole('textbox', { name: 'Name' });
+    await userEvent.type(name, 'EMEA month end');
+    // Behind the dialog, so found hidden or not.
+    const names = () => screen.getAllByRole('tab', { hidden: true }).map((tab) => tab.textContent);
+    const before = names();
+    expect(before).toHaveLength(1);
+
+    // Held by the dialog: not the browser's either.
+    expect(fireEvent.keyDown(name, { key: 'q', code: 'KeyQ', ctrlKey: true })).toBe(false);
+
+    expect(names()).toEqual(before);
+    const still = within(screen.getByRole('dialog', { name: 'Save query' })).getByRole('textbox', { name: 'Name' });
+    expect((still as HTMLInputElement).value).toBe('EMEA month end');
+  });
+
   it('shows Saved first, and History, all the user’s runs, on its button in the right pane (T817, AC-381)', async () => {
     vi.stubGlobal(
       'fetch',

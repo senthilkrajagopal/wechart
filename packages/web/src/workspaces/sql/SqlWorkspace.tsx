@@ -560,12 +560,18 @@ function Workbench({
       element?.removeEventListener('keydown', onKeyDown);
     };
   }, [saveKeys.onKeyDown]);
-  /** Ctrl+Q anywhere in the workspace: a new tab on the open tab's source (T827, AC-480). */
+  /**
+   * Ctrl+Q anywhere in the workspace: a new tab on the open tab's source
+   * (T827, AC-480). Nothing more while a dialog is open in it, Save… or Save
+   * as new… say, as ⌘/Ctrl+S (T816's review): a new tab would unmount the
+   * open tab's dialog, and what was typed in it.
+   */
   useEffect(() => {
     const element = workspace.current;
     const onKeyDown = (event: KeyboardEvent) => {
       if (tabKeyOf(event) !== 'new') return;
       event.preventDefault();
+      if (element?.querySelector('[role="dialog"][aria-modal="true"]') != null) return;
       dispatch({ kind: 'add' });
     };
     element?.addEventListener('keydown', onKeyDown);
