@@ -32,3 +32,9 @@ Lane CHARTS-B's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Files: `packages/core/src/chart-types/sankey.ts` (+ test), `packages/web/src/editor/wells/sankey.tsx` (+ test).
   - Failing test: `sankey.test.ts`: Channel → Region → Category with Revenue makes one Cube request of the three dimensions and links only adjacent pairs; a fifth step and an average are refused; `sankey.test.tsx` (wells): one step says "A Sankey shows flows between steps. Add a second dimension to Steps." with + Step (AC-610, AC-037).
   - Depends on: T934
+
+- [x] T992 (AC-592) The violin: the category's colour at 0.24 with a 1.5 px edge, the box narrowing to 20 px inside it
+  - Files: `packages/charts/src/series/violin.ts` (+ test), `packages/charts/src/series/boxplot.ts`.
+  - Failing test: `violin.test.ts`: with Violin on, each Region has a violin in its colour at opacity 0.24 with a 1.5 px edge and its box 20 px wide inside it (AC-592).
+  - Depends on: T990
+  - Waits on: research: `@echarts-x/custom-violin` (version, licence, maintenance, its KDE options), before import; wechart's own custom series if it's unmaintained (23-Q10 (a)).

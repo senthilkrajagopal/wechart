@@ -694,7 +694,11 @@ export function withBoxMarks(
     else alike.push(row);
   }
 
-  const [boxes, outliers, ...rest] = series;
+  // The boxes, then their points where Points draws any; anything after (a
+  // violin, T992) is left as it is.
+  const [boxes, ...after] = series;
+  const outliers = after[0]?.['type'] === 'scatter' ? after[0] : undefined;
+  const rest = outliers === undefined ? after : after.slice(1);
   const seen = new Map<string, number>();
   return {
     ...option,

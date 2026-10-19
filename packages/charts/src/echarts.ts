@@ -16,6 +16,7 @@
 import {
   BarChart,
   BoxplotChart,
+  CustomChart,
   HeatmapChart,
   LineChart,
   MapChart,
@@ -40,6 +41,9 @@ import { SVGRenderer } from 'echarts/renderers';
 echarts.use([
   BarChart,
   BoxplotChart,
+  // The box plot's violin (T992), wechart's own custom series
+  // (research/echarts-violin.md).
+  CustomChart,
   LineChart,
   ScatterChart,
   PieChart,

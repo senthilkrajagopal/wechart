@@ -2458,11 +2458,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T991 (AC-592, AC-306) Points as None, All or Beeswarm, these two from a fixed seed, 8 px at 0.6, falling back to All with a note where a beeswarm can't fit
 
-- [ ] T992 (AC-592) The violin: the category's colour at 0.24 with a 1.5 px edge, the box narrowing to 20 px inside it
-  - Files: `packages/charts/src/series/violin.ts` (+ test), `packages/charts/src/series/boxplot.ts`.
-  - Failing test: `violin.test.ts`: with Violin on, each Region has a violin in its colour at opacity 0.24 with a 1.5 px edge and its box 20 px wide inside it (AC-592).
-  - Depends on: T990
-  - Waits on: research: `@echarts-x/custom-violin` (version, licence, maintenance, its KDE options), before import; wechart's own custom series if it's unmaintained (23-Q10 (a)).
+- [x] T992 (AC-592) The violin: the category's colour at 0.24 with a 1.5 px edge, the box narrowing to 20 px inside it
 
 - [ ] T993 (AC-593) Mark a box plot's points by entity ID, at most 1,000, and add points and violin to its text alternative, with "View points"
   - Files: `packages/charts/src/series/boxplot.ts`, `packages/charts/src/describe/boxplot.ts` (+ test), `packages/web/src/tiles/tableView/boxplot.ts` (+ test), `packages/charts/src/series/boxplotMarking.test.ts`.

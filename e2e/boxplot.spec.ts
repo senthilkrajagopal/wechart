@@ -491,3 +491,67 @@ test('a box plot draws its points as None, Outliers, All or Beeswarm, the swarm 
   await expect(dotsIn(chart)).toHaveCount(0);
   await expect(chart.locator('path[fill="#fff"]')).not.toHaveCount(0);
 });
+
+/**
+ * T992 / AC-592 (violin): THE SYSTEM SHALL draw a box plot's violin in the
+ * category's colour at 0.24 with a 1.5 px edge, the box narrowing to 20 px
+ * inside it. `Fails when: a size or opacity differs; …`
+ *
+ * The real surface: the editor's preview, Violin switched on in Customize ›
+ * Distribution over the seed's 240 orders, 80 a status.
+ */
+test('a box plot draws a violin per status in its colour, the box 20 px inside it', async ({
+  page,
+  request,
+}) => {
+  const id = await boxPlot(request, [], 'orders.id');
+  await page.goto(`/explore/charts/${id}/edit`);
+  await expectChartType(page, 'boxplot');
+  const chart = page.getByTestId('editor-result').locator('svg').first();
+  await expect(chart).toContainText('completed');
+  const violins = chart.locator('[fill-opacity="0.24"][stroke-width="1.5"]');
+  const filled = chart.locator('path[fill="#fff"]');
+  await expect(violins).toHaveCount(0);
+  await expect(filled).toHaveCount(3);
+  // The boxes by their outline's colour: filled white, or open over a violin.
+  const outline = (await filled.first().getAttribute('stroke')) ?? '';
+  const boxes = chart.locator(
+    `path[stroke="${outline}"][fill="#fff"], path[stroke="${outline}"][fill="none"]:not([fill-opacity])`,
+  );
+  const widths = () =>
+    boxes.evaluateAll((all) => all.map((box) => Math.round(box.getBoundingClientRect().width)));
+  await expect(boxes).toHaveCount(3);
+  const before = await widths();
+  for (const width of before) expect(width).toBeGreaterThan(20);
+
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  await page.getByRole('checkbox', { name: /^Violin/ }).check();
+
+  // One violin a status, each in its own colour, its edge that colour.
+  await expect(violins).toHaveCount(3);
+  const painted = await violins.evaluateAll((all) =>
+    all.map((one) => ({ fill: one.getAttribute('fill'), stroke: one.getAttribute('stroke') })),
+  );
+  for (const one of painted) expect(one.stroke).toBe(one.fill);
+  expect(new Set(painted.map((one) => one.fill)).size).toBe(3);
+  // Each box 20 px wide and open, inside its violin's span.
+  await expect(filled).toHaveCount(0);
+  await expect.poll(widths).toEqual([20, 20, 20]);
+  const inside = await chart.evaluate((svg, stroke) => {
+    const spans = [...svg.querySelectorAll('[fill-opacity="0.24"][stroke-width="1.5"]')].map(
+      (one) => one.getBoundingClientRect(),
+    );
+    const open = `path[stroke="${stroke}"][fill="none"]:not([fill-opacity])`;
+    return [...svg.querySelectorAll(open)].map((box) => {
+      const own = box.getBoundingClientRect();
+      const centre = own.left + own.width / 2;
+      return spans.some((span) => span.left <= own.left && own.right <= span.right && centre > 0);
+    });
+  }, outline);
+  expect(inside).toEqual([true, true, true]);
+
+  // Off again: no violin, and the boxes as wide as before.
+  await page.getByRole('checkbox', { name: /^Violin/ }).uncheck();
+  await expect(violins).toHaveCount(0);
+  await expect.poll(widths).toEqual(before);
+});

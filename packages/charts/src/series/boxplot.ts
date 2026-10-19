@@ -24,6 +24,7 @@ import { nameWriter } from '../modelWriter';
 import type { EChartsOption } from '../theme';
 import { CHART_FONT } from '../themed';
 import { categoryAxisPx, DEFAULT_CANVAS, type Canvas } from './bar';
+import { BOX_IN_VIOLIN_WIDTH, densityOf, violinSeries } from './violin';
 
 export function isBoxplotType(chartType: string): boolean {
   return chartType === 'boxplot';
@@ -296,7 +297,43 @@ export function distributionNotes(spec: RenderSpec, canvas: Canvas = DEFAULT_CAN
 
 export function boxplotOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EChartsOption {
   if (!isBoxplotType(spec.chartType)) throw new Error(`${spec.chartType} is not a box plot`);
+  const option = boxesAndPoints(spec, canvas);
+  const { violin } = drawnDistribution(spec.options, spec.eachPointIs !== undefined);
+  if (!violin) return option;
 
+  // Customize › Distribution's Violin (T992, AC-592): each category's violin
+  // in its colour, under its box, which narrows to 20 px inside it. Last of
+  // the series, so the box and its points keep their places (the marking
+  // reads them by place).
+  const byCategory = valuesByCategory(spec);
+  const violins = boxesOf(spec).map(({ name }, index) => ({
+    name,
+    density: densityOf(byCategory.get(name) ?? []),
+    colour: colourFor(spec, name, index),
+  }));
+  const [box, ...rest] = (option['series'] as Record<string, unknown>[] | undefined) ?? [];
+  return {
+    ...option,
+    series: [
+      // Open, so the violin shows through where its values gather, as sheet
+      // 11 draws it (T992's review).
+      ...(box === undefined
+        ? []
+        : [
+            {
+              ...box,
+              boxWidth: [...BOX_IN_VIOLIN_WIDTH],
+              itemStyle: { ...(box['itemStyle'] as object | undefined), color: 'none' },
+            },
+          ]),
+      ...rest,
+      violinSeries(`${memberOn(spec.encoding, 'y') ?? ''} (violin)`, violins),
+    ],
+  };
+}
+
+/** The boxes and their points as Points draws them, without a violin. */
+function boxesAndPoints(spec: RenderSpec, canvas: Canvas): EChartsOption {
   const value = memberOn(spec.encoding, 'y') ?? '';
   // One series, so one colour: the measure's, as every renderer picks it (AC-039).
   const colour = colourFor(spec, value, 0);

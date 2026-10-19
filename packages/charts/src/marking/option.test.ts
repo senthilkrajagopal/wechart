@@ -375,6 +375,23 @@ describe('each item marked by its own rows (T507)', () => {
 
       expect(isFaded(outliers?.data[0])).toBe(true);
     });
+
+    // T992: with Points at None, the violin follows the boxes; it isn't
+    // their points, so no item of it is read as an outlier's row.
+    it('leaves a violin’s items alone, with no points between it and the boxes', () => {
+      const violin = (marked: readonly string[]): RenderSpec => ({
+        ...boxplot(EACH, marked),
+        eachPointIs: EACH,
+        options: { distribution: { points: 'none', violin: true } },
+      });
+      const [boxes, second] = seriesIn(optionFor(violin(['c3', 'c9'])));
+      expect(isFaded(boxes?.data[1])).toBe(true);
+      const unmarkedSpec = Object.fromEntries(
+        Object.entries(violin([])).filter(([key]) => key !== 'marking'),
+      ) as unknown as RenderSpec;
+      const [, unmarked] = seriesIn(optionFor(unmarkedSpec));
+      expect(second?.data).toEqual(unmarked?.data);
+    });
   });
 
   /**

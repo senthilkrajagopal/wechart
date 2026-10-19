@@ -14,6 +14,7 @@ import * as echarts from 'echarts/core';
 import {
   BarChart,
   BoxplotChart,
+  CustomChart,
   HeatmapChart,
   LineChart,
   MapChart,
@@ -38,6 +39,7 @@ echarts.use([
   LabelLayout,
   BarChart,
   BoxplotChart,
+  CustomChart,
   LineChart,
   ScatterChart,
   PieChart,
