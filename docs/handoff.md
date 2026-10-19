@@ -7,7 +7,7 @@ Read this first when resuming. It holds only the current state and the rules in 
 The user's instruction in force: "complete all things that you have started.. and deploy it.. and dont start anything new". The user paused with: "stop all and prepare a handoff … so that if the limits runout.. we have a way of resume".
 
 - **Branch:** all work is on `feat/xcube`, which is at **6af8d0dc** or later (this handoff's commit). The user pushes, or asks for a push.
-- **Deployed** on docker-desktop k8s (namespace `wechart`, http://localhost:8089): **6be59df1** (verify.sh 46/46), with xcube bb188d8ada, sign-in on, and MCP off. **Not deployed yet:** everything after 6be59df1, including the **16-colour fix** the user asked for (b5914de6), which is the reason for the next deploy. `wechart-api|web:593d6077` is kept as a rollback image.
+- **Deployed** on docker-desktop k8s (namespace `wechart`, http://localhost:8089): **d31c6ee8** (2026-10-19, verify.sh 46/46), with xcube bb188d8ada, sign-in on, and MCP off. It includes the **16-colour fix** (b5914de6). It was deployed at the user's request before step 1 was resolved. `wechart-api|web:6be59df1` is kept as a rollback image. feat/xcube is pushed to GitHub at d31c6ee8.
 - **Nothing is running.** Every lane agent is stopped. No lane has uncommitted work.
 
 ### What is left (9 ACs; the rest is parked or held)
@@ -15,7 +15,7 @@ The user's instruction in force: "complete all things that you have started.. an
 | Step | ACs it ticks | Where |
 |---|---|---|
 | 1. **Resolve `e2e/acceleration.spec.ts:267`.** It failed 3 of 3 at checkpoint 5: `locator.click` times out on the tile ⋯ › "Data as of" submenu's "Edit schedule in Model" ("waiting for element to be visible, enabled and stable" ×229), after coming back from "Open in Jobs". It passed on a rerun at checkpoint 4 and is in the lanes' known-flake list, but it is now consistently red. Suspects: a re-render loop that keeps the submenu from settling (`useDashboardColourAssignment` sets state during render, and the colour fix added a per-tile fallback), or the dashboard parameter state. A debug lane (`laneDBG1`, worktree `.claude/worktrees/agent-a15b10a901fa57aed`) was stopped before it found anything. Run the test with `--trace on`, and bisect 203c03c5..b5914de6 if needed. | none |
-| 2. **Deploy** (see Deploy below), then update the "Deployed" line here. The user is waiting to see the colours on the Sales dashboard. | none |
+| 2. ~~Deploy~~ Done as d31c6ee8. Redeploy if step 1 changes app code. | none |
 | 3. **T1013** (lane CHARTS-B): keyboard marking on Sankey nodes (by step, then links), parallel lines (by the first axis) and map regions (by name, then points). `keyToMarking` has an `'unmark'` action for Esc (decision T971-1). KPI tiles, bullets and graphical-table rows are already done (T971 and its follow-up). | AC-563 |
 | 4. **T1014** (lane CHARTS-B): a dashboard of lane B's types, e2e. | AC-305, AC-622, AC-623, AC-625, AC-626 (all built; their ticks wait on this e2e) |
 | 5. **Checkpoint 6** over 6af8d0dc..HEAD: typecheck, the full unit suite, the real-Chrome main and security e2e, and one cold spec-review. | — |
@@ -62,7 +62,7 @@ helm upgrade --install wechart deploy/helm/wechart --kube-context docker-desktop
 deploy/helm/verify.sh --no-install
 ```
 
-`verify.sh` takes the same values files through EXTRA_VALUES. Never touch the k8s `charter` namespace. The Northwind Sales and Shipping dashboards on the deploy hold the new chart types (combo, parallel coordinates, box plot), which the user approved.
+Run verify as `EXTRA_VALUES="deploy/helm/values/docker-desktop-security.yaml" deploy/helm/verify.sh --no-install`: paths only, with no `-f`. Never touch the k8s `charter` namespace. The Northwind Sales and Shipping dashboards on the deploy hold the new chart types (combo, parallel coordinates, box plot), which the user approved.
 
 ## How the work runs
 
