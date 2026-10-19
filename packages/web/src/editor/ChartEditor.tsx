@@ -10,6 +10,7 @@ import {
   onOneScale,
   removeFromWell,
   swapMeasure,
+  targetCount,
   granularitiesOf,
   seriesOf,
   toCubeQuery,
@@ -566,6 +567,7 @@ function EditorBody({
       (name) => available.find((member) => member.name === name)?.type === 'number',
     ).length,
     eachPointIs: spec.eachPointIs === undefined ? 0 : 1,
+    targets: targetCount(options), // A bullet chart's Target (T953, AC-580).
   };
 
   const recommendation = useMemo(() => recommend(signature), [signature]);

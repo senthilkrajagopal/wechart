@@ -196,3 +196,94 @@ test('a graphical table takes Rows, Group rows by and ordered columns, moved and
       .getByRole('radio', { name: 'Lower is better' }),
   ).toBeChecked();
 });
+
+/**
+ * T953 / AC-580: THE SYSTEM SHALL offer the bullet chart only while Target
+ * holds a measure or a value, its card otherwise greyed with "Put a measure
+ * or a value in Target"; take Metrics, Target, Bands as 2 or 3 percentages
+ * of the target (80 %, 100 % and 120 % by default), and one dimension; refuse
+ * a fourth band, saying "At most 3 bands: R80's three greys, and no fourth
+ * without a new colour."; and with Target emptied, say "A bullet chart
+ * compares each member with a target. Put a measure or a value in Target."
+ * with the Target well as its action.
+ * `Fails when: a bullet chart can be drawn with no target; fewer than 2 or
+ * more than 3 bands can be set; the defaults differ; or a sentence or action
+ * is missing.` And AC-217 (R81): a greyed card chosen highlights the well it
+ * needs; AC-037 (R81): the spec, saved and reopened, is the same.
+ */
+test('a bullet chart is drawable only with a Target, takes 2 or 3 bands from 80, 100 and 120 %, and keeps them through a save', async ({
+  page,
+}) => {
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+  await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
+  const id = /\/explore\/charts\/([^/]+)\/edit/.exec(page.url())?.[1] ?? '';
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await expect(page.getByTestId('member-orders.count')).toBeVisible();
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+
+  // Greyed with what it needs, and still chosen: Target highlighted.
+  await page.getByTestId('chart-type-change').click();
+  const gallery = page.getByRole('dialog', { name: 'Choose chart type' });
+  await gallery.getByRole('button', { name: 'All charts' }).click();
+  const card = gallery.getByTestId('type-card-bullet');
+  await expect(card).toHaveAttribute('data-drawable', 'false');
+  await expect(card.locator('.type-card__missing')).toHaveText(
+    'Put a measure or a value in Target',
+  );
+  await card.click();
+  await expectChartType(page, 'bullet');
+  const target = page.getByTestId('well-bullet-target');
+  await expect(target).toHaveAttribute('data-highlight', 'true');
+  await expect(target).toContainText(
+    'A bullet chart compares each member with a target. Put a measure or a value in Target.',
+  );
+  // Not drawn with no target.
+  await expect(page.getByTestId('missing-fields')).toContainText(
+    'Put a measure or a value in Target',
+  );
+
+  // Target is the action.
+  await target
+    .getByRole('combobox', { name: 'Target', exact: true })
+    .selectOption('orders.total_amount');
+  await expect(page.getByTestId('missing-fields')).toHaveCount(0);
+  await expect(target).not.toContainText('compares each member with a target');
+
+  // Bands: 80, 100 and 120 % by default; a fourth refused; two at least.
+  const bands = page.getByRole('group', { name: 'Bands' });
+  await expect(bands.getByRole('spinbutton')).toHaveCount(3);
+  for (const [at, band] of ['80', '100', '120'].entries())
+    await expect(bands.getByRole('spinbutton').nth(at)).toHaveValue(band);
+  // Disabled by `aria-disabled`, so still reached, and pressed, from the keyboard.
+  await bands.getByRole('button', { name: '+ Band' }).press('Enter');
+  await expect(bands).toContainText(
+    'At most 3 bands: R80’s three greys, and no fourth without a new colour.',
+  );
+  await expect(bands.getByRole('spinbutton')).toHaveCount(3);
+  await bands.getByRole('button', { name: 'Remove band 3, 120 %' }).click();
+  await expect(bands.getByRole('spinbutton')).toHaveCount(2);
+  await bands.getByRole('button', { name: 'Remove band 2, 100 %' }).press('Enter');
+  await expect(bands).toContainText('At least 2 bands: a bullet chart’s bands are 2 or 3.');
+  await expect(bands.getByRole('spinbutton')).toHaveCount(2);
+  const first = bands.getByRole('spinbutton', { name: 'Band 1, % of target' });
+  await first.fill('90');
+  await first.press('Enter');
+
+  const title = `Bullet ${String(Date.now())}`;
+  const head = page.getByTestId('editor-bar');
+  await head.getByLabel('Chart title').fill(title);
+  await head.getByRole('button', { name: '← Back to Explore' }).click();
+  await expect(page).toHaveURL(new RegExp(`/explore/charts/${id}$`));
+
+  // Reopened: the same target and bands.
+  await page.goto(`/explore/charts/${id}/edit`);
+  await expectChartType(page, 'bullet');
+  await expect(
+    page.getByTestId('well-bullet-target').getByRole('combobox', { name: 'Target', exact: true }),
+  ).toHaveValue('orders.total_amount');
+  const reopened = page.getByRole('group', { name: 'Bands' }).getByRole('spinbutton');
+  await expect(reopened).toHaveCount(2);
+  await expect(reopened.nth(0)).toHaveValue('90');
+  await expect(reopened.nth(1)).toHaveValue('100');
+});

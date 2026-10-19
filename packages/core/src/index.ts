@@ -403,4 +403,17 @@ export {
   type SankeyLink,
   type SankeySettings,
 } from './chart-types/sankey';
+export {
+  BULLET_NO_TARGET,
+  bandsRefusal,
+  bulletModule,
+  bulletOptionsOf,
+  DEFAULT_BANDS,
+  MAX_BANDS,
+  MIN_BANDS,
+  targetCount,
+  withBulletOptions,
+  type BulletSettings,
+  type BulletTarget,
+} from './chart-types/bullet';
 export { sealSecretV1, type XcubeKey } from './data-sources/seal';
