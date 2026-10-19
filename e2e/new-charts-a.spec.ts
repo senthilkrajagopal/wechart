@@ -1776,6 +1776,88 @@ test('one measure over time is drawn as a Line in Auto, "KPI with trend" next, a
 });
 
 /**
+ * AC-031: WHEN a chart would exceed a channel's capacity, THE SYSTEM SHALL
+ * reject that candidate: more than 8 colour categories, more than 20 trellis
+ * panels, more than 6 pie slices, or more than 200 heatmap cells; and, from
+ * R81, … a KPI tiled by more than 20 members, … and a … 100 % stack … of a
+ * measure that isn't summed.
+ * `Fails when: a candidate over any cap is offered as the top pick or a
+ * runner-up (amended 2026-10-18: R81's caps included).`
+ * The parked types' caps (bubble, calendar heatmap, icicle, waterfall) go
+ * with them; the Sankey's are lane B's (T1012). On the real editor and the
+ * sample: 240 orders, 4 countries, 3 statuses.
+ */
+test('the editor offers no candidate over a channel’s cap, R81’s KPI tiles and 100 % stacks among them', async ({
+  page,
+}) => {
+  /** A new chart of these fields, and what the recommender offers for it. */
+  const offeredFor = async (fields: {
+    measures: string[];
+    dimensions?: string[];
+    times?: string[];
+  }) => {
+    await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+    await cubePicker(page).selectOption({ label: 'Orders' });
+    await expect(page.getByTestId('member-orders.count')).toBeVisible();
+    for (const measure of fields.measures) await wellPicker(page, 'measures').selectOption(measure);
+    for (const dimension of fields.dimensions ?? [])
+      await wellPicker(page, 'dimensions').selectOption(dimension);
+    for (const time of fields.times ?? [])
+      await wellPicker(page, 'timeDimensions').selectOption(time);
+    await expect(page.getByTestId('result-row-count')).toBeVisible();
+    await page.getByRole('button', { name: 'Why this recommendation?' }).click();
+    const picked = await page.getByTestId('picked-type').getAttribute('data-chart-type');
+    const runnersUp = await page
+      .locator('[data-testid^="runner-up-"]')
+      .evaluateAll((all) => all.map((one) => one.getAttribute('data-testid')?.slice(10) ?? ''));
+    return [picked ?? '', ...runnersUp];
+  };
+  const OVER_TIME_BY_COLOUR = ['line', 'multiLine', 'area', 'stackedArea', 'stackedArea-100'];
+
+  // Count over time by 240 orders: colour (8) and panels (20) too many, and
+  // a KPI's tiles (20).
+  const byOrder = await offeredFor({
+    measures: ['orders.count'],
+    dimensions: ['orders.id'],
+    times: ['orders.ordered_at'],
+  });
+  for (const over of [...OVER_TIME_BY_COLOUR, 'bar', 'trellis', 'kpi'])
+    expect(byOrder).not.toContain(over);
+  // …which by 4 countries, within every cap, are offered: a KPI tile each.
+  const byCountry = await offeredFor({
+    measures: ['orders.count'],
+    dimensions: ['customers.country'],
+    times: ['orders.ordered_at'],
+  });
+  expect(byCountry[0]).toBe('line');
+  expect(byCountry).toContain('kpi');
+
+  // Count by 240 orders: a pie of more than 6 slices.
+  expect(await offeredFor({ measures: ['orders.count'], dimensions: ['orders.id'] })).not.toContain(
+    'pie',
+  );
+  // By 240 orders and 4 countries: 960 heatmap cells.
+  expect(
+    await offeredFor({
+      measures: ['orders.count'],
+      dimensions: ['orders.id', 'customers.country'],
+    }),
+  ).not.toContain('heatmap');
+
+  // A 100 % stack of an average: never; of a sum, beside the stack at Sum.
+  const average = await offeredFor({
+    measures: ['orders.average_amount'],
+    dimensions: ['orders.status', 'customers.country'],
+  });
+  expect(average).not.toContain('stackedBar-100');
+  const summed = await offeredFor({
+    measures: ['orders.total_amount'],
+    dimensions: ['orders.status', 'customers.country'],
+  });
+  expect(summed).toContain('stackedBar-100');
+});
+
+/**
  * T969 / AC-561: WHEN the chart's fields change, THE SYSTEM SHALL offer as a
  * runner-up, never the top pick, each with its reason of at most 80
  * characters: … 100 % stacked bar …, beside Stacked bar …, for at most 8
