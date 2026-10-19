@@ -2345,10 +2345,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T983 (AC-599) Brush along parallel axes to mark the members passing every brushed range, as a member list of at most 1,000, and cross-filter to them
 
-- [ ] T984 (AC-600) A From and a To slider per parallel axis, named after its measure, setting its brush from the keyboard
-  - Files: `packages/web/src/tiles/ParallelSliders.tsx` (+ test).
-  - Failing test: `ParallelSliders.test.tsx`: in Markings mode each axis has `input type="range"` named "Margin % from" and "Margin % to"; Tab reaches them and → moves them; setting 22 % and 26 % marks the same 6 Products the drag did (AC-600).
-  - Depends on: T983
+- [x] T984 (AC-600) A From and a To slider per parallel axis, named after its measure, setting its brush from the keyboard
 
 - [ ] T985 (AC-601) The text alternative and the table view of parallel coordinates
   - Files: `packages/charts/src/describe/parallel.ts` (+ test), `packages/web/src/tiles/tableView/parallel.ts` (+ test).

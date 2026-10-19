@@ -20,6 +20,7 @@ import { PivotTable } from './PivotTable';
 import { TileEmpty } from './TileEmpty';
 import { LogScaleNote } from './LogScaleNote';
 import { ParallelNotes } from './ParallelNotes';
+import { ParallelSliders } from './ParallelSliders';
 import { SankeyNotes } from './SankeyNotes';
 import { UnplacedCodes } from './UnplacedCodes';
 
@@ -548,6 +549,10 @@ export function ChartTile({
             ? { onTable: () => setAsTable(true) }
             : {})}
         />
+      ) : null}
+      {/* Parallel coordinates' brushes from the keyboard, where the tile brushes (T984, AC-600). */}
+      {spec.chartType === 'parallel' && onBrush !== undefined && !showingTable ? (
+        <ParallelSliders spec={spec} onBrush={onBrush} />
       ) : null}
       {/* A Sankey's split members and its fold, as text (T987, AC-611). */}
       {spec.chartType === 'sankey' && !showingTable ? <SankeyNotes spec={spec} /> : null}

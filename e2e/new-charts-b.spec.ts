@@ -711,6 +711,41 @@ test('parallel coordinates mark a line by a click, brush along axes with Ctrl ad
   await expect(page.getByTestId('mark-chip')).toContainText(/ID: /);
   await expect(page.getByTestId('mark-chip')).not.toContainText(/ to /);
 
+  /**
+   * T984 / AC-600: WHILE a dashboard is in Markings mode, THE SYSTEM SHALL
+   * give each parallel-coordinate axis a From and a To slider under the chart
+   * (`input type="range"`), named "‹measure› from" and "‹measure› to",
+   * setting that axis's brush as a drag does, reached with Tab and moved with
+   * ← and →. `Fails when: an axis lacks either slider, or its name; moving a
+   * slider marks other members than the same drag would; or a slider can't
+   * be reached or moved from the keyboard.`
+   */
+  const sliders = tile.getByTestId('parallel-sliders');
+  await expect(sliders.locator('input[type="range"]')).toHaveCount(6);
+  for (const measure of ['Count', 'Total Amount', 'Average Amount'])
+    for (const end of ['from', 'to'])
+      await expect(
+        sliders.getByRole('slider', { name: new RegExp(`${measure} ${end}$`) }),
+      ).toHaveCount(1);
+  // Reached with Tab: from Total Amount's From to its To.
+  const totalFrom = sliders.getByRole('slider', { name: /Total Amount from$/ });
+  await totalFrom.focus();
+  await page.keyboard.press('Tab');
+  await expect(sliders.getByRole('slider', { name: /Total Amount to$/ })).toBeFocused();
+  // Moved with →: Total Amount from a fifth of the way up to where its drag
+  // ended, its other brush (Average Amount) kept, as a Ctrl-drag would.
+  await totalFrom.focus();
+  await page.keyboard.press('Home');
+  for (let step = 0; step < 20; step += 1) await page.keyboard.press('ArrowRight');
+  const fifth = total.bottom - (total.bottom - total.top) * 0.2;
+  const keyed = within(1, top, fifth, 1).filter((index) => within(2, low, high, 1).includes(index));
+  const keyedStrict = within(1, top, fifth, -1).filter((index) =>
+    within(2, low, high, -1).includes(index),
+  );
+  await expect.poll(count).toBeLessThanOrEqual(keyed.length);
+  expect(await count()).toBeGreaterThanOrEqual(keyedStrict.length);
+  await expect(tile.locator('svg path[fill-opacity="0.3"]')).toHaveCount(2);
+
   // Cross-filtering, a brush filters the other tile to its members, in one chip.
   const crossing = await parallelDashboard(request, 'crossFilter');
   await page.goto(`/explore/dashboards/${crossing.id}`);

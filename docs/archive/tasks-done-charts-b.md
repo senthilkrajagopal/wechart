@@ -50,6 +50,11 @@ Lane CHARTS-B's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Depends on: T982
   - Waits on: research: ECharts 6.1's `parallel` brush events (`axisareaselected` and what it reports).
 
+- [x] T984 (AC-600) A From and a To slider per parallel axis, named after its measure, setting its brush from the keyboard
+  - Files: `packages/web/src/tiles/ParallelSliders.tsx` (+ test).
+  - Failing test: `ParallelSliders.test.tsx`: in Markings mode each axis has `input type="range"` named "Margin % from" and "Margin % to"; Tab reaches them and → moves them; setting 22 % and 26 % marks the same 6 Products the drag did (AC-600).
+  - Depends on: T983
+
 - [x] T987 (AC-611) Draw the Sankey's nodes and links, split a repeated member as "‹member› (2)", and fold flows past 50 into "Other"
   - Files: `packages/charts/src/series/sankey.ts` (+ test).
   - Failing test: `sankey.test.ts` (series): nodes 12 px wide; the colouring step's nodes in their members' colours, others `text-secondary`; links at 0.4, emphasis 0.6; EMEA in steps 1 and 3 yields a node "EMEA (2)" and the note; 214 flows keep each step's members carrying its top 50 and fold the rest into "Other" with the note (AC-611).
