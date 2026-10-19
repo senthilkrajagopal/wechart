@@ -606,13 +606,20 @@ describe('held to 8 series (AC-505)', () => {
     });
   });
 
-  it('always draws the first measure, folding its members to the top 7 + Other when All is past 8 (decision T853-1)', () => {
+  it('folds no further with All chosen, though one measure alone passes 8 series: none is drawn (AC-505; decision T853-1)', () => {
     expect(comboLimit([REVENUE, TARGET], 21, 'all')).toEqual({
       members: 21,
-      top: 7,
-      drawn: [REVENUE],
-      over: [TARGET],
-      series: 8,
+      drawn: [],
+      over: [REVENUE, TARGET],
+      series: 0,
+    });
+    // A chosen top 9 + Other is 10 series a measure: none is drawn either.
+    expect(comboLimit([REVENUE], 21, 9)).toEqual({
+      members: 21,
+      top: 9,
+      drawn: [],
+      over: [REVENUE],
+      series: 0,
     });
   });
 

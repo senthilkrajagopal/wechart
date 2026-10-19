@@ -412,10 +412,9 @@ export interface ComboLimit {
  * chosen nothing folds further, and whole measures are left out instead.
  *
  * A fold that keeps as many series as it folds ("top 3 + Other" of 4) only
- * hides a member's name, so it isn't made. And the first measure is always
- * drawn: where a choice would give it more than 8 series alone, its members
- * fold to the top 7 + Other (decision T853-1), since drawing nothing at all
- * helps no one.
+ * hides a member's name, so it isn't made. A choice is kept as made, even
+ * where one measure alone would pass 8 series: then none is drawn, each
+ * "not drawn · over 8 series" (AC-505 as written; decision T853-1).
  */
 export function comboLimit(
   measures: readonly string[],
@@ -424,7 +423,7 @@ export function comboLimit(
 ): ComboLimit {
   const limit = COMBO_SERIES_LIMIT;
   const held = (count: number, perMeasure: number, top?: number): ComboLimit => {
-    const drawn = measures.slice(0, Math.max(1, Math.min(measures.length, count)));
+    const drawn = measures.slice(0, Math.min(measures.length, count));
     return {
       members: members ?? 1,
       ...(top === undefined ? {} : { top }),
@@ -444,7 +443,6 @@ export function comboLimit(
   else if (shown !== undefined) fold = folded(shown);
   else if (measures.length * members <= limit) fold = { perMeasure: members };
   else fold = folded(Math.max(1, Math.floor(limit / measures.length) - 1));
-  if (fold.perMeasure > limit) fold = folded(limit - 1);
   return held(Math.floor(limit / fold.perMeasure), fold.perMeasure, fold.top);
 }
 
