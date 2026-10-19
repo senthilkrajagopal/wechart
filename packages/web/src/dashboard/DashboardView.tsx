@@ -129,6 +129,7 @@ import { TextTile } from '../tiles/text/TextTile';
 import { LazyTextEditor, TextEditingContext, type TextEditing } from '../tiles/text/textEditing';
 import type { CopilotOffer, InsertSources } from '../tiles/text/InsertMenu';
 import { insertSourcesOf } from '../tiles/text/insertSources';
+import { copilotOfferFor } from '../tiles/text/copilotOffer';
 import { namesFrom } from '../tiles/text/elementName';
 import { ElementsList } from '../tiles/text/ElementsList';
 import { QueryClientContext } from '@tanstack/react-query';
@@ -5246,13 +5247,11 @@ export function DashboardView({
     [model, live, documents, memberTitle],
   );
   /**
-   * The insert menu's Copilot group (AC-535; decision T881-1): AI isn't set up
-   * in wechart yet (AC-547), so a Super-Admin sees Summarize… disabled with
-   * where to set it up, and anyone else no group.
+   * The insert menu's Copilot group (AC-535; decision T881-1): none while AI
+   * is parked (`copilotOffer.ts`), else a Super-Admin's disabled Summarize….
    */
   const queries = useContext(QueryClientContext);
-  const copilot: CopilotOffer =
-    queries?.getQueryData<Me>(ME_QUERY.queryKey)?.superAdmin === true ? 'setup' : undefined;
+  const copilot: CopilotOffer = copilotOfferFor(queries?.getQueryData<Me>(ME_QUERY.queryKey));
   /**
    * The filter selected while editing, its field, scope and Remove in
    * Properties (T468, UX-031); and whether focus is asked for in its field
