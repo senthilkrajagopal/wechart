@@ -1,4 +1,4 @@
-import { isAdditive, labelOf } from '@wechart/charts';
+import { DEFAULT_PALETTE, isAdditive, labelOf } from '@wechart/charts';
 import {
   formatValue,
   kpiOptionsOf,
@@ -11,7 +11,6 @@ import {
 } from '@wechart/core';
 import { useContext, useLayoutEffect, useState } from 'react';
 
-import { colourOfMember } from '../dashboard/colours';
 import { SecurityPreview } from '../query/securityPreview';
 import { KpiChange, type KpiCompared } from './kpi/KpiChange';
 import { kpiPartsShown } from './kpi/kpiFit';
@@ -198,7 +197,8 @@ function KpiTrendLoaded({
       formats={spec.formats}
       granularity={time.granularity}
       // The measure's dashboard colour (AC-039), as R80's sparkline takes it.
-      colour={spec.colours?.[measure] ?? spec.palette?.[0] ?? colourOfMember({}, measure)}
+      // Unassigned, the palette's first colour, as an empty assignment gives it.
+      colour={spec.colours?.[measure] ?? spec.palette?.[0] ?? DEFAULT_PALETTE[0]}
       width={width}
       shown={shown}
     />
