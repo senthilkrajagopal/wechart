@@ -81,8 +81,16 @@ export function ProposeFlow({
       return (await response.json()) as { id: string; status: string };
     },
     onSuccess: async (proposal) => {
-      await client.invalidateQueries({ queryKey: ['reviews'] });
-      await client.invalidateQueries({ queryKey: ['proposal-of', item.kind, item.id] });
+      /**
+       * A read still on its way began before this proposal, and the first of
+       * one, with no data yet, would be reused by an invalidation rather than
+       * asked again (tanstack-query-mutations.md), leaving the item's row
+       * "Draft" (propose.spec:83 under load). Cancelled first, it is asked anew.
+       */
+      for (const queryKey of [['reviews'], ['proposal-of', item.kind, item.id]]) {
+        await client.cancelQueries({ queryKey });
+        await client.invalidateQueries({ queryKey });
+      }
       onProposed(proposal, checked.data?.targetPath ?? targetPath);
     },
   });

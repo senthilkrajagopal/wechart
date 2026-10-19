@@ -1,8 +1,9 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { REVIEWS_QUERY } from '../reviews/reviews';
 import { ProposeFlow } from './ProposeFlow';
 
 /**
@@ -138,5 +139,63 @@ describe('proposing a workspace item (T358, AC-284)', () => {
       'It is waiting for review already.',
     );
     expect(onProposed).not.toHaveBeenCalled();
+  });
+
+  /**
+   * propose.spec:83's "Draft" under load (lane FIX): Explore's first read of
+   * the proposals was still on its way when Propose answered. Invalidated
+   * then, TanStack Query reuses a first fetch that has no data yet
+   * (tanstack-query-mutations.md, "With no data yet, the in-flight promise is
+   * reused"), so the row kept the answer from before the proposal.
+   */
+  it('reads the proposals afresh once proposed, even while their first read is still on its way', async () => {
+    let firstRead: ((response: Response) => void) | undefined;
+    let reads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url === '/api/proposals/check') return answer(200, CHECKED);
+        if (url === '/api/proposals' && init?.method === 'POST')
+          return answer(201, { id: 'p1', status: 'open' });
+        if (url === '/api/reviews') {
+          reads += 1;
+          if (reads === 1)
+            return new Promise<Response>((resolve) => {
+              firstRead = resolve;
+            });
+          return answer(200, { toReview: [], mine: [{ id: 'p1' }] });
+        }
+        return answer(404, {});
+      }),
+    );
+    function Mine() {
+      const lists = useQuery(REVIEWS_QUERY);
+      return <output aria-label="Mine">{lists.data?.mine.length ?? 'reading'}</output>;
+    }
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <Mine />
+        <ProposeFlow
+          item={{ kind: 'chart', id: 'c1', title: 'Margin' }}
+          targetPath={['Shared', 'Sales', 'EMEA']}
+          onProposed={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Propose to Sales / EMEA' });
+    await within(dialog).findByTestId('propose-item');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Propose' }));
+    // The read from before the proposal arrives only now.
+    await vi.waitFor(() => {
+      expect(firstRead).toBeDefined();
+    });
+    firstRead?.(new Response(JSON.stringify({ toReview: [], mine: [] }), { status: 200 }));
+
+    await vi.waitFor(() => {
+      expect(screen.getByRole('status', { name: 'Mine' }).textContent).toBe('1');
+    });
   });
 });
