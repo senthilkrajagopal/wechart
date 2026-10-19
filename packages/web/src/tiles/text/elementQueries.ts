@@ -55,6 +55,50 @@ export function valueQueryOf(
   return { query: { measures: [measure], ...(filters.length === 0 ? {} : { filters }) } };
 }
 
+/** An element's marking limit (AC-116): its marking's rows, none while nothing is marked. */
+function limitOf(node: Element, marking: MarkingPredicate | undefined): Query[] {
+  if (text(node.attrs?.['marking']) === undefined || marking === undefined) return [];
+  const limit = limitFilterFor([marking], 'all');
+  return limit === undefined ? [] : [limit];
+}
+
+/**
+ * A Sparkline's query (T885, AC-521): its measure in the last ‹n› periods
+ * of its time dimension at its granularity — 12 months where it names
+ * neither (decision T885-1) — newest first, over its marking and under its
+ * own filter.
+ */
+export function sparklineQueryOf(
+  node: Element,
+  time: string,
+  marking: MarkingPredicate | undefined,
+): Query {
+  const measure = text(node.attrs?.['measure']) ?? '';
+  const granularity = text(node.attrs?.['granularity']) ?? 'month';
+  const last = node.attrs?.['last'];
+  const filters = [...limitOf(node, marking), ...ownFilters(node)];
+  return {
+    measures: [measure],
+    timeDimensions: [{ dimension: time, granularity }],
+    order: { [time]: 'desc' },
+    limit: typeof last === 'number' && Number.isInteger(last) && last >= 1 ? last : 12,
+    ...(filters.length === 0 ? {} : { filters }),
+  };
+}
+
+/** A Bullet graph's query (T885): its measure, and its target where that's a measure. */
+export function bulletQueryOf(node: Element, marking: MarkingPredicate | undefined): Query {
+  const measure = text(node.attrs?.['measure']) ?? '';
+  const target = node.attrs?.['target'] as { kind?: unknown; measure?: unknown } | undefined;
+  const targetMeasure =
+    target?.kind === 'measure' && typeof target.measure === 'string' ? target.measure : undefined;
+  const filters = [...limitOf(node, marking), ...ownFilters(node)];
+  return {
+    measures: [measure, ...(targetMeasure === undefined ? [] : [targetMeasure])],
+    ...(filters.length === 0 ? {} : { filters }),
+  };
+}
+
 /** The periods a Change compares, when it names none: a month (decision T884-1). */
 const PERIOD = 'month';
 
@@ -63,10 +107,14 @@ const PERIOD = 'month';
  * dimension, at its period, newest first, under its own filter; the tile's
  * filters, a date filter among them, are added as for any tile.
  */
-export function changeQueryOf(node: Element, time: string): Query {
+export function changeQueryOf(
+  node: Element,
+  time: string,
+  marking?: MarkingPredicate | undefined,
+): Query {
   const measure = text(node.attrs?.['measure']) ?? '';
   const period = text(node.attrs?.['period']) ?? PERIOD;
-  const filters = ownFilters(node);
+  const filters = [...limitOf(node, marking), ...ownFilters(node)];
   return {
     measures: [measure],
     timeDimensions: [{ dimension: time, granularity: period }],

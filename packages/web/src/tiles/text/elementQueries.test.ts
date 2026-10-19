@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { EMPTY_PREDICATE, withItem, type MarkingPredicate } from '@wechart/core';
 
 import { withFilters, type ActiveFilter } from '../../filters/apply';
-import { changeOf, changeQueryOf, timeOf, valueQueryOf } from './elementQueries';
+import {
+  bulletQueryOf,
+  changeOf,
+  changeQueryOf,
+  sparklineQueryOf,
+  timeOf,
+  valueQueryOf,
+} from './elementQueries';
 
 /**
  * T884 / AC-520: a Value shows a measure … optionally limited by a marking,
@@ -72,6 +79,63 @@ describe('what a Value asks Cube (T884, AC-520, AC-116)', () => {
       OWN,
       { member: 'orders.category', operator: 'equals', values: ['Beverages'] },
     ]);
+  });
+});
+
+describe('what a Sparkline and a Bullet graph ask (T885, AC-521, AC-116)', () => {
+  it('asks a Sparkline’s last periods at its granularity, newest first, over its marking', () => {
+    expect(
+      sparklineQueryOf(
+        {
+          type: 'sparkline',
+          attrs: { measure: 'orders.revenue', granularity: 'week', last: 8, marking: 'Picks' },
+        },
+        'orders.created_at',
+        shipped,
+      ),
+    ).toEqual({
+      measures: ['orders.revenue'],
+      timeDimensions: [{ dimension: 'orders.created_at', granularity: 'week' }],
+      order: { 'orders.created_at': 'desc' },
+      limit: 8,
+      filters: [SHIPPED],
+    });
+    // 12 months where it names neither.
+    expect(
+      sparklineQueryOf(
+        { type: 'sparkline', attrs: { measure: 'orders.revenue' } },
+        'orders.created_at',
+        undefined,
+      ),
+    ).toMatchObject({
+      timeDimensions: [{ dimension: 'orders.created_at', granularity: 'month' }],
+      limit: 12,
+    });
+  });
+
+  it('asks a Bullet graph’s measure, with its target where that is a measure', () => {
+    expect(
+      bulletQueryOf(
+        {
+          type: 'bulletGraph',
+          attrs: {
+            measure: 'orders.margin',
+            target: { kind: 'measure', measure: 'orders.margin_target' },
+            filters: [OWN],
+          },
+        },
+        undefined,
+      ),
+    ).toEqual({ measures: ['orders.margin', 'orders.margin_target'], filters: [OWN] });
+    expect(
+      bulletQueryOf(
+        {
+          type: 'bulletGraph',
+          attrs: { measure: 'orders.margin', target: { kind: 'fixed', value: 0.25 } },
+        },
+        undefined,
+      ),
+    ).toEqual({ measures: ['orders.margin'] });
   });
 });
 

@@ -75,7 +75,7 @@ import { hiddenMemberOf, TileUnavailable } from '../tiles/TileUnavailable';
 import { accelerationOf } from '../tiles/AccelerationBadge';
 import { RollupRefreshNote } from '../tiles/RollupRefreshNote';
 import { TileSkeleton } from '../tiles/TileSkeleton';
-import { useDashboardColours } from './colours';
+import { colourOfMember, useDashboardColourAssignment } from './colours';
 import { AddPanel } from './edit/AddPanel';
 import {
   CHART_MISSING,
@@ -132,9 +132,17 @@ import type { CopilotOffer, InsertSources } from '../tiles/text/InsertMenu';
 import { insertSourcesOf } from '../tiles/text/insertSources';
 import { copilotOfferFor } from '../tiles/text/copilotOffer';
 import type { ElementRender } from '../tiles/text/readMapping';
-import { changeQueryOf, timeOf, valueQueryOf } from '../tiles/text/elementQueries';
+import {
+  bulletQueryOf,
+  changeQueryOf,
+  sparklineQueryOf,
+  timeOf,
+  valueQueryOf,
+} from '../tiles/text/elementQueries';
 import { ValueElement } from '../tiles/text/elements/ValueElement';
 import { ChangeElement } from '../tiles/text/elements/ChangeElement';
+import { SparklineElement } from '../tiles/text/elements/Sparkline';
+import { BulletGraphElement } from '../tiles/text/elements/BulletGraph';
 import { namesFrom } from '../tiles/text/elementName';
 import { ElementsList } from '../tiles/text/ElementsList';
 import { QueryClientContext } from '@tanstack/react-query';
@@ -3962,7 +3970,10 @@ export function DashboardView({
   // does not hand its colour to whoever is now first (AC-039).
   // The dashboard as the session has it: a tile added in it — a duplicate's
   // copy (T068) — is drawn, and coloured, before the dashboard is saved.
-  const coloured = useDashboardColours(live, withMarkings);
+  const { specs: coloured, assigned: colourAssignment } = useDashboardColourAssignment(
+    live,
+    withMarkings,
+  );
   /**
    * The charts of tiles marked whole (Mark all, AC-115) that are still
    * filtered as they were then: each draws every item marked. One filtered
@@ -4806,21 +4817,52 @@ export function DashboardView({
     textElementsOf: (tileId: string) => (node, key) => {
       const attrs = node.attrs ?? {};
       const measure = typeof attrs['measure'] === 'string' ? attrs['measure'] : undefined;
-      if (measure === undefined) return undefined;
-      if (node.type === 'value') {
-        const named = typeof attrs['marking'] === 'string' ? attrs['marking'] : undefined;
-        const found =
-          named === undefined
-            ? undefined
-            : markings.find(
-                (each) => each.name.trim().toLowerCase() === named.trim().toLowerCase(),
-              );
-        if (named !== undefined && found === undefined)
-          return <UnknownMarkingToken key={key} name={named} />;
-        const asked = valueQueryOf(
-          node,
-          found === undefined ? undefined : markingOf(marks, found.id),
+      if (measure === undefined || node.type === 'icon' || node.type === 'asOf') return undefined;
+      // The marking it follows, by its name, as a token found one (AC-116).
+      const named = typeof attrs['marking'] === 'string' ? attrs['marking'] : undefined;
+      const found =
+        named === undefined
+          ? undefined
+          : markings.find((each) => each.name.trim().toLowerCase() === named.trim().toLowerCase());
+      if (named !== undefined && found === undefined)
+        return <UnknownMarkingToken key={key} name={named} />;
+      const predicate = found === undefined ? undefined : markingOf(marks, found.id);
+      // Its measure by its short title, as a one-source chart's legend names it.
+      const title = shortTitles?.[measure] ?? memberTitle?.(measure) ?? measure;
+      if (node.type === 'sparkline') {
+        const time = timeOf(node, model);
+        return (
+          <SparklineElement
+            key={key}
+            query={
+              time === undefined
+                ? undefined
+                : withFilters(sparklineQueryOf(node, time, predicate), textFiltersOf(tileId))
+            }
+            title={title}
+            member={measure}
+            attrs={attrs}
+            formats={formats}
+            // Its measure's dashboard colour (AC-039, AC-521).
+            colour={colourOfMember(colourAssignment, measure)}
+            context={preview}
+          />
         );
+      }
+      if (node.type === 'bulletGraph')
+        return (
+          <BulletGraphElement
+            key={key}
+            query={withFilters(bulletQueryOf(node, predicate), textFiltersOf(tileId))}
+            title={title}
+            member={measure}
+            attrs={attrs}
+            formats={formats}
+            context={preview}
+          />
+        );
+      if (node.type === 'value') {
+        const asked = valueQueryOf(node, predicate);
         return (
           <ValueElement
             key={key}
@@ -4841,7 +4883,7 @@ export function DashboardView({
             query={
               time === undefined
                 ? undefined
-                : withFilters(changeQueryOf(node, time), textFiltersOf(tileId))
+                : withFilters(changeQueryOf(node, time, predicate), textFiltersOf(tileId))
             }
             member={measure}
             attrs={attrs}

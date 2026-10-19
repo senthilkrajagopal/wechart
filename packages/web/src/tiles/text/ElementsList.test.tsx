@@ -89,6 +89,58 @@ describe('a Value’s and a Change’s settings (T884, AC-520)', () => {
   });
 });
 
+/**
+ * T885 / AC-521: a Sparkline's granularity, its last ‹n› periods and its
+ * last point; a Bullet graph's target, ranges — up to 3, low to high, a
+ * fourth refused — and its minimum and maximum (design 21 C2, C4).
+ */
+describe('a Sparkline’s and a Bullet graph’s settings (T885, AC-521)', () => {
+  const settingsOf = (element: TextNode) => {
+    const onChange = vi.fn();
+    render(
+      <ElementsList
+        elements={[element]}
+        selected={0}
+        names={names}
+        onSelect={vi.fn()}
+        onChange={onChange}
+      />,
+    );
+    return onChange;
+  };
+
+  it('sets a Sparkline’s granularity, how many periods, and its last point', async () => {
+    const onChange = settingsOf({ type: 'sparkline', attrs: { measure: 'orders.revenue' } });
+    await userEvent.selectOptions(screen.getByLabelText('By'), 'week');
+    expect(onChange).toHaveBeenLastCalledWith(0, { granularity: 'week' });
+    const last = screen.getByLabelText('Show the last');
+    await userEvent.clear(last);
+    await userEvent.type(last, '8');
+    await userEvent.tab();
+    expect(onChange).toHaveBeenLastCalledWith(0, { last: 8 });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Mark the last point' }));
+    expect(onChange).toHaveBeenLastCalledWith(0, { lastPoint: true });
+  });
+
+  it('sets a Bullet graph’s fixed target and ranges, refusing a fourth range', async () => {
+    const onChange = settingsOf({ type: 'bulletGraph', attrs: { measure: 'orders.margin' } });
+    await userEvent.type(screen.getByLabelText('Target'), '0.25');
+    await userEvent.tab();
+    expect(onChange).toHaveBeenLastCalledWith(0, { target: { kind: 'fixed', value: 0.25 } });
+
+    const ranges = screen.getByLabelText('Ranges, low to high');
+    await userEvent.type(ranges, '0.1, 0.2, 0.3, 0.4');
+    await userEvent.tab();
+    expect(screen.getByRole('alert').textContent).toBe('A bullet graph holds up to 3 ranges.');
+    expect(onChange).not.toHaveBeenCalledWith(0, { ranges: [0.1, 0.2, 0.3, 0.4] });
+    await userEvent.clear(ranges);
+    await userEvent.type(ranges, '0.15, 0.2, 0.25');
+    await userEvent.tab();
+    expect(onChange).toHaveBeenLastCalledWith(0, { ranges: [0.15, 0.2, 0.25] });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
 describe('the Elements list (T882, AC-519)', () => {
   it('lists every element in text order, with its kind and source, and "3 of 10"', () => {
     render(<ElementsList elements={ELEMENTS} selected={null} names={names} onSelect={vi.fn()} />);

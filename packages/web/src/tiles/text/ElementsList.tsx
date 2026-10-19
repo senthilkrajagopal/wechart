@@ -1,8 +1,9 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 
 import { TEXT_ELEMENT_LIMIT, type TextNode } from '@wechart/core';
 
 import { elementName, elementParts, type ElementNames } from './elementName';
+import { rangesProblem } from './elements/BulletGraph';
 
 /**
  * A Text tile's Elements in Properties (T882, AC-519; design 21 pin 13,
@@ -132,6 +133,10 @@ function ElementSettings({
         <ValueSettings attrs={attrs} markings={markings} onChange={onChange} />
       ) : element.type === 'change' ? (
         <ChangeSettings attrs={attrs} onChange={onChange} />
+      ) : element.type === 'sparkline' ? (
+        <SparklineSettings attrs={attrs} onChange={onChange} />
+      ) : element.type === 'bulletGraph' ? (
+        <BulletSettings attrs={attrs} onChange={onChange} />
       ) : null}
     </section>
   );
@@ -230,6 +235,182 @@ const PERIODS = [
   ['quarter', 'Quarter'],
   ['year', 'Year'],
 ] as const;
+
+const GRANULARITIES = [
+  ['day', 'Day'],
+  ['week', 'Week'],
+  ['month', 'Month'],
+  ['quarter', 'Quarter'],
+  ['year', 'Year'],
+] as const;
+
+/**
+ * A number field set when it's left, a blank taking the setting away, and
+ * what can't be one refused with its reason, nothing set.
+ */
+function NumberField({
+  label,
+  value,
+  check,
+  onSet,
+}: {
+  label: string;
+  value: string;
+  /** Why the text can't be set, or undefined. */
+  check?: (text: string) => string | undefined;
+  onSet: (text: string) => void;
+}) {
+  const id = useId();
+  const [typed, setTyped] = useState(value);
+  const [problem, setProblem] = useState<string | undefined>(undefined);
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        type="text"
+        inputMode="decimal"
+        value={typed}
+        aria-invalid={problem === undefined ? undefined : true}
+        onChange={(event) => {
+          setTyped(event.target.value);
+        }}
+        onBlur={() => {
+          const refused = check?.(typed.trim());
+          setProblem(refused);
+          if (refused === undefined && typed.trim() !== value) onSet(typed.trim());
+        }}
+      />
+      {problem === undefined ? null : (
+        <p role="alert" className="text-element-settings__problem">
+          {problem}
+        </p>
+      )}
+    </div>
+  );
+}
+
+const asNumber = (typed: string): number | undefined => {
+  if (typed === '') return undefined;
+  const number = Number(typed);
+  return Number.isFinite(number) ? number : undefined;
+};
+const notANumber = (typed: string) =>
+  typed === '' || asNumber(typed) !== undefined ? undefined : 'Type a number.';
+
+/** A Sparkline's: its granularity, how many periods, and its last point (design 21 C2). */
+function SparklineSettings({
+  attrs,
+  onChange,
+}: {
+  attrs: Readonly<Record<string, unknown>>;
+  onChange: (settings: Record<string, unknown>) => void;
+}) {
+  const id = useId();
+  const last = typeof attrs['last'] === 'number' ? attrs['last'] : 12;
+  return (
+    <>
+      <div className="field">
+        <label htmlFor={id}>By</label>
+        <select
+          id={id}
+          value={text(attrs['granularity']) ?? 'month'}
+          onChange={(event) => {
+            onChange({ granularity: event.target.value });
+          }}
+        >
+          {GRANULARITIES.map(([granularity, words]) => (
+            <option key={granularity} value={granularity}>
+              {words}
+            </option>
+          ))}
+        </select>
+      </div>
+      <NumberField
+        label="Show the last"
+        value={String(last)}
+        check={(typed) =>
+          /^[1-9]\d{0,3}$/.test(typed) ? undefined : 'Type a whole number from 1.'
+        }
+        onSet={(typed) => {
+          onChange({ last: Number(typed) });
+        }}
+      />
+      <label className="tile-properties__check">
+        <input
+          type="checkbox"
+          checked={attrs['lastPoint'] === true}
+          onChange={(event) => {
+            onChange({ lastPoint: event.target.checked ? true : null });
+          }}
+        />
+        Mark the last point
+      </label>
+    </>
+  );
+}
+
+/**
+ * A Bullet graph's: a fixed target, its ranges — up to 3, low to high — and
+ * its minimum and maximum (design 21 C4). A measure as its target is set
+ * through the API for now (decision T885-1).
+ */
+function BulletSettings({
+  attrs,
+  onChange,
+}: {
+  attrs: Readonly<Record<string, unknown>>;
+  onChange: (settings: Record<string, unknown>) => void;
+}) {
+  const target = attrs['target'] as { kind?: unknown; value?: unknown } | undefined;
+  const fixed = target?.kind === 'fixed' && typeof target.value === 'number' ? target.value : '';
+  const ranges = Array.isArray(attrs['ranges']) ? (attrs['ranges'] as unknown[]).join(', ') : '';
+  const listed = (typed: string) =>
+    typed === '' ? [] : typed.split(',').map((part) => Number(part.trim()));
+  return (
+    <>
+      <NumberField
+        label="Target"
+        value={String(fixed)}
+        check={notANumber}
+        onSet={(typed) => {
+          const value = asNumber(typed);
+          onChange({ target: value === undefined ? null : { kind: 'fixed', value } });
+        }}
+      />
+      <NumberField
+        label="Ranges, low to high"
+        value={ranges}
+        check={(typed) => {
+          const numbers = listed(typed);
+          if (numbers.some((number) => !Number.isFinite(number)))
+            return 'Type numbers, separated by commas.';
+          return rangesProblem(numbers);
+        }}
+        onSet={(typed) => {
+          const numbers = listed(typed);
+          onChange({ ranges: numbers.length === 0 ? null : numbers });
+        }}
+      />
+      <NumberField
+        label="Min"
+        value={typeof attrs['min'] === 'number' ? String(attrs['min']) : '0'}
+        check={notANumber}
+        onSet={(typed) => {
+          onChange({ min: asNumber(typed) ?? null });
+        }}
+      />
+      <NumberField
+        label="Max"
+        value={typeof attrs['max'] === 'number' ? String(attrs['max']) : ''}
+        check={notANumber}
+        onSet={(typed) => {
+          onChange({ max: asNumber(typed) ?? null });
+        }}
+      />
+    </>
+  );
+}
 
 /** A Change's: the period it compares, % or an amount, and its direction (design 21 C1). */
 function ChangeSettings({

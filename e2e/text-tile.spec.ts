@@ -547,3 +547,64 @@ test('a Value in its model’s format, limited by a marking, and a Change with i
   await toolbar(page).getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(change).toHaveText(/^(▲|▼) \d+\.\d%$|^0\.0%$/);
 });
+
+/**
+ * T885 / AC-521: a Sparkline is wechart's own 64 × 16 SVG, one 2 px line in
+ * the measure's dashboard colour with only its chosen last point, named by
+ * its measure, period, first and last values, low and high; a Bullet graph
+ * is 96 × 16, named by its value, target and ranges.
+ */
+test('a Sparkline and a Bullet graph, word-sized SVG images named by what they show', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWithText(request, [
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: 'Trend ' },
+        {
+          type: 'sparkline',
+          attrs: { measure: 'orders.total_amount', granularity: 'month', last: 6, lastPoint: true },
+        },
+        { type: 'text', text: ' and orders ' },
+        {
+          type: 'bulletGraph',
+          attrs: {
+            measure: 'orders.count',
+            target: { kind: 'fixed', value: 200 },
+            ranges: [100, 150, 220],
+          },
+        },
+      ],
+    },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-text"]');
+
+  const sparkline = tile.locator('.text-tile svg.text-sparkline');
+  await expect(sparkline).toHaveAttribute('role', 'img');
+  await expect(sparkline).toHaveAttribute(
+    'aria-label',
+    /^Total Amount by month, last 6 months: from \$[\d.]+[KMB]? to \$[\d.]+[KMB]?, low \$[\d.]+[KMB]?, high \$[\d.]+[KMB]?$/,
+  );
+  const box = await sparkline.boundingBox();
+  expect([box?.width, box?.height]).toEqual([64, 16]);
+  const line = sparkline.locator('path');
+  await expect(line).toHaveCount(1);
+  await expect(line).toHaveAttribute('stroke-width', '2');
+  await expect(line).toHaveAttribute('stroke', /^#[0-9a-fA-F]{6}$/);
+  await expect(sparkline.locator('circle')).toHaveCount(1);
+  await expect(sparkline.locator('line, text, rect')).toHaveCount(0);
+
+  const bullet = tile.locator('.text-tile svg.text-bullet');
+  await expect(bullet).toHaveAttribute('role', 'img');
+  await expect(bullet).toHaveAttribute(
+    'aria-label',
+    'Count 240, target 200, ranges 100, 150 and 220',
+  );
+  const bulletBox = await bullet.boundingBox();
+  expect([bulletBox?.width, bulletBox?.height]).toEqual([96, 16]);
+  await expect(bullet.locator('[data-part="range"]')).toHaveCount(3);
+});

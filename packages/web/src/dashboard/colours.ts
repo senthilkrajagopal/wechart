@@ -1,5 +1,6 @@
 import {
   assignColours,
+  DEFAULT_PALETTE,
   colouredMembersOf,
   coloursMembers,
   OTHER_COLOUR,
@@ -139,10 +140,29 @@ export function useDashboardColours(
   document: DashboardDocument,
   specs: Readonly<Record<string, RenderSpec>>,
 ): Record<string, RenderSpec> {
+  return useDashboardColourAssignment(document, specs).specs;
+}
+
+/**
+ * The same, with the assignment itself, for what draws a member outside a
+ * chart — a Text tile's sparkline in its measure's colour (T885, AC-521).
+ */
+export function useDashboardColourAssignment(
+  document: DashboardDocument,
+  specs: Readonly<Record<string, RenderSpec>>,
+): DashboardColours {
   const [assigned, setAssigned] = useState<Record<string, string>>({});
   const coloured = dashboardColours(document, specs, assigned);
 
   if (!sameAssignment(coloured.assigned, assigned)) setAssigned(coloured.assigned);
 
-  return coloured.specs;
+  return coloured;
+}
+
+/**
+ * A member's dashboard colour (AC-039): the one it was given, else the next
+ * the palette has free, as the next chart to draw it would give it.
+ */
+export function colourOfMember(assigned: Readonly<Record<string, string>>, member: string): string {
+  return assignColours(DEFAULT_PALETTE, assigned).colourFor(member);
 }

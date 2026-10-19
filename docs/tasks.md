@@ -1923,10 +1923,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T884 (AC-520, AC-116) The Value and Change elements: their settings, model formats, marking limits, own filters, and Change's triangle, sign and direction colour
 
-- [ ] T885 (AC-521) Sparkline and Bullet graph as wechart's own SVG, word-sized, each an image with its text alternative
-  - Files: `packages/web/src/tiles/text/elements/Sparkline.tsx` (+ test), `packages/web/src/tiles/text/elements/BulletGraph.tsx` (+ test).
-  - Failing test: `Sparkline.test.tsx`: a 64 × 16 `svg` with `role="img"`, one `path` of stroke width 2 in Revenue's dashboard colour, no axis, a last-point circle only when chosen, and the label "Revenue by month, last 12 months: from $1.0M to $1.27M, low $0.95M, high $1.3M"; `BulletGraph.test.tsx`: 96 × 16, a 4 px value bar and a 2 px target in `text-primary`, three range rects in `bg-subtle`, `border-subtle` and `border-strong`, a fourth range refused, and its label naming value, target and ranges (AC-521).
-  - Depends on: T884
+- [x] T885 (AC-521) Sparkline and Bullet graph as wechart's own SVG, word-sized, each an image with its text alternative
 
 - [ ] T886 (AC-522, AC-116) The Icon, Marking, Filter value and As of elements
   - Files: `packages/web/src/tiles/text/elements/IconElement.tsx` (+ test), `packages/web/src/tiles/text/elements/MarkingElement.tsx`, `packages/web/src/tiles/text/elements/FilterValueElement.tsx` (+ test), `packages/web/src/tiles/text/elements/AsOfElement.tsx` (+ test).

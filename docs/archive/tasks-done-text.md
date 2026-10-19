@@ -66,3 +66,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/tiles/text/elements/ValueElement.tsx` (+ test), `packages/web/src/tiles/text/elements/ChangeElement.tsx` (+ test), `packages/web/src/tiles/text/elementQueries.ts` (+ test).
   - Failing test: `ValueElement.test.tsx`: Revenue in its model's currency format; limited by Marking, over the marked rows, and with nothing marked all data, or "—" when chosen; its own filter added to the tile's in the query; `ChangeElement.test.tsx`: +4.2 % with Higher is better reads "▲ 4.2%" in `status-success`, −2.1 % "▼ 2.1%" in `status-error`, Neutral in `text-secondary`; as an amount "▲ $50K" (AC-520, AC-116).
   - Depends on: T882
+
+- [x] T885 (AC-521) Sparkline and Bullet graph as wechart's own SVG, word-sized, each an image with its text alternative
+  - Files: `packages/web/src/tiles/text/elements/Sparkline.tsx` (+ test), `packages/web/src/tiles/text/elements/BulletGraph.tsx` (+ test).
+  - Failing test: `Sparkline.test.tsx`: a 64 × 16 `svg` with `role="img"`, one `path` of stroke width 2 in Revenue's dashboard colour, no axis, a last-point circle only when chosen, and the label "Revenue by month, last 12 months: from $1.0M to $1.27M, low $0.95M, high $1.3M"; `BulletGraph.test.tsx`: 96 × 16, a 4 px value bar and a 2 px target in `text-primary`, three range rects in `bg-subtle`, `border-subtle` and `border-strong`, a fourth range refused, and its label naming value, target and ranges (AC-521).
+  - Depends on: T884

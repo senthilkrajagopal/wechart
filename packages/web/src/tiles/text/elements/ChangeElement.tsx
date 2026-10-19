@@ -1,6 +1,7 @@
 import { formatValue, type MemberFormats } from '@wechart/core';
 
 import { changeOf, type Change } from '../elementQueries';
+import { kindOfFormat } from './shortNumbers';
 import { useElementAnswer } from './useElementAnswer';
 
 export type Direction = 'higher' | 'lower' | 'neutral';
@@ -18,20 +19,12 @@ function toneOf(delta: number, direction: Direction): 'success' | 'error' | 'neu
  * other number in short (decision T884-1).
  */
 function amountOf(amount: number, member: string, formats: MemberFormats | undefined): string {
-  const format = formats?.[member];
-  const named = typeof format === 'string' ? format : format?.name;
-  const specifier = typeof format === 'string' ? undefined : format?.specifier;
-  const currency = typeof format === 'object' ? format.currency : undefined;
-  if (named === 'percent' || specifier?.includes('%') === true)
-    return formatValue(amount, member, formats);
-  const money =
-    named?.startsWith('currency') === true ||
-    currency !== undefined ||
-    specifier?.startsWith('$') === true;
+  const kind = kindOfFormat(member, formats);
+  if (kind.kind === 'percent') return formatValue(amount, member, formats);
   return new Intl.NumberFormat('en-US', {
     notation: 'compact',
     maximumFractionDigits: 1,
-    ...(money ? { style: 'currency', currency: currency ?? 'USD' } : {}),
+    ...(kind.kind === 'money' ? { style: 'currency', currency: kind.currency } : {}),
   }).format(amount);
 }
 
