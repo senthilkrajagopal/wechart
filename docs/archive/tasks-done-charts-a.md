@@ -162,6 +162,24 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - **Seen:** unit tests red, then green; the recommender package's tests and the web's editor and query tests passed; `e2e/new-charts-a.spec.ts`, "the editor offers 100 % stacked bar, Graphical table and KPI tiled as runners-up…", "one measure over time…" and `chart-editor.spec.ts`'s "recommends a chart with a runner-up", on headless Chromium.
     - **AC-561 not ticked:** it also needs the Sankey's runner-up (lane B's T1012). AC-031 is still open.
 
+- [x] T970 (AC-562, AC-028) Keep a chart saved in Auto before R81 drawing its saved type until its fields next change
+  - Files: `packages/core/src/chart-spec.ts` (the recommender rules version), `packages/core/src/chart-migrations.ts` (+ test), `packages/web/src/editor/chartTypeState.ts` (+ test).
+  - Failing test: `chart-migrations.test.ts`: an Auto spec of Revenue, Margin % and Order count by Product saved without a rules version reads as drawn type bar; `chartTypeState.test.ts`: it stays bar on opening, and after the author adds and removes a filter field it is recommended Bubble; a spec saved with R81's version follows the rules at once (AC-562, AC-028).
+  - Depends on: T968
+  - Done (2026-10-19), decision T970-1:
+    - **Rules version:** core `RECOMMENDER_RULES` (81) and `RULES_BEFORE_R81` (80).
+      - `ChartDefinition.rules` and `ChartSpec.rules` are new.
+      - `recommenderRulesOf` is in chart-spec.ts, re-exported from chart-migrations.ts. An Auto chart without the field was saved before R81. It is read that way, not rewritten, and the schema version doesn't change.
+      - `readChartDocument` keeps the field. `chartDocumentOf` writes the current rules for a chart in Auto.
+      - `toChartSpec` gives `rules` only for older rules, on a chart that has fields; a new chart's stub has none.
+    - **Recommender:** `Signature.rules`. Under older rules there are no R81 candidates or picks: `underR81`, with `r81Candidates` split out of `enumerate`. `signatureOf` passes the spec's rules on.
+    - **Editor:**
+      - `chartTypeState.ts`'s `rulesAfterEdit` drops the older rules once the fields change. Fields here are the cube, the members of the three wells, the filter fields and "Each point is"; titles, options and grains don't count. `setSpec` applies it.
+      - `chartDocumentWith` writes the current rules on save. Older rules are left absent, as they were saved, so an unchanged chart writes back identically. A chosen type writes none.
+    - **The example:** the bubble is parked, so the tests use R81's parallel coordinates: four measures by 14 Products (unit), by 240 orders (e2e). A chart saved before R81 draws bar, or small multiples where formats split scales, until a filter field is added and removed.
+    - **AC-562** is ticked on `e2e/new-charts-a.spec.ts`, "a tile saved in Auto before R81 keeps its type until its fields change…", on headless Chromium: the tile and the editor both keep the saved type; after the edit and a save, the stored chart has rules 81 and no type, and the tile draws parallel coordinates. A narrowing note under AC-562 quotes the parking. Unit tests seen red, then green.
+    - **AC-028** stays open until AC-560 and AC-561 are whole (lane B's T1012).
+
 - [x] T953 (AC-580, AC-037) The bullet chart's spec and wells: Target, 2–3 bands at 80, 100 and 120 % by default, and its empty state
   - Files: `packages/core/src/chart-types/bullet.ts` (+ test), `packages/web/src/editor/wells/bullet.tsx` (+ test).
   - Failing test: `bullet.test.ts`: bands default to [80, 100, 120]; a fourth band is refused with "At most 3 bands: R80's three greys, and no fourth without a new colour."; one band is refused; `bullet.test.tsx` (wells): with Target emptied the tile says "A bullet chart compares each member with a target. Put a measure or a value in Target." with Target as its action (AC-580, AC-037).

@@ -1,3 +1,4 @@
+import type { ChartSpec } from '@wechart/core';
 import type { ChartType } from '@wechart/recommender';
 
 /**
@@ -41,4 +42,29 @@ export function effectiveType(
 
 export function isManual(state: ChartTypeState): boolean {
   return state.manual !== null;
+}
+
+/** What a chart is asked by: the fields its rules are kept for until they change. */
+const fieldsOf = (spec: ChartSpec) =>
+  JSON.stringify([
+    spec.cube,
+    spec.measures,
+    spec.dimensions,
+    spec.timeDimensions,
+    (spec.filters ?? []).map((filter) => filter.member),
+    spec.eachPointIs ?? null,
+  ]);
+
+/**
+ * A chart saved in Auto before R81's rules after an edit (T970, AC-562): its
+ * fields changed — a member added, removed or moved, a filter field added or
+ * removed — and it is drawn by the current rules from then on; anything else
+ * keeps the rules it was saved under, so no tile changes type without an
+ * edit to its fields.
+ */
+export function rulesAfterEdit(before: ChartSpec, after: ChartSpec): ChartSpec {
+  if (after.rules === undefined || fieldsOf(before) === fieldsOf(after)) return after;
+  const current: { -readonly [K in keyof ChartSpec]: ChartSpec[K] } = { ...after };
+  delete current.rules;
+  return current;
 }

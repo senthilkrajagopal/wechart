@@ -51,6 +51,12 @@ export interface Signature {
    * a bullet chart the pick; with none, a KPI against it.
    */
   readonly target?: boolean;
+  /**
+   * The rules the chart is drawn by (T970, AC-562): those before R81's for a
+   * chart saved in Auto before them, until its fields change — none of R81's
+   * picks or offers then. Absent, the current ones.
+   */
+  readonly rules?: number;
 }
 
 /**

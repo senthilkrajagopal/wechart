@@ -3,6 +3,8 @@ import {
   ChartDocumentError,
   emptySpec,
   readChartDocument,
+  RECOMMENDER_RULES,
+  RULES_BEFORE_R81,
   toChartSpec,
   type ChartDocument,
   type ChartSpec,
@@ -232,6 +234,14 @@ export function chartDocumentWith(loaded: ChartDocument, state: EditorState): Ch
   const chosen = state.chartType.manual;
   if (chosen === null) delete chart['chartType'];
   else chart['chartType'] = chosen;
+  /**
+   * The rules a chart in Auto is drawn by (T970, AC-562): the current ones
+   * once its fields have changed, written so it opens by them; those before
+   * R81 by their absence, as it was saved; none on a chart of a chosen type.
+   */
+  const rules = state.spec.rules ?? RECOMMENDER_RULES;
+  if (chosen !== null || rules === RULES_BEFORE_R81) delete chart['rules'];
+  else chart['rules'] = rules;
 
   // The grains chosen from pills and the chart's own filters (AC-216): as the
   // editor has them, and none where it has none.

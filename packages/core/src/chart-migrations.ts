@@ -23,6 +23,14 @@
 
 import { CHART_DOCUMENT_VERSION, ChartDocumentError } from './chart-document';
 
+/**
+ * A chart saved in Auto before R81's recommender rules (T970, AC-562) is read
+ * as such, by the absence of its rules version, rather than upgraded: no step
+ * here writes one in, so it is drawn by the rules it was saved under until
+ * its fields next change.
+ */
+export { recommenderRulesOf } from './chart-spec';
+
 /** One step: take a body at `from`, return it at `from + 1`. */
 type Upgrade = (body: Record<string, unknown>) => Record<string, unknown>;
 

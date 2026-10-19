@@ -150,6 +150,39 @@ describe('R81’s runners-up (T969, AC-561)', () => {
     ]);
   });
 
+  /**
+   * T970 / AC-562: a chart saved in Auto before R81's rules is drawn by the
+   * rules before them until its fields change: none of R81's picks or offers.
+   */
+  it('makes no R81 pick or offer under the rules before R81 (T970, AC-562)', () => {
+    const four = ['revenue', 'margin', 'count', 'units'].map((name): Field => ({
+      name: `orders.${name}`,
+      kind: 'measure',
+    }));
+    const products = dimension('products.name', 14);
+    expect(recommend({ fields: [...four, products] }).top?.candidate.chartType).toBe('parallel');
+    const before = recommend({ fields: [...four, products], rules: 80 });
+    expect(before.top?.candidate.chartType).toBe('bar');
+    const r81 = new Set(['parallel', 'bullet', 'graphicalTable']);
+    for (const signature of [
+      { fields: [...four, products], rules: 80 },
+      { fields: [revenue, month, dimension('products.category', 42)], rules: 80 },
+      { fields: [revenue, month], rules: 80 },
+      { fields: [revenue, dimension('customers.region', 4)], target: true, rules: 80 },
+    ]) {
+      const { top, runnersUp } = recommend(signature);
+      for (const each of [top, ...runnersUp]) {
+        expect(r81.has(each?.candidate.chartType ?? '')).toBe(false);
+        expect(each?.candidate.stack).toBeUndefined();
+        expect(each?.candidate.chartType === 'kpi' && each.candidate.categoryField).toBeFalsy();
+      }
+    }
+    // Under R81's own, as any other chart.
+    expect(recommend({ fields: [...four, products], rules: 81 }).top?.candidate.chartType).toBe(
+      'parallel',
+    );
+  });
+
   it('keeps every R81 reason within 80 characters', () => {
     const long = (name: string) => `${name} with a very long title indeed`;
     for (const signature of [

@@ -2205,10 +2205,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T969 (AC-561, AC-031) Runners-up with their reasons: ~~waterfall,~~ 100 % stacked, graphical table, KPI tiled and parallel coordinates for 4+ measures over at most 8 members (the waterfall part parked, the user, 2026-10-18)
 
-- [ ] T970 (AC-562, AC-028) Keep a chart saved in Auto before R81 drawing its saved type until its fields next change
-  - Files: `packages/core/src/chart-spec.ts` (the recommender rules version), `packages/core/src/chart-migrations.ts` (+ test), `packages/web/src/editor/chartTypeState.ts` (+ test).
-  - Failing test: `chart-migrations.test.ts`: an Auto spec of Revenue, Margin % and Order count by Product saved without a rules version reads as drawn type bar; `chartTypeState.test.ts`: it stays bar on opening, and after the author adds and removes a filter field it is recommended Bubble; a spec saved with R81's version follows the rules at once (AC-562, AC-028).
-  - Depends on: T968
+- [x] T970 (AC-562, AC-028) Keep a chart saved in Auto before R81 drawing its saved type until its fields next change
 
 - [ ] T971 (AC-563) Keyboard marking on KPI tiles~~, bullets, waterfall steps and histogram bins~~ and bullets, with §7a's keys in their order (the waterfall and histogram parts parked, the user, 2026-10-18)
   - Files: `packages/charts/src/interaction/keyboardMarking.ts` (+ test), `packages/web/src/tiles/kpi/KpiTiles.tsx`.

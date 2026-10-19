@@ -83,6 +83,7 @@ import {
   chooseType,
   effectiveType,
   isManual,
+  rulesAfterEdit,
   type ChartTypeState,
 } from './chartTypeState';
 import { OPENED_WITH, type EditorState } from './openChart';
@@ -367,8 +368,9 @@ function EditorBody({
   const change = (next: (current: EditorState) => EditorState) =>
     setHistory((current) => push(current, next(current.present)));
 
+  // A change to its fields draws a chart saved before R81 by R81's rules (T970, AC-562).
   const setSpec = (next: (current: ChartSpec) => ChartSpec) =>
-    change((current) => ({ ...current, spec: next(current.spec) }));
+    change((current) => ({ ...current, spec: rulesAfterEdit(current.spec, next(current.spec)) }));
 
   // A choice that changes nothing — Auto while following, the type already
   // chosen — is no undo step (T230's review).

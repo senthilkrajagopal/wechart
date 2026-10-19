@@ -1849,6 +1849,77 @@ test('the editor offers 100 % stacked bar, Graphical table and KPI tiled as runn
 });
 
 /**
+ * T970 / AC-562: WHEN a chart saved in Auto before R81's recommender rules
+ * opens, THE SYSTEM SHALL draw the type it drew when saved, and apply R81's
+ * rules only from the next change to its fields, so that no tile on a
+ * published dashboard changes type without an edit.
+ * `Fails when: a dashboard tile saved in Auto … drawn as [its type] before
+ * R81, draws as anything but that … before its fields change; or, after a
+ * field change that keeps [its fields], it isn't recommended [R81's pick].`
+ * With the bubble parked, R81's pick for these is parallel coordinates: four
+ * measures by 240 orders. Saved as before R81, with no rules version.
+ */
+test('a tile saved in Auto before R81 keeps its type until its fields change, then draws parallel coordinates', async ({
+  page,
+  request,
+}) => {
+  const { id, title, charts } = await graphicalTableDashboard(request, [
+    {
+      tile: 'tile-legacy',
+      w: 12,
+      library: true,
+      chart: {
+        wells: {
+          measures: [
+            'orders.count',
+            'orders.total_amount',
+            'orders.average_amount',
+            'customers.count',
+          ],
+          dimensions: ['orders.id'],
+          timeDimensions: [],
+        },
+      },
+    },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-legacy"]');
+  const drawn = tile.locator('[data-chart-type]').first();
+  await expect(drawn).toBeVisible();
+  const before = await drawn.getAttribute('data-chart-type');
+  expect(before).not.toBe('parallel');
+
+  // Opened in the editor: as the tile drew it, in Auto.
+  const legacy = charts['tile-legacy'] ?? '';
+  await page.goto(`/explore/charts/${legacy}/edit`);
+  await expectChartType(page, before ?? '');
+  await expect(page.getByRole('button', { name: 'Auto', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+
+  // A filter field added and removed: its fields changed, R81's rules apply.
+  await wellPicker(page, 'filters').selectOption('orders.status');
+  await page.getByRole('button', { name: /^Remove the filter on / }).click();
+  await expectChartType(page, 'parallel');
+
+  // Saved under R81's rules, the tile draws it too.
+  await page.getByRole('button', { name: 'Save chart', exact: true }).click();
+  const storedChart = async () =>
+    (
+      (await (await request.get(`${API}/documents/chart/${legacy}`)).json()) as {
+        body?: { chart?: { rules?: number; chartType?: string } };
+      }
+    ).body?.chart;
+  await expect.poll(async () => (await storedChart())?.rules).toBe(81);
+  // Still in Auto: drawn by the recommender, not pinned to a type.
+  expect((await storedChart())?.chartType).toBeUndefined();
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(tile.locator('[data-chart-type="parallel"]').first()).toBeVisible();
+});
+
+/**
  * A dashboard of graphical tables of orders, each its Rows and columns, or
  * any other chart of orders; with `interactions`, in that mode with one
  * default marking, "Marking".
@@ -1861,6 +1932,8 @@ async function graphicalTableDashboard(
     readonly columns?: readonly unknown[];
     /** Another chart of orders in place of a graphical table. */
     readonly chart?: Record<string, unknown>;
+    /** A library chart, saved from its own editor, rather than the dashboard's own. */
+    readonly library?: boolean;
     readonly w?: number;
     readonly h?: number;
   }[],
@@ -1873,7 +1946,17 @@ async function graphicalTableDashboard(
     })
   ).json()) as { id: string };
   const items: Record<string, unknown>[] = [];
-  for (const { tile, dimensions = [], columns = [], chart: other, w = 6, h = 40 } of tables) {
+  /** Each tile's chart, by its tile. */
+  const charts: Record<string, string> = {};
+  for (const {
+    tile,
+    dimensions = [],
+    columns = [],
+    chart: other,
+    library = false,
+    w = 6,
+    h = 40,
+  } of tables) {
     const chart = (await (
       await request.post(`${API}/documents`, {
         data: { kind: 'chart', title: tile, ...IN_MY_WORKSPACE },
@@ -1886,7 +1969,9 @@ async function graphicalTableDashboard(
           schemaVersion: 1,
           title: tile,
           owner: 'admin',
-          localToDashboardId: dashboard.id,
+          ...(library
+            ? { folderId: IN_MY_WORKSPACE.folderId }
+            : { localToDashboardId: dashboard.id }),
           chart: {
             source: { cube: 'orders' },
             ...(other ?? {
@@ -1904,6 +1989,7 @@ async function graphicalTableDashboard(
     });
     expect(saved.ok(), await saved.text()).toBe(true);
     items.push({ id: tile, kind: 'chart', w, h, chartId: chart.id });
+    charts[tile] = chart.id;
   }
   const place = async (version: number, mode?: Record<string, unknown>) => {
     const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
@@ -1932,7 +2018,7 @@ async function graphicalTableDashboard(
     ).json()) as { version: number };
     await place(stored.version, mode);
   };
-  return { id: dashboard.id, title, remode };
+  return { id: dashboard.id, title, remode, charts };
 }
 
 /**

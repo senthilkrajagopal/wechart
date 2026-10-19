@@ -47,6 +47,31 @@ export interface ChartSpec {
    * what it is compared with change what it asks (`kpiQueries`).
    */
   readonly kpi?: KpiOptions;
+  /**
+   * The recommender's rules a chart in Auto is drawn by (T970, AC-562): those
+   * it was saved under, until its fields next change. Absent on a chart of a
+   * chosen type, which the recommender doesn't draw.
+   */
+  readonly rules?: number;
+}
+
+/**
+ * The recommender's rules (T970, AC-562): R81's, which add its types' picks
+ * and runners-up. A chart saved in Auto under the rules before them keeps
+ * drawing what it drew until its fields change.
+ */
+export const RECOMMENDER_RULES = 81;
+/** The rules before R81's: a chart saved in Auto with no rules version was saved under them. */
+export const RULES_BEFORE_R81 = 80;
+
+/**
+ * The rules a saved chart was saved under (T970, AC-562): its own where it
+ * says, else those before R81 — every chart saved since writes its rules
+ * (`chartDocumentOf`), so one without was saved before them. Read, never
+ * written back: migrating doesn't save (AC-181).
+ */
+export function recommenderRulesOf(chart: { readonly rules?: number | undefined }): number {
+  return typeof chart.rules === 'number' ? chart.rules : RULES_BEFORE_R81;
 }
 
 /**

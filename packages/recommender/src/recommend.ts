@@ -1,4 +1,4 @@
-import { undrawnOf } from '@wechart/core';
+import { RECOMMENDER_RULES, undrawnOf } from '@wechart/core';
 
 import { isLegal } from './legality';
 import { pieSlicesField } from './slices';
@@ -83,29 +83,22 @@ function build(chartType: ChartType, parts: Partial<Candidate>): Candidate {
 }
 
 /**
- * Every chart the signature could be drawn as. Legality and scoring decide
- * which survive; enumeration is deliberately generous so a good candidate is
- * never missing for want of being considered.
+ * Whether the chart is drawn by R81's rules (T970, AC-562): unless it was
+ * saved in Auto before them and its fields haven't changed since.
  */
-export function enumerate(signature: Signature): Candidate[] {
+const underR81 = (signature: Signature) =>
+  (signature.rules ?? RECOMMENDER_RULES) >= RECOMMENDER_RULES;
+
+/** R81's candidates for a signature (T968, T969). */
+function r81Candidates(signature: Signature): Candidate[] {
   const measures = measuresOf(signature);
   const dimensions = dimensionsOf(signature);
   const times = timesOf(signature);
   const candidates: Candidate[] = [];
-
-  if (measures.length === 0 && dimensions.length === 0 && times.length === 0) return [];
-
-  // A measure on its own is a number, not a chart.
-  if (measures.length >= 1 && dimensions.length === 0 && times.length === 0) {
-    candidates.push(build('kpi', { valueFields: measures.slice(0, 1) }));
-    if (measures.length > 1) candidates.push(build('table', { valueFields: measures }));
-  }
-
   /**
-   * R81's (T968, AC-560): a Target makes a bullet per member of one
-   * dimension, or a single bullet with none; one measure over time is also
-   * a KPI with its trend; 4 or more measures by one dimension are lines
-   * across their axes.
+   * T968, AC-560: a Target makes a bullet per member of one dimension, or a
+   * single bullet with none; one measure over time is also a KPI with its
+   * trend; 4 or more measures by one dimension are lines across their axes.
    */
   if (signature.target === true && measures.length >= 1 && times.length === 0) {
     if (dimensions.length <= 1)
@@ -122,10 +115,10 @@ export function enumerate(signature: Signature): Candidate[] {
     candidates.push(build('parallel', { valueFields: measures, categoryField: dimensions[0]! }));
 
   /**
-   * R81's runners-up (T969, AC-561), never first: a summed measure stacked
-   * at 100 % by at most 8 members, beside the stack at Sum; a measure over
-   * time by one dimension of more than 8 members, a row each with its trend;
-   * one measure over time by a dimension, a KPI tile per member.
+   * T969, AC-561, never first: a summed measure stacked at 100 % by at most
+   * 8 members, beside the stack at Sum; a measure over time by one dimension
+   * of more than 8 members, a row each with its trend; one measure over time
+   * by a dimension, a KPI tile per member.
    */
   const summed = measures[0] !== undefined && isSummed(measures[0]);
   if (summed && dimensions.length === 2 && times.length === 0)
@@ -159,6 +152,30 @@ export function enumerate(signature: Signature): Candidate[] {
     candidates.push(
       build('kpi', { valueFields: measures, categoryField: times[0]!, facetField: dimensions[0]! }),
     );
+  return candidates;
+}
+
+/**
+ * Every chart the signature could be drawn as. Legality and scoring decide
+ * which survive; enumeration is deliberately generous so a good candidate is
+ * never missing for want of being considered.
+ */
+export function enumerate(signature: Signature): Candidate[] {
+  const measures = measuresOf(signature);
+  const dimensions = dimensionsOf(signature);
+  const times = timesOf(signature);
+  const candidates: Candidate[] = [];
+
+  if (measures.length === 0 && dimensions.length === 0 && times.length === 0) return [];
+
+  // A measure on its own is a number, not a chart.
+  if (measures.length >= 1 && dimensions.length === 0 && times.length === 0) {
+    candidates.push(build('kpi', { valueFields: measures.slice(0, 1) }));
+    if (measures.length > 1) candidates.push(build('table', { valueFields: measures }));
+  }
+
+  // R81's, under its rules alone (T970, AC-562).
+  if (underR81(signature)) candidates.push(...r81Candidates(signature));
 
   // Over time. `compile` colours these by the first dimension where there is
   // one (`defaultEncoding`), so each carries it as its colour, and the colour
@@ -485,6 +502,8 @@ const pickKeyOf = (candidate: Candidate) =>
  * the Map's are lane B's (T1012).
  */
 function r81PicksOf(signature: Signature): { readonly top?: Is; readonly next?: Is } {
+  // A chart drawn by the rules before R81's keeps their picks (T970, AC-562).
+  if (!underR81(signature)) return {};
   const measures = measuresOf(signature);
   const dimensions = dimensionsOf(signature);
   const times = timesOf(signature);

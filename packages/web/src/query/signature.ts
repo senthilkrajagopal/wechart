@@ -97,6 +97,8 @@ export function signatureOf(
     ],
     rowCount: rows.length,
     ...(target ? { target: true } : {}),
+    // The rules a chart saved in Auto before R81 is drawn by (T970, AC-562).
+    ...(spec.rules === undefined ? {} : { rules: spec.rules }),
   };
 }
 

@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { CHART_DOCUMENT_VERSION, readChartDocument } from './chart-document';
-import { LEGACY_FIXTURES, migrateChartDocument } from './chart-migrations';
+import {
+  CHART_DOCUMENT_VERSION,
+  chartDocumentOf,
+  readChartDocument,
+  toChartSpec,
+} from './chart-document';
+import { LEGACY_FIXTURES, migrateChartDocument, recommenderRulesOf } from './chart-migrations';
+import { emptySpec, RECOMMENDER_RULES, RULES_BEFORE_R81 } from './chart-spec';
 import { mapLayersOf, mapSettingsOf } from './chart-types/map';
 
 /**
@@ -139,4 +145,63 @@ describe('a country map saved before R81', () => {
       });
     });
   }
+});
+
+/**
+ * T970 / AC-562: WHEN a chart saved in Auto before R81's recommender rules
+ * opens, THE SYSTEM SHALL draw the type it drew when saved, and apply R81's
+ * rules only from the next change to its fields, so that no tile on a
+ * published dashboard changes type without an edit.
+ * `Fails when: a dashboard tile saved in Auto … drawn as a bar before R81,
+ * draws as anything but that bar before its fields change; …`
+ *
+ * A chart says which rules it was saved under; one saved in Auto with none
+ * was saved before them, and reads as such — no rewrite, nothing saved.
+ */
+describe('the recommender rules a chart was saved under (T970, AC-562)', () => {
+  // Four measures by Product, as R81 makes parallel coordinates of.
+  const auto = {
+    schemaVersion: CHART_DOCUMENT_VERSION,
+    title: 'Products',
+    chart: {
+      source: { cube: 'orders' },
+      wells: {
+        measures: ['orders.revenue', 'orders.margin', 'orders.count', 'orders.units'],
+        dimensions: ['products.name'],
+        timeDimensions: [],
+      },
+    },
+  };
+
+  it('reads an Auto chart saved without a rules version as saved before R81', () => {
+    const document = read(auto);
+    expect(recommenderRulesOf(document.chart)).toBe(RULES_BEFORE_R81);
+    expect(toChartSpec(document).rules).toBe(RULES_BEFORE_R81);
+    expect(RECOMMENDER_RULES).toBeGreaterThan(RULES_BEFORE_R81);
+  });
+
+  it('keeps the rules a chart was saved under, and asks none of a chart of a chosen type', () => {
+    const saved = read({ ...auto, chart: { ...auto.chart, rules: RECOMMENDER_RULES } });
+    expect(saved.chart.rules).toBe(RECOMMENDER_RULES);
+    expect(recommenderRulesOf(saved.chart)).toBe(RECOMMENDER_RULES);
+    // The current rules are the spec's without saying so.
+    expect(toChartSpec(saved).rules).toBeUndefined();
+    const chosen = read({ ...auto, chart: { ...auto.chart, chartType: 'bar' } });
+    expect(toChartSpec(chosen).rules).toBeUndefined();
+  });
+
+  it('writes a new chart in Auto under the current rules', () => {
+    const made = chartDocumentOf({ title: 'New', spec: emptySpec('orders') });
+    expect(made.chart.rules).toBe(RECOMMENDER_RULES);
+    const kept = chartDocumentOf({
+      title: 'Kept',
+      spec: { ...emptySpec('orders'), rules: RULES_BEFORE_R81 },
+    });
+    expect(kept.chart.rules).toBe(RULES_BEFORE_R81);
+    const chosen = chartDocumentOf({
+      title: 'Bar',
+      spec: { ...emptySpec('orders'), chartType: 'bar' },
+    });
+    expect(chosen.chart.rules).toBeUndefined();
+  });
 });

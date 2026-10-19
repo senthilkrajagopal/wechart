@@ -20,7 +20,13 @@
  * generates its `title`, `folder_id` and `owner` columns out of them.
  */
 
-import { emptySpec, type ChartFilter, type ChartSpec } from './chart-spec';
+import {
+  emptySpec,
+  RECOMMENDER_RULES,
+  recommenderRulesOf,
+  type ChartFilter,
+  type ChartSpec,
+} from './chart-spec';
 import { targetMeasuresOf } from './chart-types/bullet';
 import { kpiOptionsOf } from './chart-types/kpi';
 import { comboProblems } from './combo';
@@ -72,6 +78,11 @@ export interface ChartDefinition {
   };
   /** Absent means the recommender's pick is followed. */
   readonly chartType?: ChartType;
+  /**
+   * The recommender's rules a chart in Auto was saved under (T970, AC-562);
+   * absent on one saved before R81 (`recommenderRulesOf`).
+   */
+  readonly rules?: number;
   readonly encoding?: EncodingOverrides;
   /**
    * Everything else the user changed about how the chart is drawn, as a sparse
@@ -206,6 +217,7 @@ export function readChartDocument(body: unknown): ChartDocument {
       ...(typeof definition['chartType'] === 'string'
         ? { chartType: definition['chartType'] as ChartType }
         : {}),
+      ...(typeof definition['rules'] === 'number' ? { rules: definition['rules'] } : {}),
       ...(definition['encoding'] === undefined
         ? {}
         : { encoding: definition['encoding'] as EncodingOverrides }),
@@ -314,6 +326,8 @@ export function chartDocumentOf(input: {
         ...(spec.eachPointIs === undefined ? {} : { eachPointIs: spec.eachPointIs }),
       },
       ...(spec.chartType === undefined ? {} : { chartType: spec.chartType }),
+      // In Auto, the rules it is drawn by: the current ones, unless it keeps older (T970).
+      ...(spec.chartType === undefined ? { rules: spec.rules ?? RECOMMENDER_RULES } : {}),
       ...(input.encoding === undefined ? {} : { encoding: input.encoding }),
       ...(input.options === undefined ? {} : { options: input.options }),
       ...(spec.granularities === undefined ? {} : { granularities: { ...spec.granularities } }),
@@ -327,6 +341,18 @@ export function chartDocumentOf(input: {
 export function toChartSpec(document: ChartDocument): ChartSpec {
   const { chart } = document;
   const targets = targetMeasuresOf(chart.chartType, chart.options);
+  /**
+   * In Auto, older rules it was saved under (T970, AC-562); none means the
+   * current ones. A chart of no fields drew nothing to keep: a new one's
+   * stub, say, saved with neither (AC-181).
+   */
+  const { measures, dimensions, timeDimensions } = chart.wells;
+  const olderRules =
+    chart.chartType === undefined &&
+    recommenderRulesOf(chart) < RECOMMENDER_RULES &&
+    measures.length + dimensions.length + timeDimensions.length > 0
+      ? recommenderRulesOf(chart)
+      : undefined;
 
   return {
     ...emptySpec(chart.source.cube),
@@ -334,6 +360,7 @@ export function toChartSpec(document: ChartDocument): ChartSpec {
     dimensions: [...chart.wells.dimensions],
     timeDimensions: [...chart.wells.timeDimensions],
     ...(chart.chartType === undefined ? {} : { chartType: chart.chartType }),
+    ...(olderRules === undefined ? {} : { rules: olderRules }),
     ...(chart.granularities === undefined ? {} : { granularities: { ...chart.granularities } }),
     ...(chart.filters === undefined ? {} : { filters: [...chart.filters] }),
     ...(chart.wells.eachPointIs === undefined ? {} : { eachPointIs: chart.wells.eachPointIs }),
