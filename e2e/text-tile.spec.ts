@@ -431,6 +431,7 @@ async function dashboardWithText(
   request: APIRequestContext,
   content: unknown[],
   filters: unknown[] = [],
+  more: unknown[] = [],
 ) {
   const title = `Text ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = (await (
@@ -461,6 +462,7 @@ async function dashboardWithText(
                 h: 24,
                 document: { version: 1, doc: { type: 'doc', content } },
               },
+              ...more,
             ],
           },
         ],
@@ -667,4 +669,64 @@ test('an Icon, a Filter value, an As of and a Marking, each read as words in the
   await expect(asOf).toHaveText(/^as of \S/);
   await expect(asOf).toHaveAttribute('title', /^Answered by the /);
   await expect(tile).toContainText(/marked 0$/);
+});
+
+/**
+ * T877 / AC-514: a dashboard of two Text tiles opened in view mode requests
+ * no script of the editor's chunk (`text-editor-…`, named in
+ * `vite.config.ts`), and none of the scripts it loads holds ProseMirror's
+ * code; double-clicking a tile in edit mode then requests the chunk.
+ */
+test('view mode loads no editor code, and editing a Text tile first loads it', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWithText(
+    request,
+    [{ type: 'paragraph', content: [{ type: 'text', text: 'First text' }] }],
+    [],
+    [
+      {
+        id: 'tile-text-2',
+        kind: 'text',
+        w: 6,
+        h: 24,
+        document: {
+          version: 1,
+          doc: {
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Second text' }] }],
+          },
+        },
+      },
+    ],
+  );
+  const scripts: { url: string; body: Promise<string> }[] = [];
+  page.on('response', (response) => {
+    if (response.request().resourceType() === 'script') {
+      scripts.push({ url: response.url(), body: response.text().catch(() => '') });
+    }
+  });
+  const editorChunk = /\/assets\/text-editor-[\w-]+\.js$/;
+
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await expect(page.locator('[data-tile="tile-text"] .text-tile p')).toHaveText('First text');
+  await expect(page.locator('[data-tile="tile-text-2"] .text-tile p')).toHaveText('Second text');
+  await page.waitForLoadState('networkidle');
+
+  expect(scripts.length).toBeGreaterThan(0);
+  expect(scripts.filter((script) => editorChunk.test(script.url))).toEqual([]);
+  // ProseMirror's model, which only the editor imports, is in no loaded script.
+  const bodies = await Promise.all(scripts.map((script) => script.body));
+  expect(bodies.filter((body) => body.includes('Invalid content for node'))).toEqual([]);
+
+  // Editing a Text tile is what first loads it.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.locator('[data-tile="tile-text"] .text-tile p')).toHaveText('First text');
+  expect(scripts.filter((script) => editorChunk.test(script.url))).toEqual([]);
+  const loaded = page.waitForResponse((response) => editorChunk.test(response.url()));
+  await page.locator('[data-tile="tile-text"] .text-tile').dblclick();
+  await loaded;
+  await expect(page.locator('[data-tile="tile-text"]').getByRole('textbox')).toBeFocused();
 });

@@ -1892,10 +1892,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T876 (AC-302) Edit a Text tile in place on the canvas: double-click, or "Edit text on the canvas" by keyboard; Esc, Tab or a click outside leaves; one Undo takes the whole edit
 
-- [ ] T877 (AC-514) Keep the editor's code out of view mode: no editor chunk until a Text tile is first edited
-  - Files: `packages/web/vite.config.ts` (the editor chunk's name), `e2e/text-tile.spec.ts`.
-  - Failing test: `text-tile.spec.ts`: opening a dashboard with two Text tiles in view mode requests no script whose name holds the editor chunk's; double-clicking a tile in edit mode then requests it (AC-514).
-  - Depends on: T876
+- [x] T877 (AC-514) Keep the editor's code out of view mode: no editor chunk until a Text tile is first edited
 
 - [x] T878 (AC-515) The toolbar: block style in §3's sizes, bold, italic, both lists, link, Insert and the element count, and nothing for colour, font or size
 

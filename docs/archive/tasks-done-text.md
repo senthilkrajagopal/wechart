@@ -76,3 +76,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/tiles/text/elements/IconElement.tsx` (+ test), `packages/web/src/tiles/text/elements/MarkingElement.tsx`, `packages/web/src/tiles/text/elements/FilterValueElement.tsx` (+ test), `packages/web/src/tiles/text/elements/AsOfElement.tsx` (+ test).
   - Failing test: `IconElement.test.tsx`: rules ≥ 100 % On track, ≥ 90 % Watch, otherwise Behind show the first match's icon and word; with no data, "No rule matched" with a neutral ring; `FilterValueElement.test.tsx`: Country set to Germany and France reads "Germany, France", unset "all countries"; `AsOfElement.test.tsx`: "as of 14:05" with a tooltip naming a pre-aggregation; a Marking element shows its count (AC-522, AC-116).
   - Depends on: T884
+
+- [x] T877 (AC-514) Keep the editor's code out of view mode: no editor chunk until a Text tile is first edited
+  - Files: `packages/web/vite.config.ts` (the editor chunk's name), `e2e/text-tile.spec.ts`.
+  - Failing test: `text-tile.spec.ts`: opening a dashboard with two Text tiles in view mode requests no script whose name holds the editor chunk's; double-clicking a tile in edit mode then requests it (AC-514).
+  - Depends on: T876

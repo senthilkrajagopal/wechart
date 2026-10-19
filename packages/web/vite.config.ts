@@ -30,6 +30,17 @@ export default defineConfig({
   // in it would 404.
   server: { proxy },
   preview: { proxy },
+  build: {
+    rolldownOptions: {
+      output: {
+        // The Text tile's editor (Tiptap and ProseMirror) is its own chunk,
+        // which only editing a text loads, never view mode (AC-514). Named so
+        // a test can tell it apart from the rest.
+        chunkFileNames: (chunk) =>
+          chunk.name === 'TextEditor' ? 'assets/text-editor-[hash].js' : 'assets/[name]-[hash].js',
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: false,
