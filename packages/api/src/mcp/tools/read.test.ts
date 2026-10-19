@@ -464,3 +464,39 @@ describe('each read in the audit trail (T782, AC-478)', () => {
     expect(JSON.stringify(calls)).not.toContain(at.hidden.dashboard);
   });
 });
+
+/**
+ * AC-471 (`[R78-3]`) on `/mcp` itself: one token of writer's, through one MCP
+ * session, reaches what the groups of writer's latest web sign-in reach, and
+ * a new sign-in changes that from the next call. Dex's test users have fixed
+ * groups, so the sign-in with a group added is recorded as the callback
+ * records one (`auth/oidc.test.ts`, T777); the sign-in that takes it away
+ * again is a real one, through Dex.
+ */
+describe('the groups of the owner’s latest web sign-in decide each call (AC-471)', () => {
+  it('reaches a folder from the sign-in that adds its group, and not from the next sign-in without it', async () => {
+    const hiddenGroup = `${mark}-nobody`;
+    const reaches = async (client: Client) => {
+      const listed = data(await call(client, 'list_folders')) as { folders: { id: string }[] };
+      const read = await call(client, 'read_dashboard', { id: at.hidden.dashboard });
+      return {
+        listed: listed.folders.some((folder) => folder.id === at.hidden.folder),
+        read: read.isError !== true,
+      };
+    };
+
+    await withClient(tokens.read!, async (client) => {
+      // From writer's sign-in at the start: `sales-rw` only.
+      expect(await reaches(client)).toEqual({ listed: false, read: false });
+
+      // Signed in with the hidden folder's group added: the same token reaches it.
+      await signInStore(getDb()).record(writerKey, ['sales-rw', hiddenGroup], new Date());
+      expect(await reaches(client)).toEqual({ listed: true, read: true });
+
+      // Signed in again through Dex, without that group: it no longer does.
+      cookie = await signIn(app, USERS['writer']!);
+      expect((await signInStore(getDb()).latest(writerKey))?.groups).toEqual(['sales-rw']);
+      expect(await reaches(client)).toEqual({ listed: false, read: false });
+    });
+  });
+});
