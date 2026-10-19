@@ -370,8 +370,12 @@ function EditorBody({
     // A KPI's period and comparison (T937, AC-565), as the dashboard asks them.
     if (chartTypeState.manual === 'kpi' && options['kpi'] !== undefined)
       return toCubeQuery({ ...asked, chartType: 'kpi', kpi: kpiOptionsOf(options) });
+    // A box plot asks its rows ungrouped, and a bullet chart by its member
+    // alone (checkpoint 1's review, AC-581), as the dashboard asks them.
     return toCubeQuery(
-      chartTypeState.manual === 'boxplot' ? { ...asked, chartType: 'boxplot' } : asked,
+      chartTypeState.manual === 'boxplot' || chartTypeState.manual === 'bullet'
+        ? { ...asked, chartType: chartTypeState.manual }
+        : asked,
     );
   }, [spec, chartTypeState.manual, options]);
 

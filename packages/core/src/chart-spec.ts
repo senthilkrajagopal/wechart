@@ -186,6 +186,22 @@ export function toCubeQuery(spec: ChartSpec, now: Date = new Date()): Record<str
     };
   }
 
+  /**
+   * A bullet chart draws one bullet per member of its first dimension (T954,
+   * AC-581): asked by that member alone, so each is the member's own total,
+   * whatever its measure — never by every well, which gave a member one row
+   * per id or per day and its bullet the first of them (checkpoint 1's
+   * review). A dashboard's date filter still reaches it (`withFilters`).
+   */
+  if (spec.chartType === 'bullet') {
+    const filters = cubeFiltersOf(spec.filters);
+    return {
+      ...query,
+      dimensions: spec.dimensions.slice(0, 1),
+      ...(filters.length > 0 ? { filters } : {}),
+    };
+  }
+
   const grains = granularitiesOf(spec.timeDimensions, spec.granularities);
   if (spec.timeDimensions.length > 0) {
     query['timeDimensions'] = [...spec.timeDimensions]

@@ -67,6 +67,33 @@ describe('a bullet’s Target, asked of Cube (AC-581)', () => {
     });
   });
 
+  /**
+   * AC-581: one bullet per member (checkpoint 1's review): asked by every
+   * well, a member came back as many rows — one per id, or per day — and its
+   * bullet read the first of them. Asked by its member alone, Cube gives the
+   * member's own total, whatever the measure's kind.
+   */
+  it('asks Cube by its member alone, so each bullet is the member’s total', () => {
+    const document = {
+      ...bullet({ kind: 'measure', member: 'orders.revenue_target' }),
+    } as unknown as { chart: Record<string, unknown> };
+    const wide = {
+      ...document,
+      chart: {
+        ...document.chart,
+        wells: {
+          measures: ['orders.revenue'],
+          dimensions: ['orders.region', 'orders.id'],
+          timeDimensions: ['orders.ordered_at'],
+        },
+      },
+    } as unknown as ChartDocument;
+    const query = toCubeQuery(toChartSpec(wide));
+    expect(query['dimensions']).toEqual(['orders.region']);
+    expect(query['timeDimensions']).toBeUndefined();
+    expect(query['measures']).toEqual(['orders.revenue', 'orders.revenue_target']);
+  });
+
   it('names the measures a type’s settings draw', () => {
     expect(
       targetMeasuresOf('bullet', { bullet: { target: { kind: 'measure', member: 'm.t' } } }),

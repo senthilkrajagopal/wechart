@@ -753,8 +753,14 @@ test('a bullet chart on a 5-column tile marks a bullet as its member, and splits
     expect(saved.ok(), await saved.text()).toBe(true);
     return made.id;
   };
+  // Wells beyond the member — an id and a time field — still give one bullet
+  // per status, its total (checkpoint 1's review, AC-581).
   const bullet = await chartOf({
-    wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+    wells: {
+      measures: ['orders.count'],
+      dimensions: ['orders.status', 'orders.id'],
+      timeDimensions: ['orders.ordered_at'],
+    },
     chartType: 'bullet',
     options: { bullet: { target: { kind: 'value', value: 75 } } },
   });
@@ -793,6 +799,13 @@ test('a bullet chart on a 5-column tile marks a bullet as its member, and splits
   const ink = tile.locator('svg path[fill="#1f1f1e"]');
   // Three value bars and three targets.
   await expect(ink).toHaveCount(6);
+  // Each the status's total: the 240 orders between them.
+  const totals = (await tile.locator('svg text').allTextContents()).flatMap((text) => {
+    const figure = /^(\d+) of 75 · \d+ %$/.exec(text)?.[1];
+    return figure === undefined ? [] : [Number(figure)];
+  });
+  expect(totals).toHaveLength(3);
+  expect(totals.reduce((sum, one) => sum + one, 0)).toBe(240);
 
   // A click on shipped's value bar, beside its label, marks shipped.
   const name = tile.locator('svg text', { hasText: /^shipped$/ });
