@@ -51,7 +51,13 @@ export interface CustomizeTabProps {
    * A combo's measures and its split, where it has one: its Series section
    * is then a row per series with its mark and axis (T855, AC-497).
    */
-  readonly combo?: Pick<SeriesRowsProps, 'measures' | 'split'>;
+  readonly combo?: Pick<SeriesRowsProps, 'measures' | 'split'> & {
+    /**
+     * The measures drawn, none on another scale or past 8 series: what the
+     * stacking rows read (AC-503). Absent, every measure.
+     */
+    readonly drawn?: readonly string[];
+  };
   /** Customize › Stack, Sum or 100 %, on a stacked bar or area (T957, AC-584). */
   readonly stack?: ReactNode;
   /** At 100 %, the value axis is 0–100 %, every 25 %, and nothing else of it is set (AC-584). */
@@ -274,13 +280,15 @@ export function CustomizeTab({
                 onOptions={onOptions}
                 colourOf={colourOf}
               />
-              {/* Stacking, chart-wide, under the rows (T859, AC-503; pin 4). */}
+              {/* Stacking, chart-wide, under the rows (T859, AC-503; pin 4):
+                  by the series drawn, so an area on another scale brings no
+                  Areas row (checkpoint 1's review). */}
               <StackingRows
                 series={comboSeriesOf(
                   combo.measures.map((one) => one.measure),
                   options,
                   { split: combo.split !== undefined },
-                )}
+                ).filter((one) => combo.drawn?.includes(one.measure) ?? true)}
                 options={options}
                 onOptions={onOptions}
               />

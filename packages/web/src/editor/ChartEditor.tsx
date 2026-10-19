@@ -775,9 +775,11 @@ function EditorBody({
       title: own(measure),
     }));
     const splitBy = memberOn(drawnSpec.encoding, 'color');
+    // The measures drawn: none on another scale or past 8 series (AC-503, AC-505).
+    const drawn = membersOn(onOneScale(drawnSpec).encoding, 'y');
     return splitBy === undefined
-      ? { measures }
-      : { measures, split: { dimension: own(splitBy), members: drawnSeries } };
+      ? { measures, drawn }
+      : { measures, drawn, split: { dimension: own(splitBy), members: drawnSeries } };
   }, [drawnSpec, titles, drawnSeries]);
   /**
    * A combo's mark and axis menu, as its Metrics pills (T856) and, in the

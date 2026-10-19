@@ -420,6 +420,45 @@ describe('a combo’s Series section (T855)', () => {
     expect(screen.getByRole('radiogroup', { name: 'Orders Count axis' })).toBeTruthy();
   });
 
+  /**
+   * Checkpoint 1's review (AC-503): the Areas row shows while an area is
+   * drawn, so a measure set to an area but not drawn (on another scale)
+   * doesn't bring it.
+   */
+  it('offers Areas only for an area drawn, not one on another scale', () => {
+    const { rerender } = render(
+      <CustomizeTab
+        options={{ series: { 'orders.count': { mark: 'area' } } }}
+        onOptions={vi.fn()}
+        cartesian
+        valueAxes={['y']}
+        drawn
+        stackable
+        series={[series[1]!]}
+        colourOf={() => '#123456'}
+        combo={{ ...combo, drawn: ['orders.amount'] }}
+      />,
+    );
+
+    expect(screen.queryByRole('radiogroup', { name: 'Areas' })).toBeNull();
+    expect(screen.getByRole('radiogroup', { name: 'Bars' })).toBeTruthy();
+
+    rerender(
+      <CustomizeTab
+        options={{ series: { 'orders.count': { mark: 'area' } } }}
+        onOptions={vi.fn()}
+        cartesian
+        valueAxes={['y']}
+        drawn
+        stackable
+        series={series}
+        colourOf={() => '#123456'}
+        combo={{ ...combo, drawn: ['orders.count', 'orders.amount'] }}
+      />,
+    );
+    expect(screen.getByRole('radiogroup', { name: 'Areas' })).toBeTruthy();
+  });
+
   it('keeps the order list for any other chart', () => {
     tab();
     expect(screen.queryByRole('radiogroup', { name: /mark$/ })).toBeNull();
