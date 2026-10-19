@@ -31,7 +31,8 @@ export interface KeyModifiers {
 export interface KeyResult {
   readonly focused: number;
   readonly anchor: number | null;
-  readonly action: 'none' | 'replace' | 'toggle' | 'extend';
+  /** `unmark`: Esc, this tile's marking cleared (AC-094, AC-563). */
+  readonly action: 'none' | 'replace' | 'toggle' | 'extend' | 'unmark';
   /** For an extend: the inclusive item range the marking should now cover. */
   readonly range?: readonly [number, number];
   /**
@@ -52,6 +53,10 @@ export function keyToMarking(
   itemCount: number,
 ): KeyResult {
   const last = Math.max(itemCount - 1, 0);
+
+  // Esc unmarks the tile's marking, focus staying where it is (AC-094, T971).
+  if (key === 'Escape' || key === 'Esc')
+    return { focused: state.focused, anchor: null, action: 'unmark', handled: true };
 
   if (key === ' ' || key === 'Spacebar') {
     return {

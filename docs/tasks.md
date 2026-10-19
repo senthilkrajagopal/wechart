@@ -2207,11 +2207,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T970 (AC-562, AC-028) Keep a chart saved in Auto before R81 drawing its saved type until its fields next change
 
-- [ ] T971 (AC-563) Keyboard marking on KPI tiles~~, bullets, waterfall steps and histogram bins~~ and bullets, with §7a's keys in their order (the waterfall and histogram parts parked, the user, 2026-10-18)
-  - Files: `packages/charts/src/interaction/keyboardMarking.ts` (+ test), `packages/web/src/tiles/kpi/KpiTiles.tsx`.
-  - Failing test: `keyboardMarking.test.ts`: on ~~a waterfall, → moves focus step to step left to right~~ a bullet chart, → moves focus bullet to bullet in reading order without marking, Space marks, Ctrl+Space toggles, Shift+→ extends, Esc unmarks, each announced once; KPI tiles ~~and bullets~~ in reading order; ~~histogram bins left to right;~~ no other key acts (AC-563).
-  - Depends on: T941, ~~T951,~~ T955~~, T963~~
-  - Parked (the user, 2026-10-18): waterfall steps and histogram bins, struck through above, go with T951 and T963 (§"Parked" below).
+- [x] T971 (AC-563) Keyboard marking on KPI tiles~~, bullets, waterfall steps and histogram bins~~ and bullets, with §7a's keys in their order (the waterfall and histogram parts parked, the user, 2026-10-18)
 
 - [ ] T972 (AC-559, AC-037, AC-098, AC-568, AC-573, ~~AC-578,~~ AC-582~~, AC-589~~) Design 23's screen 2 on a running dashboard: a KPI tiled by Region marks EMEA, and the graphical table~~, waterfall,~~ and bullet chart ~~and histogram~~ each show it their way (the waterfall and histogram parts parked, the user, 2026-10-18)
   - Files: `e2e/new-charts-a.spec.ts`.

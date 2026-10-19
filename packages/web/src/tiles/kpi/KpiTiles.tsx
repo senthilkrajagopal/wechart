@@ -3,6 +3,7 @@ import {
   formatValue,
   kpiOptionsOf,
   matchesPredicate,
+  memberOn,
   type KpiOptions,
   type RenderSpec,
 } from '@wechart/core';
@@ -18,6 +19,18 @@ import { useBox } from './useBox';
 
 /** The most tiles on one page, as trellis panels page past 20 (§5; AC-567). */
 export const KPI_TILES_PER_PAGE = 20;
+
+/**
+ * A tiled KPI's members as its tiles read (T971, AC-563): the order the keys
+ * move through, by value or as Customize orders them, every page's. None for
+ * a KPI not tiled, or without a measure.
+ */
+export function kpiKeyItemsOf(spec: RenderSpec): string[] {
+  const { tileBy, tileOrder } = kpiOptionsOf(spec.options);
+  const measure = memberOn(spec.encoding, 'y');
+  if (tileBy === undefined || measure === undefined) return [];
+  return ordered(tilesOf(spec, tileBy, measure), tileOrder).map((tile) => tile.member);
+}
 
 /** "EMEA: $412K, up 4.2% vs Sep 2026, 92% of $450K" (AC-567). */
 function nameOf(
@@ -74,6 +87,7 @@ function KpiTile({
   trend,
   marked,
   dimmed,
+  focused,
   onItemClick,
 }: {
   readonly tile: Tile;
@@ -85,6 +99,8 @@ function KpiTile({
   readonly marked: boolean;
   /** Another tile's member is, and this one's isn't. */
   readonly dimmed: boolean;
+  /** The keyboard is on it (T971, AC-563). */
+  readonly focused: boolean;
   readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
 }) {
   const [measured, box] = useBox();
@@ -100,6 +116,8 @@ function KpiTile({
     <li
       className={`kpi-tile${marked ? ' kpi-tile--marked' : ''}${dimmed ? ' kpi-tile--dimmed' : ''}`}
       aria-label={nameOf(tile, compared, goal, spec, measure)}
+      // The tile the keyboard is on: the dashed accent ring (T971, AC-176).
+      {...(focused ? { 'data-keyboard-focus': 'true' } : {})}
       ref={measured}
       style={
         marked && spec.marking !== undefined
@@ -195,10 +213,19 @@ export function KpiTiles({
   const predicate = spec.marking?.predicate;
   const markedOf = (tile: Tile) =>
     predicate !== undefined && matchesPredicate(predicate, tile.current);
-  const [page, setPage] = useState(0);
   const tileBy = kpi.tileBy ?? '';
   const tiles = ordered(tilesOf(spec, tileBy, measure), kpi.tileOrder);
   const pages = Math.max(1, Math.ceil(tiles.length / KPI_TILES_PER_PAGE));
+  // The keyboard's tile (T971, AC-563), and its page shown as the keys reach it.
+  const focus = spec.keyboardFocus;
+  const focusAt = focus === undefined ? -1 : tiles.findIndex((tile) => tile.member === focus);
+  const pageOf = (index: number) => Math.floor(index / KPI_TILES_PER_PAGE);
+  const [page, setPage] = useState(() => (focusAt >= 0 ? pageOf(focusAt) : 0));
+  const [seenFocus, setSeenFocus] = useState(focusAt);
+  if (focusAt !== seenFocus) {
+    setSeenFocus(focusAt);
+    if (focusAt >= 0) setPage(pageOf(focusAt));
+  }
   const at = Math.min(page, pages - 1);
   const first = at * KPI_TILES_PER_PAGE;
   const shown = tiles.slice(first, first + KPI_TILES_PER_PAGE);
@@ -219,6 +246,7 @@ export function KpiTiles({
             trend={trends?.get(tile.member)}
             marked={markedOf(tile)}
             dimmed={anyMarked && !markedOf(tile)}
+            focused={tile.member === focus}
             onItemClick={onItemClick}
           />
         ))}

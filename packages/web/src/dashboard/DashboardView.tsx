@@ -57,6 +57,7 @@ import {
   withoutCalculations,
   TEXT_ELEMENT_LIMIT,
   elementsOf,
+  kpiOptionsOf,
   textDocumentMembers,
   type TextNode,
   chartParameterIds,
@@ -86,6 +87,7 @@ import { markedShareFilter, needsMarkedShare } from '../query/markedShare';
 import { SecurityPreview } from '../query/securityPreview';
 import { QueryItemContext, type QueryItem } from '../query/item';
 import { ChartTile, type ChartTileProps } from '../tiles/ChartTile';
+import { kpiKeyItemsOf } from '../tiles/kpi/KpiTiles';
 import { TileError } from '../tiles/TileError';
 import { hiddenMemberOf, TileUnavailable } from '../tiles/TileUnavailable';
 import { accelerationOf } from '../tiles/AccelerationBadge';
@@ -3802,6 +3804,8 @@ export function DashboardView({
     // A drilled view marks nothing, by the keyboard either (T270's review).
     if (drillShown(tileId) !== undefined) return [];
     const spec = drawn.specs[element.chartId];
+    // A tiled KPI's tiles, as they read (T971, AC-563).
+    if (spec !== undefined && isTiledKpi(spec)) return kpiKeyItemsOf(spec);
     if (spec === undefined || memberOn(spec.encoding, 'x') === undefined) return [];
     // A scatter's x is a measure, not items to step between (T242's review).
     if (spec.chartType === 'scatter') return [];
@@ -3857,7 +3861,8 @@ export function DashboardView({
     const held = markFocus[tileId];
     const state = { focused: Math.min(held?.focused ?? 0, items.length - 1), anchor: null };
     const result = keyToMarking(event.key, { shift: false, toggle: false }, state, items.length);
-    if (!result.handled) return;
+    // Escape is the dashboard's here, clearing every cross-filter (AC-119).
+    if (!result.handled || result.action === 'unmark') return;
     event.preventDefault();
     setMarkFocus((now) => ({ ...now, [tileId]: { focused: result.focused, anchor: null } }));
     setKeyShownOn(tileId);
@@ -3950,7 +3955,13 @@ export function DashboardView({
     if (markingId === undefined || items.length === 0) return;
 
     const spec = drawn.specs[element.chartId];
-    const member = spec === undefined ? undefined : memberOn(spec.encoding, 'x');
+    // A tiled KPI's tile is its Tile by member (T971, AC-563), as its click marks it.
+    const member =
+      spec === undefined
+        ? undefined
+        : isTiledKpi(spec)
+          ? kpiOptionsOf(spec.options).tileBy
+          : memberOn(spec.encoding, 'x');
     if (member === undefined) return;
     const before = markingOf(marks, markingId);
     const named = markings.find((each) => each.id === markingId);
@@ -3966,18 +3977,6 @@ export function DashboardView({
       );
     };
 
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      const cleared = markingOf(
-        clearTileMarking(marks, { ...element, marksWith: markingId }),
-        markingId,
-      );
-      if (cleared === before) return;
-      setMarks((now) => withMarking(now, markingId, cleared));
-      say(cleared);
-      return;
-    }
-
     const state = markFocus[tileId] ?? { focused: 0, anchor: null };
     const result = keyToMarking(
       event.key,
@@ -3988,6 +3987,18 @@ export function DashboardView({
     // Tab above all: a tile that swallowed it would be a keyboard trap.
     if (!result.handled) return;
     event.preventDefault();
+
+    // Esc: this tile's marking cleared (AC-094, T971).
+    if (result.action === 'unmark') {
+      const cleared = markingOf(
+        clearTileMarking(marks, { ...element, marksWith: markingId }),
+        markingId,
+      );
+      if (cleared === before) return;
+      setMarks((now) => withMarking(now, markingId, cleared));
+      say(cleared);
+      return;
+    }
     setMarkFocus((now) => ({
       ...now,
       [tileId]: { focused: result.focused, anchor: result.anchor },

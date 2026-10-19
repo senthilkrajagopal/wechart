@@ -63,6 +63,10 @@ export const KPI_CSS = `
   color: var(--wc-text-secondary);
 }
 .kpi-tile--dimmed .kpi-tile__value { color: var(--wc-text-secondary); }
+/* The tile the keyboard is on (T971, AC-563; AC-176): a dashed 2 px ring in
+   the accent, distinct in dash, width and colour from the marked tile's
+   solid 1.5 px ring in its marking's colour, as a chart's focused item is. */
+.kpi-tile[data-keyboard-focus='true'] { outline: 2px dashed var(--wc-accent); outline-offset: 2px; }
 .kpi-tile--dimmed svg { opacity: 0.28; }
 .kpi-tile__value {
   font-size: 32px;

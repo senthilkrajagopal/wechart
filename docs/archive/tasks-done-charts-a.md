@@ -180,6 +180,18 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - **AC-562** is ticked on `e2e/new-charts-a.spec.ts`, "a tile saved in Auto before R81 keeps its type until its fields change…", on headless Chromium: the tile and the editor both keep the saved type; after the edit and a save, the stored chart has rules 81 and no type, and the tile draws parallel coordinates. A narrowing note under AC-562 quotes the parking. Unit tests seen red, then green.
     - **AC-028** stays open until AC-560 and AC-561 are whole (lane B's T1012).
 
+- [x] T971 (AC-563) Keyboard marking on KPI tiles~~, bullets, waterfall steps and histogram bins~~ and bullets, with §7a's keys in their order (the waterfall and histogram parts parked, the user, 2026-10-18)
+  - Files: `packages/charts/src/interaction/keyboardMarking.ts` (+ test), `packages/web/src/tiles/kpi/KpiTiles.tsx`.
+  - Failing test: `keyboardMarking.test.ts`: on ~~a waterfall, → moves focus step to step left to right~~ a bullet chart, → moves focus bullet to bullet in reading order without marking, Space marks, Ctrl+Space toggles, Shift+→ extends, Esc unmarks, each announced once; KPI tiles ~~and bullets~~ in reading order; ~~histogram bins left to right;~~ no other key acts (AC-563).
+  - Depends on: T941, ~~T951,~~ T955~~, T963~~
+  - Parked (the user, 2026-10-18): waterfall steps and histogram bins, struck through above, go with T951 and T963 (§"Parked" below).
+  - Done (2026-10-19), decision T971-1:
+    - **Keys:** `keyToMarking` now owns Esc as well (`action: 'unmark'`). The dashboard's `onTileMarkKey` clears the tile's marking on it, as it did before T971. `onTileCrossKey` leaves Esc to the dashboard, which clears every cross-filter (AC-119). The arrows, Space, Ctrl/⌘+Space and Shift+arrow are as before, and no other key is claimed.
+    - **Bullets:** they were already keyboard-markable through the generic path: their categories, in the order drawn, from top to bottom. The e2e shows it; no code was needed.
+    - **KPI tiles:** `kpiKeyItemsOf(spec)` lists a tiled KPI's members in its tiles' order, by value or by Customize's order, across every page. `markableItemsOf` uses it, and `onTileMarkKey` marks the Tile by member. `KpiTiles` draws the focused tile with `data-keyboard-focus` and a dashed 2 px accent outline, distinct from the marked tile's 1.5 px ring. It moves to that tile's page when the keys reach it, changing state during render rather than in an effect.
+    - **Seen:** unit tests red, then green. `e2e/new-charts-a.spec.ts`, "KPI tiles and bullets mark from the keyboard…", passed on headless Chromium, with `markings.spec.ts`'s "a focused tile marks from the keyboard…" and `crossfilter.spec.ts`'s "cross-filters from the keyboard…" still passing.
+    - **AC-563 not ticked:** it also holds Sankey nodes and links, parallel-coordinate lines, map regions and points, and graphical-table rows. No task in this batch covers the rows.
+
 - [x] T953 (AC-580, AC-037) The bullet chart's spec and wells: Target, 2–3 bands at 80, 100 and 120 % by default, and its empty state
   - Files: `packages/core/src/chart-types/bullet.ts` (+ test), `packages/web/src/editor/wells/bullet.tsx` (+ test).
   - Failing test: `bullet.test.ts`: bands default to [80, 100, 120]; a fourth band is refused with "At most 3 bands: R80's three greys, and no fourth without a new colour."; one band is refused; `bullet.test.tsx` (wells): with Target emptied the tile says "A bullet chart compares each member with a target. Put a measure or a value in Target." with Target as its action (AC-580, AC-037).

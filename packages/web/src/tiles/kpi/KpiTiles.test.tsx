@@ -2,7 +2,7 @@ import type { RenderSpec } from '@wechart/core';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { KpiTiles } from './KpiTiles';
+import { kpiKeyItemsOf, KpiTiles } from './KpiTiles';
 
 /**
  * T940 / AC-567: WHILE a KPI has Tile by set, THE SYSTEM SHALL draw one tile
@@ -116,5 +116,46 @@ describe('a KPI tiled by a dimension (T940, AC-567)', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(12);
     expect(screen.getByTestId('kpi-tiles-page').textContent).toBe('Tiles 21–32 of 32');
     expect(screen.getByRole('button', { name: 'Next tiles' })).toHaveProperty('disabled', true);
+  });
+});
+
+/**
+ * T971 / AC-563: … focus moving through KPI tiles … in reading order …, the
+ * focused one drawn distinct from a marked one (AC-176).
+ */
+describe('a tiled KPI’s tiles from the keyboard (T971, AC-563)', () => {
+  it('lists its members as its tiles read, by value or as Customize orders them', () => {
+    expect(kpiKeyItemsOf(spec())).toEqual(['North America', 'EMEA', 'APAC', 'LATAM']);
+    expect(kpiKeyItemsOf(spec(REGIONS, { tileOrder: 'name' }))).toEqual([
+      'APAC',
+      'EMEA',
+      'LATAM',
+      'North America',
+    ]);
+    // A KPI not tiled has no items to step between.
+    const single = spec();
+    expect(
+      kpiKeyItemsOf({
+        ...single,
+        options: { kpi: { time: { member: 'x', granularity: 'month' } } },
+      }),
+    ).toEqual([]);
+  });
+
+  it('draws the tile the keyboard is on, and pages to it', () => {
+    const many = Array.from(
+      { length: 32 },
+      (_, at) => [`Region ${String(at + 1).padStart(2, '0')}`, 1000 * (at + 1), 900] as const,
+    );
+    render(<KpiTiles spec={{ ...spec(many), keyboardFocus: 'Region 05' }} measure={REVENUE} />);
+    // Region 05 is 28th by value: on the second page, which shows.
+    expect(screen.getByTestId('kpi-tiles-page').textContent).toBe('Tiles 21–32 of 32');
+    const focused = screen.getByRole('listitem', { name: /^Region 05:/ });
+    expect(focused.getAttribute('data-keyboard-focus')).toBe('true');
+    expect(
+      screen
+        .getAllByRole('listitem')
+        .filter((one) => one.getAttribute('data-keyboard-focus') === 'true'),
+    ).toHaveLength(1);
   });
 });

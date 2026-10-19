@@ -145,3 +145,27 @@ describe('keys the tile does not claim', () => {
     expect(press('ArrowRight', at(2)).handled).toBe(true);
   });
 });
+
+/**
+ * T971 / AC-563: … the arrow keys move focus without marking, Space marks,
+ * Ctrl/⌘+Space toggles, Shift+arrow extends, and Esc unmarks …; a key not in
+ * §7a acts on no R81 chart. Every §7a key is this module's, Esc too.
+ */
+describe('§7a’s keys, Esc among them (T971, AC-563)', () => {
+  it('unmarks with Esc, keeping focus and dropping the anchor', () => {
+    const result = press('Escape', { focused: 2, anchor: 1 });
+    expect(result).toEqual({ focused: 2, anchor: null, action: 'unmark', handled: true });
+  });
+
+  it('acts on §7a’s keys alone', () => {
+    const acting = ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', ' ', 'Escape'];
+    for (const key of acting) expect(press(key, at(2)).handled).toBe(true);
+    for (const key of ['Enter', 'Home', 'End', 'Delete', 'm', 'Tab', 'PageDown'])
+      expect(press(key, at(2))).toEqual({
+        focused: 2,
+        anchor: null,
+        action: 'none',
+        handled: false,
+      });
+  });
+});

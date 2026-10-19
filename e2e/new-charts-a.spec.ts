@@ -1920,6 +1920,103 @@ test('a tile saved in Auto before R81 keeps its type until its fields change, th
 });
 
 /**
+ * T971 / AC-563: WHILE a dashboard is in Markings mode, THE SYSTEM SHALL let
+ * the keyboard mark the items of every R81 type with §7a's existing keys and
+ * roving focus, and no new shortcut: the arrow keys move focus without
+ * marking, Space marks, Ctrl/⌘+Space toggles, Shift+arrow extends, and Esc
+ * unmarks, each change announced politely; focus moving through KPI tiles
+ * and bullets in reading order …
+ * `Fails when: an item of an R81 type that a pointer can mark can't be marked
+ * from the keyboard; a key does something other than §7a says; focus visits
+ * items in another order; a change isn't announced; or a key not in §7a acts
+ * on an R81 chart.`
+ * Narrowed by the parking to KPI tiles and bullets here (T971).
+ */
+test('KPI tiles and bullets mark from the keyboard with §7a’s keys, in reading order, each change said', async ({
+  page,
+  request,
+}) => {
+  const byStatus = (chart: Record<string, unknown>) => ({
+    wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+    ...chart,
+  });
+  const { id, title } = await graphicalTableDashboard(
+    request,
+    [
+      {
+        tile: 'tile-bullets',
+        chart: byStatus({
+          chartType: 'bullet',
+          options: { bullet: { target: { kind: 'value', value: 75 } } },
+        }),
+      },
+      {
+        tile: 'tile-kpis',
+        chart: {
+          wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
+          chartType: 'kpi',
+          options: { kpi: { tileBy: 'orders.status' } },
+        },
+      },
+    ],
+    { mode: 'markings', crossFilter: { defaultAction: 'filter' } },
+  );
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const said = page.getByTestId('marking-announcer');
+
+  // Bullets, top to bottom as drawn.
+  const bullets = page.locator('[data-tile="tile-bullets"]');
+  const members = async () =>
+    (await bullets.locator('svg text').allTextContents()).filter((text) =>
+      ['completed', 'shipped', 'processing'].includes(text),
+    );
+  await expect.poll(members).toHaveLength(3);
+  const drawn = await members();
+  await bullets.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(said).toHaveText(`${drawn[1] ?? ''}, 2 of 3. Space marks.`);
+  await expect(bullets.getByTestId('mark-badge')).toHaveCount(0);
+  await page.keyboard.press('Space');
+  await expect(bullets.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(page.getByTestId('mark-chip')).toContainText(drawn[1] ?? '');
+  await expect(said).toContainText('1 item marked');
+  await page.keyboard.press('Shift+ArrowDown');
+  await expect(bullets.getByTestId('mark-badge')).toContainText('2 marked');
+  await page.keyboard.press('Control+Space');
+  await expect(bullets.getByTestId('mark-badge')).toContainText('1 marked');
+  // A key §7a doesn't name does nothing.
+  const before = await said.textContent();
+  await page.keyboard.press('KeyM');
+  await expect(bullets.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(said).toHaveText(before ?? '');
+  await page.keyboard.press('Escape');
+  await expect(bullets.getByTestId('mark-badge')).toHaveCount(0);
+
+  // KPI tiles, in reading order: as the tiles are laid out.
+  const kpis = page.locator('[data-tile="tile-kpis"]');
+  const tiles = kpis.getByRole('listitem');
+  await expect(tiles).toHaveCount(3);
+  const order = (await tiles.evaluateAll((all) =>
+    all.map((one) => one.querySelector('.kpi__label')?.textContent ?? ''),
+  )) as string[];
+  await kpis.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(said).toHaveText(`${order[1] ?? ''}, 2 of 3. Space marks.`);
+  await page.keyboard.press('ArrowRight');
+  await expect(said).toHaveText(`${order[2] ?? ''}, 3 of 3. Space marks.`);
+  // The focused tile is drawn so, distinct from a marked one.
+  await expect(tiles.nth(2)).toHaveAttribute('data-keyboard-focus', 'true');
+  await page.keyboard.press('Space');
+  await expect(tiles.nth(2)).toHaveClass(/kpi-tile--marked/);
+  await page.keyboard.press('Shift+ArrowLeft');
+  await expect(tiles.nth(1)).toHaveClass(/kpi-tile--marked/);
+  await expect(kpis.getByTestId('mark-badge')).toContainText('2 marked');
+  await page.keyboard.press('Escape');
+  await expect(kpis.getByTestId('mark-badge')).toHaveCount(0);
+});
+
+/**
  * A dashboard of graphical tables of orders, each its Rows and columns, or
  * any other chart of orders; with `interactions`, in that mode with one
  * default marking, "Marking".
