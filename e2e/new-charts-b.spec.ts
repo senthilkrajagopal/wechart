@@ -1002,3 +1002,57 @@ test('a brush highlights the other tile by every brushed member, and a tile mark
   await expect(tile.locator('svg path[stroke-width="1.5"][fill="none"]').first()).toBeVisible();
   await expect(tile.getByTestId('parallel-sliders')).toHaveCount(0);
 });
+
+/**
+ * T1012 / AC-561: … offer as a runner-up, never the top pick, each with its
+ * reason of at most 80 characters: … Sankey, for 2 dimensions and one summed
+ * measure of at most 50 pairs ("Revenue from Channel to Region: 12 flows,
+ * widths to scale.") … `Fails when: … a Sankey of 51 pairs …`
+ * AC-031: the candidate is rejected for more than 50 flows, or a measure that
+ * isn't summed. AC-028: a top pick and runners-up, each with its reason.
+ * On the real editor and Cube: Orders' Total Amount (a sum) by Status (3)
+ * and Customers' Country (4), 12 pairs.
+ */
+test('the editor offers a Sankey of a summed measure over 12 pairs as a runner-up, and none past 50 flows or of an average', async ({
+  page,
+}) => {
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await expect(page.getByTestId('member-orders.count')).toBeVisible();
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await wellPicker(page, 'dimensions').selectOption('customers.country');
+  await expect(page.getByTestId('result-row-count')).toHaveText('12 rows');
+  await page.getByRole('button', { name: 'Why this recommendation?' }).click();
+  const sankey = page.getByTestId('runner-up-sankey');
+  await expect(sankey).toHaveText(
+    // Its long titles keep the flows, the gloss dropped to stay within 80.
+    /^Sankey — .*Total Amount from .*Status to .*Country: 12 flows(, widths to scale)?\.$/,
+  );
+  expect((((await sankey.textContent()) ?? '').split(' — ')[1] ?? '').length).toBeLessThanOrEqual(80);
+  await expect(page.getByTestId('picked-type')).not.toHaveAttribute('data-chart-type', 'sankey');
+
+  // By each order's id: 240 pairs, past the 50 a Sankey draws.
+  await page
+    .getByTestId('well-dimensions')
+    .getByRole('button', { name: /^Remove .*Country from Dimensions$/ })
+    .click();
+  await wellPicker(page, 'dimensions').selectOption('orders.id');
+  await expect(page.getByTestId('result-row-count')).toContainText('240 rows');
+  await expect(page.getByTestId('runner-up-sankey')).toHaveCount(0);
+  await page.getByRole('button', { name: /^Show every rule for every type/ }).click();
+  const trace = page.getByTestId('why-this-chart');
+  await expect(trace.getByTestId('trace-sankey-sankey_flow_capacity')).toContainText('✗');
+
+  // An average's widths don't add up: refused, whatever its pairs.
+  await page
+    .getByTestId('well-dimensions')
+    .getByRole('button', { name: /^Remove .*ID from Dimensions$/i })
+    .click();
+  await wellPicker(page, 'dimensions').selectOption('customers.country');
+  await page.getByRole('button', { name: /^Remove .*Total Amount from Metrics$/ }).click();
+  await wellPicker(page, 'measures').selectOption('orders.average_amount');
+  await expect(page.getByTestId('result-row-count')).toHaveText('12 rows');
+  await expect(page.getByTestId('runner-up-sankey')).toHaveCount(0);
+  await expect(trace.getByTestId('trace-sankey-sankey_summed_measure')).toContainText('✗');
+});

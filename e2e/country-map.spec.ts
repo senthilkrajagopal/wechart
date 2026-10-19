@@ -48,7 +48,8 @@ test('a measure by ISO-3 codes is offered as a country map, coloured, with a leg
   await wellPicker(page, 'dimensions').selectOption(`${cube}.iso3`);
   const result = page.getByTestId('editor-result');
   // The fields' rows in: what the gallery offers is read from them.
-  await expect(result.locator('svg').first()).toContainText('FRA');
+  // The fields' rows in (in Auto ISO-3 codes now draw the Map, T1012).
+  await expect(page.getByTestId('result-row-count')).toHaveText('5 rows');
 
   // Offered: drawable, and suggested for these fields.
   const offered = await mapCard(page);
@@ -90,7 +91,8 @@ test('the Map’s wells offer its boundary sets and three layers, Regions drawn 
   const cube = await newChartOnCountries(page, request, testInfo.project.name);
   await wellPicker(page, 'dimensions').selectOption(`${cube}.iso3`);
   const result = page.getByTestId('editor-result');
-  await expect(result.locator('svg').first()).toContainText('FRA');
+  // The fields' rows in (in Auto ISO-3 codes now draw the Map, T1012).
+  await expect(page.getByTestId('result-row-count')).toHaveText('5 rows');
   await chooseChartType(page, 'map');
   await expectChartType(page, 'map');
 
@@ -139,9 +141,8 @@ test('the map is offered for a dimension the model marks a country code only as 
     .getByRole('button', { name: /^Remove .* from Dimensions$/ })
     .click();
   await wellPicker(page, 'dimensions').selectOption(`${cube}.country_marked`);
-  await expect(page.getByTestId('editor-result').locator('svg').first()).toContainText(
-    'United States',
-  );
+  // A country code the model marks: the Map, drawn in Auto since T1012.
+  await expect(page.getByTestId('editor-result').locator('svg').first()).toContainText('No data');
   expect((await mapCard(page)).drawable).toBe('true');
 });
 
@@ -163,7 +164,8 @@ test('a Points layer draws each place from a geo dimension over the regions, siz
   const cube = await newChartOnCountries(page, request, testInfo.project.name);
   await wellPicker(page, 'dimensions').selectOption(`${cube}.iso3`);
   const result = page.getByTestId('editor-result');
-  await expect(result.locator('svg').first()).toContainText('FRA');
+  // The fields' rows in (in Auto ISO-3 codes now draw the Map, T1012).
+  await expect(page.getByTestId('result-row-count')).toHaveText('5 rows');
   await chooseChartType(page, 'map');
   await expectChartType(page, 'map');
 
@@ -242,7 +244,8 @@ test('a Density layer draws where places gather, the regions as outlines, and sa
   const cube = await newChartOnCountries(page, request, testInfo.project.name);
   await wellPicker(page, 'dimensions').selectOption(`${cube}.iso3`);
   const result = page.getByTestId('editor-result');
-  await expect(result.locator('svg').first()).toContainText('FRA');
+  // The fields' rows in (in Auto ISO-3 codes now draw the Map, T1012).
+  await expect(page.getByTestId('result-row-count')).toHaveText('5 rows');
   await chooseChartType(page, 'map');
   await expectChartType(page, 'map');
   const map = result.locator('svg').first();
@@ -327,6 +330,60 @@ test('a Regions layer on Admin-1 colours German states by code or name, Bremen a
 });
 
 /**
+ * T1012 / AC-560: THE SYSTEM SHALL make one of R81's types the top pick only
+ * for: … a geo dimension and one measure (Map with a Points layer); a region
+ * key (AC-623) and one measure (Map with a Regions layer) …
+ * `Fails when: for any of those signatures the top pick … differs; …`
+ * In Auto, on the real editor: ISO-3 codes, a `geo` dimension, and German
+ * states by name and code each give the Map, drawn with its layer.
+ */
+test('in Auto the Map is the top pick for ISO-3 codes, a geo dimension and an Admin-1 key, drawn with its layer', async ({
+  page,
+  request,
+}, testInfo) => {
+  const cube = await newChartOnCountries(page, request, testInfo.project.name);
+  const result = page.getByTestId('editor-result');
+  const map = result.locator('svg').first();
+  await wellPicker(page, 'dimensions').selectOption(`${cube}.iso3`);
+  // In Auto: the type drawn is the pick.
+  await expect(page.getByRole('button', { name: 'Auto', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expectChartType(page, 'map');
+  await expect(map.locator('path[fill^="rgb"]').first()).toBeAttached();
+
+  // A geo dimension: its places as points, in slot 1 with no regions under them.
+  await page
+    .getByTestId('well-dimensions')
+    .getByRole('button', { name: /^Remove .* from Dimensions$/ })
+    .click();
+  await wellPicker(page, 'dimensions').selectOption(`${cube}.location`);
+  await expectChartType(page, 'map');
+  await expect(map.locator('path[fill="#2a78d6"]')).toHaveCount(5);
+  await expect(map.locator('path[fill^="rgb"]')).toHaveCount(0);
+  await expect(result.getByTestId('unplaced-codes')).toHaveCount(0);
+
+  // German states by name and code, every value one (AC-623): on Admin-1.
+  const states = await newChartOnStates(page, request, testInfo.project.name);
+  // With "Online", not every value is a region key: no Map in Auto.
+  await expect(page.getByTestId('result-row-count')).toHaveText('16 rows');
+  await expectChartType(page, 'bar');
+  await page
+    .getByTestId('well-dimensions')
+    .getByRole('button', { name: /^Remove .* from Dimensions$/ })
+    .click();
+  await wellPicker(page, 'dimensions').selectOption(`${states}.state_known`);
+  await expectChartType(page, 'map');
+  await expect(page.getByRole('button', { name: 'Auto', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(result.getByTestId('unplaced-codes')).toHaveText('Not on the map: (empty)');
+  await expect(result.locator('svg').first()).toContainText('No data');
+});
+
+/**
  * T979 / AC-628: WHEN a read-write member of a folder uploads a custom
  * boundary set, THE SYSTEM SHALL take it into their My workspace, landing it
  * in the folder only through a proposal, … and SHALL then offer the set in
@@ -389,7 +446,8 @@ test('a custom boundary set uploaded and approved into a folder is offered and d
   const cube = await newChartOnCountries(page, request, testInfo.project.name);
   await wellPicker(page, 'dimensions').selectOption(`${cube}.iso3`);
   const result = page.getByTestId('editor-result');
-  await expect(result.locator('svg').first()).toContainText('FRA');
+  // The fields' rows in (in Auto ISO-3 codes now draw the Map, T1012).
+  await expect(page.getByTestId('result-row-count')).toHaveText('5 rows');
   await chooseChartType(page, 'map');
   const set = page.getByRole('combobox', { name: 'Boundary set' });
   await set.selectOption({ label: name });

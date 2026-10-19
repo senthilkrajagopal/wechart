@@ -34,7 +34,7 @@ import {
 import { withNarrowCombo } from './combo/narrow';
 import { heatmapOption, isHeatmapType } from './series/heatmap';
 import { countryMap } from './geo/countryMap';
-import { isMapType, mapOption } from './series/map';
+import { isMapType, mapOption, mapSpecOf } from './series/map';
 import { withMapDensity } from './series/mapDensity';
 import { withMapPoints } from './series/mapPoints';
 import { SERIES } from './series/registry';
@@ -204,6 +204,8 @@ export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): E
   // boundaries are registered: the tile loads them first (`loadMapBoundaries`).
   if (isMapType(spec.chartType)) {
     const map = countryMap();
+    // As it draws in Auto, where its layer is the dimension's (T1012, AC-560).
+    const shown = mapSpecOf(spec);
     // Marked, highlighted and focused as every chart is (T398's review), in
     // outline and fade only: a region's fill is the scale's, and a colour
     // of the item's own would stand in for it (direction.md, "Country map").
@@ -212,11 +214,14 @@ export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): E
     return withMapPoints(
       withMapDensity(
         regionsFilledByScale(
-          withKeyboardFocus(withMarks(withHighlight(mapOption(spec, map), spec), spec), spec),
+          withKeyboardFocus(
+            withMarks(withHighlight(mapOption(shown, map), shown), shown),
+            shown,
+          ),
         ),
-        spec,
+        shown,
       ),
-      spec,
+      shown,
     );
   }
 

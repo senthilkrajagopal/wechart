@@ -26,6 +26,7 @@ import {
 } from '@wechart/core';
 
 import { markedItemStyle } from '../marking/render';
+import { mapSpecOf } from './map';
 import { DEFAULT_PALETTE, DEFAULT_SURFACE, type EChartsOption } from '../theme';
 
 export const POINT_MIN_PX = 8;
@@ -84,7 +85,9 @@ const numberOf = (raw: unknown): number | undefined => {
 };
 
 /** The Points layer as drawn; none without the layer or before its answer is in. */
-export function mapPointsOf(spec: RenderSpec): MapPointsDrawn | undefined {
+export function mapPointsOf(given: RenderSpec): MapPointsDrawn | undefined {
+  // As it draws in Auto: a geo dimension's rows are its points (T1012).
+  const spec = mapSpecOf(given);
   const layer = mapSettingsOf(spec.options).points;
   const answer = spec.mapPoints;
   if (layer === undefined || answer === undefined) return undefined;
@@ -148,7 +151,8 @@ const escapeHtml = (value: string) =>
  * The map's option with its Points layer: a hidden `geo` laid out as the map
  * series' own, and the points as a scatter series on it, over the regions.
  */
-export function withMapPoints(option: EChartsOption, spec: RenderSpec): EChartsOption {
+export function withMapPoints(option: EChartsOption, given: RenderSpec): EChartsOption {
+  const spec = mapSpecOf(given);
   const drawn = mapPointsOf(spec);
   const series = (option['series'] as Record<string, unknown>[] | undefined) ?? [];
   const regions = series.find((one) => one['type'] === 'map');

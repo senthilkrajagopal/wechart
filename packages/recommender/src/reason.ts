@@ -70,6 +70,15 @@ export function runnerUpReasonFor(
     return capped(
       `A KPI per ${title(facetField)}: ${countOf(facetField)} tiles, each this period’s number and its trend.`,
     );
+  // T1012, AC-561's words: the measure, its two steps and its flows.
+  if (chartType === 'sankey' && categoryField !== undefined) {
+    const said = `${title(valueFields[0])} from ${title(categoryField)} to ${title(candidate.secondCategoryField)}: ${
+      candidate.flows === undefined ? 'its' : String(candidate.flows)
+    } flows`;
+    // Long titles keep the flows and drop the gloss before anything is cut.
+    const whole = `${said}, widths to scale.`;
+    return capped(whole.length <= MAX_REASON_LENGTH ? whole : `${said}.`);
+  }
   if (chartType === 'parallel' && categoryField !== undefined)
     return capped(
       `${String(valueFields.length)} measures across ${countOf(categoryField)} ${title(categoryField)} values: a line per member.`,

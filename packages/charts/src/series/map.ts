@@ -16,6 +16,10 @@
  */
 import {
   formatterFor,
+  geoPointOf,
+  holdsCountryCodes,
+  isRegionKey,
+  mapModule,
   mapSettingsOf,
   memberOn,
   placeValues,
@@ -27,7 +31,7 @@ import { geoEqualEarth } from 'd3-geo';
 
 import { OTHER_COLOUR } from '../colorAssignment';
 import { COUNTRY_KEY, COUNTRY_MAP, countryMap, type CountryMap } from '../geo/countryMap';
-import { admin1CountryOf, admin1Index, admin1SetId } from '../geo/admin1';
+import { admin1CountryOf, admin1Index, admin1RegionsOf, admin1SetId } from '../geo/admin1';
 import { regionSetOf } from '../geo/regionSets';
 import { DEFAULT_SURFACE, SEQUENTIAL, type EChartsOption } from '../theme';
 
@@ -88,6 +92,60 @@ export function unplacedCodes(
  * set other than Countries: a custom set's own id; Admin-1's comes with its
  * boundaries (T975).
  */
+/**
+ * A Map as it draws in Auto, where no setting says its layer (T1012,
+ * AC-560): a dimension of Cube's "lat,lng" values is its Points layer, its
+ * rows the points and no region placed; one whose values name Admin-1's
+ * regions of one country, with no boundary set chosen, is on Admin-1 — as
+ * the recommender read them to pick the Map. Any other, or one set, as it is.
+ */
+export function mapSpecOf(spec: RenderSpec): RenderSpec {
+  if (!isMapType(spec.chartType)) return spec;
+  const x = memberOn(spec.encoding, 'x');
+  if (x === undefined) return spec;
+  const settings = mapSettingsOf(spec.options);
+  const values = spec.rows.map((row) => row[x]);
+  const present = values.filter((value) => value !== null && value !== undefined && value !== '');
+  if (present.length === 0) return spec;
+  const y = memberOn(spec.encoding, 'y');
+  if (settings.points === undefined && present.every((value) => geoPointOf(value) !== undefined))
+    return {
+      ...spec,
+      encoding: { ...spec.encoding, x: [] },
+      options: {
+        ...spec.options,
+        map: mapModule.save({ ...settings, points: { location: x, ...(y === undefined ? {} : { size: y }) } }),
+      },
+      mapPoints: { rows: spec.rows },
+    };
+  const chosen = (spec.options?.['map'] as { boundarySet?: unknown } | undefined)?.boundarySet;
+  if (chosen === undefined && !holdsCountryCodes(values, undefined)) {
+    const country = admin1CountryOf(values);
+    const regions = country === undefined ? undefined : admin1RegionsOf(country);
+    if (regions !== undefined && isRegionKey('admin1', regions, values, undefined))
+      return {
+        ...spec,
+        options: { ...spec.options, map: mapModule.save({ ...settings, boundarySet: 'admin1' }) },
+      };
+  }
+  return spec;
+}
+
+/** Whether a Map in Auto may be on Admin-1, once its index is in to tell (T1012). */
+export function mayBeAdmin1(spec: RenderSpec): boolean {
+  const x = memberOn(spec.encoding, 'x');
+  const chosen = (spec.options?.['map'] as { boundarySet?: unknown } | undefined)?.boundarySet;
+  return (
+    isMapType(spec.chartType) &&
+    x !== undefined &&
+    chosen === undefined &&
+    !holdsCountryCodes(
+      spec.rows.map((row) => row[x]),
+      undefined,
+    )
+  );
+}
+
 export function regionSetIdOf(spec: RenderSpec): string | undefined {
   const { boundarySet } = mapSettingsOf(spec.options);
   if (boundarySet.startsWith('custom:')) return boundarySet;
@@ -108,9 +166,12 @@ export function regionSetIdOf(spec: RenderSpec): string | undefined {
  * when everything is placed, or before the boundaries are in.
  */
 export function unplacedNote(
-  spec: RenderSpec,
+  given: RenderSpec,
   map: CountryMap | undefined = countryMap(),
 ): string | undefined {
+  // As it draws in Auto (T1012): a Points layer's places are no regions to place.
+  const spec = mapSpecOf(given);
+  if (memberOn(spec.encoding, 'x') === undefined) return undefined;
   if (mapSettingsOf(spec.options).boundarySet === 'countries') {
     const codes = unplacedCodes(spec, map);
     return codes.length === 0 ? undefined : `Not on the map: ${codes.join(', ')}`;
@@ -170,9 +231,10 @@ export interface DrawnRegions {
 }
 
 export function drawnRegionsOf(
-  spec: RenderSpec,
+  given: RenderSpec,
   map: CountryMap | undefined = countryMap(),
 ): DrawnRegions | { readonly instead: string } | undefined {
+  const spec = mapSpecOf(given);
   const { boundarySet } = mapSettingsOf(spec.options);
   if (boundarySet === 'countries') {
     if (map === undefined) return undefined;
@@ -235,7 +297,7 @@ export function mapOption(spec: RenderSpec, map: CountryMap | undefined): EChart
   const values = placed.map((each) => each.value).filter((value) => Number.isFinite(value));
   const [min, max] = values.length === 0 ? [0, 1] : [Math.min(...values), Math.max(...values)];
 
-  return {
+  const drawnOption: EChartsOption = {
     animation: false,
     series: [
       {
@@ -268,6 +330,13 @@ export function mapOption(spec: RenderSpec, map: CountryMap | undefined): EChart
         itemStyle: { areaColor: OTHER_COLOUR, borderColor: DEFAULT_SURFACE, borderWidth: 0.5 },
       },
     ],
+    // No Regions layer (a geo dimension's points alone, T1012): no ramp to read.
+    ...(memberOn(spec.encoding, 'x') === undefined ? {} : regionsKey()),
+  };
+
+  /** The Regions layer's ramp and its "No data" swatch (rule 86). */
+  function regionsKey(): EChartsOption {
+    return {
     visualMap: {
       type: 'continuous',
       seriesIndex: 0,
@@ -306,6 +375,11 @@ export function mapOption(spec: RenderSpec, map: CountryMap | undefined): EChart
         ],
       },
     ],
+    };
+  }
+
+  return {
+    ...drawnOption,
     // The country by its name, then the measure, or "No data" (direction.md);
     // a partly marked one's marked value beside it (T453).
     tooltip: {

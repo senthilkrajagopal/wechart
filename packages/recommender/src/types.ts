@@ -33,6 +33,13 @@ export interface Field {
    * Unknown reads as not summed.
    */
   readonly aggType?: string;
+  /** A dimension of Cube's `geo` type: each value a place (T1012, AC-560). */
+  readonly geo?: boolean;
+  /**
+   * A dimension that is a region key of a boundary set other than Countries
+   * (AC-623), as the caller decided it: `admin1`, or `custom:‹id›` (T1012).
+   */
+  readonly regionSet?: string;
 }
 
 export interface Signature {
@@ -97,6 +104,12 @@ export interface Candidate {
    * AC-561): the same type as at Sum, offered beside it as its own pick.
    */
   readonly stack?: 'percent';
+  /** A Map's layer: Points from a geo dimension, or Regions of a region key (T1012). */
+  readonly mapLayer?: 'points' | 'regions';
+  /** A Map's boundary set, where not Countries (T1012): `admin1`, `custom:‹id›`. */
+  readonly boundarySet?: string;
+  /** A Sankey's flows: the pairs of its two steps the query answered (T1012, AC-031). */
+  readonly flows?: number;
 }
 
 export interface RuleOutcome {

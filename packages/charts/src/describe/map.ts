@@ -3,7 +3,7 @@ import { formatterFor, mapSettingsOf, memberOn, type RenderSpec } from '@wechart
 import { moneyOf } from '../compact';
 import { echarts } from '../echarts';
 import { titleOf } from '../modelWriter';
-import { drawnRegionsOf, type DrawnRegions } from '../series/map';
+import { drawnRegionsOf, mapSpecOf, type DrawnRegions } from '../series/map';
 import { mapPointsOf } from '../series/mapPoints';
 
 /** A noun's plural, as a sentence says it: "territory" → "territories". */
@@ -47,17 +47,22 @@ function drawn(spec: RenderSpec): DrawnRegions | undefined {
  * of the set without one named, or past three counted. On Countries and
  * Admin-1, Natural Earth's point of view said (R83).
  */
-export function describeMap(spec: RenderSpec): string | undefined {
+export function describeMap(given: RenderSpec): string | undefined {
+  // As it draws in Auto (T1012): a geo dimension's rows its points alone.
+  const spec = mapSpecOf(given);
   const regions = drawn(spec);
   const dimension = memberOn(spec.encoding, 'x');
   const measure = memberOn(spec.encoding, 'y');
-  if (regions === undefined || dimension === undefined || measure === undefined) return undefined;
+  const parts: string[] = [];
+  if (regions === undefined || measure === undefined) return undefined;
   const valued = regions.placed.filter((region) => Number.isFinite(region.value));
   const nameOf = (key: string) => regions.names.get(key) ?? key;
-  const parts: string[] = [];
   const noun = regions.noun;
-  const head = `Map of ${titleOf(spec, measure)} by ${titleOf(spec, dimension).toLowerCase()}, ${String(valued.length)} ${valued.length === 1 ? noun : plural(noun)}`;
-  if (valued.length === 0) parts.push(`${head}.`);
+  const head = `Map of ${titleOf(spec, measure)}${
+    dimension === undefined ? '' : ` by ${titleOf(spec, dimension).toLowerCase()}`
+  }, ${String(valued.length)} ${valued.length === 1 ? noun : plural(noun)}`;
+  if (dimension === undefined) parts.push(`Map of ${titleOf(spec, measure)}.`);
+  else if (valued.length === 0) parts.push(`${head}.`);
   else {
     const highest = valued.reduce((one, other) => (other.value > one.value ? other : one));
     const lowest = valued.reduce((one, other) => (other.value < one.value ? other : one));
@@ -146,7 +151,8 @@ export interface MapRegionTable {
  * with a row first in the rows' order, then the rest by name with no value;
  * with a Points layer, how many of its points lie in each.
  */
-export function mapRegionTable(spec: RenderSpec): MapRegionTable | undefined {
+export function mapRegionTable(given: RenderSpec): MapRegionTable | undefined {
+  const spec = mapSpecOf(given);
   const regions = drawn(spec);
   const dimension = memberOn(spec.encoding, 'x');
   const measure = memberOn(spec.encoding, 'y');

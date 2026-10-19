@@ -152,6 +152,47 @@ function r81Candidates(signature: Signature): Candidate[] {
     candidates.push(
       build('kpi', { valueFields: measures, categoryField: times[0]!, facetField: dimensions[0]! }),
     );
+
+  /**
+   * T1012, AC-560: a geo dimension and one measure, a Map with its Points;
+   * a region key of Admin-1 or a custom set and one measure, a Map with its
+   * Regions there (Countries' is AC-305's, below).
+   */
+  const [place] = dimensions;
+  if (measures.length === 1 && dimensions.length === 1 && times.length === 0) {
+    if (place!.geo === true)
+      candidates.push(
+        build('map', { valueFields: measures, categoryField: place!, mapLayer: 'points' }),
+      );
+    // ISO-3 codes are Countries' region key (AC-623 over AC-313).
+    else if (place!.countryCodes === true)
+      candidates.push(
+        build('map', { valueFields: measures, categoryField: place!, mapLayer: 'regions' }),
+      );
+    else if (place!.regionSet !== undefined)
+      candidates.push(
+        build('map', {
+          valueFields: measures,
+          categoryField: place!,
+          mapLayer: 'regions',
+          boundarySet: place!.regionSet,
+        }),
+      );
+  }
+  /**
+   * T1012, AC-561, never first: one summed measure flowing between two
+   * dimensions, the pairs the query answered being its flows; the caps
+   * (`legality.ts`) keep it to 50 and to a summed measure (AC-031).
+   */
+  if (measures.length === 1 && dimensions.length === 2 && times.length === 0)
+    candidates.push(
+      build('sankey', {
+        valueFields: measures,
+        categoryField: dimensions[0]!,
+        secondCategoryField: dimensions[1]!,
+        ...(signature.rowCount === undefined ? {} : { flows: signature.rowCount }),
+      }),
+    );
   return candidates;
 }
 
@@ -457,6 +498,11 @@ function formReasonOf(candidate: Candidate, signature: Signature): string | unde
     return 'One number against its target.';
   if (chartType === 'bullet' && categoryField === undefined)
     return 'A single bullet: the number against its target and bands.';
+  // The Map's layers (T1012, AC-560).
+  if (chartType === 'map' && candidate.mapLayer === 'points')
+    return 'One point per place, sized by the measure, on an equal-area map.';
+  if (chartType === 'map' && candidate.mapLayer === 'regions')
+    return 'Each region shaded by the measure, on its boundary set.';
   return undefined;
 }
 
@@ -517,6 +563,15 @@ function r81PicksOf(signature: Signature): { readonly top?: Is; readonly next?: 
     // A Target and none: the KPI against it, a single bullet next.
     if (dimensions.length === 0) return { top: is('kpi'), next: is('bullet') };
   }
+  // A geo dimension, or a region key of Admin-1 or a custom set, and one measure: the Map (T1012).
+  const [place] = dimensions;
+  if (
+    measures.length === 1 &&
+    dimensions.length === 1 &&
+    times.length === 0 &&
+    (place!.geo === true || place!.regionSet !== undefined || place!.countryCodes === true)
+  )
+    return { top: is('map', (candidate) => candidate.mapLayer !== undefined) };
   // 4 or more measures by one dimension of more than 8 members.
   if (
     measures.length >= 4 &&

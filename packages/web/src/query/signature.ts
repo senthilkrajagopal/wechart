@@ -1,12 +1,38 @@
+import { admin1CountryOf, admin1Index, admin1RegionsOf } from '@wechart/charts';
 import {
   countryCodeMarkingOf,
+  geoPointOf,
   holdsCountryCodes,
+  isRegionKey,
   kpiOptionsOf,
+  regionKeyMarkingOf,
   scaleOf,
   targetCount,
   type ChartSpec,
   type MemberFormats,
+  type RegionKeyMarking,
 } from '@wechart/core';
+
+/** What the caller knows of places (T1012): Cube's `geo` type, and region-key markings. */
+export interface PlacesOf {
+  readonly geo?: (member: string) => boolean;
+  readonly regionMarking?: (member: string) => RegionKeyMarking;
+}
+
+/** How the model marks each dimension as a region key, from `/v1/meta` (T974, AC-623). */
+export function regionMarkingsOf(meta: unknown): (member: string) => RegionKeyMarking {
+  const marked = new Map<string, RegionKeyMarking>();
+  const cubes = (meta as { cubes?: unknown } | null | undefined)?.cubes;
+  for (const cube of Array.isArray(cubes) ? cubes : []) {
+    const dimensions = (cube as { dimensions?: unknown }).dimensions;
+    for (const dimension of Array.isArray(dimensions) ? dimensions : []) {
+      const { name, meta: own } = dimension as { name?: unknown; meta?: unknown };
+      const marking = regionKeyMarkingOf(own);
+      if (typeof name === 'string' && marking !== undefined) marked.set(name, marking);
+    }
+  }
+  return (member) => marked.get(member);
+}
 
 /**
  * How the model marks each dimension as holding country codes, from its
@@ -66,14 +92,46 @@ export function signatureOf(
    * 100 % stack is offered only for a summed measure (T969, AC-561).
    */
   aggTypes?: Readonly<Record<string, string>>,
+  /**
+   * Places, where the caller knows them (T1012, AC-560): a dimension of
+   * Cube's `geo` type, and the model's region-key marking (AC-623).
+   */
+  places?: PlacesOf,
 ): Signature {
   const distinct = (member: string) => new Set(rows.map((row) => String(row[member] ?? ''))).size;
   const target = targetCount(options) > 0 || kpiOptionsOf(options).target !== undefined;
+  const valuesOf = (member: string) => rows.map((row) => row[member]);
   const countryCodes = (member: string) =>
-    holdsCountryCodes(
-      rows.map((row) => row[member]),
-      countryMarking?.(member),
-    );
+    holdsCountryCodes(valuesOf(member), countryMarking?.(member));
+  /** Cube's `geo` type, or every value a "lat,lng" as Cube writes one (research `cube-geo-values.md`). */
+  const geo = (member: string) => {
+    if (places?.geo?.(member) === true) return true;
+    const present = valuesOf(member).filter((value) => value !== null && value !== undefined && value !== '');
+    return present.length > 0 && present.every((value) => geoPointOf(value) !== undefined);
+  };
+  /**
+   * A region key of a boundary set other than Countries (AC-623): as the
+   * model marks it, else Admin-1 where its index is in and every value
+   * names one region of one country (T1012).
+   */
+  const regionSet = (member: string): string | undefined => {
+    const marking = places?.regionMarking?.(member);
+    if (marking === false || marking === 'countries') return undefined;
+    if (marking !== undefined) return marking;
+    const values = valuesOf(member);
+    const index = admin1Index();
+    const country = index === undefined ? undefined : admin1CountryOf(values, index);
+    const regions = country === undefined ? undefined : admin1RegionsOf(country, index);
+    return regions !== undefined && isRegionKey('admin1', regions, values, undefined)
+      ? 'admin1'
+      : undefined;
+  };
+  const placeOf = (member: string) => {
+    if (countryCodes(member)) return { countryCodes: true };
+    if (geo(member)) return { geo: true };
+    const set = regionSet(member);
+    return set === undefined ? {} : { regionSet: set };
+  };
 
   return {
     fields: [
@@ -87,7 +145,7 @@ export function signatureOf(
         name,
         kind: 'dimension' as const,
         ...(rows.length > 0 ? { cardinality: distinct(name) } : {}),
-        ...(countryCodes(name) ? { countryCodes: true } : {}),
+        ...placeOf(name),
       })),
       ...spec.timeDimensions.map((name) => ({
         name,

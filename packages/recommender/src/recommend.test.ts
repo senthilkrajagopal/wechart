@@ -103,11 +103,13 @@ describe('the recommendation follows the signature (AC-028)', () => {
    * reads values more exactly — for a measure by a dimension of ISO-3 codes,
    * and for nothing else.
    */
+  // Since R81 (AC-560, T1012): ISO-3 codes are Countries' region key, and the
+  // Map with its Regions is the top pick, offered once.
   it('offers a country map for a measure by country codes, and only then', () => {
     const countries: Field = { ...dimension(20, 'customers.country_iso3'), countryCodes: true };
     const byCountry = recommend(signature(measure(), countries));
-    expect(byCountry.top?.candidate.chartType).toBe('bar');
-    expect(byCountry.runnersUp.map((each) => each.candidate.chartType)).toContain('map');
+    expect(byCountry.top?.candidate.chartType).toBe('map');
+    expect(byCountry.runnersUp.map((each) => each.candidate.chartType)).not.toContain('map');
 
     const byStatus = recommend(signature(measure(), dimension(20)));
     expect(
@@ -137,7 +139,8 @@ describe('the recommendation follows the signature (AC-028)', () => {
     it('promotes it to second, by two fields or by country, when more than half would hide', () => {
       expect(second(twoFields)).not.toBe('hbar');
       expect(second({ ...twoFields, hiddenLabels: 0.6 })).toBe('hbar');
-      expect(second(byCountry)).toBe('map');
+      // The Map top by country since R81 (T1012): the bar's labels then hidden second.
+      expect(second(byCountry)).not.toBe('hbar');
       expect(second({ ...byCountry, hiddenLabels: 0.6 })).toBe('hbar');
     });
 

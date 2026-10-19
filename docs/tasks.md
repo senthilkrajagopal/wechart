@@ -2260,11 +2260,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 ### Lane CHARTS-B: the recommender, the keyboard and the e2e
 
-- [ ] T1012 (AC-560, AC-561, AC-031, AC-305) The map as the top pick for a geo dimension or a region key; the Sankey~~, funnel, timeline, calendar and icicle~~ as ~~runners-up~~ a runner-up with ~~their reasons~~ its reason; and their caps (the funnel, timeline, calendar and icicle parts parked, the user, 2026-10-18)
-  - Files: `packages/recommender/src/recommend.ts`, `packages/recommender/src/legality.ts`, `packages/recommender/src/reason.ts`, `packages/recommender/src/recommendLaneB.test.ts`.
-  - Failing test: `recommendLaneB.test.ts`: a geo dimension and Revenue give Map with Points; an admin-1 key and Revenue give Map with Regions, an ISO-3 one as AC-305 says; Channel and Region with Revenue offer Sankey ("Revenue from Channel to Region: 12 flows, widths to scale."), 51 pairs don't; ~~5 counts and no dimension offer Funnel; Batch, Started at and Finished at offer Timeline; Count by day over 184 days offers Calendar heatmap, 55 days don't; Region › Country of Revenue offers Icicle, a first level of 9 doesn't;~~ an average offers ~~neither Sankey nor Icicle~~ no Sankey; none is ever first and every reason is at most 80 characters (AC-560, AC-561, AC-031, AC-305).
-  - Depends on: T974, T968
-  - Parked (the user, 2026-10-18, "any of the charts that you have not started implmentation put them in the parking lot for now"): the funnel's, timeline's, calendar's and icicle's runners-up, struck through above, go with T994–T1011 and T1019 (§"Parked" below).
+- [x] T1012 (AC-560, AC-561, AC-031, AC-305) The map as the top pick for a geo dimension or a region key; the Sankey~~, funnel, timeline, calendar and icicle~~ as ~~runners-up~~ a runner-up with ~~their reasons~~ its reason; and their caps (the funnel, timeline, calendar and icicle parts parked, the user, 2026-10-18)
 
 - [ ] T1013 (AC-563) Keyboard marking on ~~calendar days, timeline bars,~~ Sankey nodes and links, ~~icicle boxes,~~ parallel lines, map regions and points~~, and funnel stages~~, in their order (the calendar, timeline, icicle and funnel parts parked, the user, 2026-10-18)
   - Files: `packages/charts/src/interaction/keyboardMarking.ts` (+ test).

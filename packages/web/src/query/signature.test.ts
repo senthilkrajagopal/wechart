@@ -189,3 +189,41 @@ describe('a chart’s Target in its signature (T968, AC-560)', () => {
     expect(recommendedTypeOf(byStatus, rows)).toBe('bar');
   });
 });
+
+/**
+ * T1012 / AC-560: a geo dimension and one measure pick the Map with Points;
+ * a region key (AC-623) and one measure, the Map with Regions — told by the
+ * dimension's values, or the model's marking — in the editor and on a
+ * dashboard alike.
+ */
+describe('places in the signature (AC-560)', () => {
+  const byPlace = (dimension: string) => ({
+    ...emptySpec('stores'),
+    measures: ['orders.revenue'],
+    dimensions: [dimension],
+  });
+
+  it('says a dimension of Cube’s "lat,lng" values is a place, and picks the Map', () => {
+    const places = [
+      { 'stores.location': '48.8566,2.3522', 'orders.revenue': 3 },
+      { 'stores.location': '51.5074,-0.1278', 'orders.revenue': 4 },
+    ];
+    const [, location] = signatureOf(byPlace('stores.location'), places).fields;
+    expect(location?.geo).toBe(true);
+    expect(recommendedTypeOf(byPlace('stores.location'), places)).toBe('map');
+  });
+
+  it('says a dimension the model marks as an Admin-1 key is one, and picks the Map', () => {
+    const states = [
+      { 'stores.state': 'Online', 'orders.revenue': 3 },
+      { 'stores.state': 'Retail', 'orders.revenue': 4 },
+    ];
+    const marked = signatureOf(byPlace('stores.state'), states, undefined, undefined, undefined, undefined, {
+      regionMarking: (member) => (member === 'stores.state' ? 'admin1' : undefined),
+    });
+    expect(marked.fields[1]?.regionSet).toBe('admin1');
+    expect(topTypeOf(recommend(marked))).toBe('map');
+    // Unmarked, these values are no region key: no Map.
+    expect(signatureOf(byPlace('stores.state'), states).fields[1]?.regionSet).toBeUndefined();
+  });
+});

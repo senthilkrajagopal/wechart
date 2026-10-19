@@ -60,6 +60,7 @@ import {
 
 import {
   DEFAULT_PALETTE,
+  loadAdmin1Index,
   referencesOutside,
   STACKABLE_TYPES,
   type LegendGlyphBox,
@@ -91,7 +92,12 @@ import { PreviewFrame, type TileSize } from './PreviewFrame';
 import { drawnSizeIn, hiddenLabelsAt } from './hiddenLabels';
 import { boundarySetsQueryOf } from '../query/boundarySets';
 import { metaQueryOf, siblingsQueryOf, useWorkspaceItem } from '../query/meta';
-import { countryMarkingsOf, signatureOf, topTypeOf } from '../query/signature';
+import {
+  countryMarkingsOf,
+  regionMarkingsOf,
+  signatureOf,
+  topTypeOf,
+} from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { CubeSourcePicker, FieldList, membersWithJoins, useJoined } from './FieldList';
 import { Wells } from './Wells';
@@ -598,6 +604,24 @@ function EditorBody({
   // A dimension of country codes, by its values unless the model says (T398, AC-313).
   const countryMarking = useMemo(() => countryMarkingsOf(meta.data), [meta.data]);
   /**
+   * Places (T1012, AC-560): a dimension of Cube's `geo` type, a region key the
+   * model marks; and Admin-1's keys, which tell one by its values once in.
+   */
+  const admin1Keys = useQuery({
+    queryKey: ['admin1-index'],
+    queryFn: loadAdmin1Index,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const places = useMemo(
+    () => ({
+      geo: (member: string) => available.some((one) => one.name === member && one.type === 'geo'),
+      regionMarking: regionMarkingsOf(meta.data),
+    }),
+    // The index in changes what its values say.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [available, meta.data, admin1Keys.data],
+  );
+  /**
    * The size the chart's canvas is drawn at (T516), which says how many of a
    * bar's labels would hide there: opened from a tile, the tile's less its
    * own padding and border, whichever preview size is shown; else the
@@ -629,7 +653,8 @@ function EditorBody({
       // scales are drawn as small multiples (T510, R67), as on a tile.
       // Its Target too, a bullet chart's or a KPI's (T968, AC-560).
       // And each measure's aggregation, for a 100 % stack (T969, AC-561).
-      ...signatureOf(spec, rows, countryMarking, formats, options, measureTypes),
+      // And places: a geo dimension, a region key (T1012, AC-560).
+      ...signatureOf(spec, rows, countryMarking, formats, options, measureTypes, places),
       // More than half a bar's labels hidden at that size: the horizontal bar
       // offered second (T516; R67). The pick itself never turns on it.
       hiddenLabels: hiddenLabelsAt(previewDocument, rows, drawnAt, formats),
@@ -646,6 +671,7 @@ function EditorBody({
       formats,
       options,
       measureTypes,
+      places,
     ],
   );
   /** What the fields are, for what a type needs (AC-033): a map's country codes too (T398). */
@@ -656,8 +682,12 @@ function EditorBody({
     // The first dimension's alone: it is the one a map draws by (T398's review).
     // On Admin-1 or a custom set, the first dimension is the set's region key,
     // what it can't place named under the map (T975, AC-623).
+    // A geo dimension, or a region key of Admin-1, is the Map's too (T1012).
     countryCodes:
-      signature.fields.find((field) => field.kind === 'dimension')?.countryCodes === true ||
+      ((field) =>
+        field?.countryCodes === true || field?.geo === true || field?.regionSet !== undefined)(
+        signature.fields.find((field) => field.kind === 'dimension'),
+      ) ||
       (mapSettingsOf(options).boundarySet !== 'countries' && spec.dimensions.length > 0)
         ? 1
         : 0,

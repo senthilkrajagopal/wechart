@@ -44,6 +44,10 @@ const model = (cube: string) =>
     '      - name: state',
     '        sql: state',
     '        type: string',
+    // The states alone, "Online" none: every value a region key (T1012).
+    '      - name: state_known',
+    "        sql: \"CASE WHEN state = 'Online' THEN NULL ELSE state END\"",
+    '        type: string',
     '    measures:',
     '      - name: total',
     '        sql: amount',

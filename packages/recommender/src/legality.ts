@@ -25,6 +25,8 @@ export const CAPS = {
   heatmapCells: 200,
   /** R81's (T968, AC-031; design 23 Q5 (a)): a KPI's tiles, at the trellis's panel cap. */
   kpiTiles: 20,
+  /** R81's (T1012, AC-031; design 23 sheet 10): a Sankey's flows, as it folds past them. */
+  sankeyFlows: 50,
 } as const;
 
 type Rule = (candidate: Candidate) => RuleOutcome;
@@ -130,6 +132,30 @@ const kpiTileCapacity: Rule = (candidate) => {
     : pass('kpi_tile_capacity');
 };
 
+/**
+ * A Sankey of at most 50 flows (R81, T1012, AC-031): its pairs as the query
+ * answered them, an unknown count read as over, as every cap reads one.
+ */
+const sankeyFlowCapacity: Rule = (candidate) => {
+  if (candidate.chartType !== 'sankey') return pass('sankey_flow_capacity');
+  const flows = candidate.flows ?? Number.POSITIVE_INFINITY;
+  return flows > CAPS.sankeyFlows
+    ? fail(
+        'sankey_flow_capacity',
+        `A Sankey draws ${String(CAPS.sankeyFlows)} flows at most; this has ${describeCount(flows)}.`,
+      )
+    : pass('sankey_flow_capacity');
+};
+
+/** A Sankey's widths add up only for a summed measure: Cube's sum or count (T1012, AC-031). */
+const sankeySummed: Rule = (candidate) => {
+  if (candidate.chartType !== 'sankey') return pass('sankey_summed_measure');
+  const [measure] = candidate.valueFields;
+  return measure?.aggType === 'sum' || measure?.aggType === 'count'
+    ? pass('sankey_summed_measure')
+    : fail('sankey_summed_measure', 'A Sankey’s widths add up only for a summed measure.');
+};
+
 /** Draco `pie_without_single_measure`-shaped: a pie shows one measure's parts. */
 const pieNeedsOneMeasure: Rule = (candidate) => {
   if (candidate.chartType !== 'pie' && candidate.chartType !== 'donut') {
@@ -155,6 +181,8 @@ export const HARD_RULES: readonly Rule[] = [
   heatmapCapacity,
   pieNeedsOneMeasure,
   kpiTileCapacity,
+  sankeyFlowCapacity,
+  sankeySummed,
 ];
 
 /** Every rule's verdict, in order — this is what AC-029's trace shows. */
