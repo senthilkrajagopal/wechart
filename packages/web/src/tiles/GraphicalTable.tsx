@@ -5,6 +5,7 @@ import {
   formatValue,
   graphicalTableMeasures,
   graphicalTablePage,
+  kpiTrendPeriods,
   kpiTrendValues,
   memberOn,
   NO_COLUMNS,
@@ -22,6 +23,7 @@ import { useQueryItem } from '../query/item';
 import { loadTile } from '../query/loadTile';
 import { SecurityPreview } from '../query/securityPreview';
 import type { Change } from './text/elementQueries';
+import { ElementSkeleton, ElementUnavailable } from './text/ElementState';
 import { BulletGraphSvg } from './text/elements/BulletGraph';
 import { ChangeText, type Direction } from './text/elements/ChangeElement';
 import { IconText } from './text/elements/IconElement';
@@ -32,9 +34,16 @@ export interface LoadedTrend {
   readonly time: { readonly member: string; readonly granularity: TimeGranularity };
   readonly periods: number;
   readonly rows: readonly Readonly<Record<string, unknown>>[];
+  /** Still on its way: its cells show loading, never "No data" (rule 134). */
+  readonly pending?: boolean | undefined;
+  /** Why it failed, where it did: its cells say "Unavailable", with Details. */
+  readonly error?: unknown;
 }
 
 type Row = Readonly<Record<string, unknown>>;
+
+/** R80's sparkline is 64 px wide (design 21 pin 9): its skeleton holds the same place. */
+const SPARKLINE_WIDTH = 64;
 
 const numberOf = (raw: unknown): number | undefined => {
   if (raw === null || raw === undefined || raw === '') return undefined;
@@ -180,6 +189,19 @@ function Cell({
     }
     case 'sparkline': {
       const trend = trendFor(column, trends, chartTime);
+      // On its way, or failed: said as such, never as no data (rule 134).
+      if (trend?.pending === true)
+        return (
+          <td>
+            <ElementSkeleton pixels={SPARKLINE_WIDTH} />
+          </td>
+        );
+      if (trend?.error !== undefined)
+        return (
+          <td>
+            <ElementUnavailable measure={labelOf(spec, measure)} error={trend.error} />
+          </td>
+        );
       const values = trend === undefined ? [] : valuesAlong(trend, measure, matches, now);
       if (values.every((value) => value === null))
         return (
@@ -253,12 +275,48 @@ function Cell({
       );
     case 'change': {
       const trend = trendFor(column, trends, chartTime);
-      const seen = (trend === undefined ? [] : valuesAlong(trend, measure, matches, now)).filter(
-        (value): value is number => value !== null,
-      );
-      const [previous, current] = seen.slice(-2);
+      if (trend?.pending === true)
+        return (
+          <td className="gt__change">
+            <ElementSkeleton />
+          </td>
+        );
+      if (trend?.error !== undefined)
+        return (
+          <td className="gt__change">
+            <ElementUnavailable measure={labelOf(spec, measure)} error={trend.error} />
+          </td>
+        );
+      /**
+       * The periods its heading names (checkpoint 3's review): this one and
+       * the one before, never the latest two that happen to have data. A
+       * missing one gives no change, "—", saying which period has none, as
+       * the KPI does (T939).
+       */
+      const along = trend === undefined ? [] : valuesAlong(trend, measure, matches, now);
+      const [previous, current] = along.slice(-2);
+      if (trend !== undefined && (previous === null || current === null)) {
+        const starts = kpiTrendPeriods(trend.time, now, trend.periods);
+        const missing = starts[current === null ? starts.length - 1 : starts.length - 2] ?? '';
+        const said = `No data for ${formatValue(missing, trend.time.member, formats, {
+          [trend.time.member]: trend.time.granularity,
+        })}`;
+        return (
+          <td className="gt__change">
+            <span
+              className="text-change"
+              data-tone="neutral"
+              role="img"
+              aria-label={said}
+              title={said}
+            >
+              —
+            </span>
+          </td>
+        );
+      }
       const change: Change | undefined =
-        previous === undefined || current === undefined
+        previous === undefined || current === undefined || previous === null || current === null
           ? undefined
           : {
               current,
@@ -458,6 +516,8 @@ export function GraphicalTableView({
         data-testid="graphical-table"
         role="region"
         aria-label={`${pluralOf(rowsTitle)} at a glance`}
+        // Busy while any trend is on its way (rule 134).
+        {...(trends.some((trend) => trend.pending === true) ? { 'aria-busy': true } : {})}
         // A scrolling region the keyboard must reach (WCAG 2.1.1), as a table's is.
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
@@ -586,6 +646,9 @@ export function GraphicalTable({
     periods: trend.periods,
     rows:
       (answers[at]?.data as { data?: readonly Record<string, unknown>[] } | undefined)?.data ?? [],
+    // Its own states, loading or failed, never read as no data (checkpoint 3).
+    pending: answers[at]?.isPending === true,
+    ...(answers[at]?.isError === true ? { error: answers[at]?.error } : {}),
   }));
   return (
     <GraphicalTableView

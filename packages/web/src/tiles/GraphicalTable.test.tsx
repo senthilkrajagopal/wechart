@@ -173,6 +173,76 @@ describe('a graphical table drawn (T944, AC-571)', () => {
     expect(GT_CSS).toMatch(/\.gt-scroll:focus-visible \{[^}]*outline:[^}]*\}/);
   });
 
+  it('shows trends on their way as loading, aria-busy, never as "No data"', () => {
+    const waiting = (trend: LoadedTrend): LoadedTrend => ({ ...trend, rows: [], pending: true });
+    render(
+      <GraphicalTableView spec={spec()} trends={[waiting(months), waiting(quarters)]} now={now} />,
+    );
+    expect(
+      screen.getByRole('region', { name: 'Categories at a glance' }).getAttribute('aria-busy'),
+    ).toBe('true');
+    const cells = within(screen.getByRole('row', { name: /^Beverages/ })).getAllByRole('cell');
+    expect(cells[1]?.querySelector('[data-state="loading"]')).not.toBeNull();
+    expect(cells[4]?.querySelector('[data-state="loading"]')).not.toBeNull();
+    expect(screen.queryByLabelText('No data for these filters')).toBeNull();
+    // Values are not trends: they draw as they are.
+    expect(cells[0]?.textContent).toBe('$1,210,000');
+  });
+
+  it('says a trend that failed "Unavailable", with Cube’s error in its Details', () => {
+    const failed = (trend: LoadedTrend): LoadedTrend => ({
+      ...trend,
+      rows: [],
+      error: new Error('Query timeout'),
+    });
+    render(
+      <GraphicalTableView spec={spec()} trends={[failed(months), failed(quarters)]} now={now} />,
+    );
+    const region = screen.getByRole('region', { name: 'Categories at a glance' });
+    expect(region.getAttribute('aria-busy')).toBeNull();
+    const cells = within(screen.getByRole('row', { name: /^Beverages/ })).getAllByRole('cell');
+    expect(cells[1]?.textContent).toContain('Unavailable');
+    expect(cells[4]?.textContent).toContain('Unavailable');
+    expect(screen.queryByLabelText('No data for these filters')).toBeNull();
+  });
+
+  it('compares a Change’s asked periods, this one and the one before, a missing one "—" with "No data for ‹period›"', () => {
+    const byMonth = [
+      COLUMNS[0]!,
+      { kind: 'change' as const, settings: { measure: REVENUE, time: AT, period: 'month' } },
+    ];
+    // Beverages has August and October; Seafood August and September.
+    const gappy: LoadedTrend = {
+      time: { member: AT, granularity: 'month' },
+      periods: 12,
+      rows: [
+        ['Beverages', '2026-08-01', '1000'],
+        ['Beverages', '2026-10-01', '1200'],
+        ['Seafood', '2026-08-01', '1000'],
+        ['Seafood', '2026-09-01', '1100'],
+        ['Dairy', '2026-09-01', '1000'],
+        ['Dairy', '2026-10-01', '1100'],
+      ].map(([category, month, revenue]) => ({
+        [CATEGORY]: category,
+        [`${AT}.month`]: `${String(month)}T00:00:00.000`,
+        [REVENUE]: revenue,
+      })),
+    };
+    render(<GraphicalTableView spec={spec({}, byMonth)} trends={[gappy]} now={now} />);
+    const change = (name: string) =>
+      within(screen.getByRole('row', { name: new RegExp(`^${name}`) })).getAllByRole('cell')[1];
+    // Not August against October: September has none.
+    expect(change('Beverages')?.textContent).toBe('—');
+    expect(within(change('Beverages')!).getByRole('img').getAttribute('aria-label')).toBe(
+      'No data for Sep 2026',
+    );
+    // Not August against September: October, this month, has none.
+    expect(within(change('Seafood')!).getByRole('img').getAttribute('aria-label')).toBe(
+      'No data for Oct 2026',
+    );
+    expect(change('Dairy')?.textContent).toBe('▲ 10.0%');
+  });
+
   it('says "No rule matched" for an icon no rule applies to', () => {
     const noRule = COLUMNS.map((column) =>
       column.kind === 'icon'
