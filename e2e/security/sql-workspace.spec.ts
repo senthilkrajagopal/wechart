@@ -31,7 +31,7 @@ const switcher = (page: Page) =>
 const workspace = (page: Page) => page.getByRole('region', { name: 'SQL runner' });
 
 /** A page of a role's, signed in afresh in a context of its own. */
-async function signedIn(browser: Browser, role: 'super' | 'writer' | 'reader' | 'manager') {
+async function signedIn(browser: Browser, role: 'super' | 'reader' | 'manager') {
   const context = await browser.newContext({
     baseURL: BASE_URL,
     storageState: { cookies: [], origins: [] },
@@ -42,9 +42,15 @@ async function signedIn(browser: Browser, role: 'super' | 'writer' | 'reader' | 
 }
 
 /**
- * A folder read-write for `sales-rw` (writer) and read-only for `sales-ro`
- * (reader), made by `super`: what makes writer a read-write member, whatever
+ * A folder read-write for `managers` (manager) and read-only for `sales-ro`
+ * (reader), made by `super`: what makes manager a read-write member, whatever
  * else the database holds.
+ *
+ * The file's read-write member is manager, not writer: `sql-runner`,
+ * `sql-saved` and `sql-parameters` run SQL as writer, and a parallel run
+ * would meet their runs in the one-run-per-person hold (AC-379) and in My
+ * runs (AC-381). No other spec runs SQL as manager, as `sql-make-cube` has
+ * `many` to itself.
  */
 test.beforeAll(async ({ browser }) => {
   const admin = await signedIn(browser, 'super');
@@ -55,9 +61,7 @@ test.beforeAll(async ({ browser }) => {
     expect(made.status()).toBe(201);
     world.folderId = ((await made.json()) as { id: string }).id;
     const access = await admin.page.request.put(`/api/folders/${world.folderId}/access`, {
-      // `managers` too: T804's long runs go as manager, as no other spec runs SQL as
-      // them, so its one-run-per-person hold never meets another spec's run.
-      data: { readOnly: ['sales-ro'], readWrite: ['sales-rw', 'managers'] },
+      data: { readOnly: ['sales-ro'], readWrite: ['managers'] },
     });
     expect(access.status()).toBe(200);
     // Two data sources on the sample database there: one switched on, one off (T798).
@@ -102,8 +106,8 @@ test.afterAll(async ({ browser }) => {
 });
 
 test.describe('SQL runner in the switcher (T796, AC-001, AC-446)', () => {
-  test.describe('as writer, a read-write member', () => {
-    test.use({ role: 'writer' });
+  test.describe('as manager, a read-write member', () => {
+    test.use({ role: 'manager' });
 
     test('SQL runner, after Schedules, opens the workspace at /sql', async ({ page }) => {
       await page.goto('/explore');
@@ -187,7 +191,7 @@ const sideways = (page: Page) =>
   });
 
 test.describe('the workspace’s three panes (T797, rule 91)', () => {
-  test.use({ role: 'writer' });
+  test.use({ role: 'manager' });
 
   test('at 1,440 px: the left pane 280, the right 320, the editor over the results at 30 : 70', async ({
     page,
@@ -360,8 +364,8 @@ const groupOf = (page: Page) =>
   });
 
 test.describe('the data source picker (T798, AC-447)', () => {
-  test.describe('as writer, a read-write member of the folder', () => {
-    test.use({ role: 'writer' });
+  test.describe('as manager, a read-write member of the folder', () => {
+    test.use({ role: 'manager' });
 
     test('lists the folder’s on and off sources under its path, each with its driver and state', async ({
       page,
@@ -380,7 +384,7 @@ test.describe('the data source picker (T798, AC-447)', () => {
       await expect(
         options.filter({ hasText: SOURCES.on }).locator('.sql-picker__state'),
       ).toHaveText('SQL runner on');
-      // My workspace's group, where the writer has one, comes before every folder's.
+      // My workspace's group, where the member has one, comes before every folder's.
       const labels = await page
         .getByRole('listbox', { name: 'Data sources' })
         .getByRole('group')
@@ -423,8 +427,8 @@ test.describe('the data source picker (T798, AC-447)', () => {
       await expect(page.getByTestId('sql-editor-area')).toHaveCount(0);
     });
   });
-  test.describe('as writer, on a first visit (T799, AC-466)', () => {
-    test.use({ role: 'writer' });
+  test.describe('as manager, on a first visit (T799, AC-466)', () => {
+    test.use({ role: 'manager' });
 
     test('one tab, “Query 1”, no data source, focus on the picker, and the sentence to choose one', async ({
       page,
@@ -468,13 +472,13 @@ test.describe('tabs kept in this browser, the open one in the address (T801, AC-
   test('a reload opens the tab the address names, with its name and data source; no other browser or user sees it', async ({
     browser,
   }) => {
-    const writer = await signedIn(browser, 'writer');
+    const member = await signedIn(browser, 'manager');
     const sent: string[] = [];
-    writer.page.on('request', (request) => {
+    member.page.on('request', (request) => {
       sent.push(`${request.url()} ${request.postData() ?? ''}`);
     });
     try {
-      const { page } = writer;
+      const { page } = member;
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto('/sql');
       await expect(tabs(page)).toHaveText(['Query 1']);
@@ -512,11 +516,11 @@ test.describe('tabs kept in this browser, the open one in the address (T801, AC-
         sent.filter((line) => line.includes(MARKER) || (line.includes('/api/') && line.includes(id))),
       ).toEqual([]);
     } finally {
-      await writer.context.close();
+      await member.context.close();
     }
 
     // Another browser, the same user: SQL runner starts with Query 1.
-    const elsewhere = await signedIn(browser, 'writer');
+    const elsewhere = await signedIn(browser, 'manager');
     try {
       await elsewhere.page.goto('/sql');
       await expect(tabs(elsewhere.page)).toHaveText(['Query 1']);
@@ -540,7 +544,7 @@ test.describe('tabs kept in this browser, the open one in the address (T801, AC-
     });
     try {
       const page = await context.newPage();
-      await signInThroughDex(page, 'writer');
+      await signInThroughDex(page, 'manager');
       await page.goto('/sql');
       await page.getByRole('button', { name: 'New tab' }).click();
       await expect(tabs(page)).toHaveText(['Query 1', 'Query 2']);
@@ -581,7 +585,7 @@ test.describe('running a tab’s SQL in the workspace (T802)', () => {
   test('runs SELECT on the tab’s own source, with the grid, types, rows, time and CSV; two tabs name their own', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     const posts: string[] = [];
     page.on('request', (request) => {
       if (request.method() === 'POST' && request.url().endsWith('/sql')) posts.push(request.url());
@@ -664,7 +668,7 @@ test.describe('running a tab’s SQL in the workspace (T802)', () => {
   test('runs only the statement at the cursor, or only the selection, from ⌘/Ctrl+Enter and Run (T803, AC-387)', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     const sentSql: string[] = [];
     page.on('request', (request) => {
       if (request.method() === 'POST' && request.url().endsWith('/sql'))
@@ -702,7 +706,7 @@ test.describe('running a tab’s SQL in the workspace (T802)', () => {
   test('a reload of a tab’s address brings back its source and its text, kept in no request or database (AC-446, AC-451)', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     const marker = `kept_text_${RUN}`;
     const sent: string[] = [];
     page.on('request', (request) => {
@@ -769,7 +773,7 @@ test.describe('the schema browser in the left pane (T805, AC-386)', () => {
   test('lists every table and column of the development database’s public schema, and puts a chosen name in the editor', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto('/sql');
@@ -814,7 +818,7 @@ test.describe('the schema browser in the left pane (T805, AC-386)', () => {
   test('Find a table keeps the read tables whose names hold the text; orders.id shows PK, orders.customer_id FK to customers (T806, AC-448)', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto('/sql');
@@ -904,7 +908,7 @@ test.describe('autocomplete in the editor (T808, AC-456)', () => {
   test('offers the read tables and columns as they are typed; Enter accepts, Esc closes the list only, Tab leaves', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto('/sql');
@@ -985,7 +989,7 @@ test.describe('saving a query (T812, AC-457, AC-483)', () => {
   test('Save… keeps the SQL, the source and the parameters; Save updates it; Save as new… under a taken name is refused', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     const name = `Big orders ${RUN}`;
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
@@ -1081,7 +1085,7 @@ test.describe('History in the right pane (T817, AC-381, AC-452)', () => {
   test('lists all the user’s runs, narrows to the open tab’s source, reads a lost source as no longer available, and says a run’s state as its tab and result head do', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto('/sql');
@@ -1144,7 +1148,7 @@ test.describe('History in the right pane (T817, AC-381, AC-452)', () => {
   test('puts a chosen row back: into the open tab with its values and Undo, into a new tab on another source, on none for a lost one; never runs (T818, AC-465, AC-381)', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     const posts: string[] = [];
     page.on('request', (request) => {
       if (request.method() === 'POST' && request.url().endsWith('/sql')) posts.push(request.url());
@@ -1228,7 +1232,7 @@ test.describe('History in the right pane (T817, AC-381, AC-452)', () => {
   test('says a run going the same way, icon and label, on its tab, in its result head and in its History row (AC-452)', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto('/sql');
@@ -1309,7 +1313,7 @@ test.describe('Save and Find keys (T816, AC-455)', () => {
   test('⌘/Ctrl+S saves the open tab’s query from anywhere in the workspace; ⌘/Ctrl+F opens the editor’s find; neither does anything new elsewhere', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     const name = `Keyed save ${RUN}`;
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
@@ -1388,7 +1392,7 @@ test.describe('parameters under the editor (T809, AC-453)', () => {
   test('lists each parameter once with its type, and holds Run, ⌘/Ctrl+Enter too, until each has a value', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     const runs: string[] = [];
     page.on('request', (request) => {
       if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/sql')) runs.push(request.url());
@@ -1441,7 +1445,7 @@ test.describe('a table’s ⋯ in the schema browser (T807, AC-449)', () => {
   test('Insert SELECT writes its 100-row SELECT and runs nothing; Preview 100 rows runs it in a new tab, audited and in History', async ({
     browser,
   }) => {
-    const { context, page } = await signedIn(browser, 'writer');
+    const { context, page } = await signedIn(browser, 'manager');
     const asked: string[] = [];
     page.on('request', (request) => {
       if (request.url().includes('/api/')) asked.push(`${request.method()} ${new URL(request.url()).pathname}`);
@@ -1567,7 +1571,6 @@ test.describe('a run going, across tabs and away (T804, AC-452, AC-379)', () => 
   test('holds Run on every other tab, Go to it selects the running one, and Cancel that run stops it on the database', async ({
     browser,
   }) => {
-    // As manager: no other spec runs SQL as them, so one run per person meets none of theirs.
     const { context, page } = await signedIn(browser, 'manager');
     const marker = `held_${RUN}`;
     const posts: string[] = [];
