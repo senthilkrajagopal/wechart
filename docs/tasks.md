@@ -2194,10 +2194,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T945 (AC-572) Page a graphical table at 50 rows, each page asking Cube for its values and its own members' trends
 
-- [ ] T946 (AC-573) Mark a graphical table's rows as table tiles do, never by sorting, with "· $X marked" in partly marked additive cells, and cross-filter by row
-  - Files: `packages/web/src/tiles/GraphicalTable.tsx`, `packages/web/src/tiles/graphicalTableMarking.test.tsx`, `packages/charts/src/marking/partial.ts`.
-  - Failing test: `graphicalTableMarking.test.tsx`: click marks Seafood, Ctrl-click adds Dairy, Shift-click from Seafood marks the range; sorting by Revenue keeps the marking; marked rows are bold with a left rule, others' text `text-secondary` and micro-charts 0.28 while Change and Icon keep their colours; with Region = EMEA marked elsewhere, Beverages' Revenue reads "$1.21M · $310K marked" and Margin % shows "Marked: 22.8%" only in its tooltip; in cross-filter mode a row filters the others to its Category (AC-573).
-  - Depends on: T944, T935
+- [x] T946 (AC-573) Mark a graphical table's rows as table tiles do, never by sorting, with "· $X marked" in partly marked additive cells, and cross-filter by row
 
 - [ ] T947 (AC-574) "View as table" for a graphical table: the numbers behind every cell
   - Files: `packages/web/src/tiles/tableView/graphicalTable.ts` (+ test).

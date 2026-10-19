@@ -254,6 +254,9 @@ function ChartBody({
         spec={spec}
         {...(query === undefined ? {} : { query })}
         {...(onAddColumn === undefined ? {} : { onAddColumn })}
+        // A row marks or cross-filters its member, a Shift-range as a shape (T946, AC-573).
+        {...(onItemClick === undefined ? {} : { onItemClick })}
+        {...(onShapeMark === undefined ? {} : { onShapeMark })}
       />
     );
   // A KPI alone, at text-kpi-solo (T683; design 06 state B).

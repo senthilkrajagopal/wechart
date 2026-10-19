@@ -197,10 +197,12 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
   // A Sankey's node is its member and its link its tuple (AC-612), and a
   // tiled KPI's tile its member (AC-568); "Other", or anything else that
   // carries nothing, is no member of anything. A parallel-coordinate line is
-  // its member as its row holds it (T983, AC-599).
+  // its member as its row holds it (T983, AC-599), and so is a graphical
+  // table's row (T946, AC-573).
   if (
     spec.chartType === 'sankey' ||
     spec.chartType === 'kpi' ||
+    spec.chartType === 'graphicalTable' ||
     (spec.chartType === 'parallel' && item.marks !== undefined)
   ) {
     const [first, ...rest] = item.marks ?? [];
@@ -243,10 +245,11 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
 export function clickedMarkItem(spec: RenderSpec, item: ClickedItem): MarkedItem | undefined {
   // What the item stands for as drawn, its values as its rows hold them
   // (AC-612): a Sankey's node or link, a tiled KPI's tile (AC-568), a
-  // parallel-coordinate line (T983, AC-599).
+  // parallel-coordinate line (T983, AC-599), a graphical table's row (T946).
   if (
     spec.chartType === 'sankey' ||
     spec.chartType === 'kpi' ||
+    spec.chartType === 'graphicalTable' ||
     (spec.chartType === 'parallel' && item.marks !== undefined)
   )
     return item.marks;

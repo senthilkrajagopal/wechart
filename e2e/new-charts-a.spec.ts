@@ -1719,16 +1719,23 @@ test('graphical tables on 5- and 6-column tiles draw their cells, sections and e
   );
 });
 
-/** A dashboard of graphical tables of orders, each its Rows and columns. */
+/**
+ * A dashboard of graphical tables of orders, each its Rows and columns, or
+ * any other chart of orders; with `interactions`, in that mode with one
+ * default marking, "Marking".
+ */
 async function graphicalTableDashboard(
   request: APIRequestContext,
   tables: readonly {
     readonly tile: string;
-    readonly dimensions: readonly string[];
-    readonly columns: readonly unknown[];
+    readonly dimensions?: readonly string[];
+    readonly columns?: readonly unknown[];
+    /** Another chart of orders in place of a graphical table. */
+    readonly chart?: Record<string, unknown>;
     readonly w?: number;
     readonly h?: number;
   }[],
+  interactions?: Record<string, unknown>,
 ) {
   const title = `Tables ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = (await (
@@ -1736,8 +1743,8 @@ async function graphicalTableDashboard(
       data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
-  const items = [];
-  for (const { tile, dimensions, columns, w = 6, h = 40 } of tables) {
+  const items: Record<string, unknown>[] = [];
+  for (const { tile, dimensions = [], columns = [], chart: other, w = 6, h = 40 } of tables) {
     const chart = (await (
       await request.post(`${API}/documents`, {
         data: { kind: 'chart', title: tile, ...IN_MY_WORKSPACE },
@@ -1753,13 +1760,15 @@ async function graphicalTableDashboard(
           localToDashboardId: dashboard.id,
           chart: {
             source: { cube: 'orders' },
-            wells: {
-              measures: ['orders.total_amount'],
-              dimensions,
-              timeDimensions: ['orders.ordered_at'],
-            },
-            chartType: 'graphicalTable',
-            options: { graphicalTable: { columns } },
+            ...(other ?? {
+              wells: {
+                measures: ['orders.total_amount'],
+                dimensions,
+                timeDimensions: ['orders.ordered_at'],
+              },
+              chartType: 'graphicalTable',
+              options: { graphicalTable: { columns } },
+            }),
           },
         },
       },
@@ -1767,21 +1776,34 @@ async function graphicalTableDashboard(
     expect(saved.ok(), await saved.text()).toBe(true);
     items.push({ id: tile, kind: 'chart', w, h, chartId: chart.id });
   }
-  const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
-    data: {
-      version: 1,
-      body: {
-        schemaVersion: 1,
-        title,
-        ...IN_MY_WORKSPACE,
-        owner: 'admin',
-        settings: { width: 'fixed' },
-        pages: [{ id: 'only', title: 'Only', items }],
+  const place = async (version: number, mode?: Record<string, unknown>) => {
+    const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+      data: {
+        version,
+        body: {
+          schemaVersion: 1,
+          title,
+          ...IN_MY_WORKSPACE,
+          owner: 'admin',
+          settings: { width: 'fixed', ...(mode === undefined ? {} : { interactions: mode }) },
+          ...(mode === undefined
+            ? {}
+            : { markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }] }),
+          pages: [{ id: 'only', title: 'Only', items }],
+        },
       },
-    },
-  });
-  expect(placed.ok(), await placed.text()).toBe(true);
-  return { id: dashboard.id, title };
+    });
+    expect(placed.ok(), await placed.text()).toBe(true);
+  };
+  await place(1, interactions);
+  /** The dashboard again, in another mode. */
+  const remode = async (mode: Record<string, unknown>) => {
+    const stored = (await (
+      await request.get(`${API}/documents/dashboard/${dashboard.id}`)
+    ).json()) as { version: number };
+    await place(stored.version, mode);
+  };
+  return { id: dashboard.id, title, remode };
 }
 
 /**
@@ -1856,6 +1878,142 @@ test('a graphical table of 240 orders shows 50 a page, each page asking its own 
   const second = await shownIds();
   expect([...(asked.find((one) => one.trend)?.members ?? [])].sort()).toEqual([...second].sort());
   await expect(tile.locator('tbody td svg[role="img"]').first()).toBeVisible();
+});
+
+/**
+ * T946 / AC-573: THE SYSTEM SHALL make a graphical table's row its member for
+ * marking: a click marks it, Ctrl/⌘+click toggles it, and Shift+click marks
+ * the range from the anchor row, as table tiles do; … marked rows SHALL be
+ * bold with a left rule, other rows dimming their text to `text-secondary`
+ * and their micro-charts to 0.28 while Change and Icon cells keep their
+ * colours; WHILE another tile's marking partly covers a row, an additive
+ * Value cell SHALL add "· ‹$X› marked" in `text-secondary`, and a
+ * non-additive one show "Marked: ‹X›" in its tooltip only; and as a
+ * cross-filter source a row SHALL filter the other tiles to its member.
+ *
+ * Rows by status; the other tile's marking is a country, which every status
+ * holds part of. On a fixed clock of 20 August 2026.
+ */
+test('a graphical table on a 6-column tile marks its rows by click, Ctrl and Shift, says another tile’s marked part, and cross-filters by status', async ({
+  page,
+  request,
+}) => {
+  const { id, title, remode } = await graphicalTableDashboard(
+    request,
+    [
+      {
+        tile: 'gt-status',
+        dimensions: ['orders.status'],
+        columns: [
+          { kind: 'value', measure: 'orders.total_amount' },
+          { kind: 'value', measure: 'orders.average_amount' },
+          { kind: 'sparkline', measure: 'orders.count', granularity: 'month', last: 6 },
+          {
+            kind: 'icon',
+            measure: 'orders.count',
+            rules: [
+              { op: '>=', value: 80, state: 'success', label: 'On track' },
+              { op: 'otherwise', state: 'error', label: 'Off track' },
+            ],
+          },
+          { kind: 'change', measure: 'orders.count', period: 'month' },
+        ],
+      },
+      {
+        tile: 'tile-country',
+        w: 12,
+        chart: {
+          wells: {
+            measures: ['orders.count'],
+            dimensions: ['customers.country'],
+            timeDimensions: [],
+          },
+          chartType: 'bar',
+        },
+      },
+    ],
+    { mode: 'markings', crossFilter: { defaultAction: 'filter' } },
+  );
+  await page.clock.setFixedTime(new Date('2026-08-20T12:00:00Z'));
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  const tile = page.locator('[data-tile="gt-status"]');
+  const rowOf = (status: string) => tile.getByRole('row', { name: new RegExp(`^${status}`) });
+  await expect(tile.locator('tbody tr')).toHaveCount(3);
+  const drawn = await tile.locator('tbody th[scope="row"]').allTextContents();
+  const chip = page.getByTestId('mark-chip');
+
+  // A click marks a status: bold, with the marking's rule down its left.
+  await rowOf('shipped').click();
+  await expect(chip).toContainText('shipped');
+  await expect(rowOf('shipped')).toHaveAttribute('data-marked', 'whole');
+  await expect(rowOf('shipped').locator('th')).toHaveCSS('font-weight', '600');
+  await expect(rowOf('shipped').locator('th')).toHaveCSS('box-shadow', /inset$/);
+  // The others: text in text-secondary, micro-charts at 0.28, Change and Icon in colour.
+  const secondary = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--wc-text-secondary)';
+    document.body.append(probe);
+    const read = getComputedStyle(probe).color;
+    probe.remove();
+    return read;
+  });
+  const other = rowOf(drawn.find((status) => status !== 'shipped') ?? '');
+  await expect(other).toHaveAttribute('data-marked', 'none');
+  await expect(other.locator('th')).toHaveCSS('color', secondary);
+  await expect(other.locator('td').nth(2).locator('svg')).toHaveCSS('opacity', '0.28');
+  await expect(other.locator('td.gt__icon svg').first()).toHaveCSS('opacity', '1');
+  await expect(other.locator('td.gt__icon')).not.toHaveCSS('color', secondary);
+
+  // Ctrl/⌘ toggles one in, and out again.
+  const third = drawn.find((status) => status !== 'shipped') ?? '';
+  await rowOf(third).click({ modifiers: ['ControlOrMeta'] });
+  await expect(rowOf(third)).toHaveAttribute('data-marked', 'whole');
+  await rowOf(third).click({ modifiers: ['ControlOrMeta'] });
+  await expect(rowOf(third)).toHaveAttribute('data-marked', 'none');
+
+  // Shift marks the range from the anchor row, in the order drawn.
+  await rowOf(drawn[0] ?? '').click();
+  await rowOf(drawn[2] ?? '').click({ modifiers: ['Shift'] });
+  for (const status of drawn) await expect(rowOf(status)).toHaveAttribute('data-marked', 'whole');
+
+  // Germany marked on the other tile: every status holds part of it.
+  const country = page.locator('[data-tile="tile-country"]');
+  await country.scrollIntoViewIfNeeded();
+  await clickAbove(page, country, 'Germany');
+  await expect(chip).toContainText('Germany');
+  await tile.scrollIntoViewIfNeeded();
+  for (const status of drawn) {
+    await expect(rowOf(status)).toHaveAttribute('data-marked', 'partly');
+    const [total, average] = [
+      rowOf(status).locator('td').nth(0),
+      rowOf(status).locator('td').nth(1),
+    ];
+    // A sum says its marked part in the cell, in text-secondary.
+    await expect(total).toHaveText(/^\$[\d,.]+ · \$[\d,.]+ marked$/);
+    await expect(total.locator('.gt__marked')).toHaveCSS('color', secondary);
+    // An average says nothing in the cell, its marked value in the tooltip only.
+    await expect(average).toHaveText(/^\$[\d,.]+$/);
+    await expect(average).toHaveAttribute('title', /^Marked: \$[\d,.]+$/);
+  }
+
+  // As a cross-filter source, a row filters the others to its status.
+  await remode({ mode: 'crossFilter', crossFilter: { defaultAction: 'filter' } });
+  const asked: string[] = [];
+  page.on('request', (sent) => {
+    if (sent.url().endsWith('/api/load') && sent.method() === 'POST')
+      asked.push(JSON.stringify((sent.postDataJSON() as { query?: unknown } | null)?.query));
+  });
+  await page.reload();
+  await expect(tile.locator('tbody tr')).toHaveCount(3);
+  await rowOf('processing').click();
+  await expect(page.getByTestId('cross-filter-chip')).toContainText('processing');
+  await expect
+    .poll(() =>
+      asked.some((query) => query.includes('customers.country') && query.includes('"processing"')),
+    )
+    .toBe(true);
 });
 
 /**

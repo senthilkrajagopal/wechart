@@ -119,6 +119,7 @@ export {
 } from './marking/render';
 export {
   isAdditive,
+  markedCellOf,
   markedState,
   partialMark,
   type MarkColours,

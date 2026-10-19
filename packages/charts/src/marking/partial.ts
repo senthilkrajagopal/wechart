@@ -80,6 +80,20 @@ export function markedState(item: PartlyMarked): 'none' | 'whole' | 'partly' {
   return kind === 'none' || kind === 'whole' ? kind : 'partly';
 }
 
+/**
+ * What a cell of figures says of its part another tile marks, where it is
+ * marked in part (T946, AC-573; §7a "Tables"): an additive measure's marked
+ * amount in the cell itself ("· $310K marked"), any other's in its tooltip
+ * only ("Marked: 22.8%"), since a value over a subset is no part of the
+ * whole's. Nothing when it is marked whole or not at all.
+ */
+export function markedCellOf(
+  item: PartlyMarked,
+): { readonly where: 'cell' | 'tooltip'; readonly marked: number } | undefined {
+  if (item.marked === undefined || markedState(item) !== 'partly') return undefined;
+  return { where: isAdditive(item.aggType) ? 'cell' : 'tooltip', marked: item.marked };
+}
+
 /** How to draw one item, given how much of it is marked. */
 export function partialMark(item: PartlyMarked, colours: MarkColours): PartialMark {
   const { marked, total, aggType } = item;

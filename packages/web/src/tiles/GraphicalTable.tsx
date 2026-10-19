@@ -1,8 +1,9 @@
-import { DEFAULT_PALETTE, labelOf } from '@wechart/charts';
+import { DEFAULT_PALETTE, labelOf, markedCellOf, rowMarksOf, type RowMark } from '@wechart/charts';
 import {
   bulletBandOf,
   columnsOf,
   formatValue,
+  graphicalTableMeasures,
   graphicalTablePage,
   kpiTrendValues,
   memberOn,
@@ -14,8 +15,9 @@ import {
   type TimeGranularity,
 } from '@wechart/core';
 import { useQueries } from '@tanstack/react-query';
-import { useContext, useState } from 'react';
+import { useContext, useMemo, useState, type CSSProperties } from 'react';
 
+import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 import { useQueryItem } from '../query/item';
 import { loadTile } from '../query/loadTile';
 import { SecurityPreview } from '../query/securityPreview';
@@ -136,6 +138,7 @@ function Cell({
   chartTime,
   matches,
   now,
+  mark,
 }: {
   readonly column: GraphicalTableColumn;
   readonly spec: RenderSpec;
@@ -144,12 +147,37 @@ function Cell({
   readonly chartTime: string | undefined;
   readonly matches: (one: Row) => boolean;
   readonly now: Date;
+  /** The row under the marking the tile shows, where it shows one (T946). */
+  readonly mark?: RowMark | undefined;
 }) {
   const measure = column.settings.measure;
   const formats = spec.formats ?? {};
   switch (column.kind) {
-    case 'value':
-      return <td className="gt__figure">{formatValue(row[measure], measure, formats)}</td>;
+    case 'value': {
+      // Another tile's marked part of it (T946, AC-573): an additive
+      // measure's said in the cell, any other's in its tooltip only.
+      const total = numberOf(row[measure]);
+      const part =
+        mark?.state !== 'partly' || total === undefined
+          ? undefined
+          : markedCellOf({
+              marked: mark.marked[measure],
+              total,
+              aggType: spec.marking?.aggTypes?.[measure],
+            });
+      const written = part === undefined ? undefined : formatValue(part.marked, measure, formats);
+      return (
+        <td
+          className="gt__figure"
+          {...(part?.where === 'tooltip' ? { title: `Marked: ${written ?? ''}` } : {})}
+        >
+          {formatValue(row[measure], measure, formats)}
+          {part?.where === 'cell' ? (
+            <span className="gt__marked">{` · ${written ?? ''} marked`}</span>
+          ) : null}
+        </td>
+      );
+    }
     case 'sparkline': {
       const trend = trendFor(column, trends, chartTime);
       const values = trend === undefined ? [] : valuesAlong(trend, measure, matches, now);
@@ -218,7 +246,8 @@ function Cell({
     }
     case 'icon':
       return (
-        <td>
+        // A state, not a mark: it keeps its colour on an unmarked row (AC-573).
+        <td className="gt__icon">
           <IconText value={iconValueOf(column, row)} rules={rulesOf(column)} />
         </td>
       );
@@ -241,7 +270,7 @@ function Cell({
         (one) => one === column.settings['direction'],
       );
       return (
-        <td>
+        <td className="gt__change">
           <ChangeText
             change={change}
             member={measure}
@@ -306,6 +335,8 @@ export function GraphicalTableView({
   onAddColumn,
   page: shownPage,
   onPage,
+  onItemClick,
+  onShapeMark,
 }: {
   readonly spec: RenderSpec;
   readonly trends: readonly LoadedTrend[];
@@ -315,9 +346,24 @@ export function GraphicalTableView({
   /** The page shown, from 0, where the tile asks each page's trends (T945); else the table's own. */
   readonly page?: number | undefined;
   readonly onPage?: ((page: number) => void) | undefined;
+  /** A row's click, its member (T946, AC-573): it marks, or cross-filters, by the dashboard's mode. */
+  readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
+  /** A Shift-click's range of rows, marked as a shape's items are (T946). */
+  readonly onShapeMark?: ((items: readonly ClickedItem[], toggle: boolean) => void) | undefined;
 }) {
   const [ownPage, setOwnPage] = useState(0);
+  /**
+   * Where a Shift-range starts, on the page it was set: the last row clicked
+   * without Shift, as a table tile holds it — and, as there, not moved by the
+   * range, so a second Shift-click grows or shrinks the same one.
+   */
+  const [anchor, setAnchor] = useState<{ page: number; at: number } | null>(null);
   const columns = columnsOf(spec.options);
+  // Each row under the marking the tile shows, read once per answer (as a table's).
+  const marksOf = useMemo(
+    () => rowMarksOf(spec, graphicalTableMeasures(columnsOf(spec.options))),
+    [spec],
+  );
   if (columns.length === 0)
     return (
       <div className="tile-no-rows" data-testid="gt-no-columns" role="status">
@@ -348,6 +394,32 @@ export function GraphicalTableView({
           name,
           rows: paged.rows.filter((row) => String(row[groupBy] ?? '') === name),
         }));
+  // The rows in the order drawn, the order a Shift-range runs in.
+  const drawnRows = groups.flatMap((group) => group.rows);
+  /** A row as the item it marks or filters by: its member of Rows (AC-573). */
+  const itemOf = (row: Row): ClickedItem => {
+    const raw = row[rowsMember];
+    const member = String(raw ?? '');
+    return {
+      name: member,
+      marks: [{ member: rowsMember, value: typeof raw === 'number' ? raw : member }],
+    };
+  };
+  const clickRow = (at: number, event: React.MouseEvent) => {
+    const row = drawnRows[at];
+    if (row === undefined || onItemClick === undefined) return;
+    const from = anchor?.page === paged.page ? anchor.at : undefined;
+    if (event.shiftKey && from !== undefined && onShapeMark !== undefined) {
+      const [first, last] = from <= at ? [from, at] : [at, from];
+      onShapeMark(drawnRows.slice(first, last + 1).map(itemOf), false);
+      return;
+    }
+    const toggle = event.ctrlKey || event.metaKey;
+    // A plain click starts the range; a Ctrl/⌘ toggle leaves it where it began.
+    if (!toggle) setAnchor({ page: paged.page, at });
+    onItemClick(itemOf(row), toggle);
+  };
+  let drawnAt = 0;
   const pager =
     paged.pages === 1 ? null : (
       <p className="gt-pager">
@@ -386,9 +458,17 @@ export function GraphicalTableView({
         data-testid="graphical-table"
         role="region"
         aria-label={`${pluralOf(rowsTitle)} at a glance`}
+        // A scrolling region the keyboard must reach (WCAG 2.1.1), as a table's is.
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
       >
-        <table className="gt">
+        <table
+          className="gt"
+          // The marked rows' rule, in the marking's colour (AC-573).
+          {...(spec.marking === undefined
+            ? {}
+            : { style: { '--gt-mark': spec.marking.colour } as CSSProperties })}
+        >
           <caption>{captionOf(rowsTitle, spec.rows, columns)}</caption>
           <thead>
             <tr>
@@ -415,8 +495,22 @@ export function GraphicalTableView({
                 const matches = (one: Row) =>
                   String(one[rowsMember] ?? '') === member &&
                   (groupBy === undefined || String(one[groupBy] ?? '') === group.name);
+                const mark = marksOf(row);
+                const place = drawnAt;
+                drawnAt += 1;
                 return (
-                  <tr key={`${member}-${String(at)}`}>
+                  <tr
+                    key={`${member}-${String(at)}`}
+                    {...(mark === undefined ? {} : { 'data-marked': mark.state })}
+                    {...(onItemClick === undefined
+                      ? {}
+                      : {
+                          className: 'gt__markable',
+                          onClick: (event: React.MouseEvent) => {
+                            clickRow(place, event);
+                          },
+                        })}
+                  >
                     <th scope="row">{member}</th>
                     {columns.map((column, place) => (
                       <Cell
@@ -428,6 +522,7 @@ export function GraphicalTableView({
                         chartTime={chartTime}
                         matches={matches}
                         now={now}
+                        mark={mark}
                       />
                     ))}
                   </tr>
@@ -452,10 +547,14 @@ export function GraphicalTable({
   spec,
   query,
   onAddColumn,
+  onItemClick,
+  onShapeMark,
 }: {
   readonly spec: RenderSpec;
   readonly query?: Readonly<Record<string, unknown>> | undefined;
   readonly onAddColumn?: (() => void) | undefined;
+  readonly onItemClick?: ((item: ClickedItem, toggle: boolean) => void) | undefined;
+  readonly onShapeMark?: ((items: readonly ClickedItem[], toggle: boolean) => void) | undefined;
 }) {
   const item = useQueryItem();
   const context = useContext(SecurityPreview);
@@ -496,6 +595,8 @@ export function GraphicalTable({
       page={page}
       onPage={setPage}
       {...(onAddColumn === undefined ? {} : { onAddColumn })}
+      {...(onItemClick === undefined ? {} : { onItemClick })}
+      {...(onShapeMark === undefined ? {} : { onShapeMark })}
     />
   );
 }

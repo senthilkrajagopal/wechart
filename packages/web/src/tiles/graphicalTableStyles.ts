@@ -44,6 +44,18 @@ export const GT_CSS = `
   border-bottom: 1px solid var(--wc-border-subtle);
 }
 .gt__bullet { display: inline-flex; align-items: center; gap: 8px; }
+/* Marking (T946, AC-573; design 23 sheet 2; §7a "Tables"): a row is its
+   member. A marked row is bold with a 3 px rule down its left in the
+   marking's colour; the others' text dims to text-secondary and their
+   micro-charts to 0.28, while Change and Icon cells, states rather than
+   marks, keep their colours. A row partly marked by another tile says its
+   additive Value cells' marked amounts in text-secondary. */
+.gt tr.gt__markable { cursor: pointer; }
+.gt tr[data-marked='whole'] > * { font-weight: 600; }
+.gt tr[data-marked='whole'] > th[scope='row'] { box-shadow: inset 3px 0 0 var(--gt-mark, var(--wc-text-primary)); }
+.gt tr[data-marked='none'] > :not(.gt__change):not(.gt__icon) { color: var(--wc-text-secondary); }
+.gt tr[data-marked='none'] > :not(.gt__icon) svg { opacity: 0.28; }
+.gt__marked { color: var(--wc-text-secondary); }
 .gt__bullet svg,
 .gt td > svg { display: block; }
 `;
