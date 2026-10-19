@@ -1,4 +1,4 @@
-import { labelOf } from '@wechart/charts';
+import { DEFAULT_PALETTE, labelOf } from '@wechart/charts';
 import {
   formatValue,
   kpiOptionsOf,
@@ -8,7 +8,6 @@ import {
 } from '@wechart/core';
 import { useState } from 'react';
 
-import { colourOfMember } from '../../dashboard/colours';
 import { changeWordsOf, KpiChange, type KpiCompared } from './KpiChange';
 import { comparedOf, numberOf, periodStartOf, targetOf } from './kpiFigures';
 import { kpiShort } from './kpiNumbers';
@@ -126,7 +125,7 @@ function KpiTile({
           member={measure}
           formats={spec.formats}
           granularity={kpi.time.granularity}
-          colour={spec.colours?.[measure] ?? spec.palette?.[0] ?? colourOfMember({}, measure)}
+          colour={spec.colours?.[measure] ?? spec.palette?.[0] ?? DEFAULT_PALETTE[0]}
           width={box.width}
         />
       )}
