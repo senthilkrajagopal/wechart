@@ -555,6 +555,29 @@ button.text-parameter__button {
 .text-parameter__option { padding: 6px 12px; line-height: 20px; cursor: pointer; white-space: nowrap; }
 .text-parameter__option[data-active='true'] { background: var(--wc-bg-subtle); }
 .text-parameter__option[aria-selected='true'] { font-weight: 600; }
+/* Below 1,024 px (T890, AC-526; design 21 state K): each control on a row
+   of its own, the text's whole width; a button wraps its words rather than
+   being cut, and the buttons wrap onto lines of their own. */
+@media (max-width: 1023.98px) {
+  .text-tile .text-parameter,
+  .text-tile .text-filter-control {
+    display: flex;
+    width: 100%;
+    margin: 4px 0;
+  }
+  .text-tile .text-parameter--segments { flex-wrap: nowrap; }
+  .text-tile button.text-parameter__segment { flex: 1 1 0; min-width: 0; }
+  .text-tile button.text-parameter__button { width: 100%; text-align: left; }
+  .text-tile .text-filter-control .filter-pill { width: 100%; }
+  .text-tile .text-filter-control button.filter-pill__summary { flex: 1 1 auto; max-width: none; }
+  .text-tile button.text-action {
+    height: auto;
+    min-height: 32px;
+    margin: 2px 0;
+    white-space: normal;
+    text-align: left;
+  }
+}
 /* A chart following a dashboard parameter says so beside its title (T898,
    AC-533; design 21 pin 7), in view mode. */
 .tile-head__set-by {

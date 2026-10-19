@@ -152,3 +152,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/dashboard/bookmarks/viewState.ts` (+ test), `packages/web/src/dashboard/bookmarks/applyBookmark.ts` (+ test), `packages/web/src/filters/url.ts` (+ test).
   - Failing test: `viewState.test.ts`: a bookmark saved with Metric to show at Orders stores it, and applying it sets it back from Revenue; `url.test.ts`: a copied link holds the parameter's value, and opening it starts there (AC-121, AC-123).
   - Depends on: T899
+
+- [x] T890 (AC-526) Below 1,024 px, a Text tile full width with stacked controls, wrapping buttons and tooltips on tap
+  - Files: `packages/web/src/tiles/text/textStyles.ts`, `e2e/text-tile.spec.ts`.
+  - Failing test: `text-tile.spec.ts` at 390 px: a Controls tile's parameter control and filter control are on separate rows, each the tile's width; its four buttons wrap with none cut off; tapping a value shows its tooltip and tapping elsewhere hides it; the document doesn't scroll sideways (AC-526).
+  - Depends on: T888, T892, T894, T899 (built after T900, for its controls)

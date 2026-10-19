@@ -1668,3 +1668,150 @@ test('an Action button runs its declared actions in order: Export a tile’s CSV
     .click();
   await expect(tile.locator('.text-value')).toHaveText('240');
 });
+
+/**
+ * T890 / AC-526: WHILE the window is narrower than 1,024 px, a Text tile is
+ * full width, its controls stacked and each full width, its buttons
+ * wrapping, and a value's tooltip opening on a tap and closing on the next
+ * tap elsewhere. `Fails when: at 390 px two controls share a row, a button
+ * is cut off, a tap on a value shows no tooltip, or the page scrolls
+ * sideways.`
+ */
+test.describe('a Text tile below 1,024 px (T890, AC-526)', () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+
+  test('stacks its controls full width, wraps its buttons, shows a value’s tooltip on a tap, and never scrolls sideways', async ({
+    page,
+    request,
+  }) => {
+    const title = `Text ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+    const dashboard = (await (
+      await request.post(`${API}/documents`, {
+        data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const button = (label: string) => ({
+      type: 'actionButton',
+      attrs: { label, actions: [{ kind: 'resetFilters' }] },
+    });
+    const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          ...IN_MY_WORKSPACE,
+          owner: 'admin',
+          settings: { width: 'fixed', interactions: { mode: 'markings' } },
+          markings: [{ id: 'm1', name: 'Picks', slot: 'mk1', isDefault: true }],
+          filters: [{ id: 'f-status', widget: 'list', member: 'orders.status' }],
+          parameters: [
+            {
+              id: 'p-metric',
+              name: 'Metric to show',
+              kind: 'fieldSwitch',
+              role: 'measure',
+              choices: [
+                { member: 'orders.total_amount', label: 'Revenue' },
+                { member: 'orders.count', label: 'Orders' },
+              ],
+              default: 'orders.count',
+            },
+          ],
+          pages: [
+            {
+              id: 'only',
+              title: 'Only',
+              items: [
+                {
+                  id: 'tile-text',
+                  kind: 'text',
+                  w: 6,
+                  h: 24,
+                  document: {
+                    version: 1,
+                    doc: {
+                      type: 'doc',
+                      content: [
+                        {
+                          type: 'paragraph',
+                          content: [
+                            { type: 'parameterControl', attrs: { parameter: 'p-metric' } },
+                            { type: 'text', text: ' ' },
+                            { type: 'filterControl', attrs: { filter: 'f-status' } },
+                          ],
+                        },
+                        {
+                          type: 'paragraph',
+                          content: [
+                            button('Go to the detail of every order'),
+                            { type: 'text', text: ' ' },
+                            button('Apply the quarterly review'),
+                            { type: 'text', text: ' ' },
+                            button('Reset filters'),
+                            { type: 'text', text: ' ' },
+                            button('Export data of both tiles'),
+                          ],
+                        },
+                        {
+                          type: 'paragraph',
+                          content: [
+                            { type: 'text', text: 'Orders: ' },
+                            { type: 'value', attrs: { measure: 'orders.count' } },
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(placed.ok(), await placed.text()).toBe(true);
+
+    await page.goto(`/explore/dashboards/${dashboard.id}`);
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    const tile = page.locator('[data-tile="tile-text"]');
+    const text = tile.locator('.text-tile');
+    await expect(text.locator('.text-value')).toHaveText('240');
+
+    // Full width, and its two controls on rows of their own, each the text's width.
+    const textBox = await text.boundingBox();
+    const parameter = await text.getByRole('radiogroup', { name: 'Metric to show' }).boundingBox();
+    const filter = await text.getByTestId('filter-control-f-status').boundingBox();
+    if (textBox === null || parameter === null || filter === null) throw new Error('not drawn');
+    expect(textBox.width).toBeGreaterThan(300);
+    expect(filter.y).toBeGreaterThanOrEqual(parameter.y + parameter.height);
+    expect(Math.round(parameter.width)).toBe(Math.round(textBox.width));
+    expect(Math.round(filter.width)).toBe(Math.round(textBox.width));
+
+    // Its four buttons wrap, none cut off: each inside the text, the whole of its label shown.
+    const buttons = text.getByRole('button', { name: /^(Go to|Apply|Reset|Export)/ });
+    await expect(buttons).toHaveCount(4);
+    for (const one of await buttons.all()) {
+      const box = await one.boundingBox();
+      if (box === null) throw new Error('not drawn');
+      expect(box.x).toBeGreaterThanOrEqual(textBox.x - 0.5);
+      expect(box.x + box.width).toBeLessThanOrEqual(textBox.x + textBox.width + 0.5);
+      expect(await one.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    }
+
+    // A tap on a value shows its tooltip; a tap elsewhere hides it.
+    const tip = page.getByRole('tooltip').filter({ visible: true });
+    await text.locator('.text-element-read').first().tap();
+    await expect(tip).toContainText('Value · Count');
+    await page.getByRole('heading', { name: title }).tap();
+    await expect(tip).toHaveCount(0);
+
+    // Nothing scrolls sideways.
+    expect(
+      await page.evaluate(() => {
+        const root = document.scrollingElement;
+        return root === null ? 0 : root.scrollWidth - root.clientWidth;
+      }),
+    ).toBe(0);
+  });
+});
