@@ -1202,6 +1202,50 @@ test('every live element under a filter that leaves no rows says “No data for 
 });
 
 /**
+ * AC-525, checkpoint 3: an element whose member the viewer may not query —
+ * Cube answers 403 — reads "Unavailable", with no icon, no Details, and
+ * nothing naming the member or why; its neighbours draw.
+ */
+test('an element its viewer may not query reads “Unavailable”, naming nothing', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWithText(request, [
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'value', attrs: { measure: 'orders.count' } },
+        { type: 'text', text: ' and ' },
+        // Its own filter, so it is asked apart from the count, not batched with it.
+        {
+          type: 'value',
+          attrs: {
+            measure: 'orders.average_amount',
+            filters: [{ member: 'orders.status', operator: 'equals', values: ['shipped'] }],
+          },
+        },
+      ],
+    },
+  ]);
+  await page.route('**/api/load', async (route) => {
+    const body = route.request().postData() ?? '';
+    if (body.includes('orders.average_amount'))
+      await route.fulfill({ status: 403, json: { error: 'Forbidden: orders.average_amount' } });
+    else await route.continue();
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const text = page.locator('[data-tile="tile-text"] .text-tile');
+  await expect(text.locator('p')).toHaveText('240 and Unavailable', { timeout: 20_000 });
+  const refused = text.locator('p > *').nth(1);
+  await expect(refused.locator('[data-icon]')).toHaveCount(0);
+  await expect(text).not.toContainText('average');
+  // Nothing to focus for Details, and no tooltip naming it.
+  await expect(refused).not.toHaveAttribute('tabindex', '0');
+  await expect(page.getByRole('tooltip').filter({ hasText: 'Average' })).toHaveCount(0);
+});
+
+/**
  * AC-520 / AC-116, on the real surface: with nothing marked, a Value limited
  * by the marking reads all data, as one that isn't; marking a bar limits it
  * to the marked rows, the unlimited one keeping all data, and a Value whose
