@@ -512,7 +512,7 @@ test('a Value in its model’s format, limited by a marking, and a Change with i
   await expect(values.nth(1)).toHaveText('—');
 
   const change = tile.locator('.text-tile .text-change');
-  await expect(change).toHaveText(/^(▲|▼) \d+\.\d%$|^0\.0%$/);
+  await expect(change).toHaveText(/^(▲ \+|▼ −)\d+\.\d%$|^0\.0%$/);
   const read = await change.evaluate((element) => {
     const probe = (colour: string) => {
       const span = document.createElement('span');
@@ -551,11 +551,11 @@ test('a Value in its model’s format, limited by a marking, and a Change with i
   await sidebar.getByRole('radio', { name: 'Amount' }).check();
   await tile.locator('.tile-head__kind').click();
   await expect(tile.getByRole('textbox')).toHaveCount(0);
-  await expect(change).toHaveText(/^((▲|▼) )?\$\d+(\.\d)?[KMB]?$/);
+  await expect(change).toHaveText(/^(▲ \+|▼ −)?\$\d+(\.\d)?[KMB]?$/);
 
   // One Undo takes the whole edit back.
   await toolbar(page).getByRole('button', { name: 'Undo', exact: true }).click();
-  await expect(change).toHaveText(/^(▲|▼) \d+\.\d%$|^0\.0%$/);
+  await expect(change).toHaveText(/^(▲ \+|▼ −)\d+\.\d%$|^0\.0%$/);
 });
 
 /**
@@ -905,9 +905,9 @@ test('a value reads in its sentence’s type, and on focus shows what it is, as 
   const tile = page.locator('[data-tile="tile-text"] .text-tile');
   const heading = tile.locator('h3[data-type="text-xl"]');
   const change = heading.locator('.text-element-read');
-  await expect(change.locator('.text-change')).toHaveText(/^(▲|▼) \d+\.\d%$|^0\.0%$/);
+  await expect(change.locator('.text-change')).toHaveText(/^(▲ \+|▼ −)\d+\.\d%$|^0\.0%$/);
   // The tooltip's words are never the sentence's.
-  await expect(heading).toHaveText(/^Revenue (▲|▼)? ?\d+\.\d%$/);
+  await expect(heading).toHaveText(/^Revenue (▲ \+|▼ −)?\d+\.\d%$/);
 
   const read = await change.evaluate((element) => {
     const style = getComputedStyle(element);

@@ -62,7 +62,7 @@ export function ChangeText({
   );
 }
 
-/** A change in words, "▲ 4.2%" or "▼ $50K", or undefined with nothing to compare. */
+/** A change in words, "▲ +4.2%" or "▼ −$50K", or undefined with nothing to compare. */
 function changeWordsOf(
   change: Change | undefined,
   member: string,
@@ -78,7 +78,8 @@ function changeWordsOf(
           ? undefined
           : `${Math.abs(change.ratio * 100).toFixed(1)}%`;
   if (change === undefined || size === undefined) return undefined;
-  const sign = change.delta > 0 ? '▲ ' : change.delta < 0 ? '▼ ' : '';
+  // Its triangle and its sign (AC-520), as the KPI writes them (AC-565).
+  const sign = change.delta > 0 ? '▲ +' : change.delta < 0 ? '▼ −' : '';
   return `${sign}${size}`;
 }
 

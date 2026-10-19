@@ -21,15 +21,17 @@ function drawn(props: Parameters<typeof ChangeText>[0]) {
 }
 
 describe('a Change (T884, AC-520)', () => {
-  it('reads "▲ 4.2%" in status-success when higher is better and it rose', () => {
+  // Its triangle and its sign (AC-520's Fails-when; the coordinator's call at
+  // checkpoint 3, as the KPI writes it, AC-565): "▲ +4.2%", "▼ −2.1%".
+  it('reads "▲ +4.2%" in status-success when higher is better and it rose', () => {
     const change = drawn({ change: UP, member: 'orders.revenue', formats: FORMATS });
-    expect(change.textContent).toBe('▲ 4.2%');
+    expect(change.textContent).toBe('▲ +4.2%');
     expect(change.getAttribute('data-tone')).toBe('success');
   });
 
-  it('reads "▼ 2.1%" in status-error when higher is better and it fell', () => {
+  it('reads "▼ −2.1%" in status-error when higher is better and it fell', () => {
     const change = drawn({ change: DOWN, member: 'orders.revenue', formats: FORMATS });
-    expect(change.textContent).toBe('▼ 2.1%');
+    expect(change.textContent).toBe('▼ −2.1%');
     expect(change.getAttribute('data-tone')).toBe('error');
   });
 
@@ -49,10 +51,10 @@ describe('a Change (T884, AC-520)', () => {
       direction: 'neutral',
     });
     expect(neutral.getAttribute('data-tone')).toBe('neutral');
-    expect(neutral.textContent).toBe('▲ 4.2%');
+    expect(neutral.textContent).toBe('▲ +4.2%');
   });
 
-  it('reads as an amount in the measure’s format, shortened: "▲ $50K"', () => {
+  it('reads as an amount in the measure’s format, shortened: "▲ +$50K"', () => {
     expect(
       drawn({
         change: { current: 1270000, previous: 1220000, delta: 50000, ratio: 50000 / 1220000 },
@@ -60,7 +62,7 @@ describe('a Change (T884, AC-520)', () => {
         formats: FORMATS,
         show: 'amount',
       }).textContent,
-    ).toBe('▲ $50K');
+    ).toBe('▲ +$50K');
   });
 
   it('says "—" with nothing to compare, and nothing up or down for no change', () => {

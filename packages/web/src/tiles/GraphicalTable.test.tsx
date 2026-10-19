@@ -152,7 +152,8 @@ describe('a graphical table drawn (T944, AC-571)', () => {
     expect(cells[3]?.textContent).toBe('At risk');
     expect(cells[3]?.querySelector('[data-tone="warning"]')).not.toBeNull();
     // Change: R80's Change, the latest quarter against the one before.
-    expect(cells[4]?.textContent).toBe('▲ 5.3%');
+    // With its sign, as AC-520 has it (checkpoint 3).
+    expect(cells[4]?.textContent).toBe('▲ +5.3%');
   });
 
   it('says a row with no trend data "—", "No data for these filters", never an empty line', () => {

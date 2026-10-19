@@ -1693,8 +1693,8 @@ test('graphical tables on 5- and 6-column tiles draw their cells, sections and e
   );
   // Icon: an icon and its word.
   await expect(cells.nth(3)).toHaveText(/^(On track|At risk|Off track)$/);
-  // Change: R80's Change, ▲ or ▼ with its size.
-  await expect(cells.nth(4)).toHaveText(/^(▲ |▼ )?[\d.]+%$|^—$/);
+  // Change: R80's Change, ▲ or ▼ with its sign and size (AC-520, checkpoint 3).
+  await expect(cells.nth(4)).toHaveText(/^(▲ \+|▼ −)?[\d.]+%$|^—$/);
   // Inside the tile: the table scrolls in it, the tile never widens.
   const tileBox = await tile.boundingBox();
   const scroller = await tile.getByTestId('graphical-table').boundingBox();
