@@ -22,6 +22,7 @@ import {
   logScaleState,
   memberOn,
   membersOn,
+  onOneScale,
   seriesOf,
   type ComboAxis,
   type ComboMark,
@@ -103,8 +104,11 @@ const listed = (items: readonly string[]): string =>
  * named under the chart — "3 values not drawn: Orders was 0 in Jan, Feb and
  * Mar, and a log scale has no zero." Nothing while none is left out.
  */
-export function logScaleOmissions(spec: RenderSpec): LogOmissions | undefined {
-  if (!isComboType(spec.chartType)) return undefined;
+export function logScaleOmissions(given: RenderSpec): LogOmissions | undefined {
+  if (!isComboType(given.chartType)) return undefined;
+  // What the drawing reads (`optionFor`): a measure left off its axis for
+  // its scale isn't drawn at all, so it neither counts nor refuses log.
+  const spec = onOneScale(given);
   const logOn = logAxesOf(spec);
   if (!logOn.left && !logOn.right) return undefined;
   const { categories, series } = seriesOf(spec);

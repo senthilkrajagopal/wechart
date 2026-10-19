@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from '@wechart/core';
 
-import { alignedAxes, type AxisExtent } from './alignedAxes';
+import { alignedAxes, alignedLogAxes, type AxisExtent } from './alignedAxes';
 import { optionFor } from '../optionFor';
 import { comboOption } from '../series/combo';
 import { labelsOf, renderToSvg } from '../testing/renderToSvg';
@@ -21,6 +21,24 @@ import { labelsOf, renderToSvg } from '../testing/renderToSvg';
 const zeroShare = (axis: AxisExtent) => -axis.min / (axis.max - axis.min);
 /** How many ticks an axis draws: its ends and every interval between. */
 const ticks = (axis: AxisExtent) => Math.round((axis.max - axis.min) / axis.interval) + 1;
+
+/**
+ * T850's review: past ten decades ECharts ticks a log axis every
+ * `quantity(span)` decades (research/echarts-axis-legend-bars.md), so both
+ * axes start on a multiple of that step, or their ticks fall apart.
+ */
+describe('two log axes over ten decades or more (AC-502)', () => {
+  it('start both on a multiple of the step, over as many decades', () => {
+    const { left, right } = alignedLogAxes({ min: 1, max: 1e12 }, { min: 2e3, max: 9e4 });
+    const exponent = (value: number) => Math.round(Math.log10(value));
+
+    expect(exponent(left.min) % 10).toBe(0);
+    expect(exponent(right.min) % 10).toBe(0);
+    expect(exponent(left.max) - exponent(left.min)).toBe(exponent(right.max) - exponent(right.min));
+    expect(right.max).toBeGreaterThanOrEqual(9e4);
+    expect(left.max).toBeGreaterThanOrEqual(1e12);
+  });
+});
 
 describe('two axes whose ranges include zero', () => {
   const { left, right } = alignedAxes(

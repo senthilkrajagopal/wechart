@@ -355,10 +355,20 @@ export function alignedLogAxes(
     const one = logPinned({ min: power(lo), max: power(hi) }, left);
     return { left: one, right: one };
   }
-  const n = Math.max(l.hi - l.lo, r.hi - r.lo);
+  /**
+   * Past ten decades ECharts steps `quantity(span)` decades at a time, from
+   * multiples of the step (T850's review): both axes then start on one.
+   */
+  const span = Math.max(l.hi - l.lo, r.hi - r.lo);
+  const step = span >= 10 ? 10 ** Math.floor(Math.log10(span)) : 1;
+  const [leftLo, rightLo] = [l.lo, r.lo].map((lo) => Math.floor(lo / step) * step) as [
+    number,
+    number,
+  ];
+  const n = Math.ceil(Math.max(l.hi - leftLo, r.hi - rightLo) / step) * step;
   return {
-    left: logPinned({ min: power(l.lo), max: power(l.lo + n) }, left),
-    right: logPinned({ min: power(r.lo), max: power(r.lo + n) }, right),
+    left: logPinned({ min: power(leftLo), max: power(leftLo + n) }, left),
+    right: logPinned({ min: power(rightLo), max: power(rightLo + n) }, right),
   };
 }
 

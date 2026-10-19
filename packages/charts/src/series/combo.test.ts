@@ -439,6 +439,30 @@ describe('log scale (AC-502)', () => {
     ).toBeUndefined();
   });
 
+  it('counts what the drawing leaves out, not a measure dropped for its scale (T850 review)', () => {
+    const REVENUE = 'orders.revenue';
+    const MARGIN = 'orders.margin';
+    const spec: RenderSpec = {
+      chartType: 'combo',
+      encoding: { x: [MONTH], y: [REVENUE, MARGIN] },
+      rows: [
+        { [MONTH]: 'Jan', [REVENUE]: 0, [MARGIN]: 0 },
+        { [MONTH]: 'Feb', [REVENUE]: 300, [MARGIN]: 0.2 },
+      ],
+      formats: { [REVENUE]: 'currency', [MARGIN]: 'percent' },
+      titles: { [REVENUE]: 'Revenue', [MARGIN]: 'Margin' },
+      // Margin's bars are on Revenue's axis in another scale, so not drawn:
+      // the chart is drawn log, and only Revenue's zero is left out.
+      options: { series: { [REVENUE]: { mark: 'line' } }, axes: { y: { log: true } } },
+    };
+
+    expect((optionFor(spec)['yAxis'] as Axis).type).toBe('log');
+    expect(logScaleOmissions(spec)).toEqual({
+      count: 1,
+      text: '1 value not drawn: Revenue was 0 in Jan, and a log scale has no zero.',
+    });
+  });
+
   it('names a negative value as below zero', () => {
     const spec = { ...logCombo({}), rows: [{ [MONTH]: 'Jan', [SESSIONS]: -5, [ORDERS]: 2 }] };
 
