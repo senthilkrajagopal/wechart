@@ -2541,10 +2541,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 ### Lane CHARTS-B: the Sankey
 
-- [ ] T986 (AC-610, AC-037) The Sankey's spec and wells: 2–4 ordered steps, one summed measure, Colour links by, one grouped query, and its empty state
-  - Files: `packages/core/src/chart-types/sankey.ts` (+ test), `packages/web/src/editor/wells/sankey.tsx` (+ test).
-  - Failing test: `sankey.test.ts`: Channel → Region → Category with Revenue makes one Cube request of the three dimensions and links only adjacent pairs; a fifth step and an average are refused; `sankey.test.tsx` (wells): one step says "A Sankey shows flows between steps. Add a second dimension to Steps." with + Step (AC-610, AC-037).
-  - Depends on: T934
+- [x] T986 (AC-610, AC-037) The Sankey's spec and wells: 2–4 ordered steps, one summed measure, Colour links by, one grouped query, and its empty state
 
 - [ ] T987 (AC-611) Draw the Sankey's nodes and links, split a repeated member as "‹member› (2)", and fold flows past 50 into "Other"
   - Files: `packages/charts/src/series/sankey.ts` (+ test).

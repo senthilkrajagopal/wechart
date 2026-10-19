@@ -9,6 +9,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 
 import { AxisPanel } from './AxisPanel';
 import { BoxplotDistribution } from './wells/boxplotDistribution';
+import { SankeyColourLinks } from './wells/sankey';
 
 /**
  * The chart editor's Customize tab (AC-219; the prototype's customizeTab):
@@ -40,6 +41,8 @@ export interface CustomizeTabProps {
   readonly whiskers?: boolean;
   /** A box plot's Each point is is set: its Distribution's points need it (T990, AC-591). */
   readonly eachPointIs?: boolean;
+  /** A Sankey: Colour links by, Source or Target (T986, AC-610). */
+  readonly sankey?: boolean;
 }
 
 const POSITIONS: readonly [LegendPosition, string][] = [
@@ -80,6 +83,7 @@ export function CustomizeTab({
   colourOf,
   whiskers = false,
   eachPointIs = false,
+  sankey = false,
 }: CustomizeTabProps) {
   const ids = useId();
   const axes = record(options['axes']) as AxesSettings;
@@ -364,6 +368,7 @@ export function CustomizeTab({
       {whiskers ? (
         <BoxplotDistribution options={options} onOptions={onOptions} eachPointIs={eachPointIs} />
       ) : null}
+      {sankey ? <SankeyColourLinks options={options} onOptions={onOptions} /> : null}
     </div>
   );
 }

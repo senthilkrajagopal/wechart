@@ -3,6 +3,7 @@ import { graphicalTableModule } from './graphicalTable';
 import { kpiModule } from './kpi';
 import { mapModule } from './map';
 import { parallelModule } from './parallel';
+import { sankeyModule } from './sankey';
 
 /**
  * R81's chart types, one module each (T934; docs/tasks.md §P2.27): a type's
@@ -25,4 +26,5 @@ export const CHART_TYPE_MODULES: Partial<Record<ChartType, ChartTypeModule>> = {
   map: mapModule as ChartTypeModule,
   parallel: parallelModule as ChartTypeModule,
   graphicalTable: graphicalTableModule as ChartTypeModule,
+  sankey: sankeyModule as ChartTypeModule,
 };

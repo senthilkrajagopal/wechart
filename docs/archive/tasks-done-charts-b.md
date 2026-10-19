@@ -27,3 +27,8 @@ Lane CHARTS-B's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Failing test: `boxplot.test.ts`: None draws no dots, not even the outliers (added 2026-10-18 from T990's review: no other task drew it); Beeswarm gives points with no two overlapping; All jitters them; two draws of the same data give identical positions; points are 8 px at opacity 0.6; APAC's 3,000 points fall back to All with "Too many points to place side by side in APAC: drawn as All, jittered."; Outliers draws as before R81 (AC-592, AC-306).
   - Depends on: T990
   - Waits on: research: ECharts 6.1's jitter and `jitterOverlap`, and how its placement can be seeded (the study: "not published").
+
+- [x] T986 (AC-610, AC-037) The Sankey's spec and wells: 2–4 ordered steps, one summed measure, Colour links by, one grouped query, and its empty state
+  - Files: `packages/core/src/chart-types/sankey.ts` (+ test), `packages/web/src/editor/wells/sankey.tsx` (+ test).
+  - Failing test: `sankey.test.ts`: Channel → Region → Category with Revenue makes one Cube request of the three dimensions and links only adjacent pairs; a fifth step and an average are refused; `sankey.test.tsx` (wells): one step says "A Sankey shows flows between steps. Add a second dimension to Steps." with + Step (AC-610, AC-037).
+  - Depends on: T934

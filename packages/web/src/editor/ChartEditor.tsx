@@ -1264,6 +1264,7 @@ function EditorBody({
               }}
               whiskers={shownType === 'boxplot'}
               eachPointIs={spec.eachPointIs !== undefined}
+              sankey={shownType === 'sankey'}
             />
           )}
         </div>

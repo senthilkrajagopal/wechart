@@ -90,3 +90,92 @@ test('parallel coordinates take their wells, refuse Shared across formats, and d
   );
   await expect(shared).toBeDisabled();
 });
+
+/**
+ * T986 / AC-610, AC-037: WHEN a Sankey is edited, THE SYSTEM SHALL take
+ * Steps, 2–4 dimensions in order, one summed measure, and Customize › Colour
+ * links by, Source or Target; query every step's dimension in one grouped
+ * Cube request …; and with one step SHALL say "A Sankey shows flows between
+ * steps. Add a second dimension to Steps." with + Step.
+ * `Fails when: a fifth step or an unsummed measure is accepted; more than one
+ * Cube request is made; …; or one step draws without the sentence.`
+ * AC-037: the spec saved and reopened is the same. (A fifth step is refused
+ * in the wells' own test: Orders has two plain dimensions.)
+ */
+test('a Sankey takes its steps in order, one summed measure and Colour links by, in one grouped query', async ({
+  page,
+  request,
+}) => {
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+  await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
+  const id = /\/explore\/charts\/([^/]+)\/edit/.exec(page.url())?.[1] ?? '';
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await expect(page.getByTestId('member-orders.count')).toBeVisible();
+  await wellPicker(page, 'measures').selectOption('orders.average_amount');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await chooseChartType(page, 'sankey');
+  await expectChartType(page, 'sankey');
+
+  // One step: the sentence, with + Step; an average measure is refused first.
+  const refusal = page.getByTestId('sankey-refusal');
+  await expect(refusal).toHaveText(
+    'A Sankey’s flows add up, so its measure must be a sum or a count; Orders Average Amount is an average.',
+  );
+  await page.getByRole('button', { name: 'Remove Average Amount from Metrics' }).click();
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await expect(refusal).toHaveText(
+    'A Sankey shows flows between steps. Add a second dimension to Steps.',
+  );
+
+  // + Step adds the next step to Dimensions: one grouped query of both.
+  const asked: Record<string, unknown>[] = [];
+  page.on('request', (sent) => {
+    if (sent.url().endsWith('/api/load') && sent.method() === 'POST')
+      asked.push((sent.postDataJSON() as { query: Record<string, unknown> }).query);
+  });
+  await page.getByTestId('add-sankeyStep').click();
+  await page.getByTestId('pick-orders.id').click();
+  await expect(page.getByTestId('sankey-steps')).toHaveText('Orders Status → Orders ID');
+  await expect(refusal).toHaveCount(0);
+  await expect.poll(() => asked.length).toBeGreaterThan(0);
+  await expect(page.getByTestId('result-row-count')).toBeVisible();
+  expect(asked).toHaveLength(1);
+  expect(asked[0]).toMatchObject({
+    measures: ['orders.total_amount'],
+    dimensions: ['orders.id', 'orders.status'],
+  });
+
+  // Customize › Colour links by: Source by default, or Target.
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  const colour = page.getByRole('radiogroup', { name: 'Colour links by' });
+  await expect(colour.getByRole('radio')).toHaveCount(2);
+  await expect(colour.getByRole('radio', { name: 'Source' })).toBeChecked();
+  await colour.getByRole('radio', { name: 'Target' }).check();
+
+  // Saved and reopened, the same (AC-037).
+  await page.getByTestId('editor-bar').getByRole('button', { name: 'Save chart' }).click();
+  await expect(page).toHaveURL(new RegExp(`/explore/charts/${id}$`));
+  const stored = (await (
+    await request.get(`http://localhost:4100/api/documents/chart/${id}`)
+  ).json()) as {
+    body: {
+      chart: {
+        chartType?: string;
+        wells: { dimensions: string[]; measures: string[] };
+        options?: Record<string, unknown>;
+      };
+    };
+  };
+  expect(stored.body.chart.chartType).toBe('sankey');
+  expect(stored.body.chart.wells.dimensions).toEqual(['orders.status', 'orders.id']);
+  expect(stored.body.chart.options?.['sankey']).toEqual({ colourLinksBy: 'target' });
+  await page.goto(`/explore/charts/${id}/edit`);
+  await expectChartType(page, 'sankey');
+  await expect(page.getByTestId('sankey-steps')).toHaveText('Orders Status → Orders ID');
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  await expect(
+    page
+      .getByRole('radiogroup', { name: 'Colour links by' })
+      .getByRole('radio', { name: 'Target' }),
+  ).toBeChecked();
+});

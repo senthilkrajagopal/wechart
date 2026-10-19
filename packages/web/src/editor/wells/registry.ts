@@ -7,6 +7,7 @@ import { GraphicalTableWells } from './graphicalTable';
 import { KpiWells } from './kpi';
 import { MapWells } from './map';
 import { ParallelWells } from './parallel';
+import { SankeyWells } from './sankey';
 
 /**
  * R81's wells, one module per type (T934; docs/tasks.md §P2.27): a KPI's
@@ -46,4 +47,5 @@ export const TYPE_WELLS: Partial<Record<ChartType, ComponentType<TypeWellsProps>
   map: MapWells,
   parallel: ParallelWells,
   graphicalTable: GraphicalTableWells,
+  sankey: SankeyWells,
 };

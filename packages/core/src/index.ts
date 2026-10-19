@@ -390,4 +390,17 @@ export {
   type GraphicalTableColumn,
   type GraphicalTableSettings,
 } from './chart-types/graphicalTable';
+export {
+  MAX_SANKEY_STEPS,
+  MIN_SANKEY_STEPS,
+  ONE_STEP,
+  SANKEY_COLOUR_BY,
+  sankeyLinksOf,
+  sankeyModule,
+  sankeyOf,
+  type Sankey,
+  type SankeyColourBy,
+  type SankeyLink,
+  type SankeySettings,
+} from './chart-types/sankey';
 export { sealSecretV1, type XcubeKey } from './data-sources/seal';
