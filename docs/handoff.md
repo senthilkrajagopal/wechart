@@ -62,7 +62,9 @@ helm upgrade --install wechart deploy/helm/wechart --kube-context docker-desktop
 deploy/helm/verify.sh --no-install
 ```
 
-Run verify as `EXTRA_VALUES="deploy/helm/values/docker-desktop-security.yaml" deploy/helm/verify.sh --no-install`: paths only, with no `-f`. Never touch the k8s `charter` namespace. The Northwind Sales and Shipping dashboards on the deploy hold the new chart types (combo, parallel coordinates, box plot), which the user approved.
+Run verify as `EXTRA_VALUES="deploy/helm/values/docker-desktop-security.yaml" deploy/helm/verify.sh --no-install`: paths only, with no `-f`. Never touch the k8s `charter` namespace.
+
+**Demo content:** `examples/northwind/` holds the Sales and Shipping dashboards' exports (with their cubes and the `default` data source, no password), the `analytics` schema SQL, and a README with the steps to recreate them on a fresh install. The Northwind Sales and Shipping dashboards on the deploy hold the new chart types (combo, parallel coordinates, box plot), which the user approved.
 
 ## How the work runs
 

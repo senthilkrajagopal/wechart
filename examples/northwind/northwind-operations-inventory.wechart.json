@@ -1,0 +1,713 @@
+{
+  "format": "wechart-export",
+  "version": 1,
+  "exportedAt": "2026-10-19T09:21:28.441Z",
+  "items": [
+    {
+      "kind": "dashboard",
+      "id": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "title": "Northwind Operations & Inventory",
+      "body": {
+        "pages": [
+          {
+            "id": "page-1",
+            "items": [
+              {
+                "h": 12,
+                "w": 12,
+                "id": "tile-intro",
+                "kind": "text",
+                "document": {
+                  "doc": {
+                    "type": "doc",
+                    "content": [
+                      {
+                        "type": "heading",
+                        "attrs": { "level": 1 },
+                        "content": [
+                          { "text": "Northwind Traders — Operations & Inventory", "type": "text" }
+                        ]
+                      },
+                      {
+                        "type": "paragraph",
+                        "content": [
+                          {
+                            "text": "Shipping performance per order and current stock position per product. The date and shipper filters apply to order charts only; inventory charts are a current snapshot.",
+                            "type": "text"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "version": 1
+                }
+              },
+              {
+                "h": 22,
+                "w": 3,
+                "id": "tile-56",
+                "kind": "chart",
+                "chartId": "061890c1-11e6-4f00-8a70-c9a615240c77"
+              },
+              {
+                "h": 22,
+                "w": 3,
+                "id": "tile-57",
+                "kind": "chart",
+                "chartId": "04041836-a9f7-4ebc-adf3-c8d88760a224"
+              },
+              {
+                "h": 22,
+                "w": 3,
+                "id": "tile-58",
+                "kind": "chart",
+                "chartId": "5dd10d5e-3072-4160-ac4b-67d27dea6905"
+              },
+              {
+                "h": 22,
+                "w": 3,
+                "id": "tile-59",
+                "kind": "chart",
+                "chartId": "2e46d983-f770-45c6-aa4e-a32720e7574b"
+              },
+              {
+                "h": 55,
+                "w": 8,
+                "id": "tile-60",
+                "kind": "chart",
+                "chartId": "13dd43b8-4d1b-4f34-91c3-7cd92a33f3e0"
+              },
+              {
+                "h": 55,
+                "w": 4,
+                "id": "tile-61",
+                "kind": "chart",
+                "chartId": "a5161ba8-694b-4589-a383-e17bf857ab6d"
+              },
+              {
+                "h": 55,
+                "w": 5,
+                "id": "tile-62",
+                "kind": "chart",
+                "chartId": "16ccffee-7874-48bd-bba5-e38e3512c320"
+              },
+              {
+                "h": 55,
+                "w": 7,
+                "id": "tile-63",
+                "kind": "chart",
+                "chartId": "95f91cb5-1401-4fed-a4a2-edc069f23bae"
+              },
+              {
+                "h": 55,
+                "w": 5,
+                "id": "tile-64",
+                "kind": "chart",
+                "chartId": "edd451be-067c-49f3-b464-216673bb91fe"
+              },
+              {
+                "h": 55,
+                "w": 7,
+                "id": "tile-65",
+                "kind": "chart",
+                "chartId": "2bf4c1d3-136a-4262-8558-43c4bd9aedbe"
+              },
+              {
+                "h": 55,
+                "w": 12,
+                "id": "tile-66",
+                "kind": "chart",
+                "chartId": "592641a7-4ae5-4abe-86a9-41a64e2214c0"
+              },
+              {
+                "h": 49,
+                "w": 6,
+                "id": "el-1792374551128-0",
+                "kind": "chart",
+                "chartId": "667f59f8-248d-4717-9218-f6488504dc1b",
+                "marksWith": "mk1"
+              },
+              {
+                "h": 49,
+                "w": 6,
+                "id": "el-1792374626299-1",
+                "kind": "chart",
+                "chartId": "494d9345-6afe-47ee-8a75-bbce86fa7f11",
+                "marksWith": "mk1"
+              },
+              {
+                "h": 49,
+                "w": 12,
+                "id": "el-1792377217540-0",
+                "kind": "chart",
+                "chartId": "18d6ae3a-caf2-4d71-831c-5ff985770a68",
+                "marksWith": "mk1"
+              }
+            ],
+            "title": "Page 1"
+          }
+        ],
+        "title": "Northwind Operations & Inventory",
+        "filters": [
+          {
+            "id": "filter-1",
+            "scope": {
+              "kind": "tiles",
+              "tileIds": [
+                "tile-56",
+                "tile-57",
+                "tile-58",
+                "tile-60",
+                "tile-61",
+                "tile-62",
+                "tile-63",
+                "el-1792374551128-0",
+                "el-1792374626299-1",
+                "el-1792377217540-0"
+              ]
+            },
+            "member": "order_summary.order_date",
+            "widget": "dateRange"
+          },
+          {
+            "id": "filter-2",
+            "scope": {
+              "kind": "tiles",
+              "tileIds": [
+                "tile-56",
+                "tile-57",
+                "tile-58",
+                "tile-60",
+                "tile-61",
+                "tile-62",
+                "tile-63",
+                "el-1792374551128-0",
+                "el-1792374626299-1",
+                "el-1792377217540-0"
+              ]
+            },
+            "member": "order_summary.shipper",
+            "widget": "list"
+          }
+        ],
+        "markings": [{ "id": "mk1", "name": "Marking", "slot": "mk1", "isDefault": true }],
+        "settings": {
+          "width": "fixed",
+          "interactions": {
+            "mode": "crossFilter",
+            "crossFilter": {
+              "pairs": {
+                "tile-56>tile-57": "highlight",
+                "tile-56>tile-58": "highlight",
+                "tile-56>tile-59": "none",
+                "tile-56>tile-60": "highlight",
+                "tile-56>tile-64": "none",
+                "tile-56>tile-65": "none",
+                "tile-56>tile-66": "none",
+                "tile-57>tile-56": "highlight",
+                "tile-57>tile-58": "highlight",
+                "tile-57>tile-59": "none",
+                "tile-57>tile-60": "highlight",
+                "tile-57>tile-64": "none",
+                "tile-57>tile-65": "none",
+                "tile-57>tile-66": "none",
+                "tile-58>tile-56": "highlight",
+                "tile-58>tile-57": "highlight",
+                "tile-58>tile-59": "none",
+                "tile-58>tile-60": "highlight",
+                "tile-58>tile-64": "none",
+                "tile-58>tile-65": "none",
+                "tile-58>tile-66": "none",
+                "tile-59>tile-56": "highlight",
+                "tile-59>tile-57": "highlight",
+                "tile-59>tile-58": "none",
+                "tile-59>tile-60": "none",
+                "tile-59>tile-61": "none",
+                "tile-59>tile-62": "none",
+                "tile-59>tile-63": "none",
+                "tile-60>tile-56": "highlight",
+                "tile-60>tile-57": "highlight",
+                "tile-60>tile-58": "highlight",
+                "tile-60>tile-59": "none",
+                "tile-60>tile-64": "none",
+                "tile-60>tile-65": "none",
+                "tile-60>tile-66": "none",
+                "tile-61>tile-57": "highlight",
+                "tile-61>tile-58": "highlight",
+                "tile-61>tile-59": "none",
+                "tile-61>tile-60": "highlight",
+                "tile-61>tile-64": "none",
+                "tile-61>tile-65": "none",
+                "tile-61>tile-66": "none",
+                "tile-62>tile-56": "highlight",
+                "tile-62>tile-57": "highlight",
+                "tile-62>tile-58": "highlight",
+                "tile-62>tile-59": "none",
+                "tile-62>tile-60": "highlight",
+                "tile-62>tile-64": "none",
+                "tile-62>tile-65": "none",
+                "tile-62>tile-66": "none",
+                "tile-63>tile-56": "highlight",
+                "tile-63>tile-57": "highlight",
+                "tile-63>tile-58": "highlight",
+                "tile-63>tile-59": "none",
+                "tile-63>tile-60": "highlight",
+                "tile-63>tile-64": "none",
+                "tile-63>tile-65": "none",
+                "tile-63>tile-66": "none",
+                "tile-64>tile-56": "highlight",
+                "tile-64>tile-57": "highlight",
+                "tile-64>tile-58": "none",
+                "tile-64>tile-59": "highlight",
+                "tile-64>tile-60": "none",
+                "tile-64>tile-61": "none",
+                "tile-64>tile-62": "none",
+                "tile-64>tile-63": "none",
+                "tile-65>tile-56": "highlight",
+                "tile-65>tile-57": "highlight",
+                "tile-65>tile-58": "none",
+                "tile-65>tile-59": "highlight",
+                "tile-65>tile-60": "none",
+                "tile-65>tile-61": "none",
+                "tile-65>tile-62": "none",
+                "tile-65>tile-63": "none",
+                "tile-66>tile-56": "highlight",
+                "tile-66>tile-57": "highlight",
+                "tile-66>tile-58": "none",
+                "tile-66>tile-59": "highlight",
+                "tile-66>tile-60": "none",
+                "tile-66>tile-61": "none",
+                "tile-66>tile-62": "none",
+                "tile-66>tile-63": "none"
+              },
+              "defaultAction": "filter"
+            }
+          }
+        },
+        "description": "Rebuilt from Superset's dashboard 6: shipping performance per order and current stock per product.",
+        "schemaVersion": 1
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "061890c1-11e6-4f00-8a70-c9a615240c77",
+      "title": "Avg Days to Ship",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["order_summary.avg_days_to_ship"],
+            "dimensions": [],
+            "timeDimensions": []
+          },
+          "source": { "cube": "order_summary" },
+          "chartType": "kpi"
+        },
+        "title": "Avg Days to Ship",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "04041836-a9f7-4ebc-adf3-c8d88760a224",
+      "title": "Late Shipment Rate",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["order_summary.late_rate"],
+            "dimensions": [],
+            "timeDimensions": []
+          },
+          "source": { "cube": "order_summary" },
+          "chartType": "kpi"
+        },
+        "title": "Late Shipment Rate",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "5dd10d5e-3072-4160-ac4b-67d27dea6905",
+      "title": "Total Freight",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["order_summary.freight"],
+            "dimensions": [],
+            "timeDimensions": []
+          },
+          "source": { "cube": "order_summary" },
+          "chartType": "kpi"
+        },
+        "title": "Total Freight",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "2e46d983-f770-45c6-aa4e-a32720e7574b",
+      "title": "Inventory Value (active products)",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["product_inventory.stock_value"],
+            "dimensions": [],
+            "timeDimensions": []
+          },
+          "source": { "cube": "product_inventory" },
+          "filters": [
+            {
+              "member": "product_inventory.discontinued",
+              "values": ["false"],
+              "operator": "equals"
+            }
+          ],
+          "chartType": "kpi"
+        },
+        "title": "Inventory Value (active products)",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "13dd43b8-4d1b-4f34-91c3-7cd92a33f3e0",
+      "title": "Orders per Month by Ship Status",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["order_summary.orders"],
+            "dimensions": ["order_summary.ship_status"],
+            "timeDimensions": ["order_summary.order_date"]
+          },
+          "source": { "cube": "order_summary" },
+          "chartType": "stackedBar",
+          "granularities": { "order_summary.order_date": "month" }
+        },
+        "title": "Orders per Month by Ship Status",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "a5161ba8-694b-4589-a383-e17bf857ab6d",
+      "title": "Freight by Shipper and Year",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["order_summary.freight"],
+            "dimensions": ["order_summary.shipper", "order_summary.order_year"],
+            "timeDimensions": []
+          },
+          "source": { "cube": "order_summary" },
+          "options": {
+            "sort": { "by": "label", "direction": "asc" },
+            "series": {
+              "1996": { "colour": "#c98500" },
+              "1997": { "colour": "#d55181" },
+              "1998": { "colour": "#2f7d32" }
+            }
+          },
+          "chartType": "hbar"
+        },
+        "title": "Freight by Shipper and Year",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "16ccffee-7874-48bd-bba5-e38e3512c320",
+      "title": "Days to Ship Distribution by Shipper",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["order_summary.max_days_to_ship"],
+            "dimensions": ["order_summary.shipper"],
+            "eachPointIs": "order_summary.order_id",
+            "timeDimensions": []
+          },
+          "source": { "cube": "order_summary" },
+          "chartType": "boxplot"
+        },
+        "title": "Days to Ship Distribution by Shipper",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "95f91cb5-1401-4fed-a4a2-edc069f23bae",
+      "title": "Orders by Ship Country",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["order_summary.orders"],
+            "dimensions": ["order_summary.ship_country_iso3"],
+            "timeDimensions": []
+          },
+          "source": { "cube": "order_summary" },
+          "chartType": "map"
+        },
+        "title": "Orders by Ship Country",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "edd451be-067c-49f3-b464-216673bb91fe",
+      "title": "Stock Status by Category",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["product_inventory.products"],
+            "dimensions": ["product_inventory.category", "product_inventory.stock_status"],
+            "timeDimensions": []
+          },
+          "source": { "cube": "product_inventory" },
+          "options": {
+            "sort": { "by": "label", "direction": "asc" },
+            "series": {
+              "OK": { "colour": "#9085e9" },
+              "Reorder now": { "colour": "#d95926" },
+              "Discontinued": { "colour": "#e66767" },
+              "Out of stock": { "colour": "#3987e5" },
+              "Low (on order)": { "colour": "#c98500" }
+            },
+            "stacked": true
+          },
+          "chartType": "hbar"
+        },
+        "title": "Stock Status by Category",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "2bf4c1d3-136a-4262-8558-43c4bd9aedbe",
+      "title": "Stock Value by Category and Product",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["product_inventory.stock_value"],
+            "dimensions": ["product_inventory.product_name", "product_inventory.category"],
+            "timeDimensions": []
+          },
+          "source": { "cube": "product_inventory" },
+          "filters": [
+            {
+              "member": "product_inventory.discontinued",
+              "values": ["false"],
+              "operator": "equals"
+            }
+          ],
+          "options": {
+            "sort": { "by": "value", "direction": "desc" },
+            "series": {
+              "Tofu": { "colour": "#9085e9" },
+              "Ikura": { "colour": "#e66767" },
+              "Konbu": { "colour": "#e66767" },
+              "Geitost": { "colour": "#c98500" },
+              "Pavlova": { "colour": "#199e70" },
+              "Filo Mix": { "colour": "#d55181" },
+              "Maxilaku": { "colour": "#199e70" },
+              "Chocolade": { "colour": "#199e70" },
+              "Spegesild": { "colour": "#e66767" },
+              "Tunnbröd": { "colour": "#d55181" },
+              "Gravad lax": { "colour": "#e66767" },
+              "Tourtière": { "colour": "#2f7d32" },
+              "Flotemysost": { "colour": "#c98500" },
+              "Inlagd Sill": { "colour": "#e66767" },
+              "Ipoh Coffee": { "colour": "#3987e5" },
+              "Rogede sild": { "colour": "#e66767" },
+              "Röd Kaviar": { "colour": "#e66767" },
+              "Genen Shouyu": { "colour": "#d95926" },
+              "Gula Malacca": { "colour": "#d95926" },
+              "Vegie-spread": { "colour": "#d95926" },
+              "Aniseed Syrup": { "colour": "#d95926" },
+              "Longlife Tofu": { "colour": "#9085e9" },
+              "Outback Lager": { "colour": "#3987e5" },
+              "Sasquatch Ale": { "colour": "#3987e5" },
+              "Zaanse koeken": { "colour": "#199e70" },
+              "Côte de Blaye": { "colour": "#3987e5" },
+              "Lakkalikööri": { "colour": "#3987e5" },
+              "Pâté chinois": { "colour": "#2f7d32" },
+              "Queso Cabrales": { "colour": "#c98500" },
+              "Ravioli Angelo": { "colour": "#d55181" },
+              "Steeleye Stout": { "colour": "#3987e5" },
+              "Tarte au sucre": { "colour": "#199e70" },
+              "Sirop d'érable": { "colour": "#d95926" },
+              "Boston Crab Meat": { "colour": "#e66767" },
+              "Carnarvon Tigers": { "colour": "#e66767" },
+              "Chartreuse verte": { "colour": "#3987e5" },
+              "Gudbrandsdalsost": { "colour": "#c98500" },
+              "Valkoinen suklaa": { "colour": "#199e70" },
+              "Camembert Pierrot": { "colour": "#c98500" },
+              "Gorgonzola Telino": { "colour": "#c98500" },
+              "Mascarpone Fabioli": { "colour": "#c98500" },
+              "Schoggi Schokolade": { "colour": "#199e70" },
+              "Scottish Longbreads": { "colour": "#199e70" },
+              "Sir Rodney's Scones": { "colour": "#199e70" },
+              "Raclette Courdavault": { "colour": "#c98500" },
+              "Gumbär Gummibärchen": { "colour": "#199e70" },
+              "Gustaf's Knäckebröd": { "colour": "#d55181" },
+              "Manjimup Dried Apples": { "colour": "#9085e9" },
+              "Nord-Ost Matjeshering": { "colour": "#e66767" },
+              "Escargots de Bourgogne": { "colour": "#e66767" },
+              "Gnocchi di nonna Alice": { "colour": "#d55181" },
+              "Mozzarella di Giovanni": { "colour": "#c98500" },
+              "Rhönbräu Klosterbier": { "colour": "#3987e5" },
+              "Sir Rodney's Marmalade": { "colour": "#199e70" },
+              "NuNuCa Nuß-Nougat-Creme": { "colour": "#199e70" },
+              "Laughing Lumberjack Lager": { "colour": "#3987e5" },
+              "Louisiana Hot Spiced Okra": { "colour": "#d95926" },
+              "Queso Manchego La Pastora": { "colour": "#c98500" },
+              "Northwoods Cranberry Sauce": { "colour": "#d95926" },
+              "Teatime Chocolate Biscuits": { "colour": "#199e70" },
+              "Wimmers gute Semmelknödel": { "colour": "#d55181" },
+              "Chef Anton's Cajun Seasoning": { "colour": "#d95926" },
+              "Grandma's Boysenberry Spread": { "colour": "#d95926" },
+              "Jack's New England Clam Chowder": { "colour": "#e66767" },
+              "Uncle Bob's Organic Dried Pears": { "colour": "#9085e9" },
+              "Louisiana Fiery Hot Pepper Sauce": { "colour": "#d95926" },
+              "Original Frankfurter grüne Soße": { "colour": "#d95926" }
+            },
+            "rowLimit": 1000
+          },
+          "chartType": "treemap"
+        },
+        "title": "Stock Value by Category and Product",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "592641a7-4ae5-4abe-86a9-41a64e2214c0",
+      "title": "Products Needing Reorder",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["product_inventory.units_in_stock", "product_inventory.units_on_order"],
+            "dimensions": [
+              "product_inventory.product_name",
+              "product_inventory.category",
+              "product_inventory.supplier",
+              "product_inventory.reorder_level",
+              "product_inventory.stock_status"
+            ],
+            "timeDimensions": []
+          },
+          "source": { "cube": "product_inventory" },
+          "filters": [
+            {
+              "member": "product_inventory.stock_status",
+              "values": ["Out of stock", "Reorder now", "Low (on order)"],
+              "operator": "equals"
+            }
+          ],
+          "options": { "sort": { "by": "value", "direction": "asc" }, "rowLimit": 100 },
+          "chartType": "table"
+        },
+        "title": "Products Needing Reorder",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "667f59f8-248d-4717-9218-f6488504dc1b",
+      "title": "Shipping profile by country",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": [
+              "order_summary.orders",
+              "order_summary.freight",
+              "order_summary.avg_days_to_ship",
+              "order_summary.late_rate"
+            ],
+            "dimensions": ["order_summary.ship_country"],
+            "timeDimensions": []
+          },
+          "source": { "cube": "order_summary" },
+          "chartType": "parallel"
+        },
+        "title": "Shipping profile by country",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "494d9345-6afe-47ee-8a75-bbce86fa7f11",
+      "title": "Freight per order by shipper",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["order_summary.freight"],
+            "dimensions": ["order_summary.shipper"],
+            "eachPointIs": "order_summary.order_id",
+            "timeDimensions": []
+          },
+          "source": { "cube": "order_summary" },
+          "options": { "distribution": { "points": "all" } },
+          "chartType": "boxplot"
+        },
+        "title": "Freight per order by shipper",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "18d6ae3a-caf2-4d71-831c-5ff985770a68",
+      "title": "Freight and days to ship by month",
+      "dashboardId": "1edf2d79-94c3-4b06-8cc9-cc0d1b156260",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["order_summary.freight", "order_summary.avg_days_to_ship"],
+            "dimensions": [],
+            "timeDimensions": ["order_summary.order_date"]
+          },
+          "source": { "cube": "order_summary" },
+          "options": { "series": { "order_summary.avg_days_to_ship": { "axis": "right" } } },
+          "chartType": "combo",
+          "granularities": { "order_summary.order_date": "month" }
+        },
+        "title": "Freight and days to ship by month",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "model",
+      "path": "northwind/order_summary.yml",
+      "content": "cubes:\n  - name: order_summary\n    sql_table: analytics.order_summary\n    title: Order summary\n    description: One row per order (Superset dataset analytics.order_summary).\n\n    dimensions:\n      - name: order_id\n        title: Order ID\n        sql: order_id\n        type: number\n        primary_key: true\n        public: true\n        format: id\n      - name: order_date\n        title: Order Date\n        sql: order_date\n        type: time\n      - name: required_date\n        title: Required Date\n        sql: required_date\n        type: time\n      - name: shipped_date\n        title: Shipped Date\n        sql: shipped_date\n        type: time\n      - name: order_year\n        title: Order Year\n        sql: order_year\n        type: number\n        format: id\n      - name: customer\n        title: Customer\n        sql: customer\n        type: string\n      - name: customer_country\n        title: Customer Country\n        sql: customer_country\n        type: string\n      - name: employee\n        title: Employee\n        sql: employee\n        type: string\n      - name: shipper\n        title: Shipper\n        sql: shipper\n        type: string\n      - name: ship_city\n        title: Ship City\n        sql: ship_city\n        type: string\n      - name: ship_country\n        title: Ship Country\n        sql: ship_country\n        type: string\n      - name: ship_country_iso3\n        title: Ship Country ISO3\n        sql: ship_country_iso3\n        type: string\n      - name: ship_status\n        title: Ship Status\n        sql: ship_status\n        type: string\n      - name: days_to_ship\n        title: Days to Ship\n        sql: days_to_ship\n        type: number\n      - name: freight_amount\n        title: Freight Amount\n        sql: freight\n        type: number\n        format: currency\n      - name: line_items\n        title: Line Items\n        sql: line_items\n        type: number\n      - name: units\n        title: Units\n        sql: units\n        type: number\n      - name: order_revenue_amount\n        title: Order Revenue Amount\n        sql: order_revenue\n        type: number\n        format: currency\n\n    measures:\n      - name: order_revenue\n        title: Revenue\n        sql: order_revenue\n        type: sum\n        format: currency\n      - name: freight\n        title: Freight\n        sql: freight\n        type: sum\n        format: currency\n      - name: avg_days_to_ship\n        title: Avg Days to Ship\n        sql: days_to_ship\n        type: avg\n      - name: max_days_to_ship\n        title: Days to Ship\n        description: The longest days to ship, over shipped orders only (Superset's box plot metric, MAX(days_to_ship) WHERE shipped_date IS NOT NULL).\n        sql: days_to_ship\n        type: max\n        filters:\n          - sql: \"{CUBE}.shipped_date IS NOT NULL\"\n      - name: late_rate\n        title: Late Shipment Rate\n        sql: \"SUM(CASE WHEN {CUBE}.ship_status = 'Late' THEN 1 ELSE 0 END)::float / NULLIF(SUM(CASE WHEN {CUBE}.shipped_date IS NOT NULL THEN 1 ELSE 0 END), 0)\"\n        type: number\n        format: percent\n      - name: orders\n        title: Orders\n        type: count\n      - name: count\n        title: Row Count\n        type: count"
+    },
+    {
+      "kind": "model",
+      "path": "northwind/product_inventory.yml",
+      "content": "cubes:\n  - name: product_inventory\n    sql_table: analytics.product_inventory\n    title: Product inventory\n    description: One row per product, its current stock position (Superset dataset analytics.product_inventory).\n\n    dimensions:\n      - name: product_id\n        title: Product ID\n        sql: product_id\n        type: number\n        primary_key: true\n        public: true\n        format: id\n      - name: product_name\n        title: Product Name\n        sql: product_name\n        type: string\n      - name: category\n        title: Category\n        sql: category\n        type: string\n      - name: supplier\n        title: Supplier\n        sql: supplier\n        type: string\n      - name: supplier_country\n        title: Supplier Country\n        sql: supplier_country\n        type: string\n      - name: quantity_per_unit\n        title: Quantity Per Unit\n        sql: quantity_per_unit\n        type: string\n      - name: unit_price\n        title: Unit Price\n        sql: unit_price\n        type: number\n        format: currency\n      - name: units_in_stock_level\n        title: Units in Stock\n        sql: units_in_stock\n        type: number\n      - name: units_on_order_level\n        title: Units on Order\n        sql: units_on_order\n        type: number\n      - name: reorder_level\n        title: Reorder Level\n        sql: reorder_level\n        type: number\n      - name: discontinued\n        title: Discontinued\n        sql: discontinued\n        type: boolean\n      - name: stock_value_amount\n        title: Stock Value Amount\n        sql: stock_value\n        type: number\n        format: currency\n      - name: stock_status\n        title: Stock Status\n        sql: stock_status\n        type: string\n\n    measures:\n      - name: products\n        title: Products\n        type: count\n      - name: units_in_stock\n        title: Units in Stock\n        sql: units_in_stock\n        type: sum\n      - name: units_on_order\n        title: Units on Order\n        sql: units_on_order\n        type: sum\n      - name: stock_value\n        title: Stock Value\n        sql: stock_value\n        type: sum\n        format: currency\n      - name: count\n        title: Row Count\n        type: count"
+    },
+    {
+      "kind": "data-source",
+      "name": "default",
+      "driver": "postgres",
+      "authMethod": "password",
+      "fields": {
+        "ssl": false,
+        "host": "superset-postgresql.superset.svc.cluster.local",
+        "port": 5432,
+        "user": "postgres",
+        "database": "northwind"
+      },
+      "description": null
+    }
+  ]
+}

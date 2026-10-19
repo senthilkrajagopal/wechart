@@ -1,0 +1,508 @@
+{
+  "format": "wechart-export",
+  "version": 1,
+  "exportedAt": "2026-10-19T09:21:28.409Z",
+  "items": [
+    {
+      "kind": "dashboard",
+      "id": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "title": "Northwind Sales Overview",
+      "body": {
+        "pages": [
+          {
+            "id": "page-1",
+            "items": [
+              {
+                "h": 12,
+                "w": 12,
+                "id": "tile-intro",
+                "kind": "text",
+                "document": {
+                  "doc": {
+                    "type": "doc",
+                    "content": [
+                      {
+                        "type": "heading",
+                        "attrs": { "level": 1 },
+                        "content": [{ "text": "Northwind Traders — Sales", "type": "text" }]
+                      },
+                      {
+                        "type": "paragraph",
+                        "content": [
+                          {
+                            "text": "Sample data: a specialty-foods importer's orders from ",
+                            "type": "text"
+                          },
+                          {
+                            "text": "Jul 1996 to May 1998",
+                            "type": "text",
+                            "marks": [{ "type": "bold" }]
+                          },
+                          {
+                            "text": " (May 1998 is a partial month). Use the filter bar, or mark a pie slice, bar or table row to limit the other charts.",
+                            "type": "text"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "version": 1
+                }
+              },
+              {
+                "h": 22,
+                "w": 3,
+                "id": "tile-45",
+                "kind": "chart",
+                "chartId": "e53a21ac-c0dc-4e95-948a-ddcc1920d5e6",
+                "limitedBy": ["mk1", "mk2"],
+                "marksWith": "",
+                "nothingMarked": "all",
+                "limitCombination": "all"
+              },
+              {
+                "h": 22,
+                "w": 3,
+                "id": "tile-46",
+                "kind": "chart",
+                "chartId": "59f9d709-17b5-475b-8361-8585feb757d0",
+                "limitedBy": ["mk1", "mk2"],
+                "marksWith": "",
+                "nothingMarked": "all",
+                "limitCombination": "all"
+              },
+              {
+                "h": 22,
+                "w": 3,
+                "id": "tile-47",
+                "kind": "chart",
+                "chartId": "ad4bd7af-6eed-4cbd-9f4b-d63892726695",
+                "limitedBy": ["mk1", "mk2"],
+                "marksWith": "",
+                "nothingMarked": "all",
+                "limitCombination": "all"
+              },
+              {
+                "h": 22,
+                "w": 3,
+                "id": "tile-48",
+                "kind": "chart",
+                "chartId": "8e0ba953-9cb9-484c-b452-4d8a929474d2",
+                "limitedBy": ["mk1", "mk2"],
+                "marksWith": "",
+                "nothingMarked": "all",
+                "limitCombination": "all"
+              },
+              {
+                "h": 55,
+                "w": 7,
+                "id": "tile-49",
+                "kind": "chart",
+                "chartId": "50ec0b07-5a0b-476a-ba9b-1571a0eda211",
+                "marksWith": "mk1"
+              },
+              {
+                "h": 55,
+                "w": 5,
+                "id": "tile-50",
+                "kind": "chart",
+                "chartId": "6c1c4f19-98a5-45ac-9c87-b4f8bf77fe6d",
+                "marksWith": "mk1"
+              },
+              {
+                "h": 55,
+                "w": 7,
+                "id": "tile-51",
+                "kind": "chart",
+                "chartId": "abab2d7e-12db-45ef-8065-f4cc85c71a47",
+                "marksWith": "mk1"
+              },
+              {
+                "h": 55,
+                "w": 5,
+                "id": "tile-52",
+                "kind": "chart",
+                "chartId": "d286e780-51f1-438d-ace1-bced1fc9168a",
+                "marksWith": "mk1"
+              },
+              {
+                "h": 55,
+                "w": 7,
+                "id": "tile-53",
+                "kind": "chart",
+                "chartId": "44857b11-2c52-4450-bd1d-1a8d9dba7023",
+                "marksWith": "mk2"
+              },
+              {
+                "h": 55,
+                "w": 5,
+                "id": "tile-54",
+                "kind": "chart",
+                "chartId": "10c2dfde-3471-4ad9-ab43-87fdad538def",
+                "marksWith": "mk1"
+              },
+              {
+                "h": 60,
+                "w": 12,
+                "id": "tile-55",
+                "kind": "chart",
+                "chartId": "ddbf32c9-4072-4a27-83a8-92099b7fd9d4",
+                "limitedBy": ["mk1", "mk2"],
+                "marksWith": "",
+                "nothingMarked": "all",
+                "limitCombination": "all"
+              },
+              {
+                "h": 49,
+                "w": 6,
+                "id": "el-1792374161105-0",
+                "kind": "chart",
+                "chartId": "2d4c083f-9bf1-4907-af1d-d921e5758bb8",
+                "marksWith": "mk1"
+              },
+              {
+                "h": 49,
+                "w": 6,
+                "id": "el-1792374372253-1",
+                "kind": "chart",
+                "chartId": "021588b9-2993-4812-a834-91ccb4881b57",
+                "marksWith": "mk1"
+              },
+              {
+                "h": 49,
+                "w": 12,
+                "id": "el-1792377062939-0",
+                "kind": "chart",
+                "chartId": "8d616606-a712-469e-b70b-1b871044e81a",
+                "marksWith": "mk1"
+              }
+            ],
+            "title": "Page 1"
+          }
+        ],
+        "title": "Northwind Sales Overview",
+        "filters": [
+          { "id": "filter-1", "member": "sales_lines.order_date", "widget": "dateRange" },
+          { "id": "filter-2", "member": "sales_lines.category", "widget": "list" },
+          { "id": "filter-3", "member": "sales_lines.customer_country", "widget": "list" },
+          { "id": "filter-4", "member": "sales_lines.employee", "widget": "list" }
+        ],
+        "markings": [
+          { "id": "mk1", "name": "Selection", "slot": "mk1", "isDefault": true },
+          { "id": "mk2", "name": "Rep focus", "slot": "mk2", "isDefault": false }
+        ],
+        "settings": {
+          "width": "fixed",
+          "interactions": { "mode": "markings", "crossFilter": { "defaultAction": "filter" } }
+        },
+        "description": "Rebuilt from Superset's dashboard 5: Northwind Traders' orders, Jul 1996 to May 1998.",
+        "schemaVersion": 1
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "e53a21ac-c0dc-4e95-948a-ddcc1920d5e6",
+      "title": "Total Revenue",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": { "measures": ["sales_lines.revenue"], "dimensions": [], "timeDimensions": [] },
+          "source": { "cube": "sales_lines" },
+          "chartType": "kpi"
+        },
+        "title": "Total Revenue",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "59f9d709-17b5-475b-8361-8585feb757d0",
+      "title": "Orders",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": { "measures": ["sales_lines.orders"], "dimensions": [], "timeDimensions": [] },
+          "source": { "cube": "sales_lines" },
+          "chartType": "kpi"
+        },
+        "title": "Orders",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "ad4bd7af-6eed-4cbd-9f4b-d63892726695",
+      "title": "Customers",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["sales_lines.customers"],
+            "dimensions": [],
+            "timeDimensions": []
+          },
+          "source": { "cube": "sales_lines" },
+          "chartType": "kpi"
+        },
+        "title": "Customers",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "8e0ba953-9cb9-484c-b452-4d8a929474d2",
+      "title": "Avg Order Value",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["sales_lines.avg_order_value"],
+            "dimensions": [],
+            "timeDimensions": []
+          },
+          "source": { "cube": "sales_lines" },
+          "chartType": "kpi"
+        },
+        "title": "Avg Order Value",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "50ec0b07-5a0b-476a-ba9b-1571a0eda211",
+      "title": "Monthly Revenue by Category",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["sales_lines.revenue"],
+            "dimensions": ["sales_lines.category"],
+            "timeDimensions": ["sales_lines.order_date"]
+          },
+          "source": { "cube": "sales_lines" },
+          "chartType": "stackedArea",
+          "granularities": { "sales_lines.order_date": "month" }
+        },
+        "title": "Monthly Revenue by Category",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "6c1c4f19-98a5-45ac-9c87-b4f8bf77fe6d",
+      "title": "Revenue by Category",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["sales_lines.revenue"],
+            "dimensions": ["sales_lines.category"],
+            "timeDimensions": []
+          },
+          "source": { "cube": "sales_lines" },
+          "options": { "sort": { "by": "value", "direction": "desc" }, "rowLimit": 100 },
+          "chartType": "donut"
+        },
+        "title": "Revenue by Category",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "abab2d7e-12db-45ef-8065-f4cc85c71a47",
+      "title": "Revenue by Customer Country",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["sales_lines.revenue"],
+            "dimensions": ["sales_lines.customer_country_iso3"],
+            "timeDimensions": []
+          },
+          "source": { "cube": "sales_lines" },
+          "chartType": "map"
+        },
+        "title": "Revenue by Customer Country",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "d286e780-51f1-438d-ace1-bced1fc9168a",
+      "title": "Top 10 Products by Revenue",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["sales_lines.revenue"],
+            "dimensions": ["sales_lines.product_name", "sales_lines.order_year"],
+            "timeDimensions": []
+          },
+          "source": { "cube": "sales_lines" },
+          "options": { "sort": { "by": "value", "direction": "asc" }, "tail": "drop", "topN": 10 },
+          "chartType": "hbar"
+        },
+        "title": "Top 10 Products by Revenue",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "44857b11-2c52-4450-bd1d-1a8d9dba7023",
+      "title": "Sales Rep Performance by Year",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["sales_lines.revenue"],
+            "dimensions": ["sales_lines.employee", "sales_lines.order_year"],
+            "timeDimensions": []
+          },
+          "source": { "cube": "sales_lines" },
+          "options": {
+            "sort": { "by": "label", "direction": "asc" },
+            "series": {
+              "1996": { "colour": "#c98500" },
+              "1997": { "colour": "#d55181" },
+              "1998": { "colour": "#2f7d32" }
+            },
+            "stacked": true
+          },
+          "chartType": "hbar"
+        },
+        "title": "Sales Rep Performance by Year",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "10c2dfde-3471-4ad9-ab43-87fdad538def",
+      "title": "Revenue by Category and Year",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["sales_lines.revenue"],
+            "dimensions": ["sales_lines.category", "sales_lines.order_year"],
+            "timeDimensions": []
+          },
+          "source": { "cube": "sales_lines" },
+          "options": { "sort": { "by": "label", "direction": "asc" } },
+          "chartType": "pivot"
+        },
+        "title": "Revenue by Category and Year",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "ddbf32c9-4072-4a27-83a8-92099b7fd9d4",
+      "title": "Top Customers",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": [
+              "sales_lines.revenue",
+              "sales_lines.orders",
+              "sales_lines.avg_order_value",
+              "sales_lines.discount_rate"
+            ],
+            "dimensions": ["sales_lines.customer", "sales_lines.customer_country"],
+            "timeDimensions": []
+          },
+          "source": { "cube": "sales_lines" },
+          "options": { "sort": { "by": "value", "direction": "desc" }, "rowLimit": 100 },
+          "chartType": "table"
+        },
+        "title": "Top Customers",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "2d4c083f-9bf1-4907-af1d-d921e5758bb8",
+      "title": "Category profile",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": [
+              "sales_lines.revenue",
+              "sales_lines.units_sold",
+              "sales_lines.avg_order_value",
+              "sales_lines.discount_rate"
+            ],
+            "dimensions": ["sales_lines.category"],
+            "timeDimensions": []
+          },
+          "source": { "cube": "sales_lines" },
+          "chartType": "parallel"
+        },
+        "title": "Category profile",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "021588b9-2993-4812-a834-91ccb4881b57",
+      "title": "Order revenue by category",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["sales_lines.revenue"],
+            "dimensions": ["sales_lines.category"],
+            "eachPointIs": "sales_lines.order_id",
+            "timeDimensions": []
+          },
+          "source": { "cube": "sales_lines" },
+          "options": { "distribution": { "points": "all" } },
+          "chartType": "boxplot"
+        },
+        "title": "Order revenue by category",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "chart",
+      "id": "8d616606-a712-469e-b70b-1b871044e81a",
+      "title": "Revenue and orders by month",
+      "dashboardId": "1fd2a522-b4b8-442d-9e1a-dcc99a40492d",
+      "body": {
+        "chart": {
+          "wells": {
+            "measures": ["sales_lines.revenue", "sales_lines.orders"],
+            "dimensions": [],
+            "timeDimensions": ["sales_lines.order_date"]
+          },
+          "source": { "cube": "sales_lines" },
+          "options": { "series": { "sales_lines.orders": { "axis": "right" } } },
+          "chartType": "combo",
+          "granularities": { "sales_lines.order_date": "month" }
+        },
+        "title": "Revenue and orders by month",
+        "schemaVersion": 2
+      }
+    },
+    {
+      "kind": "model",
+      "path": "northwind/sales_lines.yml",
+      "content": "cubes:\n  - name: sales_lines\n    sql_table: analytics.sales_lines\n    title: Sales lines\n    description: One row per order line (Superset dataset analytics.sales_lines).\n\n    dimensions:\n      - name: line_id\n        sql: \"{CUBE}.order_id::text || '-' || {CUBE}.product_id::text\"\n        type: string\n        primary_key: true\n        public: false\n      - name: order_id\n        title: Order ID\n        sql: order_id\n        type: number\n        format: id\n      - name: order_date\n        title: Order Date\n        sql: order_date\n        type: time\n      - name: order_year\n        title: Order Year\n        sql: order_year\n        type: number\n        format: id\n      - name: order_quarter\n        title: Order Quarter\n        sql: order_quarter\n        type: string\n      - name: customer_id\n        title: Customer ID\n        sql: customer_id\n        type: string\n      - name: customer\n        title: Customer\n        sql: customer\n        type: string\n      - name: customer_city\n        title: Customer City\n        sql: customer_city\n        type: string\n      - name: customer_country\n        title: Customer Country\n        sql: customer_country\n        type: string\n      - name: customer_country_iso3\n        title: Customer Country ISO3\n        sql: customer_country_iso3\n        type: string\n      - name: employee\n        title: Employee\n        sql: employee\n        type: string\n      - name: shipper\n        title: Shipper\n        sql: shipper\n        type: string\n      - name: product_id\n        title: Product ID\n        sql: product_id\n        type: number\n        format: id\n      - name: product_name\n        title: Product Name\n        sql: product_name\n        type: string\n      - name: category\n        title: Category\n        sql: category\n        type: string\n      - name: supplier\n        title: Supplier\n        sql: supplier\n        type: string\n      - name: supplier_country\n        title: Supplier Country\n        sql: supplier_country\n        type: string\n      - name: unit_price\n        title: Unit Price\n        sql: unit_price\n        type: number\n        format: currency\n      - name: quantity\n        title: Quantity\n        sql: quantity\n        type: number\n      - name: discount\n        title: Discount\n        sql: discount\n        type: number\n        format: percent\n\n    measures:\n      - name: revenue\n        title: Revenue\n        sql: revenue\n        type: sum\n        format: currency\n      - name: orders\n        title: Orders\n        sql: order_id\n        type: count_distinct\n      - name: customers\n        title: Customers\n        sql: customer_id\n        type: count_distinct\n      - name: avg_order_value\n        title: Avg Order Value\n        sql: \"SUM({CUBE}.revenue) / NULLIF(COUNT(DISTINCT {CUBE}.order_id), 0)\"\n        type: number\n        format: currency\n      - name: units_sold\n        title: Units Sold\n        sql: quantity\n        type: sum\n      - name: discount_amount\n        title: Discounts Given\n        sql: discount_amount\n        type: sum\n        format: currency\n      - name: gross_amount\n        title: Gross Amount\n        sql: gross_amount\n        type: sum\n        format: currency\n      - name: discount_rate\n        title: Discount Rate\n        sql: \"SUM({CUBE}.discount_amount) / NULLIF(SUM({CUBE}.gross_amount), 0)\"\n        type: number\n        format: percent\n      - name: count\n        title: Row Count\n        type: count"
+    },
+    {
+      "kind": "data-source",
+      "name": "default",
+      "driver": "postgres",
+      "authMethod": "password",
+      "fields": {
+        "ssl": false,
+        "host": "superset-postgresql.superset.svc.cluster.local",
+        "port": 5432,
+        "user": "postgres",
+        "database": "northwind"
+      },
+      "description": null
+    }
+  ]
+}
