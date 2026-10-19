@@ -253,6 +253,38 @@ describe('a Text tile through MCP (T891, AC-527)', () => {
     );
   });
 
+  // Checkpoint 3 (AC-527): a stored marking was kept when the client's token
+  // dropped `| marking:…`; what a token can say, it says, absence included.
+  it('takes what a token says over the stored setting, a marking dropped from it included', async () => {
+    const limited = doc(
+      p(
+        {
+          type: 'value',
+          attrs: { measure: 'orders.count', marking: 'Picks', whenUnmarked: 'none' },
+        },
+        { type: 'text', text: ' ' },
+        { type: 'marking', attrs: { marking: 'Picks', show: 'summary' } },
+      ),
+    );
+    const { call, sent } = webApp([textTile({ document: limited })]);
+    const read = dataOf(await tool('read_dashboard').run({ id: ID }, call));
+    const body = structuredClone(read.dashboard.body) as ReturnType<typeof dashboard>;
+    const section = body.pages[0]?.items[1] as { items: { markdown: string }[] };
+    const tile = section.items[0] as { markdown: string };
+    expect(tile.markdown).toBe(
+      '{{measure:orders.count | marking:Picks}} {{marking:Picks.summary}}',
+    );
+    tile.markdown = '{{measure:orders.count}} {{marking:Picks.count}}';
+    await tool('change_item').run({ kind: 'dashboard', id: ID, version: 1, body }, call);
+    const saved = (sent[0]?.body as { body: ReturnType<typeof dashboard> }).body;
+    const stored = (saved.pages[0]?.items[1] as { items: { document: TextDocument }[] }).items[0];
+    expect(stored?.document.doc.content?.[0]?.content?.filter((n) => n.type !== 'text')).toEqual([
+      // Its marking gone with its token's; what no token says, kept.
+      { type: 'value', attrs: { measure: 'orders.count', whenUnmarked: 'none' } },
+      { type: 'marking', attrs: { marking: 'Picks', show: 'count' } },
+    ]);
+  });
+
   it('matches the second token of a kind and source to the second stored one', async () => {
     const twice = doc(
       p(

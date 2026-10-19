@@ -75,6 +75,35 @@ const SOURCE: Readonly<Record<ElementKind, string>> = {
   actionButton: 'label',
 };
 
+/**
+ * What each kind's token can say (T870's tokens): these come from the token
+ * alone, a setting it leaves out being unset; every other setting is kept
+ * from the stored element (checkpoint 3: a dropped `| marking:…` kept the
+ * stored marking).
+ */
+const SAID: Readonly<Record<ElementKind, readonly string[]>> = {
+  value: ['measure', 'marking'],
+  change: ['measure'],
+  sparkline: ['measure'],
+  icon: ['measure'],
+  bulletGraph: ['measure'],
+  asOf: ['measure'],
+  marking: ['marking', 'show'],
+  filterValue: ['filter'],
+  filterControl: ['filter'],
+  parameterControl: ['parameter'],
+  actionButton: ['label'],
+};
+
+/** The stored settings no token can say, with what the token said. */
+function mergedAttrs(stored: TextNode, read: TextNode): Record<string, unknown> {
+  const said = SAID[read.type as ElementKind];
+  const kept = Object.fromEntries(
+    Object.entries(stored.attrs ?? {}).filter(([key]) => !said.includes(key)),
+  );
+  return { ...kept, ...read.attrs };
+}
+
 const keyOf = (node: TextNode) =>
   `${node.type}\u0000${String(node.attrs?.[SOURCE[node.type as ElementKind]] ?? '')}`;
 
@@ -102,7 +131,7 @@ function withStoredSettings(read: TextDocument, stored: TextDocument | undefined
   const merged = (node: TextNode): TextNode => {
     if (ELEMENTS.has(node.type)) {
       const match = kept.get(keyOf(node))?.shift();
-      return match === undefined ? node : { ...node, attrs: { ...match.attrs, ...node.attrs } };
+      return match === undefined ? node : { ...node, attrs: mergedAttrs(match, node) };
     }
     return node.content === undefined ? node : { ...node, content: node.content.map(merged) };
   };
