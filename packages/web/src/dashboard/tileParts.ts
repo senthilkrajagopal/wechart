@@ -59,6 +59,8 @@ export function tilePartsOf(shown: RenderSpec): {
       ? []
       : inSeriesOrder(seriesOf(shown).series, seriesOrderOf(shown))
           .map((one) => one.name)
+          // A split combo's members once each, every measure drawn per member (T852).
+          .filter((name, at, names) => names.indexOf(name) === at)
           .filter(pickable)
           .map((value) => ({ value, label: seriesName(value) }));
 

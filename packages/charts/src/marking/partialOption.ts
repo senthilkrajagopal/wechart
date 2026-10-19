@@ -256,9 +256,17 @@ function shareReader(spec: RenderSpec, drawn: readonly unknown[]) {
    * category no drawn item has (`isOther`).
    */
   const categories = new Set(drawn.map((each) => String(each ?? '')));
-  /** A series' measure: itself where a series is a measure, else the chart's one. */
-  const measureOf = (seriesName: string | undefined) =>
-    seriesName !== undefined && measures.includes(seriesName) ? seriesName : (measures[0] ?? '');
+  /**
+   * A series' measure: the one it carries, where a split combo's series of
+   * one member share its name (T852); else itself where a series is a
+   * measure; else the chart's one.
+   */
+  const measureOf = (seriesName: string | undefined, carried?: unknown) =>
+    typeof carried === 'string' && measures.includes(carried)
+      ? carried
+      : seriesName !== undefined && measures.includes(seriesName)
+        ? seriesName
+        : (measures[0] ?? '');
 
   return {
     measureOf,
@@ -272,8 +280,9 @@ function shareReader(spec: RenderSpec, drawn: readonly unknown[]) {
       at: unknown,
       split: string | undefined,
       grouped: Readonly<Record<string, string>> = {},
+      carried?: unknown,
     ) {
-      const measure = measureOf(seriesName);
+      const measure = measureOf(seriesName, carried);
       const splitValue = split ?? (splitBy !== undefined ? seriesName : undefined);
       const rows = share.filter((row) => {
         if (category !== undefined) {
@@ -566,8 +575,8 @@ export function withPartialMarks(option: EChartsOption, spec: RenderSpec): EChar
       const item = asItem(raw);
       const total = numberOf(item['value']);
       if (total === undefined) return { marked: { ...item, value: null }, rest: item };
-      const marked = markedOf(one.name, categories[at], undefined);
-      const kind = kindOf(measureOf(one.name), total, marked, own);
+      const marked = markedOf(one.name, categories[at], undefined, {}, one['measure']);
+      const kind = kindOf(measureOf(one.name, one['measure']), total, marked, own);
       const style = styleOf(item);
       const told = toldOf(kind, marked, total);
       const as = (value: number | null, part: 'marked' | 'rest', itemStyle: Item) => ({
@@ -632,8 +641,8 @@ export function withPartialMarks(option: EChartsOption, spec: RenderSpec): EChar
       const item = asItem(raw);
       const total = numberOf(item['value']);
       if (total === undefined) return raw;
-      const marked = markedOf(one.name, categories[at], undefined);
-      const kind = kindOf(measureOf(one.name), total, marked, colourOf(one));
+      const marked = markedOf(one.name, categories[at], undefined, {}, one['measure']);
+      const kind = kindOf(measureOf(one.name, one['measure']), total, marked, colourOf(one));
       return { ...item, share: { ...toldOf(kind, marked, total), part: 'rest' } };
     }),
   });

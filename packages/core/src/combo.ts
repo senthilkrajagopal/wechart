@@ -76,20 +76,79 @@ function autoOf(position: number): { mark: ComboMark; axis: ComboAxis } {
 export function comboSeriesOf(
   measures: readonly string[],
   options?: Readonly<Record<string, unknown>>,
+  { split = false }: { readonly split?: boolean } = {},
 ): ComboSeries[] {
   const settings = seriesSettingsOf(options);
+  const chosen = measures.map((measure) => {
+    const own = settings[measure] ?? {};
+    return {
+      mark: isMark(own['mark']) ? own['mark'] : undefined,
+      axis: isAxis(own['axis']) ? own['axis'] : undefined,
+    };
+  });
+  /**
+   * Split, colour means the member, so each measure needs a mark of its own
+   * (AC-504, rule 122): an Auto measure takes the first mark, in
+   * `SPLIT_AUTO_MARKS`' order, that no chosen mark and no earlier Auto one
+   * holds (decision T852-1). Past four, there's none left, and it's a line.
+   */
+  const taken = new Set(chosen.flatMap((one) => (one.mark === undefined ? [] : [one.mark])));
+  const nextFree = (): ComboMark => {
+    const free = SPLIT_AUTO_MARKS.find((mark) => !taken.has(mark));
+    if (free !== undefined) taken.add(free);
+    return free ?? 'line';
+  };
   return measures.map((measure, position) => {
     const auto = autoOf(position);
-    const chosen = settings[measure] ?? {};
-    const mark = isMark(chosen['mark']) ? chosen['mark'] : undefined;
-    const axis = isAxis(chosen['axis']) ? chosen['axis'] : undefined;
+    const { mark, axis } = chosen[position] ?? {};
     return {
       measure,
-      mark: mark ?? auto.mark,
+      mark: mark ?? (split ? nextFree() : auto.mark),
       axis: axis ?? auto.axis,
       auto: mark === undefined && axis === undefined,
     };
   });
+}
+
+/** The order an Auto measure takes its mark in while split (decision T852-1). */
+const SPLIT_AUTO_MARKS: readonly ComboMark[] = ['bar', 'line', 'point', 'area'];
+
+/**
+ * The measure that draws `mark` while the combo is split, other than the one
+ * asking, or none (AC-504, rule 122): with a split, two measures with one
+ * mark couldn't be told apart, colour already meaning the member, so the
+ * editor disables a mark another measure uses and names it. Unsplit, any two
+ * measures may share a mark (design 20 Q1 (a)).
+ */
+export function markTakenBy(
+  measures: readonly string[],
+  options: Readonly<Record<string, unknown>> | undefined,
+  split: boolean,
+  mark: ComboMark,
+  asking: string,
+): string | undefined {
+  if (!split) return undefined;
+  return comboSeriesOf(measures, options, { split }).find(
+    (one) => one.mark === mark && one.measure !== asking,
+  )?.measure;
+}
+
+/**
+ * A combo's wells split by `dimension` (AC-504, R80 "One dimension, all
+ * measures"): the category axis kept — the first time dimension, or else the
+ * first plain one — and the dimension that splits, the plain one after it,
+ * replaced by this one. A combo splits by one dimension only, so a second
+ * dropped on its Split by well replaces the first.
+ */
+export function withComboSplit<
+  W extends { readonly dimensions: readonly string[]; readonly timeDimensions: readonly string[] },
+>(wells: W, dimension: string): W {
+  const [first] = wells.dimensions;
+  const onAxis = wells.timeDimensions.length === 0 && first !== undefined ? [first] : [];
+  return {
+    ...wells,
+    dimensions: onAxis.includes(dimension) ? onAxis : [...onAxis, dimension],
+  };
 }
 
 /**
@@ -304,8 +363,10 @@ export function logScaleState(
   measures: readonly string[],
   options: Readonly<Record<string, unknown>> | undefined,
   label: (measure: string) => string = (measure) => measure,
+  { split = false }: { readonly split?: boolean } = {},
 ): LogScaleState {
-  const series = comboSeriesOf(measures, options);
+  // Split, Auto's marks are its own (decision T852-1), bars included.
+  const series = comboSeriesOf(measures, options, { split });
   const bars = series.find((one) => one.mark === 'bar');
   if (bars !== undefined) {
     return {

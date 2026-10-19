@@ -194,7 +194,15 @@ function parallelTooltip(spec: RenderSpec): EChartsOption {
   return { tooltip: { trigger: 'item', formatter: render } };
 }
 
-export function tooltipFor(spec: RenderSpec): EChartsOption {
+export function tooltipFor(
+  spec: RenderSpec,
+  /**
+   * The measure a series draws, by its index in the option as drawn, where
+   * its name is a member's that several measures share: a combo split across
+   * every measure (T852, AC-504; `withComboTooltip`).
+   */
+  measureOfSeries?: (seriesIndex: number) => string | undefined,
+): EChartsOption {
   if (NO_TOOLTIP.includes(spec.chartType)) return {};
   if (spec.chartType === 'parallel') return parallelTooltip(spec);
   if (spec.chartType === 'scatter') return scatterTooltip(spec);
@@ -249,22 +257,36 @@ export function tooltipFor(spec: RenderSpec): EChartsOption {
      * that carries a share are merged: the cross-filter's overlay may share a
      * series' name and is said on its own.
      */
+    // A split combo's series of one member are told apart by their measure.
+    const ownMeasure = (row: Params) =>
+      row.seriesIndex === undefined ? undefined : measureOfSeries?.(row.seriesIndex);
     const said = rows.filter((row) => {
-      const same = rows.filter((other) => other.seriesName === row.seriesName);
+      const same = rows.filter(
+        (other) => other.seriesName === row.seriesName && ownMeasure(other) === ownMeasure(row),
+      );
       if (same.length < 2 || !same.some((other) => shareOf(other) !== undefined)) return true;
       return (same.find((other) => shareOf(other)?.part === 'rest') ?? same[0]) === row;
     });
     const lines = said.map((row) => {
+      const own = ownMeasure(row);
       // By the series' measure, found by its name: its place moves with the
       // order set in Customize, or a series hidden before it (T392's review).
       const named = measures.indexOf(String(row.seriesName ?? ''));
-      const format = split
-        ? fallback
-        : (formatters[named === -1 ? (row.seriesIndex ?? 0) : named] ?? fallback);
+      const format =
+        own !== undefined
+          ? formatterFor(own, formats)
+          : split
+            ? fallback
+            : (formatters[named === -1 ? (row.seriesIndex ?? 0) : named] ?? fallback);
       const share = shareOf(row);
       const raw = share?.total ?? (Array.isArray(row.value) ? row.value[1] : row.value);
       const marked = share?.marked === undefined ? '' : ` · Marked: ${format(share.marked)}`;
-      return `${escapeHtml(seriesName(row.seriesName))}: ${escapeHtml(format(raw) + marked)}`;
+      // Its member, then its measure, where several measures share a member.
+      const label =
+        own === undefined
+          ? seriesName(row.seriesName)
+          : `${seriesName(row.seriesName)} · ${titleOf(spec, own)}`;
+      return `${escapeHtml(label)}: ${escapeHtml(format(raw) + marked)}`;
     });
 
     return [escapeHtml(heading === '' ? '' : category(heading)), ...lines]

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { comboSeriesOf } from './combo';
 import { distinctValues, seriesOf, type RenderSpec } from './render-spec';
 
 /**
@@ -172,5 +173,64 @@ describe('a chart with no category', () => {
 
     expect(categories).toEqual(['']);
     expect(series).toEqual([{ name: COUNT, values: [240] }]);
+  });
+});
+
+/**
+ * T852 (AC-504): a combo split by one dimension draws every measure once per
+ * member, series = measure × member: each named by its member, so it takes
+ * the member's colour, and carrying its measure, so it takes the measure's
+ * mark and axis.
+ */
+describe('a combo split across every measure (AC-504)', () => {
+  const QUARTER = 'orders.quarter';
+  const REVENUE = 'orders.revenue';
+  const MARGIN = 'orders.margin_pct';
+  const regions = ['EMEA', 'APAC', 'AMER', 'LATAM'];
+  const rows = ['Q1', 'Q2'].flatMap((quarter, q) =>
+    regions.map((region, r) => ({
+      [QUARTER]: quarter,
+      [REGION]: region,
+      [REVENUE]: 100 * (q + 1) + r,
+      [MARGIN]: 0.1 * (r + 1),
+    })),
+  );
+  const split: RenderSpec = {
+    chartType: 'combo',
+    encoding: { x: [QUARTER], color: [REGION], y: [REVENUE, MARGIN] },
+    rows,
+    options: { series: { [MARGIN]: { axis: 'right' } } },
+  };
+
+  it('gives 8 series, a measure’s members together in member order', () => {
+    const { series } = seriesOf(split);
+
+    expect(series.map((one) => `${one.measure ?? ''} ${one.name}`)).toEqual([
+      ...regions.map((region) => `${REVENUE} ${region}`),
+      ...regions.map((region) => `${MARGIN} ${region}`),
+    ]);
+    expect(series[0]).toEqual({ name: 'EMEA', measure: REVENUE, values: [100, 200] });
+    expect(series[7]).toEqual({ name: 'LATAM', measure: MARGIN, values: [0.4, 0.4] });
+  });
+
+  it('puts Revenue’s on the left and Margin %’s on the right', () => {
+    const axes = new Map(
+      comboSeriesOf([REVENUE, MARGIN], split.options, { split: true }).map((one) => [
+        one.measure,
+        one.axis,
+      ]),
+    );
+
+    expect(seriesOf(split).series.map((one) => axes.get(one.measure ?? ''))).toEqual([
+      ...regions.map(() => 'left'),
+      ...regions.map(() => 'right'),
+    ]);
+  });
+
+  it('draws only the first measure per member for any other split chart', () => {
+    const { series } = seriesOf({ ...split, chartType: 'groupedBar' });
+
+    expect(series).toHaveLength(4);
+    expect(series[0]).toEqual({ name: 'EMEA', values: [100, 200] });
   });
 });

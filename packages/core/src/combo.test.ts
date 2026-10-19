@@ -20,11 +20,14 @@ import {
   comboSeriesOf,
   isSynchronized,
   logScaleState,
+  markTakenBy,
   withComboAuto,
   withComboSeries,
+  withComboSplit,
   withLogScale,
   withSynchronize,
 } from './combo';
+import { undrawnMeasures } from './undrawn';
 
 const REVENUE = 'orders.revenue';
 const TARGET = 'orders.target';
@@ -335,6 +338,70 @@ describe('Synchronize axes (AC-501)', () => {
     const on = withSynchronize(options, true);
     expect(on['axes']).toEqual({ y: { max: 200_000 }, right: { title: 'Spend' } });
     expect(withSynchronize(on, false)['combo']).toBeUndefined();
+  });
+});
+
+/**
+ * T852 (AC-504): split by one dimension, colour means the member, so each
+ * measure needs a mark of its own; and a combo splits by one dimension only.
+ */
+describe('split across every measure (AC-504)', () => {
+  const REGION = 'orders.region';
+  const COUNTRY = 'orders.country';
+  const MONTH = 'orders.month';
+  const barsOnRevenue = { series: { [REVENUE]: { mark: 'bar' } } };
+
+  it('names Revenue as drawing bars while split, and nothing unsplit', () => {
+    expect(markTakenBy([REVENUE, MARGIN], barsOnRevenue, true, 'bar', MARGIN)).toBe(REVENUE);
+    expect(markTakenBy([REVENUE, MARGIN], barsOnRevenue, false, 'bar', MARGIN)).toBeUndefined();
+  });
+
+  it('never names the measure asking', () => {
+    expect(markTakenBy([REVENUE, MARGIN], barsOnRevenue, true, 'bar', REVENUE)).toBeUndefined();
+  });
+
+  it('gives each Auto measure a mark no other uses while split: bar, line, point, area', () => {
+    expect(
+      comboSeriesOf([REVENUE, TARGET, MARGIN, ORDERS], undefined, { split: true }).map(
+        (one) => one.mark,
+      ),
+    ).toEqual(['bar', 'line', 'point', 'area']);
+  });
+
+  it('keeps a chosen mark and fills Auto around it while split', () => {
+    const options = { series: { [TARGET]: { mark: 'bar' } } };
+
+    expect(
+      comboSeriesOf([REVENUE, TARGET, MARGIN], options, { split: true }).map((one) => one.mark),
+    ).toEqual(['line', 'bar', 'point']);
+  });
+
+  it('keeps Auto as bars then lines unsplit', () => {
+    expect(comboSeriesOf([REVENUE, TARGET, MARGIN]).map((one) => one.mark)).toEqual([
+      'bar',
+      'line',
+      'line',
+    ]);
+  });
+
+  it('replaces the split with a second dimension, keeping the category axis', () => {
+    const withTime = { measures: [REVENUE], dimensions: [REGION], timeDimensions: [MONTH] };
+    const noTime = { measures: [REVENUE], dimensions: [MONTH, REGION], timeDimensions: [] };
+
+    expect(withComboSplit(withTime, COUNTRY).dimensions).toEqual([COUNTRY]);
+    expect(withComboSplit(noTime, COUNTRY).dimensions).toEqual([MONTH, COUNTRY]);
+  });
+
+  it('draws every measure while split, each on its axis’s scale', () => {
+    const spec = {
+      chartType: 'combo' as const,
+      encoding: { x: [MONTH], color: [REGION], y: [REVENUE, MARGIN, TARGET] },
+      rows: [],
+      formats: { [REVENUE]: 'currency', [TARGET]: 'currency', [MARGIN]: 'percent' },
+      options: { series: { [MARGIN]: { axis: 'right' } } },
+    };
+
+    expect(undrawnMeasures(spec)).toEqual([]);
   });
 });
 

@@ -87,13 +87,18 @@ describe('the metrics a form leaves undrawn (T510)', () => {
    * bars and the rest as lines (`series/combo.ts`), so it is held to one scale
    * as a bar is, and split by colour it draws its first alone.
    */
-  it('reads a combo as a bar: one scale, or its first alone when split', () => {
+  it('reads a combo as a bar: one scale, split or not (T852: split, every metric is drawn)', () => {
     expect(undrawnMeasures(spec('combo', [COUNT, 'orders.items', AMOUNT]))).toEqual([
       { member: AMOUNT, reason: 'scale' },
     ]);
-    expect(undrawnMeasures(spec('combo', [COUNT, 'orders.items'], { color: [REGION] }))).toEqual([
-      { member: 'orders.items', reason: 'form' },
-    ]);
+    // AC-504 (T852): split, a combo draws every metric once per member,
+    // where it drew its first alone; each still held to its axis's scale.
+    expect(undrawnMeasures(spec('combo', [COUNT, 'orders.items'], { color: [REGION] }))).toEqual(
+      [],
+    );
+    expect(
+      undrawnMeasures(spec('combo', [COUNT, 'orders.items', AMOUNT], { color: [REGION] })),
+    ).toEqual([{ member: AMOUNT, reason: 'scale' }]);
   });
 
   /**

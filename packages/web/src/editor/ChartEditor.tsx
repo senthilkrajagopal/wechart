@@ -722,10 +722,12 @@ function EditorBody({
     if (drawnSpec === undefined) return [];
     try {
       // As drawn: a metric on another scale isn't a series to style (T510).
-      return seriesOf(onOneScale(drawnSpec)).series.map((one) => ({
-        name: one.name,
+      // A split combo's members, once each: every measure is drawn per member (T852).
+      const names = [...new Set(seriesOf(onOneScale(drawnSpec)).series.map((one) => one.name))];
+      return names.map((name) => ({
+        name,
         // Own keys only: a split's value may be "constructor" (T232's review).
-        title: (Object.hasOwn(titles, one.name) ? titles[one.name] : undefined) ?? one.name,
+        title: (Object.hasOwn(titles, name) ? titles[name] : undefined) ?? name,
       }));
     } catch {
       // A type `seriesOf` does not lay out — a pie, a KPI — lists none here.

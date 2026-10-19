@@ -31,3 +31,8 @@ Lane COMBO's ticked tasks from `docs/tasks.md` §P2.26 (F44), their sub-lines wo
   - Files: `packages/core/src/combo.ts` (`logScaleState`), `packages/charts/src/series/combo.ts`, their tests.
   - Failing test: `combo.test.ts`: log on the left with two axes drawn makes the right log too; with a bar series, `logScaleState` is unavailable, "Log scale · unavailable: Revenue draws bars, which need a zero baseline"; the charts' `combo.test.ts`: Orders 0, 0, 0 and 12 on a log axis draws one point and reports 3 values not drawn (AC-502).
   - Depends on: T847
+
+- [x] T852 (AC-504) Split a combo by one dimension across every measure: a series per measure × member, coloured by member, on its measure's axis, one mark per measure
+  - Files: `packages/core/src/render-spec.ts` (`seriesOf` for a split combo; + test), `packages/core/src/combo.ts` (`markTakenBy`), `packages/charts/src/series/combo.ts`, `packages/charts/src/colorAssignment.ts` (+ test).
+  - Failing test: `render-spec.test.ts`: Revenue and Margin % split by 4 regions give 8 series, Revenue's on the left and Margin %'s on the right, a measure's bars grouped in member order; `colorAssignment.test.ts`: EMEA takes in the combo the colour it takes in a bar chart on the same dashboard; `combo.test.ts`: with Revenue on bars, `markTakenBy('bar')` names Revenue while split and nothing unsplit; a second split dimension replaces the first (AC-504).
+  - Depends on: T845

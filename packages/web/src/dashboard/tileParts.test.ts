@@ -45,6 +45,14 @@ describe('the series and panels a tile’s menu offers (T631’s review, T632)',
     ]);
   });
 
+  it('offers a split combo’s members once each, though every measure is drawn per member (T852)', () => {
+    const spec: RenderSpec = {
+      ...split('combo', ['Toys', 'Books']),
+      encoding: { x: [STATUS], y: [COUNT, 'orders.total'], color: [CATEGORY] },
+    };
+    expect(values(tilePartsOf(spec).series)).toEqual(['Toys', 'Books']);
+  });
+
   it('offers no series where the legend names something else, or there is none', () => {
     // A heatmap's colour is its measure, a scale: no legend lists it.
     const heatmap: RenderSpec = {

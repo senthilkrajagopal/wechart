@@ -525,6 +525,67 @@ describe('a partly marked combo', () => {
   });
 });
 
+/**
+ * T852 (AC-504): split, a combo's series of one member share its name, so
+ * each measure's marked share is read from its own measure, and its tooltip
+ * names the member and the measure.
+ */
+describe('a partly marked combo split across every measure', () => {
+  const encoding = {
+    x: ['products.category'],
+    y: ['orders.amount', 'orders.count'],
+    color: ['orders.region'],
+  };
+  const rows = [
+    {
+      'products.category': 'Books',
+      'orders.region': 'East',
+      'orders.amount': 10,
+      'orders.count': 3,
+    },
+    {
+      'products.category': 'Games',
+      'orders.region': 'East',
+      'orders.amount': 20,
+      'orders.count': 4,
+    },
+  ];
+  const share = [
+    {
+      'products.category': 'Books',
+      'orders.region': 'East',
+      'orders.amount': 4,
+      'orders.count': 1,
+    },
+  ];
+  const combo = (): RenderSpec => ({
+    ...bySpec('combo', 'sum', rows, share, encoding),
+    marking: {
+      predicate: marked,
+      colour: MARKING,
+      share,
+      aggTypes: { 'orders.amount': 'sum', 'orders.count': 'count' },
+    },
+  });
+
+  it("reads each measure's marked share from its own measure", () => {
+    const option = optionFor(combo());
+    const drawn = seriesOf(option);
+    const formatter = (option['tooltip'] as { formatter: (params: unknown) => string }).formatter;
+    const at = drawn.map((one, seriesIndex) => ({
+      name: 'Books',
+      seriesName: one.name,
+      seriesIndex,
+      value: one.data[0]?.value,
+      data: one.data[0],
+    }));
+
+    expect(formatter(at)).toBe(
+      'Books<br/>East · orders.amount: 10 · Marked: 4<br/>East · orders.count: 3 · Marked: 1',
+    );
+  });
+});
+
 describe('a partly marked trellis panel', () => {
   const encoding = { x: ['products.category'], y: ['orders.amount'], facet: ['orders.region'] };
   const rows = [

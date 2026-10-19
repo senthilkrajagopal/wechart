@@ -381,6 +381,12 @@ export function inValueOrder(members: readonly string[]): string[] {
 /** One drawable series: its name, and one value per category. */
 export interface SeriesData {
   readonly name: string;
+  /**
+   * The measure a split combo's series draws (T852, AC-504): its name is its
+   * member's, which every measure's series of that member shares. Absent
+   * wherever a series is a measure, or every series draws the first.
+   */
+  readonly measure?: string;
   readonly values: readonly (number | null)[];
 }
 
@@ -421,6 +427,30 @@ export function seriesOf(spec: RenderSpec): {
   if (splitBy !== undefined) {
     const measure = measures[0];
     if (measure === undefined) return { categories, series: [] };
+
+    /**
+     * A combo draws every measure once per member (T852, AC-504, R80): a
+     * measure's members together, in member order, so its bars group within
+     * each category; each series named by its member, for its colour.
+     */
+    if (spec.chartType === 'combo') {
+      const members = inValueOrder(distinctValues(rows, splitBy));
+      return {
+        categories,
+        series: measures.flatMap((each) =>
+          members.map((member) => ({
+            name: member,
+            measure: each,
+            values: categories.map((name) =>
+              valueAt(
+                each,
+                (row) => inCategory(name)(row) && String(row[splitBy] ?? '') === member,
+              ),
+            ),
+          })),
+        ),
+      };
+    }
 
     return {
       categories,

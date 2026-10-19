@@ -308,8 +308,18 @@ describe('each measure with its own mark, on its own axis (AC-497)', () => {
       {
         series: [
           { type: 'line', name: COST, data: [80, 90], areaStyle: { opacity: 0.24 } },
-          // A marked share drawn over the area, as `withMarkedShareLines` does.
-          { type: 'line', name: COST, data: [10, null], areaStyle: undefined },
+          // A marked share drawn over the area, as `withMarkedShareLines`
+          // draws it: each item its part of a share (T852: told by its items,
+          // since split series share a name).
+          {
+            type: 'line',
+            name: COST,
+            data: [
+              { value: 10, share: { part: 'marked' } },
+              { value: null, share: { part: 'marked' } },
+            ],
+            areaStyle: undefined,
+          },
         ],
       },
       mixed,
@@ -325,6 +335,98 @@ describe('each measure with its own mark, on its own axis (AC-497)', () => {
     };
 
     expect(seriesOf(optionFor(formatted)).map((one) => one.name)).toContain(MARGIN);
+  });
+});
+
+/**
+ * T852 (AC-504): split by one dimension, every measure drawn once per
+ * member, each member in its colour, each measure's members on its axis with
+ * its mark, its bars grouped within each category in member order.
+ */
+describe('a combo split across every measure (AC-504)', () => {
+  const QUARTER = 'orders.quarter';
+  const REGION = 'orders.region';
+  const REVENUE = 'orders.revenue';
+  const MARGIN = 'orders.margin_pct';
+  const COST = 'orders.cost';
+  const regions = ['EMEA', 'APAC', 'AMER', 'LATAM'];
+  const COLOURS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'];
+  type Drawn = {
+    name: string;
+    type: string;
+    yAxisIndex: number;
+    z: number;
+    data: unknown[];
+    tooltip?: unknown;
+    areaStyle?: unknown;
+    itemStyle?: { color?: string };
+  };
+  const split = (options: Record<string, unknown> = {}): RenderSpec => ({
+    chartType: 'combo',
+    encoding: { x: [QUARTER], color: [REGION], y: [REVENUE, MARGIN] },
+    rows: ['Q1', 'Q2'].flatMap((quarter, q) =>
+      regions.map((region, r) => ({
+        [QUARTER]: quarter,
+        [REGION]: region,
+        [REVENUE]: 100 * (q + 1) * (r + 1),
+        [MARGIN]: 0.05 * (r + 1),
+        [COST]: 50 * (r + 1),
+      })),
+    ),
+    // Longer than the members, so a colour by series index would show.
+    palette: [...COLOURS, '#9467bd', '#8c564b'],
+    titles: { [REVENUE]: 'Revenue', [MARGIN]: 'Margin %', [COST]: 'Cost' },
+    formats: { [REVENUE]: 'currency', [MARGIN]: 'percent', [COST]: 'currency' },
+    options: { series: { [MARGIN]: { axis: 'right' } }, ...options },
+  });
+  const drawnOf = (spec: RenderSpec) =>
+    (optionFor(spec)['series'] as Drawn[]).filter((one) => one.tooltip === undefined);
+
+  it('draws 8 series: Revenue’s members as bars on the left, Margin %’s as lines on the right', () => {
+    const series = drawnOf(split());
+
+    expect(series.map((one) => `${one.name} ${one.type} ${String(one.yAxisIndex)}`)).toEqual([
+      ...regions.map((region) => `${region} bar 0`),
+      ...regions.map((region) => `${region} line 1`),
+    ]);
+  });
+
+  it('colours each member alike in every measure', () => {
+    const series = drawnOf(split());
+
+    expect(series.map((one) => one.itemStyle?.color)).toEqual([...COLOURS, ...COLOURS]);
+  });
+
+  it('groups a measure’s bars in member order within each category, in the SVG', () => {
+    const bars = marksOf(draw(split()), COLOURS)
+      .filter((mark) => mark.bottom - mark.top > 2 && mark.right - mark.left > 4)
+      .sort((a, b) => a.left - b.left);
+    const firstQuarter = bars.slice(0, 4).map((bar) => bar.fill);
+
+    expect(firstQuarter).toEqual(COLOURS);
+  });
+
+  it('puts a halo under each line, an area before it notwithstanding', () => {
+    const spec = {
+      ...split({ series: { [COST]: { mark: 'area' }, [MARGIN]: { axis: 'right' } } }),
+      encoding: { x: [QUARTER], color: [REGION], y: [REVENUE, COST, MARGIN] },
+    };
+    const halos = (optionFor(spec)['series'] as Drawn[]).filter((one) => one.tooltip !== undefined);
+
+    expect(halos).toHaveLength(4);
+    expect(halos.every((one) => one.yAxisIndex === 1)).toBe(true);
+  });
+
+  it('writes each value in its own measure’s format in the tooltip, naming the measure', () => {
+    const tooltip = optionFor(split())['tooltip'] as { formatter: (rows: unknown) => string };
+    const text = tooltip.formatter([
+      { seriesName: 'EMEA', seriesIndex: 0, name: 'Q1', value: 100 },
+      { seriesName: 'EMEA', seriesIndex: 4, name: 'Q1', value: 0.05 },
+    ]);
+
+    expect(text).toContain('EMEA · Revenue: $100');
+    expect(text).toContain('EMEA · Margin %: 5');
+    expect(text).toMatch(/Margin %: 5(\.0+)?%/);
   });
 });
 

@@ -103,7 +103,9 @@ export function undrawnOf({
   // Two, one on each axis.
   if (chartType === 'scatter') return past(2);
   if (ONE_AXIS.has(chartType)) {
-    if (split) return past(1);
+    // Split, the first metric per member; a combo draws every metric per
+    // member (T852, AC-504), each against its axis's first as unsplit.
+    if (split && chartType !== 'combo') return past(1);
     // Each metric against the first on its own axis: there is one axis
     // except in a combo the author gave a second (T846).
     const firstOn = (axis: ComboAxis) => measures.find((member) => axisOf(member) === axis);

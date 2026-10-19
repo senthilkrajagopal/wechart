@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import type { RenderSpec } from '@wechart/core';
 
 import { assignColours, OTHER_COLOUR } from './colorAssignment';
+import { colouredMembersOf } from './colouredMembers';
 import { optionFor } from './optionFor';
 import { marksOf, renderToSvg } from './testing/renderToSvg';
 
@@ -74,6 +75,59 @@ describe('the palette runs out', () => {
     PALETTE.forEach((_, index) => colours.colourFor(`member ${String(index)}`));
 
     expect(colours.colourFor('extra')).toBe(colours.colourFor('extra'));
+  });
+});
+
+/**
+ * T852 (AC-504, rule 7): split, a combo colours by member, so EMEA takes in
+ * the combo, bars and line alike, the colour it takes in a bar chart on the
+ * same dashboard.
+ */
+describe('a combo split across every measure (AC-504)', () => {
+  const regions = ['EMEA', 'APAC', 'AMER', 'LATAM'];
+  const rows = regions.map((region, at) => ({
+    'orders.quarter': 'Q1',
+    'orders.region': region,
+    'orders.revenue': 100 * (at + 1),
+    'orders.margin': 0.1 * (at + 1),
+  }));
+  const bar: RenderSpec = {
+    chartType: 'groupedBar',
+    encoding: { x: ['orders.quarter'], y: ['orders.revenue'], color: ['orders.region'] },
+    rows,
+  };
+  const combo: RenderSpec = {
+    chartType: 'combo',
+    encoding: {
+      x: ['orders.quarter'],
+      y: ['orders.revenue', 'orders.margin'],
+      color: ['orders.region'],
+    },
+    rows,
+    options: { series: { 'orders.margin': { axis: 'right' } } },
+  };
+
+  it('claims the same members a bar chart split by Region claims, each once', () => {
+    expect(colouredMembersOf(combo)).toEqual(colouredMembersOf(bar));
+    expect(colouredMembersOf(combo)).toEqual(regions);
+  });
+
+  it('draws EMEA in the colour the dashboard gave it, in its bars and its line', () => {
+    const assignment = assignColours();
+    // The bar chart first, as a dashboard's earlier tile.
+    colouredMembersOf(bar).forEach((member) => assignment.colourFor(member));
+    const colours = assignment.assigned();
+    const drawn = optionFor({ ...combo, colours })['series'] as {
+      name: string;
+      type: string;
+      itemStyle?: { color?: string };
+      lineStyle?: { color?: string };
+      tooltip?: unknown;
+    }[];
+    const emea = drawn.filter((one) => one.name === 'EMEA' && one.tooltip === undefined);
+
+    expect(emea.map((one) => one.type)).toEqual(['bar', 'line']);
+    expect(emea.map((one) => one.itemStyle?.color)).toEqual([colours['EMEA'], colours['EMEA']]);
   });
 });
 

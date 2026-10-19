@@ -46,6 +46,7 @@ import {
   type Canvas,
 } from './bar';
 import { COMBO_MARK, COMBO_Z, DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
+import { tooltipFor } from '../tooltip';
 
 export function isComboType(chartType: string): boolean {
   return chartType === 'combo';
@@ -53,10 +54,56 @@ export function isComboType(chartType: string): boolean {
 
 const AXIS_INDEX: Record<ComboAxis, number> = { left: 0, right: 1 };
 
+/** Whether a combo is split by a dimension, across every measure (AC-504). */
+const isSplit = (spec: RenderSpec) => memberOn(spec.encoding, 'color') !== undefined;
+
 /** Which of a combo's value axes are log axes (AC-502, `logScaleState`). */
 function logAxesOf(spec: RenderSpec): Record<ComboAxis, boolean> {
-  const state = logScaleState(membersOn(spec.encoding, 'y'), spec.options);
+  const state = logScaleState(membersOn(spec.encoding, 'y'), spec.options, undefined, {
+    split: isSplit(spec),
+  });
   return state.available ? { left: state.left, right: state.right } : { left: false, right: false };
+}
+
+/** A series as a combo draws it: its measure's mark and axis, and its member where split. */
+interface ComboDrawn {
+  readonly name: string;
+  readonly measure: string;
+  readonly mark: ComboMark;
+  readonly axis: ComboAxis;
+  readonly values: readonly (number | null)[];
+  /** Its member's place among the split's members, for its colour; else its own place. */
+  readonly colourIndex: number;
+}
+
+/**
+ * Each series of a combo with the mark and axis it's drawn with (AC-497):
+ * unsplit, each series is its measure; split, each is its measure's for one
+ * member (AC-504, `seriesOf`), and takes the member's colour slot.
+ */
+function comboDrawingOf(spec: RenderSpec): {
+  categories: string[];
+  series: ComboDrawn[];
+} {
+  const split = isSplit(spec);
+  const { categories, series } = seriesOf(spec);
+  const resolved = comboSeriesOf(membersOn(spec.encoding, 'y'), spec.options, { split });
+  const members = [...new Set(series.map((one) => one.name))];
+  return {
+    categories,
+    series: series.map((one, index) => {
+      const measure = one.measure ?? one.name;
+      const own = resolved.find((each) => each.measure === measure);
+      return {
+        name: one.name,
+        measure,
+        mark: own?.mark ?? 'line',
+        axis: own?.axis ?? 'left',
+        values: one.values,
+        colourIndex: split ? members.indexOf(one.name) : index,
+      };
+    }),
+  };
 }
 
 /**
@@ -111,9 +158,8 @@ export function logScaleOmissions(given: RenderSpec): LogOmissions | undefined {
   const spec = onOneScale(given);
   const logOn = logAxesOf(spec);
   if (!logOn.left && !logOn.right) return undefined;
-  const { categories, series } = seriesOf(spec);
-  const resolved = comboSeriesOf(membersOn(spec.encoding, 'y'), spec.options);
-  const split = memberOn(spec.encoding, 'color') !== undefined;
+  const { categories, series } = comboDrawingOf(spec);
+  const split = isSplit(spec);
   const writeCategory = modelWriter(spec, membersOn(spec.encoding, 'x')[0]);
   const named = (category: unknown) =>
     writeCategory === undefined ? String(category) : writeCategory(category);
@@ -121,8 +167,7 @@ export function logScaleOmissions(given: RenderSpec): LogOmissions | undefined {
   let count = 0;
   let negative = false;
   const parts = series.flatMap((one) => {
-    const axis = (split ? resolved[0] : resolved.find((each) => each.measure === one.name))?.axis;
-    if (axis === undefined || !logOn[axis]) return [];
+    if (!logOn[one.axis]) return [];
     const left = one.values.flatMap((value, at) =>
       value !== null && value <= 0 ? [{ value, at }] : [],
     );
@@ -130,7 +175,9 @@ export function logScaleOmissions(given: RenderSpec): LogOmissions | undefined {
     count += left.length;
     const below = left.some(({ value }) => value < 0);
     negative ||= below;
-    const label = split ? one.name : labelOf(spec, one.name);
+    const label = split
+      ? `${labelOf(spec, one.measure)} for ${one.name}`
+      : labelOf(spec, one.measure);
     return [
       `${label} was ${below ? 'at or below 0' : '0'} in ${listed(left.map(({ at }) => named(categories[at])))}`,
     ];
@@ -260,25 +307,18 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
   }
 
   const surface = spec.surface ?? DEFAULT_SURFACE;
-  const { categories, series } = seriesOf(spec);
-  const resolved = comboSeriesOf(membersOn(spec.encoding, 'y'), spec.options);
   /**
-   * Split by colour, every series draws the first measure, so takes its mark
-   * and axis; otherwise each series is its measure. (A split across every
-   * measure is T852's.)
+   * Each series with its measure's mark and axis: unsplit, a series is its
+   * measure; split, its measure's for one member, in the member's colour
+   * (T852, AC-504).
    */
-  const split = memberOn(spec.encoding, 'color') !== undefined;
-  const drawAs = (name: string): { measure: string; mark: ComboMark; axis: ComboAxis } =>
-    (split ? resolved[0] : resolved.find((one) => one.measure === name)) ?? {
-      measure: name,
-      mark: 'line',
-      axis: 'left',
-    };
-  const barCount = series.filter((one) => drawAs(one.name).mark === 'bar').length;
+  const { categories, series } = comboDrawingOf(spec);
+  const split = isSplit(spec);
+  const barCount = series.filter((one) => one.mark === 'bar').length;
   const logOn = logAxesOf(spec);
   /** On a log axis a value at or below zero has no place, so isn't drawn (AC-502). */
-  const valuesOf = (one: { name: string; values: readonly (number | null)[] }) =>
-    logOn[drawAs(one.name).axis]
+  const valuesOf = (one: ComboDrawn) =>
+    logOn[one.axis]
       ? one.values.map((value) => (value !== null && value <= 0 ? null : value))
       : one.values;
 
@@ -306,20 +346,26 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
     xAxis: { type: 'category', data: categories },
     yAxis: valueAxes(
       spec,
-      series.map((one, index) => ({
-        ...drawAs(one.name),
+      series.map((one) => ({
+        measure: one.measure,
+        mark: one.mark,
+        axis: one.axis,
         // Split, a glyph stands for every member, so is drawn in the
         // legend's own text colour (design 20 state D).
-        colour: split ? COLORS.light['text-secondary'] : colourFor(spec, one.name, index),
+        colour: split ? COLORS.light['text-secondary'] : colourFor(spec, one.name, one.colourIndex),
         values: valuesOf(one),
       })),
       logOn.right,
     ),
-    series: series.map((one, index) => {
-      const colour = colourFor(spec, one.name, index);
-      const { mark, axis } = drawAs(one.name);
+    series: series.map((one) => {
+      const colour = colourFor(spec, one.name, one.colourIndex);
+      const { mark, axis } = one;
       const common = {
         name: one.name,
+        // Which measure it draws, beyond ECharts (which ignores the key):
+        // split, its name is its member's, so the tooltip finds its format
+        // here (T852, `withComboTooltip`).
+        measure: one.measure,
         data: [...valuesOf(one)],
         yAxisIndex: AXIS_INDEX[axis],
         z: COMBO_Z[mark],
@@ -379,13 +425,38 @@ const valueOf = (item: unknown): unknown =>
     : item;
 
 /**
+ * A split combo's tooltip, its values each in its own measure's format and
+ * named "‹member› · ‹measure›" (T852, AC-504, AC-046): split, every
+ * measure's series of a member share the member's name, so each is told by
+ * the measure it carries in the option as drawn, a marked share's copied
+ * from its series. Any other chart's tooltip is left as it is.
+ */
+export function withComboTooltip(option: EChartsOption, spec: RenderSpec): EChartsOption {
+  if (!isComboType(spec.chartType) || !isSplit(spec)) return option;
+  const series = Array.isArray(option['series']) ? (option['series'] as Series[]) : [];
+  const measures = series.map((one) =>
+    typeof one['measure'] === 'string' ? one['measure'] : undefined,
+  );
+  return { ...option, ...tooltipFor(spec, (index) => measures[index]) };
+}
+
+/** An item of a marked share's line (`withMarkedShareLines`: `share.part` "marked"). */
+const isMarkedShare = (item: unknown): boolean => {
+  if (typeof item !== 'object' || item === null || !('share' in item)) return false;
+  const share = (item as { share: unknown }).share;
+  return (
+    typeof share === 'object' && share !== null && (share as { part?: unknown }).part === 'marked'
+  );
+};
+
+/**
  * Each line of a combo drawn on a halo (direction.md §7h, "Line over bar"):
  * a 5 px stroke in the surface colour under its 2 px line, so a line crossing
  * bars stays one line. Not an area's edge, which lies behind the bars anyway.
  *
- * Added last, to the option as drawn: one per line, from the first series of
- * its name (a marked share drawn over a line is not another line), with its
- * values only. Named as its line and listed after it, so the legend takes its
+ * Added last, to the option as drawn: one per line series (a marked share
+ * drawn over a line is not another line), with its values only. Named as
+ * its line and listed after it, so the legend takes its
  * entry from the line; silent, out of the tooltip and the legend's hover
  * (research/echarts-combo-layers.md).
  */
@@ -393,17 +464,22 @@ export function withLineHalos(option: EChartsOption, spec: RenderSpec): EChartsO
   if (!isComboType(spec.chartType) || !Array.isArray(option['series'])) return option;
   const surface = spec.surface ?? DEFAULT_SURFACE;
   const series = option['series'] as Series[];
-  const seen = new Set<unknown>();
   const halos = series.flatMap((one) => {
-    // The first series of a name says what it is: an area's marked share,
-    // drawn as a line over it, is no line of its own (T846's review).
-    if (one.type !== 'line' || seen.has(one.name)) return [];
-    seen.add(one.name);
-    if (one.areaStyle !== undefined) return [];
+    /**
+     * A line, not an area, and not a marked share drawn over a line or an
+     * area (`withMarkedShareLines`), which is no line of its own (T846's
+     * review). Told by its items, not its name: split, every measure's
+     * series of a member share the member's name (T852).
+     */
+    if (one.type !== 'line' || one.areaStyle !== undefined) return [];
+    const data = Array.isArray(one.data) ? (one.data as unknown[]) : [];
+    if (data.some(isMarkedShare)) return [];
     return [
       {
         type: 'line',
         name: one.name,
+        // Its line's measure too, so it is its line's in every reading (T852).
+        ...(one['measure'] === undefined ? {} : { measure: one['measure'] }),
         data: Array.isArray(one.data) ? one.data.map(valueOf) : [],
         yAxisIndex: one['yAxisIndex'] ?? 0,
         z: COMBO_Z.halo,
