@@ -122,3 +122,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/core/src/dashboard-parameters.ts` (+ test), `packages/core/src/dashboard-document.ts`, `packages/core/src/index.ts`.
   - Failing test: `dashboard-parameters.test.ts`: a Measure parameter of Revenue, Orders and Margin % with default Revenue passes; 1,001 choices, a default outside the choices, a Dimension choice in a Measure parameter, and an empty name are each refused, named (AC-531).
   - Depends on: none
+
+- [x] T892 (AC-528) A Filter control that is one of the dashboard's filters: the bar's widget at 28 px with its scope tag, one value in both places, and a deleted filter's control needing fixing
+  - Files: `packages/web/src/tiles/text/elements/FilterControl.tsx` (+ test), `packages/web/src/filters/FilterBar.tsx` (the shared widget), `e2e/text-tile.spec.ts`.
+  - Failing test: `FilterControl.test.tsx`: the control renders the bar's widget for Country with its scope tag, at 28 px; the e2e: choosing Spain in the control updates the bar's pill, the header's count and every tile in scope, announced once; clearing it in the bar clears the control; a second Text tile's control of Country shows the same value; deleting Country shows "1 element needs fixing" in edit mode (AC-528).
+  - Depends on: T882

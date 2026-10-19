@@ -1909,10 +1909,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 ### Lane TEXT: controls and dashboard parameters
 
-- [ ] T892 (AC-528) A Filter control that is one of the dashboard's filters: the bar's widget at 28 px with its scope tag, one value in both places, and a deleted filter's control needing fixing
-  - Files: `packages/web/src/tiles/text/elements/FilterControl.tsx` (+ test), `packages/web/src/filters/FilterBar.tsx` (the shared widget), `e2e/text-tile.spec.ts`.
-  - Failing test: `FilterControl.test.tsx`: the control renders the bar's widget for Country with its scope tag, at 28 px; the e2e: choosing Spain in the control updates the bar's pill, the header's count and every tile in scope, announced once; clearing it in the bar clears the control; a second Text tile's control of Country shows the same value; deleting Country shows "1 element needs fixing" in edit mode (AC-528).
-  - Depends on: T882
+- [x] T892 (AC-528) A Filter control that is one of the dashboard's filters: the bar's widget at 28 px with its scope tag, one value in both places, and a deleted filter's control needing fixing
 
 - [ ] T893 (AC-529) A filter control of more than 1,000 values: the first 1,000, the count, and search through Cube
   - Files: `packages/web/src/filters/widgets/` (the list widget's cap and search), `packages/web/src/tiles/text/elements/FilterControl.tsx`, tests.
