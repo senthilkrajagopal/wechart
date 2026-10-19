@@ -114,6 +114,20 @@ describe('what a shape touches on a chart', () => {
     ]);
   });
 
+  // Checkpoint 1's review: a bullet's target is a point at (target, member).
+  it('names a scatter point by the category it carries, not by its x value', () => {
+    const option: EChartsOption = {
+      xAxis: { type: 'value' },
+      yAxis: { type: 'value' },
+      series: [{ type: 'scatter', name: 'Target', data: [{ value: [1, 10], category: 'EMEA' }] }],
+    };
+    const shape = { kind: 'rect', x0: 140, y0: 280, x1: 160, y1: 299 } as const;
+
+    expect(itemsInShape(converter, option, shape)).toEqual([
+      { name: 'EMEA', seriesName: 'Target' },
+    ]);
+  });
+
   it('names an item by the category it carries, as a click does', () => {
     const option: EChartsOption = {
       xAxis: { type: 'category', data: ['Completed (label)'] },

@@ -87,6 +87,18 @@ describe('a bullet is its member (AC-582)', () => {
       y1: 80,
     } as Parameters<typeof itemsInShape>[2]);
     expect([...new Set(touched.map((one) => one.name))].sort()).toEqual(['EMEA', 'North America']);
+
+    // Past the targets, at $500K (checkpoint 1's review): a target is its
+    // member too, never a value read as a member ("500000").
+    const past = itemsInShape(chart, option, {
+      kind: 'rect',
+      x0: 0,
+      y0: 10,
+      x1: 600,
+      y1: 80,
+    } as Parameters<typeof itemsInShape>[2]);
+    expect(past.some((one) => one.seriesName === 'Target')).toBe(true);
+    expect([...new Set(past.map((one) => one.name))].sort()).toEqual(['EMEA', 'North America']);
   });
 
   it('outlines a marked bullet’s value bar and fades every other bullet, bands and all', () => {

@@ -157,11 +157,15 @@ export function itemsInShape(
           take(String(x), seriesName, String(own.entity));
           return;
         }
-        // A heatmap's cell is named by its column, as its axis writes it.
+        // A heatmap's cell is named by its column, as its axis writes it; a
+        // point that carries its category by that, as a bullet's target
+        // carries its member (checkpoint 1's review, AC-582).
         const name =
-          series.type === 'heatmap' && typeof x === 'number' && xAxis.data !== undefined
-            ? said(xAxis.data[x])
-            : String(x);
+          typeof carried === 'string'
+            ? carried
+            : series.type === 'heatmap' && typeof x === 'number' && xAxis.data !== undefined
+              ? said(xAxis.data[x])
+              : String(x);
         take(name, seriesName);
         return;
       }

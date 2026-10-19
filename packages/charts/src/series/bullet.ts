@@ -175,9 +175,10 @@ export function bulletOption(spec: RenderSpec, canvas: Canvas): EChartsOption {
       markedAs: 'fade',
       // At full strength: a scatter point is 0.8 by default.
       itemStyle: { color: tokens['text-primary'], opacity: 1 },
-      // Each named by its member, which a click on it marks (T955, AC-582).
+      // Each named by its member, which a click on it marks (T955, AC-582),
+      // and carrying it, which a drag over it marks (checkpoint 1's review).
       data: bullets.flatMap(({ member, target }) =>
-        target === null ? [] : [{ value: [target, member], name: member }],
+        target === null ? [] : [{ value: [target, member], name: member, category: member }],
       ),
     },
   ];
