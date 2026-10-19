@@ -865,6 +865,50 @@ function CountryCodeRow({ value, onChange }: { value: Value; onChange: (next: Va
 }
 
 /**
+ * Whether a string dimension is a region key of a boundary set (T974,
+ * AC-623): by its values unless the model says, in `meta.wechart.regionKey`,
+ * the set's id or false. Countries keeps its own Country code row (AC-313);
+ * a custom set's mark is shown and kept until another is chosen.
+ */
+function RegionKeyRow({ value, onChange }: { value: Value; onChange: (next: Value) => void }) {
+  const id = useId();
+  const meta = isPlain(value['meta']) ? value['meta'] : {};
+  const wechart = isPlain(meta['wechart']) ? meta['wechart'] : {};
+  const marked = wechart['regionKey'];
+  const current = marked === false ? 'false' : typeof marked === 'string' ? marked : '';
+  const custom = current.startsWith('custom:') ? current : undefined;
+  const mark = (next: string | false | undefined) => {
+    const nextMeta: Value = { ...meta };
+    const nextWechart: Value = { ...wechart };
+    if (next === undefined) delete nextWechart['regionKey'];
+    else nextWechart['regionKey'] = next;
+    if (Object.keys(nextWechart).length === 0) delete nextMeta['wechart'];
+    else nextMeta['wechart'] = nextWechart;
+    onChange(write(value, 'meta', Object.keys(nextMeta).length === 0 ? undefined : nextMeta));
+  };
+  return (
+    <div className="field model-field" data-setting="region-key">
+      <label htmlFor={id}>Region key</label>
+      <select
+        id={id}
+        value={current}
+        onChange={(event) => {
+          const chosen = event.target.value;
+          mark(chosen === '' ? undefined : chosen === 'false' ? false : chosen);
+        }}
+      >
+        <option value="">Decided by its values</option>
+        <option value="admin1">Admin-1 (ISO 3166-2 codes or English names)</option>
+        {custom === undefined ? null : (
+          <option value={custom}>Custom set: {custom.slice('custom:'.length)}</option>
+        )}
+        <option value="false">Not a region key</option>
+      </select>
+    </div>
+  );
+}
+
+/**
  * A fold that opens itself when what it holds is written, and never closes
  * on its own: clearing the last key a user set leaves it where they are
  * (T480's review). Opening and closing it otherwise is the user's.
@@ -1025,7 +1069,10 @@ export function ObjectForm({
         <div className="model-form__fields">
           {inside.map(rowOf)}
           {name === 'Geography' && countryCode ? (
-            <CountryCodeRow value={value} onChange={onChange} />
+            <>
+              <CountryCodeRow value={value} onChange={onChange} />
+              <RegionKeyRow value={value} onChange={onChange} />
+            </>
           ) : null}
         </div>
       </section>

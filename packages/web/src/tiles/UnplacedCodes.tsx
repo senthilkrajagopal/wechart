@@ -1,16 +1,28 @@
-import { countryMap, loadCountryMap, unplacedCodes, type CountryMap } from '@wechart/charts';
+import {
+  countryMap,
+  loadCountryMap,
+  onRegionSets,
+  unplacedNote,
+  type CountryMap,
+} from '@wechart/charts';
 import type { RenderSpec } from '@wechart/core';
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 
 /**
- * The codes a country map can't place (T398, AC-305; direction.md rule 87):
- * named in a note under the map, in the page's own text, not the chart's —
- * "Not on the map: XKX, …". A code the boundaries don't have (Kosovo's), a
- * territory drawn within its sovereign's shape (French Guiana's), and a row
- * with no code are each named; nothing is said when every code is placed.
+ * What a map can't place (T398, AC-305; T974, AC-623; direction.md rule 87):
+ * named in a note under the map, in the page's own text, not the chart's.
+ * On Countries, the codes — "Not on the map: XKX, …": a code the boundaries
+ * don't have (Kosovo's), a territory drawn within its sovereign's shape
+ * (French Guiana's), and a row with no code. On any other boundary set, each
+ * value quoted with why — "Not on the map: "Online" (no territory)", or
+ * "(matches more than one region)". Nothing is said when every value is
+ * placed, nor before the set's boundaries are in.
  */
 export function UnplacedCodes({ spec }: { readonly spec: RenderSpec }) {
   const [map, setMap] = useState<CountryMap | undefined>(() => countryMap());
+  // A set other than Countries is read again whenever one is registered.
+  const [, registered] = useReducer((count: number) => count + 1, 0);
+  useEffect(() => onRegionSets(registered), []);
   useEffect(() => {
     if (map !== undefined) return undefined;
     let current = true;
@@ -26,11 +38,11 @@ export function UnplacedCodes({ spec }: { readonly spec: RenderSpec }) {
     };
   }, [map]);
 
-  const unplaced = unplacedCodes(spec, map);
-  if (unplaced.length === 0) return null;
+  const note = unplacedNote(spec, map);
+  if (note === undefined) return null;
   return (
     <p className="tile-notes" data-testid="unplaced-codes">
-      Not on the map: {unplaced.join(', ')}
+      {note}
     </p>
   );
 }

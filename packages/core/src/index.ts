@@ -360,6 +360,17 @@ export {
 export { boxStats, quantile7, type BoxStats, type WhiskerRule } from './stats/boxplot';
 export { countryCodeMarkingOf, holdsCountryCodes, ISO_3166_ALPHA_3 } from './geo/iso3';
 export {
+  isRegionKey,
+  placeValues,
+  regionIndexOf,
+  regionKeyMarkingOf,
+  unplacedSentence,
+  type IndexedRegion,
+  type RegionIndex,
+  type RegionKeyMarking,
+  type Unplaced,
+} from './geo/regionKeys';
+export {
   elementOfToken,
   firstTokenIn,
   textPartsOf,

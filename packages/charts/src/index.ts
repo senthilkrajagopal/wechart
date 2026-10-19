@@ -12,8 +12,14 @@ export { pieOption, isPieType, type PieType } from './series/pie';
 export { treemapOption, isTreemapType } from './series/treemap';
 export { heatmapOption, isHeatmapType } from './series/heatmap';
 export { boxesOf, drawnPointsOf, type Box } from './series/boxplot';
-export { isMapType, mapOption, unplacedCodes } from './series/map';
+export { isMapType, mapOption, regionSetIdOf, unplacedCodes, unplacedNote } from './series/map';
 export { countryMap, loadCountryMap, type CountryMap } from './geo/countryMap';
+export {
+  onRegionSets,
+  regionSetOf,
+  registerRegionSet,
+  type RegionSet,
+} from './geo/regionSets';
 export {
   isParallelType,
   PARALLEL_LINE_CAP,

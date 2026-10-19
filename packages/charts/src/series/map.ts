@@ -18,6 +18,8 @@ import {
   formatterFor,
   mapSettingsOf,
   memberOn,
+  placeValues,
+  unplacedSentence,
   type BoundarySet,
   type RenderSpec,
 } from '@wechart/core';
@@ -26,6 +28,7 @@ import { geoEqualEarth } from 'd3-geo';
 
 import { OTHER_COLOUR } from '../colorAssignment';
 import { COUNTRY_KEY, COUNTRY_MAP, countryMap, type CountryMap } from '../geo/countryMap';
+import { regionSetOf } from '../geo/regionSets';
 import { DEFAULT_SURFACE, SEQUENTIAL, type EChartsOption } from '../theme';
 
 export function isMapType(chartType: string): boolean {
@@ -78,6 +81,41 @@ export function unplacedCodes(
   return codesOf(spec)
     .map(({ code }) => code)
     .filter((code) => !map.keys.has(code));
+}
+
+/**
+ * The id a Map's regions are registered under (`geo/regionSets.ts`), on a
+ * set other than Countries: a custom set's own id; Admin-1's comes with its
+ * boundaries (T975).
+ */
+export function regionSetIdOf(spec: RenderSpec): string | undefined {
+  const { boundarySet } = mapSettingsOf(spec.options);
+  return boundarySet.startsWith('custom:') ? boundarySet : undefined;
+}
+
+/**
+ * The note under a map naming what it can't place (rule 87; T974, AC-623):
+ * on Countries, the codes, as the country map always said them (AC-305); on
+ * any other set, each value quoted with why, in the set's own noun. None
+ * when everything is placed, or before the boundaries are in.
+ */
+export function unplacedNote(
+  spec: RenderSpec,
+  map: CountryMap | undefined = countryMap(),
+): string | undefined {
+  if (mapSettingsOf(spec.options).boundarySet === 'countries') {
+    const codes = unplacedCodes(spec, map);
+    return codes.length === 0 ? undefined : `Not on the map: ${codes.join(', ')}`;
+  }
+  const id = regionSetIdOf(spec);
+  const set = id === undefined ? undefined : regionSetOf(id);
+  const dimension = memberOn(spec.encoding, 'x');
+  if (set === undefined || dimension === undefined) return undefined;
+  const { unplaced } = placeValues(
+    spec.rows.map((row) => row[dimension]),
+    set.index,
+  );
+  return unplacedSentence(unplaced, set.noun);
 }
 
 /**
