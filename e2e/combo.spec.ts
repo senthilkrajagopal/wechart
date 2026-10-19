@@ -396,6 +396,40 @@ test('marks a combo tile’s two scales with ⚠ in edit mode only, opening the 
   );
 });
 
+/**
+ * T864 (AC-509): a combo tile's text alternative names each series' mark,
+ * axis and unit, and its table view heads each measure's column with them.
+ */
+test('names each combo series’ mark, axis and unit in its text alternative and table view (T864)', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await comboDashboard(request);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-combo"]');
+
+  const said = tile.getByTestId('chart-text-alternative');
+  await expect(said).toContainText(
+    'Orders Total Amount: bars, left axis, dollars. Orders Count: points, right axis, numbers. Axes aligned at zero.',
+  );
+  await expect(said).toHaveText(/^Combo, by .+\. .+ \d+ series\.$/);
+  // Read with the chart, by what describes it.
+  const describedBy = await tile.getByTestId('chart-canvas').getAttribute('aria-describedby');
+  expect(describedBy).toBe(await said.getAttribute('id'));
+
+  await tile.getByRole('button', { name: /^Actions for / }).click();
+  await tile
+    .getByRole('menu', { name: /^Actions for / })
+    .getByRole('menuitem', { name: 'View as table', exact: true })
+    .click();
+  const heads = tile.getByTestId('data-table').locator('thead th');
+  await expect(heads).toContainText([
+    'Orders Total Amount · bars, left · $',
+    'Orders Count · points, right',
+  ]);
+});
+
 /** T857 (AC-497): a dashboard's combo legend has no glyph buttons, in view or edit mode. */
 test('gives a combo tile’s legend no glyph buttons on a dashboard, in view or edit mode (T857)', async ({
   page,
@@ -550,6 +584,19 @@ test('splits a combo by one dimension, counts it against 8, folds it, and leaves
   await expect(
     canvas.getByRole('button', { name: 'Average Amount: line, left axis. Change mark or axis' }),
   ).toBeVisible();
+
+  // Its table view: by month, a column per status under each measure, with
+  // two header rows (T864, AC-509).
+  await page.getByTestId('toggle-table-view').click();
+  const headRows = page.getByTestId('data-table').locator('thead tr');
+  await expect(headRows).toHaveCount(2);
+  await expect(headRows.nth(0).locator('th')).toHaveText([
+    'Orders Ordered at',
+    'Orders Total Amount · bars, left · $',
+    'Orders Average Amount · line, left · $',
+  ]);
+  await expect(headRows.nth(1).locator('th')).toHaveCount(6);
+  await page.getByTestId('toggle-table-view').click();
 
   // A third measure would make 9: Auto folds to the top 1 + Other.
   await wellPicker(page, 'measures').selectOption('orders.count');

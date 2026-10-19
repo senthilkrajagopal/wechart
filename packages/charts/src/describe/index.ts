@@ -1,5 +1,6 @@
 import type { ChartType, RenderSpec } from '@wechart/core';
 
+import { describeCombo } from '../combo/describe';
 import { describeBoxplot } from './boxplot';
 import { describeBullet } from './bullet';
 import { describeParallel } from './parallel';
@@ -23,6 +24,8 @@ export const DESCRIBE: Partial<Record<ChartType, Describe>> = {
   sankey: describeSankey,
   stackedArea: describeStack100,
   stackedBar: describeStack100,
+  // Each series' mark, axis and unit, and each reference line (T864, AC-509).
+  combo: describeCombo,
 };
 
 /** A chart's text alternative, where its type has one. */

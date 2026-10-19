@@ -101,3 +101,8 @@ Lane COMBO's ticked tasks from `docs/tasks.md` §P2.26 (F44), their sub-lines wo
   - Files: `packages/charts/src/combo/references.ts` (+ test), `packages/charts/src/series/combo.ts`.
   - Failing test: `references.test.ts`: a fixed line is a `markLine` of width 1.5, dash [5, 4], in `text-secondary`; one from Margin %'s average is dashed in Margin %'s colour; a band is a `markArea` in `bg-subtle` with no border, below every series; labels are `text-xs` `text-primary` on a 3 px surface halo and not in the legend; two lines 2 px apart get their labels at opposite ends, then 16 px inward; a line at $500K on a $0–$160K axis isn't drawn and its row reads "Outside the axis range" (AC-508).
   - Depends on: T862, T847
+
+- [x] T864 (AC-509) Name each series' mark, axis and unit, and each reference line, in the text alternative and the table view
+  - Files: `packages/charts/src/combo/describe.ts` (+ test), `packages/web/src/tiles/DataTable.tsx` (+ test), `packages/web/src/tiles/ChartCanvas.tsx`.
+  - Failing test: `describe.test.ts`: the split example reads "Combo, by quarter, split by Region. Revenue: bars, left axis, dollars. Margin %: line, right axis, percent. Axes aligned at zero. 8 series." and adds "Monthly plan: line at $100K, left axis"; `DataTable.test.tsx`: a split combo's table has two header rows, the first "Revenue · bars, left · $" (AC-509).
+  - Depends on: T852, T863

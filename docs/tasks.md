@@ -1835,10 +1835,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T863 (AC-508) Draw reference lines and bands with their styles and order, label them in the chart, move a colliding label, and leave out one outside its axis's range
 
-- [ ] T864 (AC-509) Name each series' mark, axis and unit, and each reference line, in the text alternative and the table view
-  - Files: `packages/charts/src/combo/describe.ts` (+ test), `packages/web/src/tiles/DataTable.tsx` (+ test), `packages/web/src/tiles/ChartCanvas.tsx`.
-  - Failing test: `describe.test.ts`: the split example reads "Combo, by quarter, split by Region. Revenue: bars, left axis, dollars. Margin %: line, right axis, percent. Axes aligned at zero. 8 series." and adds "Monthly plan: line at $100K, left axis"; `DataTable.test.tsx`: a split combo's table has two header rows, the first "Revenue · bars, left · $" (AC-509).
-  - Depends on: T852, T863
+- [x] T864 (AC-509) Name each series' mark, axis and unit, and each reference line, in the text alternative and the table view
 
 - [x] T865 (AC-510) Keep the recommendation as it is when the author draws a second axis, and say so in "Why this recommendation?"
 

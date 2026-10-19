@@ -416,3 +416,75 @@ describe('a table showing a marking (AC-096)', () => {
     ).toEqual([null, null, null]);
   });
 });
+
+/**
+ * T864 (AC-509; design 20 state J): a combo's table view heads each
+ * measure's column with its mark, axis and unit; split, it has a second
+ * header row of members, each measure's under it.
+ */
+describe("a combo's table view (T864)", () => {
+  const QUARTER = 'orders.quarter';
+  const REGION = 'orders.region';
+  const REVENUE = 'orders.revenue';
+  const MARGIN = 'orders.margin_pct';
+  const combo = (over: Partial<RenderSpec> = {}): RenderSpec => ({
+    chartType: 'combo',
+    encoding: { x: [QUARTER], color: [REGION], y: [REVENUE, MARGIN] },
+    measures: [REVENUE, MARGIN],
+    fields: [QUARTER, REGION, REVENUE, MARGIN],
+    rows: ['Q1', 'Q2'].flatMap((quarter) =>
+      ['EMEA', 'NA'].map((region) => ({
+        [QUARTER]: quarter,
+        [REGION]: region,
+        [REVENUE]: 100,
+        [MARGIN]: 0.2,
+      })),
+    ),
+    formats: { [REVENUE]: 'currency', [MARGIN]: 'percent' },
+    titles: { [REVENUE]: 'Revenue', [MARGIN]: 'Margin %', [QUARTER]: 'Quarter', [REGION]: 'Region' },
+    options: { series: { [MARGIN]: { axis: 'right' } } },
+    ...over,
+  });
+  const headRows = () =>
+    [...document.querySelectorAll('thead tr')].map((row) =>
+      [...row.querySelectorAll('th')].map((cell) => cell.textContent),
+    );
+
+  it('has two header rows while split, the first "Revenue · bars, left · $"', () => {
+    render(<DataTable spec={combo()} />);
+
+    expect(headRows()).toEqual([
+      ['Quarter', 'Revenue · bars, left · $', 'Margin % · line, right · %'],
+      ['EMEA', 'NA', 'EMEA', 'NA'],
+    ]);
+    expect(
+      [...document.querySelectorAll('thead tr:first-child th')].map((cell) =>
+        cell.getAttribute('colspan'),
+      ),
+    ).toEqual([null, '2', '2']);
+    expect(
+      [...document.querySelectorAll('tbody tr')].map((row) =>
+        [...row.querySelectorAll('th, td')].map((cell) => cell.textContent),
+      ),
+    ).toEqual([
+      ['Q1', '$100', '$100', '20%', '20%'],
+      ['Q2', '$100', '$100', '20%', '20%'],
+    ]);
+  });
+
+  it('heads an unsplit combo’s measure columns the same way, in one header row', () => {
+    render(
+      <DataTable
+        spec={combo({
+          encoding: { x: [QUARTER], y: [REVENUE, MARGIN] },
+          fields: [QUARTER, REVENUE, MARGIN],
+          rows: [{ [QUARTER]: 'Q1', [REVENUE]: 100, [MARGIN]: 0.2 }],
+        })}
+      />,
+    );
+
+    expect(headRows()).toEqual([
+      ['Quarter', 'Revenue · bars, left · $', 'Margin % · line, right · %'],
+    ]);
+  });
+});

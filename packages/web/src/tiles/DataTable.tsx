@@ -1,4 +1,4 @@
-import { rowMarksOf } from '@wechart/charts';
+import { comboColumnHead, comboTableOf, rowMarksOf } from '@wechart/charts';
 import {
   columnTitleOf,
   formatValue,
@@ -242,6 +242,64 @@ function RowsTable({ spec, height = DEFAULT_HEIGHT, marking, label }: DataTableP
    * (T958, AC-585). Once per answer, not once per scroll.
    */
   const added = useMemo(() => addedColumnsOf(spec), [spec]);
+  /**
+   * A split combo's table view (T864, AC-509): by category, each measure's
+   * members under it, with two header rows. Laid out from the chart as
+   * drawn, so its columns are its series.
+   */
+  const pivot = useMemo(() => comboTableOf(spec), [spec]);
+  if (pivot !== undefined && rows.length > 0) {
+    const write = (value: unknown, member: string | undefined) =>
+      member === undefined ? String(value ?? '') : formatValue(value, member, spec.formats ?? {}, spec.granularities);
+    return (
+      <div
+        className="data-table"
+        data-testid="data-table"
+        role="region"
+        aria-label={label === undefined ? 'Table' : `${label}, table`}
+        tabIndex={0}
+        style={{ maxHeight: `${String(height)}px`, overflow: 'auto' }}
+      >
+        <table className="grid-table comfy">
+          <thead>
+            <tr>
+              <th scope="col" rowSpan={2}>
+                {pivot.category === undefined ? '' : columnTitleOf(pivot.category, spec.titles)}
+              </th>
+              {pivot.heads.map((head) => (
+                <th scope="colgroup" key={head.measure} colSpan={head.members.length} className="num">
+                  {head.title}
+                </th>
+              ))}
+            </tr>
+            <tr>
+              {pivot.heads.flatMap((head) =>
+                head.members.map((member) => (
+                  <th scope="col" key={`${head.measure}:${member}`} className="num">
+                    {member}
+                  </th>
+                )),
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {pivot.rows.map((row) => (
+              <tr key={row.category}>
+                <th scope="row">{write(row.category, pivot.category)}</th>
+                {pivot.heads
+                  .flatMap((head) => head.members.map(() => head.measure))
+                  .map((measure, at) => (
+                    <td key={`${measure}:${String(at)}`} className="num">
+                      {write(row.values[at] ?? null, measure)}
+                    </td>
+                  ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
 
   if (rows.length === 0) {
     return (
@@ -360,7 +418,8 @@ function RowsTable({ spec, height = DEFAULT_HEIGHT, marking, label }: DataTableP
             {columns.map((column) => (
               // By its title (AC-220), never "orders.count".
               <th scope="col" key={column} className={align(column)}>
-                {columnTitleOf(column, spec.titles)}
+                {/* A combo's measure with its mark, axis and unit (T864, AC-509). */}
+                {comboColumnHead(spec, column) ?? columnTitleOf(column, spec.titles)}
               </th>
             ))}
             {added.map((column) => (
