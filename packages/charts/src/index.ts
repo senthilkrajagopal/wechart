@@ -77,6 +77,7 @@ export {
 } from './interaction/parallelBrush';
 export { axisEmphasis, emphasisPatch } from './interaction/axisEmphasis';
 export { legendEntryAt, legendGlyphBoxes, type LegendGlyphBox } from './combo/legendGlyphs';
+export { referencesOutside } from './combo/references';
 export { dragGesture, type DragEvent, type DragGesture } from './interaction/dragOverlay';
 export {
   bucketRangeAt,

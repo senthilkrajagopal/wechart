@@ -30,6 +30,8 @@ import {
   GraphicComponent,
   GridComponent,
   LegendComponent,
+  MarkAreaComponent,
+  MarkLineComponent,
   TitleComponent,
   VisualMapComponent,
 } from 'echarts/components';
@@ -57,6 +59,8 @@ echarts.use([
   VisualMapComponent,
   GridComponent,
   LegendComponent,
+  MarkLineComponent,
+  MarkAreaComponent,
   TitleComponent,
   SVGRenderer,
 ]);

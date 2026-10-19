@@ -50,7 +50,12 @@ import {
   type WellName,
 } from '@wechart/recommender';
 
-import { DEFAULT_PALETTE, STACKABLE_TYPES, type LegendGlyphBox } from '@wechart/charts';
+import {
+  DEFAULT_PALETTE,
+  referencesOutside,
+  STACKABLE_TYPES,
+  type LegendGlyphBox,
+} from '@wechart/charts';
 
 import { ChartTypeCard } from './ChartTypeCard';
 import { ChartTypeGallery } from './ChartTypeGallery';
@@ -938,6 +943,8 @@ function EditorBody({
       category,
       describe,
       newId: () => `ref-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      // What the chart as drawn leaves out (T863, AC-508).
+      outside: referencesOutside(drawnSpec),
     };
   }, [drawnSpec, titles, formats, spec.timeDimensions]);
   /** The Split by well's count and "‹dimension› shown" (T860, AC-505). */

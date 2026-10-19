@@ -1833,10 +1833,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T862 (AC-507, AC-219) Reference lines and bands: the list and its form in Customize, horizontal or vertical, fixed or computed from a drawn series, with Edit, Duplicate and Delete with Undo
 
-- [ ] T863 (AC-508) Draw reference lines and bands with their styles and order, label them in the chart, move a colliding label, and leave out one outside its axis's range
-  - Files: `packages/charts/src/combo/references.ts` (+ test), `packages/charts/src/series/combo.ts`.
-  - Failing test: `references.test.ts`: a fixed line is a `markLine` of width 1.5, dash [5, 4], in `text-secondary`; one from Margin %'s average is dashed in Margin %'s colour; a band is a `markArea` in `bg-subtle` with no border, below every series; labels are `text-xs` `text-primary` on a 3 px surface halo and not in the legend; two lines 2 px apart get their labels at opposite ends, then 16 px inward; a line at $500K on a $0–$160K axis isn't drawn and its row reads "Outside the axis range" (AC-508).
-  - Depends on: T862, T847
+- [x] T863 (AC-508) Draw reference lines and bands with their styles and order, label them in the chart, move a colliding label, and leave out one outside its axis's range
 
 - [ ] T864 (AC-509) Name each series' mark, axis and unit, and each reference line, in the text alternative and the table view
   - Files: `packages/charts/src/combo/describe.ts` (+ test), `packages/web/src/tiles/DataTable.tsx` (+ test), `packages/web/src/tiles/ChartCanvas.tsx`.

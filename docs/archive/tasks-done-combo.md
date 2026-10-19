@@ -96,3 +96,8 @@ Lane COMBO's ticked tasks from `docs/tasks.md` §P2.26 (F44), their sub-lines wo
   - Files: `packages/core/src/combo.ts` (the references' shape and `referenceProblems`), `packages/web/src/editor/combo/ReferenceList.tsx` (+ test), `packages/web/src/editor/combo/ReferenceForm.tsx` (+ test).
   - Failing test: `ReferenceForm.test.tsx`: a horizontal line on the right axis offers Fixed, Average, Median, Minimum and Maximum of a drawn series; a vertical line on a month axis takes a month; a band with From $120K and To $90K keeps Add disabled with "A band's From must be below its To"; an empty label keeps Add disabled; `ReferenceList.test.tsx`: each row shows its icon, label, value and axis; Delete shows an Undo toast that restores it; `combo.test.ts`: an average on a split chart is one line per measure over every member (AC-507).
   - Depends on: T855
+
+- [x] T863 (AC-508) Draw reference lines and bands with their styles and order, label them in the chart, move a colliding label, and leave out one outside its axis's range
+  - Files: `packages/charts/src/combo/references.ts` (+ test), `packages/charts/src/series/combo.ts`.
+  - Failing test: `references.test.ts`: a fixed line is a `markLine` of width 1.5, dash [5, 4], in `text-secondary`; one from Margin %'s average is dashed in Margin %'s colour; a band is a `markArea` in `bg-subtle` with no border, below every series; labels are `text-xs` `text-primary` on a 3 px surface halo and not in the legend; two lines 2 px apart get their labels at opposite ends, then 16 px inward; a line at $500K on a $0–$160K axis isn't drawn and its row reads "Outside the axis range" (AC-508).
+  - Depends on: T862, T847

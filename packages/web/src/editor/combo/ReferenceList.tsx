@@ -7,6 +7,7 @@ import {
 import { useState } from 'react';
 
 import { MenuButton } from '../../shell/MenuButton';
+import { StatusIcon } from '../../shell/StatusIcon';
 import { ReferenceForm, type ReferenceFormProps } from './ReferenceForm';
 
 /**
@@ -25,6 +26,8 @@ export interface ReferenceListProps
   readonly onOptions: (patch: Readonly<Record<string, unknown>>) => void;
   /** A reference's value as its row writes it, in its axis's format. */
   readonly describe: (reference: ComboReference) => string;
+  /** The references the chart as drawn leaves out, by id (T863, AC-508). */
+  readonly outside?: readonly string[] | undefined;
 }
 
 /** The form open: a new line or band, or the reference being edited. */
@@ -52,6 +55,7 @@ export function ReferenceList({
   category,
   newId,
   describe,
+  outside = [],
 }: ReferenceListProps) {
   const references = comboReferencesOf(options);
   const [open, setOpen] = useState<Open | undefined>(undefined);
@@ -93,6 +97,13 @@ export function ReferenceList({
             <span className="combo-reference__axis" data-part="axis">
               {reference.direction === 'vertical' ? 'vertical' : (reference.axis ?? 'left')}
             </span>
+            {/* Not drawn, and why (T863, AC-508). */}
+            {outside.includes(reference.id) ? (
+              <span className="combo-reference__outside" data-testid="reference-outside">
+                <StatusIcon kind="warn" />
+                Outside the axis range
+              </span>
+            ) : null}
             <MenuButton
               label={`More for ${reference.label}`}
               className="btn-icon"

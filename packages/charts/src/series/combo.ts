@@ -16,6 +16,7 @@
  * see it as a series of the chart's.
  */
 import {
+  comboReferencesOf,
   comboSeriesOf,
   comboStackingOf,
   formatterFor,
@@ -33,7 +34,14 @@ import {
 import { COLORS } from '@wechart/ui';
 
 import { allCounts, axesOf, writeInFormat, type AxisSettings } from '../axis';
-import { alignedAxes, alignedLogAxes, type AxisRange, type LogRange } from '../combo/alignedAxes';
+import {
+  alignedAxes,
+  alignedLogAxes,
+  type AxisExtent,
+  type AxisRange,
+  type LogRange,
+} from '../combo/alignedAxes';
+import { referenceDrawing } from '../combo/references';
 import { axisTitle } from '../combo/axisTitles';
 import { colourFor } from '../colours';
 import { plotEdgesOf } from '../customize';
@@ -257,7 +265,13 @@ function valueAxes(
     values: readonly (number | null)[];
   }[],
   log: boolean,
-): EChartsOption['yAxis'] {
+  /**
+   * One axis with a horizontal reference on it (T863, AC-508): its extent
+   * fixed here, as two axes' are, so whether a reference lies outside it is
+   * known, not ECharts' guess.
+   */
+  { fixOneAxis = false }: { readonly fixOneAxis?: boolean } = {},
+): { yAxis: EChartsOption['yAxis']; extents: Partial<Record<ComboAxis, AxisExtent>> } {
   const axes = axesOf(spec);
   /**
    * Each axis titled with its unit, or with no unit its measures, each once
@@ -271,8 +285,6 @@ function valueAxes(
     );
     return measures.length === 0 ? {} : axisTitle(spec, measures, side);
   };
-  if (!drawn.some((one) => one.axis === 'right'))
-    return { type: 'value', ...(axes.y?.title === undefined ? titleOf('left') : {}) };
   const bars = drawn.some((one) => one.mark === 'bar');
   const measuresOn = (side: ComboAxis) => [
     ...new Set(drawn.filter((one) => one.axis === side).map((one) => one.measure)),
@@ -292,6 +304,14 @@ function valueAxes(
       ...(typeof settings?.max === 'number' ? { fixedMax: settings.max } : {}),
     };
   };
+  if (!drawn.some((one) => one.axis === 'right')) {
+    const title = axes.y?.title === undefined ? titleOf('left') : {};
+    // Not a log axis: ECharts places its decades (`applyAxes`).
+    if (!fixOneAxis || axes.y?.log === true) return { yAxis: { type: 'value', ...title }, extents: {} };
+    // One nice extent over its own range, as a synchronized pair is given.
+    const own = alignedAxes(rangeOf('left'), rangeOf('left'), { synchronize: true }).left;
+    return { yAxis: { type: 'value', ...title, ...own }, extents: { left: own } };
+  }
   const synchronize = isSynchronized(membersOn(spec.encoding, 'y'), spec.options, spec.formats);
   /**
    * Log on both or neither (AC-502), from the values it draws, those above
@@ -310,15 +330,19 @@ function valueAxes(
   const logAligned = log
     ? alignedLogAxes(logRangeOf('left'), logRangeOf('right'), { synchronize })
     : undefined;
-  const aligned: Record<ComboAxis, object> =
+  const linear =
     logAligned === undefined
-      ? { ...alignedAxes(rangeOf('left'), rangeOf('right'), { synchronize }) }
+      ? alignedAxes(rangeOf('left'), rangeOf('right'), { synchronize })
+      : undefined;
+  const aligned: Record<ComboAxis, object> =
+    linear !== undefined
+      ? { ...linear }
       : {
-          left: { type: 'log', ...logAligned.left },
-          right: { type: 'log', ...logAligned.right },
+          left: { type: 'log', ...logAligned?.left },
+          right: { type: 'log', ...logAligned?.right },
         };
 
-  return (['left', 'right'] as const).map((side) => {
+  const yAxis = (['left', 'right'] as const).map((side) => {
     const [first] = measuresOn(side);
     /**
      * Each axis group's own title, number format and (the left's)
@@ -357,6 +381,97 @@ function valueAxes(
           }),
     };
   });
+  // Log axes' decades aren't a linear extent: a reference on one is judged by zero alone.
+  return { yAxis, extents: linear ?? {} };
+}
+
+/** A series as its axes and references read it. */
+interface AxisSeries {
+  readonly measure: string;
+  readonly mark: ComboMark;
+  readonly axis: ComboAxis;
+  readonly stack: string | undefined;
+  readonly values: readonly (number | null)[];
+  readonly colour: string;
+}
+
+/**
+ * The height a combo's plot is taken to have on a canvas, for whether two
+ * reference labels meet (T863): the canvas less the grid's margins, the
+ * legend's room and the category labels'. An estimate: the grid fits its
+ * labels in (`outerBoundsContain`), so the plot is a little shorter or taller.
+ */
+const plotHeightOf = (canvas: Canvas) =>
+  Math.max(1, canvas.height - PROTOTYPE_GRID.top - PROTOTYPE_GRID.bottom - 32 - 24);
+
+/**
+ * A combo's value axes and its reference lines and bands (T863, AC-508): the
+ * axes' extents fixed wherever a reference reads one, so a reference outside
+ * them is known and left undrawn.
+ */
+function axesAndReferences(
+  spec: RenderSpec,
+  canvas: Canvas,
+  categories: readonly string[],
+  drawn: readonly AxisSeries[],
+  logOn: Record<ComboAxis, boolean>,
+) {
+  const horizontal = comboReferencesOf(spec.options).some(
+    (one) => one.direction === 'horizontal',
+  );
+  const axes = valueAxes(spec, drawn, logOn.right, { fixOneAxis: horizontal });
+  const firstOn = (axis: ComboAxis) => drawn.find((one) => one.axis === axis)?.measure;
+  const category = membersOn(spec.encoding, 'x')[0];
+  const writeCategory = modelWriter(spec, category);
+  const references = referenceDrawing(spec, {
+    categories,
+    extents: axes.extents,
+    log: logOn,
+    plotHeight: plotHeightOf(canvas),
+    // Split, a measure's series are its members' colours: its line takes text-secondary.
+    colourOf: (measure) =>
+      isSplit(spec) ? undefined : drawn.find((one) => one.measure === measure)?.colour,
+    surface: spec.surface ?? DEFAULT_SURFACE,
+    write: (reference, value) => {
+      if (reference.direction === 'vertical')
+        return writeCategory === undefined ? String(value) : writeCategory(value);
+      const measure = reference.series ?? firstOn(reference.axis ?? 'left');
+      return measure === undefined ? String(value) : formatterFor(measure, spec.formats ?? {})(value);
+    },
+  });
+  return { axes, references };
+}
+
+/**
+ * The references a combo as drawn leaves out, by id (T863, AC-508): outside
+ * their axis's range, at or below zero on a log axis, or at a category the
+ * axis hasn't got. What the editor's rows say "Outside the axis range" of.
+ */
+export function comboReferencesOutside(
+  given: RenderSpec,
+  canvas: Canvas = DEFAULT_CANVAS,
+): readonly string[] {
+  if (!isComboType(given.chartType) || comboReferencesOf(given.options).length === 0) return [];
+  // As it's drawn (`optionFor`): a measure off its scale gone, log settled.
+  const spec = withSettledLogScale(onOneScale(given));
+  const { categories, series } = comboDrawingOf(spec);
+  const logOn = logAxesOf(spec);
+  return axesAndReferences(
+    spec,
+    canvas,
+    categories,
+    series.map((one) => ({
+      measure: one.measure,
+      mark: one.mark,
+      axis: one.axis,
+      stack: stackOf(spec, one.mark, one.axis),
+      values: logOn[one.axis]
+        ? one.values.map((value) => (value !== null && value <= 0 ? null : value))
+        : one.values,
+      colour: colourFor(spec, one.name, one.colourIndex),
+    })),
+    logOn,
+  ).references.outside;
 }
 
 export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EChartsOption {
@@ -427,23 +542,30 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
     ),
   );
 
+  const { axes: drawnAxes, references } = axesAndReferences(
+    spec,
+    canvas,
+    categories,
+    series.map((one, index) => ({
+      measure: one.measure,
+      mark: one.mark,
+      axis: one.axis,
+      stack: stacks[index],
+      values: valuesOf(one),
+      colour: colourFor(spec, one.name, one.colourIndex),
+    })),
+    logOn,
+  );
+
   return {
     animation: false,
     // The grid its bars' widths are estimated against (T254).
     grid: { ...PROTOTYPE_GRID },
     xAxis: { type: 'category', data: categories },
-    yAxis: valueAxes(
-      spec,
-      series.map((one, index) => ({
-        measure: one.measure,
-        mark: one.mark,
-        axis: one.axis,
-        stack: stacks[index],
-        values: valuesOf(one),
-      })),
-      logOn.right,
-    ),
+    yAxis: drawnAxes.yAxis,
     series: [
+      // Reference lines and bands (T863, AC-508), each on a carrier of its own.
+      ...references.series,
       ...series.map((one, index) => {
       const colour = colourFor(spec, one.name, one.colourIndex);
       const { mark, axis } = one;

@@ -733,4 +733,28 @@ test('adds, lists and deletes a combo’s reference lines in Customize, with Und
   await section.getByRole('status').getByRole('button', { name: 'Undo' }).click();
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(0).locator('[data-part="label"]')).toHaveText('Monthly plan');
+
+  /**
+   * T863 (AC-508): drawn on the chart, dashed and labelled in place, not in
+   * the legend; one far past the axis isn't drawn, and its row says so.
+   */
+  const canvas = page.getByTestId('chart-canvas');
+  const dashed = () =>
+    canvas
+      .locator('svg path')
+      .evaluateAll(
+        (nodes) =>
+          nodes.filter((node) => /^5[ ,]+4$/.test(node.getAttribute('stroke-dasharray') ?? ''))
+            .length,
+      );
+  await expect.poll(dashed).toBe(2);
+  await expect.poll(() => canvas.locator('svg text').allTextContents()).toContain('Monthly plan');
+  await section.getByRole('button', { name: '+ Line' }).click();
+  await section.getByRole('spinbutton', { name: 'Value' }).fill('100000000');
+  await section.getByRole('textbox', { name: 'Label' }).fill('Far away');
+  await section.getByRole('button', { name: 'Add line' }).click();
+  await expect(rows.nth(2).getByTestId('reference-outside')).toHaveText('Outside the axis range');
+  await expect(rows.nth(0).getByTestId('reference-outside')).toHaveCount(0);
+  await expect.poll(dashed).toBe(2);
+  await expect.poll(() => canvas.locator('svg text').allTextContents()).not.toContain('Far away');
 });

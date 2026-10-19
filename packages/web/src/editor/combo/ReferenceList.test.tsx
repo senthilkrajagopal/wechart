@@ -39,7 +39,13 @@ const change: ComboReference = {
   label: 'Price change',
 };
 
-function Held({ start }: { start: Record<string, unknown> }) {
+function Held({
+  start,
+  outside = [],
+}: {
+  start: Record<string, unknown>;
+  outside?: readonly string[];
+}) {
   const [options, setOptions] = useState<Record<string, unknown>>(start);
   let next = 0;
   return (
@@ -67,6 +73,7 @@ function Held({ start }: { start: Record<string, unknown> }) {
               : `$${String(Number(reference.value) / 1000)}K`
         }
         newId={() => `new-${String((next += 1))}`}
+        outside={outside}
       />
       <pre data-testid="options">{JSON.stringify(options)}</pre>
     </>
@@ -92,6 +99,17 @@ describe("Customize's reference lines and bands (T862)", () => {
       ['Target range', '0.1–0.2', 'right'],
       ['Price change', '2026-09', 'vertical'],
     ]);
+  });
+
+  it('says a reference outside its axis’s range isn’t drawn, with the warning icon (T863, AC-508)', () => {
+    render(<Held start={{ references: [plan, range] }} outside={['r1']} />);
+    const [first, second] = screen.getAllByTestId('reference-row');
+
+    expect(first?.querySelector('[data-testid="reference-outside"]')?.textContent).toBe(
+      'Outside the axis range',
+    );
+    expect(first?.querySelector('[data-testid="reference-outside"] [data-icon="warn"]')).not.toBeNull();
+    expect(second?.querySelector('[data-testid="reference-outside"]')).toBeNull();
   });
 
   it('deletes one with an Undo toast that puts it back where it was', async () => {
