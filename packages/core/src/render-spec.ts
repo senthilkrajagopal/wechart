@@ -348,6 +348,10 @@ export interface ChartMarking {
 export interface ChartHighlight {
   readonly member: string;
   readonly value: string;
+  /** Every value of `member` the selection stands for, where more than one (a brush's members). */
+  readonly values?: readonly string[];
+  /** The rest of the selection's tuple (a Sankey link's target), each matched too. */
+  readonly also?: readonly { readonly member: string; readonly value: string }[];
   /**
    * `fade`: the items that are the selection keep their strength and the rest
    * fade. `share`: the chart's own values fade, and the selection's own

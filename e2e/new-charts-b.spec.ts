@@ -529,7 +529,10 @@ test('a Sankey marks a link as its tuple and a node as its member, says a marked
 });
 
 /** A dashboard of parallel coordinates (customers across three measures) and a bar by country. */
-async function parallelDashboard(request: APIRequestContext, mode: 'markings' | 'crossFilter') {
+async function parallelDashboard(
+  request: APIRequestContext,
+  mode: 'markings' | 'crossFilter' | 'highlight' | 'markingsNone',
+) {
   const title = `Parallel ${mode} ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = (await (
     await request.post(`${API}/api/documents`, {
@@ -569,7 +572,15 @@ async function parallelDashboard(request: APIRequestContext, mode: 'markings' | 
       },
     });
     expect(saved.ok(), await saved.text()).toBe(true);
-    items.push({ id: tile, kind: 'chart', w: 6, h: 40, chartId: chart.id });
+    items.push({
+      id: tile,
+      kind: 'chart',
+      w: 6,
+      h: 40,
+      chartId: chart.id,
+      // "(None)": a tile that marks with nothing (AC-085).
+      ...(mode === 'markingsNone' && tile === 'tile-parallel' ? { marksWith: '' } : {}),
+    });
   }
   const placed = await request.put(`${API}/api/documents/dashboard/${dashboard.id}`, {
     data: {
@@ -582,9 +593,12 @@ async function parallelDashboard(request: APIRequestContext, mode: 'markings' | 
         settings: {
           width: 'fixed',
           interactions:
-            mode === 'markings'
+            mode === 'markings' || mode === 'markingsNone'
               ? { mode: 'markings' }
-              : { mode: 'crossFilter', crossFilter: { defaultAction: 'filter' } },
+              : {
+                  mode: 'crossFilter',
+                  crossFilter: { defaultAction: mode === 'highlight' ? 'highlight' : 'filter' },
+                },
         },
         markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
         pages: [{ id: 'only', title: 'Only', items }],
@@ -788,4 +802,53 @@ test('parallel coordinates mark a line by a click, brush along axes with Ctrl ad
   await expect(chips.locator('.cross-chip__what')).toHaveText(
     /^.*ID: \d+ brushed in .*Total Amount$/,
   );
+});
+
+/**
+ * Checkpoint 3's review (AC-599, AC-117, AC-600): a brush set to Highlight
+ * asks the other tile's share by every brushed member, not the first; and a
+ * tile that marks with no marking has no sliders, which could only snap back.
+ */
+test('a brush highlights the other tile by every brushed member, and a tile marking with none has no sliders', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await parallelDashboard(request, 'highlight');
+  /** Each `orders.id` filter the page asks Cube for, by how many values it holds. */
+  const asked: number[] = [];
+  page.on('request', (sent) => {
+    if (!sent.url().endsWith('/api/load') || sent.method() !== 'POST') return;
+    const body = sent.postDataJSON() as {
+      query?: { filters?: { member?: string; values?: unknown[] }[] };
+    };
+    for (const filter of body.query?.filters ?? [])
+      if (filter.member === 'orders.id') asked.push(filter.values?.length ?? 0);
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-parallel"]');
+  await expect(tile.locator('svg path[stroke-width="1.5"][fill="none"]').first()).toBeVisible();
+  const lines = await linesOf(page, 'tile-parallel');
+  const ys = lines.map((line) => line.points[1]!.y);
+  const [top, bottom] = [Math.min(...ys), Math.max(...ys)];
+  const x = lines[0]!.points[1]!.x;
+  await dragAlong(
+    page,
+    { x, y: top + (bottom - top) * 0.2 },
+    { x, y: top + (bottom - top) * 0.8 },
+  );
+  const brushed = lines.filter((line) => {
+    const y = line.points[1]!.y;
+    return y > top + (bottom - top) * 0.2 + 1 && y < top + (bottom - top) * 0.8 - 1;
+  }).length;
+  expect(brushed).toBeGreaterThan(1);
+  // The bar chart's share: asked by every brushed order, never by one.
+  await expect.poll(() => Math.max(0, ...asked)).toBeGreaterThanOrEqual(brushed);
+  expect(asked).not.toContain(1);
+
+  const none = await parallelDashboard(request, 'markingsNone');
+  await page.goto(`/explore/dashboards/${none.id}`);
+  await expect(page.getByRole('heading', { name: none.title })).toBeVisible();
+  await expect(tile.locator('svg path[stroke-width="1.5"][fill="none"]').first()).toBeVisible();
+  await expect(tile.getByTestId('parallel-sliders')).toHaveCount(0);
 });

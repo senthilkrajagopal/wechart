@@ -1,3 +1,5 @@
+import { MARKING_ITEM_LIMIT } from '@wechart/core';
+
 import type { CrossFilterConfig, PairAction } from '../settings/interactionMode';
 
 /**
@@ -42,6 +44,38 @@ export function selectionParts(
   selection: Pick<CrossSelection, 'member' | 'value' | 'also'>,
 ): { member: string; value: string }[] {
   return [{ member: selection.member, value: selection.value }, ...(selection.also ?? [])];
+}
+
+/**
+ * What a highlight's share is asked by, as a filter is (checkpoint 3's
+ * review): its first member with every value it stands for (a brush's
+ * members), under the name the target takes it by, then each of its tuple's
+ * other members (a Sankey link's target).
+ */
+export function highlightParts(
+  selection: Pick<CrossSelection, 'member' | 'value' | 'also' | 'values'>,
+  firstAs?: string,
+): { member: string; values: readonly string[] }[] {
+  return selectionParts(selection).map((part, at) =>
+    at === 0
+      ? { member: firstAs ?? part.member, values: selection.values ?? [part.value] }
+      : { member: part.member, values: [part.value] },
+  );
+}
+
+/**
+ * A brush's members as a cross-filter holds them (AC-599, checkpoint 3's
+ * review): at most a marking's 1,000 (AC-102), the first kept, the rest said.
+ */
+export function brushedMembers(values: readonly string[]): {
+  values: string[];
+  message?: string;
+} {
+  if (values.length <= MARKING_ITEM_LIMIT) return { values: [...values] };
+  return {
+    values: values.slice(0, MARKING_ITEM_LIMIT),
+    message: `A cross-filter holds at most ${MARKING_ITEM_LIMIT.toLocaleString('en-GB')} members. ${String(values.length - MARKING_ITEM_LIMIT)} were not added.`,
+  };
 }
 
 /** Whether two selections are the same one: every member and value alike. */
@@ -199,7 +233,9 @@ export function effectsOn(
             ? 'share'
             : highlightKind(
                 tile.chartType,
-                tile.members.includes(selection.member),
+                // A fade is honest only where the tile shows every member of
+                // the selection's tuple (checkpoint 3's review).
+                selectionParts(selection).every((part) => tile.members.includes(part.member)),
                 tile.seriesCount,
                 tile.tiledKpi === true,
               );

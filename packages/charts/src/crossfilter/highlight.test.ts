@@ -129,6 +129,66 @@ describe('a fade of everything that is not the selection', () => {
     expect(opacities({ member: REGION, value: 'South', kind: 'fade' })).toEqual([FADED_OPACITY, 1]);
   });
 
+  /**
+   * Checkpoint 3's review (AC-599, AC-612): a brush's every member keeps its
+   * strength, and a Sankey link's tuple is matched by every part of it.
+   */
+  it('keeps every value a brush passes, not its first alone', () => {
+    const three: RenderSpec = {
+      ...bar,
+      chartType: 'pie',
+      rows: [
+        { 'orders.status': 'shipped', 'orders.count': 30 },
+        { 'orders.status': 'processing', 'orders.count': 20 },
+        { 'orders.status': 'returned', 'orders.count': 5 },
+      ],
+    };
+    const option = optionFor({
+      ...three,
+      highlight: {
+        member: 'orders.status',
+        value: 'shipped',
+        values: ['shipped', 'returned'],
+        kind: 'fade',
+      },
+    });
+    expect(seriesOf(option)[0]?.data.map((each) => opacityOf(each) ?? 1)).toEqual([
+      1,
+      FADED_OPACITY,
+      1,
+    ]);
+  });
+
+  it('matches a tuple by every part: the series by one member, the items by the other', () => {
+    const REGION = 'orders.region';
+    const stacked: RenderSpec = {
+      chartType: 'stackedBar',
+      encoding: { x: ['orders.channel'], y: ['orders.count'], color: [REGION] },
+      rows: [
+        { 'orders.channel': 'Web', [REGION]: 'EMEA', 'orders.count': 3 },
+        { 'orders.channel': 'Retail', [REGION]: 'EMEA', 'orders.count': 4 },
+        { 'orders.channel': 'Web', [REGION]: 'APAC', 'orders.count': 5 },
+        { 'orders.channel': 'Retail', [REGION]: 'APAC', 'orders.count': 6 },
+      ],
+    };
+    const series = seriesOf(
+      optionFor({
+        ...stacked,
+        highlight: {
+          member: 'orders.channel',
+          value: 'Web',
+          also: [{ member: REGION, value: 'EMEA' }],
+          kind: 'fade',
+        },
+      }),
+    );
+    const emea = series.find((one) => one.name === 'EMEA');
+    const apac = series.find((one) => one.name === 'APAC');
+    // EMEA's Web bar alone keeps its strength; Retail in EMEA fades, and APAC whole.
+    expect(emea?.data.map((each) => opacityOf(each) ?? 1)).toEqual([1, FADED_OPACITY]);
+    expect((apac?.itemStyle as { opacity?: number } | undefined)?.opacity).toBe(FADED_OPACITY);
+  });
+
   it('fades the series that do not match, where the selection is the series', () => {
     const split: RenderSpec = {
       chartType: 'stackedBar',

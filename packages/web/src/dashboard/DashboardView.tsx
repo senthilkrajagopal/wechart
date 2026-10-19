@@ -172,8 +172,10 @@ import { measureQueryOf } from './tiles/TextTokens';
 import { coverageOf, type Reach } from '../filters/coverage';
 import { chartTilesOf, scopeLabel, scopeOf, textTilesOf, tileName } from '../filters/scope';
 import {
+  brushedMembers,
   crossChipWords,
   effectsOn,
+  highlightParts,
   sameSelection,
   selectionParts,
   type CrossEffects,
@@ -1975,7 +1977,10 @@ function Elements({
               // Parallel coordinates' brush, marking or cross-filtering (T983, AC-599).
               {...(charts.onBrush === undefined ||
               drill !== undefined ||
-              charts.specs[chartId]?.chartType !== 'parallel'
+              charts.specs[chartId]?.chartType !== 'parallel' ||
+              // Marking, only a tile that marks with a marking brushes, and
+              // has sliders (checkpoint 3's review, AC-600).
+              (charts.marksShapes !== undefined && charts.marksShapes(element.id, chartId) !== true)
                 ? {}
                 : {
                     onBrush: (brush: ParallelBrush, add: boolean) => {
@@ -2327,6 +2332,25 @@ function interactionHint(
 
 /** One empty list, so "nothing selected" is the same value on every render. */
 const NO_SELECTIONS: readonly CrossSelection[] = [];
+
+/**
+ * A highlight's share asked of Cube as filters (checkpoint 3's review): its
+ * first member with every value it stands for, by the name the target takes
+ * it by, and each other member of its tuple — as Filter asks them.
+ */
+function highlightFiltersOf(selection: CrossSelection, firstAs?: string) {
+  return highlightParts(selection, firstAs).map((part, at) => ({
+    filter: {
+      id:
+        at === 0
+          ? `cross-highlight:${selection.from}`
+          : `cross-highlight:${selection.from}:${part.member}`,
+      widget: 'checkbox' as const,
+      member: part.member,
+    },
+    value: { kind: 'values' as const, values: [...part.values] },
+  }));
+}
 
 /**
  * A marking's own colour: its slot (`mk1`–`mk4`) in the theme showing. Read
@@ -3550,7 +3574,8 @@ export function DashboardView({
     const from = chartTitleOf(chartId);
 
     if (crossFiltering) {
-      const values = members.map((member) => String(member));
+      // At most 1,000, as a marking holds (AC-599, AC-102; checkpoint 3's review).
+      const { values, message } = brushedMembers(members.map((member) => String(member)));
       const [first] = values;
       setCrossSelections((before) => {
         const others = before.filter((each) => each.from !== tileId);
@@ -3562,7 +3587,12 @@ export function DashboardView({
         ...before,
         [tileId]: { brushes, made: JSON.stringify(first === undefined ? null : values) },
       }));
-      sayAfresh(setCrossSaid, filterChangeSaid({ kind: 'cross-filter', what: words, from }));
+      sayAfresh(
+        setCrossSaid,
+        [filterChangeSaid({ kind: 'cross-filter', what: words, from }), message]
+          .filter((part) => part !== undefined)
+          .join(' '),
+      );
       return;
     }
 
@@ -3940,16 +3970,10 @@ export function DashboardView({
       if (highlight === undefined || highlight.kind !== 'share') continue;
       asked[chartId] = [
         ...(reached[chartId] ?? []),
-        {
-          filter: {
-            id: `cross-highlight:${highlight.selection.from}`,
-            widget: 'checkbox' as const,
-            // By the name this chart's own cube or view takes it by: a view
-            // reaches a cube's member through its own (AC-079).
-            member: crossEffects.askHighlightAs[chartId] ?? highlight.selection.member,
-          },
-          value: { kind: 'values' as const, values: [highlight.selection.value] },
-        },
+        // Every value and every part of the tuple, as Filter asks them
+        // (checkpoint 3's review). By the name this chart's own cube or view
+        // takes it by: a view reaches a cube's member through its own (AC-079).
+        ...highlightFiltersOf(highlight.selection, crossEffects.askHighlightAs[chartId]),
       ];
     }
     return asked;
@@ -4184,6 +4208,9 @@ export function DashboardView({
         highlight: {
           member: highlight.selection.member,
           value: highlight.selection.value,
+          // A brush's every member, a link's whole tuple (checkpoint 3's review).
+          ...(highlight.selection.values === undefined ? {} : { values: highlight.selection.values }),
+          ...(highlight.selection.also === undefined ? {} : { also: highlight.selection.also }),
           kind: highlight.kind,
           ...(rows === undefined ? {} : { rows }),
         },
@@ -4364,19 +4391,13 @@ export function DashboardView({
       const highlight = effects.highlight;
       if (highlight === undefined || highlight.kind !== 'share') continue;
       const result = highlighted[chartId];
-      const asked = `cross-highlight:${highlight.selection.from}`;
-      if (result?.unfiltered !== true && !(result?.uncovered ?? []).includes(asked)) continue;
-      all[chartId] = [
-        ...(all[chartId] ?? []),
-        {
-          filter: {
-            id: asked,
-            widget: 'checkbox' as const,
-            member: highlight.selection.member,
-          },
-          value: { kind: 'values' as const, values: [highlight.selection.value] },
-        },
-      ];
+      const asked = highlightFiltersOf(highlight.selection);
+      if (
+        result?.unfiltered !== true &&
+        !asked.some((one) => (result?.uncovered ?? []).includes(one.filter.id))
+      )
+        continue;
+      all[chartId] = [...(all[chartId] ?? []), ...asked];
     }
     return all;
   }, [notCovered, reached, filtered, crossEffects, highlighted]);

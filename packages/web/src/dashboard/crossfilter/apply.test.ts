@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import type { CrossFilterConfig } from '../settings/interactionMode';
-import { effectsOn, pairKey, type CrossSelection } from './apply';
+import {
+  brushedMembers,
+  effectsOn,
+  highlightParts,
+  pairKey,
+  type CrossSelection,
+} from './apply';
 
 /**
  * T123 / AC-117: WHILE a dashboard is in cross-filter mode, WHEN the user
@@ -208,5 +214,61 @@ describe('a highlight on a tile that cannot draw one', () => {
       expect(effects.highlight).toBeUndefined();
       expect(effects.filters).toEqual([clicked]);
     }
+  });
+});
+
+/**
+ * Checkpoint 3's review (AC-599, AC-612, AC-568, AC-117): Highlight carries a
+ * selection whole, as Filter does — every member a parallel brush passes, and
+ * every part of a Sankey link's tuple — never its first value alone.
+ */
+describe('a highlight carries the whole selection', () => {
+  const brushed: CrossSelection = {
+    from: 'tile-parallel',
+    member: 'products.name',
+    value: 'Chai',
+    values: ['Chai', 'Chang', 'Tofu', 'Ikura', 'Konbu', 'Pavlova'],
+    words: 'Product: 6 brushed in Margin %',
+  };
+  const link: CrossSelection = {
+    from: 'tile-sankey',
+    member: 'orders.channel',
+    value: 'Web',
+    also: [{ member: 'orders.region', value: 'EMEA' }],
+  };
+
+  it('asks a share by every brushed value, under the name the target takes it by', () => {
+    expect(highlightParts(brushed, 'view.product_name')).toEqual([
+      { member: 'view.product_name', values: brushed.values },
+    ]);
+  });
+
+  /** AC-599: "stored as a member list of at most 1,000 (AC-102)", cross-filtering too. */
+  it('holds a brush’s cross-filter to 1,000 members, saying how many were left out', () => {
+    const many = Array.from({ length: 1_250 }, (_, at) => String(at));
+    const capped = brushedMembers(many);
+    expect(capped.values).toEqual(many.slice(0, 1_000));
+    expect(capped.message).toBe('A cross-filter holds at most 1,000 members. 250 were not added.');
+    expect(brushedMembers(many.slice(0, 6))).toEqual({ values: many.slice(0, 6) });
+  });
+
+  it('asks a share by every part of a tuple', () => {
+    expect(highlightParts(link)).toEqual([
+      { member: 'orders.channel', values: ['Web'] },
+      { member: 'orders.region', values: ['EMEA'] },
+    ]);
+  });
+
+  it('fades only a tile showing every member of the tuple; one that shows part of it is filtered', () => {
+    const pair = config('none', { [pairKey('tile-sankey', 'tile-stacked')]: 'highlight' });
+    const both = { chartType: 'stackedBar', members: ['orders.channel', 'orders.region'], seriesCount: 3 };
+    expect(effectsOn('tile-stacked', [link], pair, both).highlight).toEqual({
+      selection: link,
+      kind: 'fade',
+    });
+    const channelOnly = { chartType: 'stackedBar', members: ['orders.channel', 'orders.status'], seriesCount: 3 };
+    const effects = effectsOn('tile-stacked', [link], pair, channelOnly);
+    expect(effects.highlight).toBeUndefined();
+    expect(effects.filters).toEqual([link]);
   });
 });

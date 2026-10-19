@@ -67,34 +67,57 @@ function splitOf(item: unknown): string | undefined {
  * excluded, which is what Filter means, not Highlight.
  */
 function faded(option: EChartsOption, spec: RenderSpec): EChartsOption {
-  const { member, value } = spec.highlight ?? { member: '', value: '' };
+  const highlight = spec.highlight;
+  if (highlight === undefined) return option;
+  // Every part of the selection, each with every value it stands for: a
+  // brush's members, a Sankey link's tuple (checkpoint 3's review).
+  const parts = [
+    { member: highlight.member, values: highlight.values ?? [highlight.value] },
+    ...(highlight.also ?? []).map((part) => ({ member: part.member, values: [part.value] })),
+  ];
+  const valuesOf = (member: string | undefined) =>
+    member === undefined ? undefined : parts.find((part) => part.member === member)?.values;
+  const seriesValues = valuesOf(memberOn(spec.encoding, 'color'));
+  const categoryValues =
+    valuesOf(memberOn(spec.encoding, 'x')) ?? valuesOf(memberOn(spec.encoding, 'facet'));
   const series = (option['series'] as Series[] | undefined) ?? [];
-  const isSeries = memberOn(spec.encoding, 'color') === member;
-  const isCategory =
-    memberOn(spec.encoding, 'x') === member || memberOn(spec.encoding, 'facet') === member;
+  const fade = (item: unknown) => withStyle(item, { opacity: FADED_OPACITY });
+  // By the item's own name where it has one (a slice, a treemap leaf), else
+  // by its place on the category axis, which is the order `seriesOf` drew.
+  const { categories } = seriesOf(spec);
+  const inCategory = (item: unknown, index: number) =>
+    categoryValues === undefined ||
+    categoryValues.includes(categoryOf(item, index, categories) ?? '');
 
   // A split pie has one series; its slices say which value of the split each is.
   const splitItems = series.some((one) =>
     (one.data ?? []).some((item) => splitOf(item) !== undefined),
   );
-  if (isSeries && splitItems) {
+  if (seriesValues !== undefined && splitItems) {
     return {
       ...option,
       series: series.map((one) => ({
         ...one,
-        data: (one.data ?? []).map((item) =>
-          splitOf(item) === value ? item : withStyle(item, { opacity: FADED_OPACITY }),
+        data: (one.data ?? []).map((item, index) =>
+          seriesValues.includes(splitOf(item) ?? '') && inCategory(item, index) ? item : fade(item),
         ),
       })),
     };
   }
 
-  if (isSeries) {
+  if (seriesValues !== undefined) {
     return {
       ...option,
       series: series.map((one) =>
-        one.name === value
-          ? one
+        seriesValues.includes(one.name ?? '')
+          ? categoryValues === undefined
+            ? one
+            : {
+                ...one,
+                data: (one.data ?? []).map((item, index) =>
+                  inCategory(item, index) ? item : fade(item),
+                ),
+              }
           : {
               ...one,
               itemStyle: {
@@ -110,20 +133,12 @@ function faded(option: EChartsOption, spec: RenderSpec): EChartsOption {
     };
   }
 
-  if (!isCategory) return option;
-
-  // By the item's own name where it has one (a slice, a treemap leaf), else
-  // by its place on the category axis, which is the order `seriesOf` drew.
-  const { categories } = seriesOf(spec);
+  if (categoryValues === undefined) return option;
   return {
     ...option,
     series: series.map((one) => ({
       ...one,
-      data: (one.data ?? []).map((item, index) =>
-        categoryOf(item, index, categories) === value
-          ? item
-          : withStyle(item, { opacity: FADED_OPACITY }),
-      ),
+      data: (one.data ?? []).map((item, index) => (inCategory(item, index) ? item : fade(item))),
     })),
   };
 }
