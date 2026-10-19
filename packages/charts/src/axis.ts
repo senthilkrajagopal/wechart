@@ -49,6 +49,12 @@ const FORMATTERS: Record<NumberFormat, (value: number) => string> = {
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value),
 };
 
+/** A value written in one of Customize's number formats (AC-040), as an axis writes it. */
+export function writeInFormat(format: NumberFormat, value: unknown): string {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? FORMATTERS[format](numeric) : String(value);
+}
+
 export function axesOf(spec: RenderSpec): AxesSettings {
   const axes = spec.options?.['axes'];
   return typeof axes === 'object' && axes !== null ? (axes as AxesSettings) : {};

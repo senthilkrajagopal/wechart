@@ -90,6 +90,31 @@ export const COMBO_CSS = `
   line-height: 14px;
 }
 .pill .menu-button__item > svg { flex: none; color: var(--wc-text-secondary); }
+.combo-synchronize { display: grid; gap: 4px; margin-bottom: 8px; }
+.combo-switch {
+  flex: none;
+  width: 28px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 8px;
+  background: var(--wc-bg-subtle);
+  cursor: pointer;
+}
+.combo-switch__track {
+  display: block;
+  width: 12px;
+  height: 12px;
+  margin: 1px;
+  border-radius: 50%;
+  background: var(--wc-text-secondary);
+}
+.combo-switch[aria-checked='true'] { background: var(--wc-accent); border-color: var(--wc-accent); }
+.combo-switch[aria-checked='true'] .combo-switch__track { margin-left: 13px; background: var(--wc-bg-surface); }
+.combo-switch:disabled { cursor: not-allowed; opacity: 0.5; }
+.combo-switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
+.combo-toast { font-size: var(--wc-text-xs-size); color: var(--wc-text-primary); }
+.axis-panel__head { color: var(--wc-text-secondary); font-weight: 400; }
 .legend-glyph-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
 .legend-glyph { position: absolute; display: grid; place-items: center; pointer-events: auto; }
 .legend-glyph .menu-button { display: grid; width: 100%; height: 100%; }

@@ -587,6 +587,65 @@ export function withLogScale(
 }
 
 /**
+ * A Customize › Axes group's head (T858; design 20 pin 7): the measures on
+ * that axis, then its unit, "Revenue · Revenue target · $"; a plain number
+ * adds no unit. Nothing while no series is on it.
+ */
+export function comboAxisHead(
+  measures: readonly string[],
+  options: Readonly<Record<string, unknown>> | undefined,
+  axis: ComboAxis,
+  formats: MemberFormats = {},
+  label: (measure: string) => string = (measure) => measure,
+  { split = false }: { readonly split?: boolean } = {},
+): string {
+  const on = comboSeriesOf(measures, options, { split })
+    .filter((one) => one.axis === axis)
+    .map((one) => one.measure);
+  const [first] = on;
+  if (first === undefined) return '';
+  const unit = unitOfFormat(formats[first]);
+  return [...on.map(label), ...(unit === '' ? [] : [unit])].join(' · ');
+}
+
+/**
+ * Include zero, locked while any series draws bars (AC-499, rule 118;
+ * design 20 pin 8 and state H): a bar is drawn from zero, so both axes
+ * include it, and the control says why, naming the first measure drawn as
+ * bars. None while no series draws bars: include zero is then the author's.
+ */
+export function includeZeroLock(
+  measures: readonly string[],
+  options: Readonly<Record<string, unknown>> | undefined,
+  label: (measure: string) => string = (measure) => measure,
+  { split = false }: { readonly split?: boolean } = {},
+): string | undefined {
+  const bars = comboSeriesOf(measures, options, { split }).find((one) => one.mark === 'bar');
+  return bars === undefined
+    ? undefined
+    : `Include zero · on, because ${label(bars.measure)} draws bars`;
+}
+
+/**
+ * The editor's canvas line for a combo (AC-499, AC-501; design 20 pin 1):
+ * "3 series on 2 value axes, aligned at zero", "3 series on 2 axes,
+ * synchronized", or "3 series on one value axis" while every series is on
+ * one. `series` counts the series drawn (`comboLimitOf`).
+ */
+export function comboAxesLine(
+  series: number,
+  measures: readonly string[],
+  options: Readonly<Record<string, unknown>> | undefined,
+  formats: MemberFormats = {},
+): string {
+  const axes = new Set(comboSeriesOf(measures, options).map((one) => one.axis));
+  if (axes.size < 2) return `${String(series)} series on one value axis`;
+  return isSynchronized(measures, options, formats)
+    ? `${String(series)} series on 2 axes, synchronized`
+    : `${String(series)} series on 2 value axes, aligned at zero`;
+}
+
+/**
  * Back to Auto (AC-498): the measure's mark and axis forgotten, its colour
  * and anything else kept, and no empty entry left behind, so the saved
  * options stay sparse.

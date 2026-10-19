@@ -337,6 +337,37 @@ describe('each measure with its own mark, on its own axis (AC-497)', () => {
 
     expect(seriesOf(optionFor(formatted)).map((one) => one.name)).toContain(MARGIN);
   });
+
+  /**
+   * T858 (AC-219): Customize › Axes' Left and Right groups each set their
+   * own axis while two are drawn: a title, a number format, and the left's
+   * gridlines (the right draws none of its own).
+   */
+  it('draws each axis group’s title, number format and the left’s gridlines', () => {
+    const set: RenderSpec = {
+      ...mixed,
+      options: {
+        ...mixed.options,
+        axes: {
+          y: { title: 'Money', gridlines: false },
+          right: { title: 'Share', numberFormat: 'percent', tickRotation: 45 },
+        },
+      },
+    };
+    type Axis = {
+      name?: string;
+      splitLine?: { show?: boolean };
+      axisLabel?: { formatter?: (value: unknown) => string; rotate?: number };
+    };
+    const [left, right] = optionFor(set)['yAxis'] as Axis[];
+
+    expect(left?.name).toBe('Money');
+    expect(right?.name).toBe('Share');
+    expect(left?.splitLine?.show).toBe(false);
+    expect(right?.splitLine?.show).toBe(false);
+    expect(right?.axisLabel?.formatter?.(0.25)).toBe('25%');
+    expect(right?.axisLabel?.rotate).toBe(45);
+  });
 });
 
 /**

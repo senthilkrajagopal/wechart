@@ -1823,10 +1823,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T857 (AC-497, AC-500) In the chart editor only, make each legend entry's glyph a 20 px button opening the pill's menu
 
-- [ ] T858 (AC-219, AC-499, AC-501, AC-502) Customize › Axes: the Left and Right axis groups, include zero locked with its reason, Synchronize with its toast, log scale on both, and the canvas line
-  - Files: `packages/web/src/editor/AxisPanel.tsx` (+ test), `packages/web/src/editor/combo/SynchronizeSwitch.tsx` (+ test), `packages/web/src/editor/PreviewFrame.tsx`.
-  - Failing test: `AxisPanel.test.tsx`: with every series on the left there's no Right group and no Synchronize; with Margin % on the right, the Right group lists "Margin % · %" and has no gridlines field; with a bar series, include zero reads "Include zero · on, because Revenue draws bars" and can't be switched; Log on one axis announces "Log scale on for both axes" and shows on both; `SynchronizeSwitch.test.tsx`: disabled for $ and % with the reason, and for $ and $ turning it on clears the right's fixed max with "Right axis now follows the left axis · Undo", which restores it; the canvas line reads "3 series on 2 value axes, aligned at zero", then "3 series on 2 axes, synchronized" (AC-219, AC-499, AC-501, AC-502).
-  - Depends on: T849, T850, T855
+- [x] T858 (AC-219, AC-499, AC-501, AC-502) Customize › Axes: the Left and Right axis groups, include zero locked with its reason, Synchronize with its toast, log scale on both, and the canvas line
 
 - [x] T859 (AC-503) The stacking rows, Bars side by side or stacked, and Areas overlap or stacked while an area is drawn
 

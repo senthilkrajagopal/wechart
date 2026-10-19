@@ -454,3 +454,106 @@ test('stacks a combo’s bars chart-wide from Customize › Series, and offers A
     page.getByRole('radiogroup', { name: 'Areas' }).getByRole('radio', { name: 'Overlap' }),
   ).toBeChecked();
 });
+
+/**
+ * T858 (AC-219, AC-499, AC-501, AC-502; design 20 pins 1, 5, 7, 8, 9):
+ * Customize › Axes' Left and Right axis groups, include zero locked while
+ * bars are drawn, Synchronize with its toast and Undo, log on both axes,
+ * and the canvas line saying what's drawn.
+ */
+test('gives a combo its Left and Right axis groups, Synchronize, log on both and the canvas line (T858)', async ({
+  page,
+}) => {
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'measures').selectOption('orders.average_amount');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+  await chooseChartType(page, 'combo');
+  const status = page.getByTestId('preview-status');
+  // The type is named as the gallery names it, "Combo (bar + line)".
+  const SHOWING = 'Showing Combo (bar + line) · chosen manually';
+  await expect(status).toHaveText(`${SHOWING} · 2 series on one value axis`);
+
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  const axes = page.getByTestId('axes-section');
+  // Each measure by its title, as Customize › Series names it.
+  await expect(axes.getByRole('group', { name: /^Left axis/ })).toContainText(
+    'Orders Total Amount · Orders Average Amount · $',
+  );
+  await expect(axes.getByRole('group', { name: /^Right axis/ })).toHaveCount(0);
+  await expect(axes.getByRole('switch', { name: 'Synchronize axes' })).toHaveCount(0);
+
+  await page.locator('summary', { hasText: /^Series/ }).click();
+  await page
+    .getByRole('radiogroup', { name: 'Average Amount axis' })
+    .getByRole('radio', { name: 'Right' })
+    .check();
+  await expect(status).toHaveText(`${SHOWING} · 2 series on 2 value axes, aligned at zero`);
+  const left = axes.getByRole('group', { name: /^Left axis/ });
+  const right = axes.getByRole('group', { name: /^Right axis/ });
+  await expect(right).toContainText('Right axis Orders Average Amount · $');
+  await expect(right.getByRole('checkbox', { name: 'Gridlines' })).toHaveCount(0);
+  for (const side of [left, right]) {
+    const zero = side.getByRole('checkbox', {
+      name: 'Include zero · on, because Orders Total Amount draws bars',
+      exact: true,
+    });
+    await expect(zero).toBeChecked();
+    await expect(zero).toBeDisabled();
+    await expect(
+      side.getByRole('checkbox', {
+        name: 'Log scale · unavailable: Orders Total Amount draws bars, which need a zero baseline',
+        exact: true,
+      }),
+    ).toBeDisabled();
+  }
+
+  // Synchronize clears the right's fixed maximum, and Undo brings it back.
+  const maximum = right.getByRole('spinbutton', { name: 'Maximum' });
+  await maximum.fill('500');
+  await axes.getByRole('switch', { name: 'Synchronize axes' }).click();
+  await expect(status).toHaveText(`${SHOWING} · 2 series on 2 axes, synchronized`);
+  // One scale, labelled on both sides: the same ticks left and right (AC-501).
+  const ticksBySide = () =>
+    page
+      .getByTestId('chart-canvas')
+      .locator('svg text')
+      .evaluateAll((nodes) => {
+        const svg = nodes[0]?.closest('svg')?.getBoundingClientRect();
+        const middle = (svg?.left ?? 0) + (svg?.width ?? 0) / 2;
+        const ticks = nodes.filter((node) => /^\$/.test(node.textContent ?? ''));
+        const side = (left: boolean) =>
+          ticks
+            .filter((node) => node.getBoundingClientRect().left < middle === left)
+            .map((node) => node.textContent ?? '')
+            .filter((text) => text !== '$');
+        return { left: side(true), right: side(false) };
+      });
+  await expect
+    .poll(async () => {
+      const { left: onLeft, right: onRight } = await ticksBySide();
+      return onLeft.length > 1 && onLeft.join() === onRight.join();
+    })
+    .toBe(true);
+  await expect(maximum).toHaveValue('');
+  await expect(maximum).toBeDisabled();
+  const toast = axes.getByRole('status').filter({ hasText: 'Right axis now follows the left axis' });
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect(maximum).toHaveValue('500');
+  await expect(status).toHaveText(`${SHOWING} · 2 series on 2 value axes, aligned at zero`);
+
+  // With lines only, log on one axis is log on both, said on both.
+  await maximum.fill('');
+  await page
+    .getByRole('radiogroup', { name: 'Total Amount mark' })
+    .getByRole('radio', { name: 'Line' })
+    .check();
+  await left.getByRole('checkbox', { name: 'Logarithmic scale' }).check();
+  for (const side of [left, right]) {
+    await expect(
+      side.getByRole('checkbox', { name: 'Log scale · on for both axes, so their ticks align' }),
+    ).toBeChecked();
+  }
+  await expect(page.getByTestId('axes-announcement')).toHaveText('Log scale on for both axes');
+});

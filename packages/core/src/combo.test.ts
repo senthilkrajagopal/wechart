@@ -16,12 +16,15 @@ import {
   canSynchronize,
   COMBO_AXES,
   COMBO_MARKS,
+  comboAxesLine,
+  comboAxisHead,
   comboLimit,
   comboLimitOf,
   comboProblems,
   comboSeriesOf,
   comboStackingOf,
   comboStackingRows,
+  includeZeroLock,
   isSynchronized,
   logScaleState,
   markTakenBy,
@@ -661,5 +664,48 @@ describe('held to 8 series (AC-505)', () => {
     ]);
     expect(comboProblems({ combo: { shown: 2.5 } })).toHaveLength(1);
     expect(comboProblems({ combo: { shown: 3 } })).toEqual([]);
+  });
+});
+
+/**
+ * T858 (AC-219, AC-499, AC-501): what Customize › Axes and the canvas line
+ * say of a combo's two value axes.
+ */
+describe("the value axes' groups and the canvas line (T858)", () => {
+  const formats = { [REVENUE]: 'currency', [TARGET]: 'currency', [MARGIN]: 'percent' };
+  const LABELS: Record<string, string> = {
+    [REVENUE]: 'Revenue',
+    [TARGET]: 'Revenue target',
+    [MARGIN]: 'Margin %',
+    [ORDERS]: 'Orders',
+  };
+  const label = (measure: string) => LABELS[measure] ?? measure;
+  const three = [REVENUE, TARGET, MARGIN];
+
+  it('heads each axis group with its measures and its unit', () => {
+    expect(comboAxisHead(three, MARGIN_ON_RIGHT, 'left', formats, label)).toBe(
+      'Revenue · Revenue target · $',
+    );
+    expect(comboAxisHead(three, MARGIN_ON_RIGHT, 'right', formats, label)).toBe('Margin % · %');
+    // A plain number has no unit to add.
+    expect(comboAxisHead([ORDERS], {}, 'left', {}, label)).toBe('Orders');
+    expect(comboAxisHead(three, {}, 'right', formats, label)).toBe('');
+  });
+
+  it('locks include zero while a series draws bars, naming it', () => {
+    expect(includeZeroLock(three, MARGIN_ON_RIGHT, label)).toBe(
+      'Include zero · on, because Revenue draws bars',
+    );
+    const noBars = { series: { [REVENUE]: { mark: 'line' }, [MARGIN]: { axis: 'right' } } };
+    expect(includeZeroLock(three, noBars, label)).toBeUndefined();
+  });
+
+  it('says on the canvas how many series are on how many axes', () => {
+    expect(comboAxesLine(3, three, MARGIN_ON_RIGHT, formats)).toBe(
+      '3 series on 2 value axes, aligned at zero',
+    );
+    expect(comboAxesLine(3, three, {}, formats)).toBe('3 series on one value axis');
+    const cost = { series: { [TARGET]: { axis: 'right' } }, combo: { synchronize: true } };
+    expect(comboAxesLine(3, three, cost, formats)).toBe('3 series on 2 axes, synchronized');
   });
 });

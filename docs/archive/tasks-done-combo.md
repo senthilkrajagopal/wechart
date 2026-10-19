@@ -76,3 +76,8 @@ Lane COMBO's ticked tasks from `docs/tasks.md` §P2.26 (F44), their sub-lines wo
   - Files: `packages/web/src/editor/combo/LegendGlyphButtons.tsx` (+ test), `packages/web/src/editor/PreviewFrame.tsx`, `e2e/combo.spec.ts`.
   - Failing test: `LegendGlyphButtons.test.tsx`: in the editor's preview each entry has a button named "Revenue target: line, left axis. Change mark or axis" opening the same menu; the e2e: on a dashboard, in view and edit mode, a combo tile's legend has no such button (AC-497, AC-500).
   - Depends on: T856, T848
+
+- [x] T858 (AC-219, AC-499, AC-501, AC-502) Customize › Axes: the Left and Right axis groups, include zero locked with its reason, Synchronize with its toast, log scale on both, and the canvas line
+  - Files: `packages/web/src/editor/AxisPanel.tsx` (+ test), `packages/web/src/editor/combo/SynchronizeSwitch.tsx` (+ test), `packages/web/src/editor/PreviewFrame.tsx`.
+  - Failing test: `AxisPanel.test.tsx`: with every series on the left there's no Right group and no Synchronize; with Margin % on the right, the Right group lists "Margin % · %" and has no gridlines field; with a bar series, include zero reads "Include zero · on, because Revenue draws bars" and can't be switched; Log on one axis announces "Log scale on for both axes" and shows on both; `SynchronizeSwitch.test.tsx`: disabled for $ and % with the reason, and for $ and $ turning it on clears the right's fixed max with "Right axis now follows the left axis · Undo", which restores it; the canvas line reads "3 series on 2 value axes, aligned at zero", then "3 series on 2 axes, synchronized" (AC-219, AC-499, AC-501, AC-502).
+  - Depends on: T849, T850, T855

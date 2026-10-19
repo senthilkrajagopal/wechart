@@ -12,8 +12,32 @@ import type { AxisSettings, NumberFormat } from '@wechart/charts';
  * the data when nobody has overridden anything.
  */
 export interface AxisPanelProps {
-  readonly axis: 'x' | 'y';
+  /** Which axis: a combo's right value axis is `right` (T858). */
+  readonly axis: 'x' | 'y' | 'right';
   readonly label: string;
+  /**
+   * A combo's axis group's head (T858; design 20 pin 7): its measures and
+   * unit, "Margin % · %".
+   */
+  readonly head?: string | undefined;
+  /** Whether it offers Gridlines: a combo's right axis has none of its own (AC-499). */
+  readonly gridlines?: boolean;
+  /**
+   * Include zero locked on, with why (AC-499): "Include zero · on, because
+   * Revenue draws bars".
+   */
+  readonly zeroLock?: string | undefined;
+  /**
+   * A combo's log scale (AC-502): unavailable with why, or on and off for
+   * both axes at once, written through `onLog`.
+   */
+  readonly log?:
+    | { readonly available: false; readonly reason: string }
+    | { readonly available: true; readonly on: boolean; readonly both: boolean }
+    | undefined;
+  readonly onLog?: ((on: boolean) => void) | undefined;
+  /** Synchronized (AC-501): its Min, Max and Log follow the left axis's. */
+  readonly follows?: boolean;
   readonly settings: AxisSettings;
   readonly onChange: (next: AxisSettings) => void;
   /** Whether this axis carries values, which "include zero" is about (AC-219). */
@@ -36,6 +60,12 @@ export function AxisPanel({
   onChange,
   values = true,
   share = false,
+  head,
+  gridlines = true,
+  zeroLock,
+  log,
+  onLog,
+  follows = false,
 }: AxisPanelProps) {
   const id = (name: string) => `axis-${axis}-${name}`;
 
@@ -60,7 +90,12 @@ export function AxisPanel({
 
   return (
     <fieldset className="axis-panel" data-testid={`axis-panel-${axis}`}>
-      <legend>{label}</legend>
+      <legend>
+        {label}
+        {head === undefined || head === '' ? null : (
+          <span className="axis-panel__head"> {head}</span>
+        )}
+      </legend>
 
       <label htmlFor={id('title')}>Title</label>
       <input
@@ -76,11 +111,16 @@ export function AxisPanel({
         <p className="panel-section__note">0–100 %, a tick every 25 %</p>
       ) : (
         <>
+          {/* Synchronized, the left axis's ends and scale are this one's (AC-501). */}
+          {follows ? (
+            <p className="panel-section__note">Min, Max and Log follow the left axis</p>
+          ) : null}
           <label htmlFor={id('min')}>Minimum</label>
           <input
             id={id('min')}
             type="number"
             value={settings.min ?? ''}
+            disabled={follows}
             onChange={(event) => {
               set({ min: numberOrNothing(event.target.value) });
             }}
@@ -91,50 +131,65 @@ export function AxisPanel({
             id={id('max')}
             type="number"
             value={settings.max ?? ''}
+            disabled={follows}
             onChange={(event) => {
               set({ max: numberOrNothing(event.target.value) });
             }}
           />
 
+          {/*
+            A combo's log scale is both axes' at once, or unavailable while
+            bars are drawn (AC-502), each said in its label.
+          */}
           <label htmlFor={id('log')}>
             <input
               id={id('log')}
               type="checkbox"
-              checked={settings.log ?? false}
+              checked={log === undefined ? (settings.log ?? false) : log.available && log.on}
+              disabled={follows || log?.available === false}
               onChange={(event) => {
-                set({ log: event.target.checked ? true : undefined });
+                if (onLog !== undefined) onLog(event.target.checked);
+                else set({ log: event.target.checked ? true : undefined });
               }}
             />
-            Logarithmic scale
+            {log?.available === false
+              ? log.reason
+              : log?.available === true && log.both && log.on
+                ? 'Log scale · on for both axes, so their ticks align'
+                : 'Logarithmic scale'}
           </label>
         </>
       )}
 
-      <label htmlFor={id('gridlines')}>
-        <input
-          id={id('gridlines')}
-          type="checkbox"
-          checked={settings.gridlines ?? true}
-          onChange={(event) => {
-            set({ gridlines: event.target.checked });
-          }}
-        />
-        Gridlines
-      </label>
+      {gridlines ? (
+        <label htmlFor={id('gridlines')}>
+          <input
+            id={id('gridlines')}
+            type="checkbox"
+            checked={settings.gridlines ?? true}
+            onChange={(event) => {
+              set({ gridlines: event.target.checked });
+            }}
+          />
+          Gridlines
+        </label>
+      ) : null}
 
       {/* On unless turned off (AC-219): off, the axis spans only the data.
-          Only on an axis of values: a category axis has no zero. */}
+          Only on an axis of values: a category axis has no zero. A combo's
+          bars lock it on, saying why (AC-499). */}
       {values && !share ? (
         <label htmlFor={id('zero')}>
           <input
             id={id('zero')}
             type="checkbox"
-            checked={settings.includeZero ?? true}
+            checked={zeroLock === undefined ? (settings.includeZero ?? true) : true}
+            disabled={zeroLock !== undefined}
             onChange={(event) => {
               set({ includeZero: event.target.checked ? undefined : false });
             }}
           />
-          Include zero
+          {zeroLock ?? 'Include zero'}
         </label>
       ) : null}
 

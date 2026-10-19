@@ -1,4 +1,11 @@
-import { comboSeriesOf } from '@wechart/core';
+import {
+  comboAxisHead,
+  comboSeriesOf,
+  includeZeroLock,
+  isSynchronized,
+  logScaleState,
+  type MemberFormats,
+} from '@wechart/core';
 import {
   inSeriesOrder,
   type AxesSettings,
@@ -12,6 +19,7 @@ import { AxisPanel } from './AxisPanel';
 import { ColourSetting } from './ColourSetting';
 import { SeriesRows, type SeriesRowsProps } from './combo/SeriesRows';
 import { StackingRows } from './combo/StackingRows';
+import { SynchronizeSwitch } from './combo/SynchronizeSwitch';
 import { BoxplotDistribution } from './wells/boxplotDistribution';
 import { SankeyColourLinks } from './wells/sankey';
 
@@ -57,6 +65,8 @@ export interface CustomizeTabProps {
      * stacking rows read (AC-503). Absent, every measure.
      */
     readonly drawn?: readonly string[];
+    /** The model's formats, which Synchronize compares (AC-501). */
+    readonly formats?: MemberFormats;
   };
   /** Customize › Stack, Sum or 100 %, on a stacked bar or area (T957, AC-584). */
   readonly stack?: ReactNode;
@@ -112,8 +122,10 @@ export function CustomizeTab({
   const legend = record(options['legend']);
   const perSeries = record(options['series']) as Record<string, SeriesSettings>;
 
-  const setAxis = (axis: 'x' | 'y', next: AxisSettings) =>
+  const setAxis = (axis: 'x' | 'y' | 'right', next: AxisSettings) =>
     onOptions({ axes: sparse({ ...axes, [axis]: sparse({ ...next }) }) });
+  /** What Customize › Axes says to the screen reader (AC-502). */
+  const [announcement, setAnnouncement] = useState('');
   const setLegend = (patch: Record<string, unknown>) =>
     onOptions({ legend: sparse({ ...legend, ...patch }) });
   const setSeries = (name: string, patch: Record<string, unknown>) =>
@@ -205,14 +217,30 @@ export function CustomizeTab({
               values={valueAxes.includes('x')}
               onChange={(next) => setAxis('x', next)}
             />
-            <AxisPanel
-              axis="y"
-              label="Y axis"
-              settings={axes.y ?? {}}
-              values={valueAxes.includes('y')}
-              share={shareAxis}
-              onChange={(next) => setAxis('y', next)}
-            />
+            {combo === undefined ? (
+              <AxisPanel
+                axis="y"
+                label="Y axis"
+                settings={axes.y ?? {}}
+                values={valueAxes.includes('y')}
+                share={shareAxis}
+                onChange={(next) => setAxis('y', next)}
+              />
+            ) : (
+              <ComboAxes
+                combo={combo}
+                options={options}
+                onOptions={onOptions}
+                axes={axes}
+                setAxis={setAxis}
+                announce={setAnnouncement}
+              />
+            )}
+            {combo === undefined ? null : (
+              <p className="visually-hidden" aria-live="polite" data-testid="axes-announcement">
+                {announcement}
+              </p>
+            )}
           </div>
         </details>
       ) : null}
@@ -431,5 +459,93 @@ export function CustomizeTab({
       ) : null}
       {sankey ? <SankeyColourLinks options={options} onOptions={onOptions} /> : null}
     </div>
+  );
+}
+
+/**
+ * A combo's value axes in Customize › Axes (T858; AC-219, AC-499, AC-501,
+ * AC-502; design 20 pins 5, 7, 8, 9 and states C, E, H): Synchronize axes
+ * and the Right axis group only while a series is on the right; each group
+ * headed with its measures and unit; the right with no gridlines of its own;
+ * include zero locked while a series draws bars; log on both axes at once
+ * while two are drawn, announced, or unavailable while bars are drawn; and,
+ * synchronized, the right's Min, Max and Log following the left's.
+ */
+function ComboAxes({
+  combo,
+  options,
+  onOptions,
+  axes,
+  setAxis,
+  announce,
+}: {
+  readonly combo: NonNullable<CustomizeTabProps['combo']>;
+  readonly options: Readonly<Record<string, unknown>>;
+  readonly onOptions: CustomizeTabProps['onOptions'];
+  readonly axes: AxesSettings;
+  readonly setAxis: (axis: 'y' | 'right', next: AxisSettings) => void;
+  readonly announce: (said: string) => void;
+}) {
+  const measures = combo.drawn ?? combo.measures.map((one) => one.measure);
+  const titleOf = (measure: string) =>
+    combo.measures.find((one) => one.measure === measure)?.title ?? measure;
+  const split = { split: combo.split !== undefined };
+  const formats = combo.formats ?? {};
+  const right = comboSeriesOf(measures, options, split).some((one) => one.axis === 'right');
+  const zeroLock = includeZeroLock(measures, options, titleOf, split);
+  const log = logScaleState(measures, options, titleOf, split);
+  const synchronized = right && isSynchronized(measures, options, formats);
+  const logOf = (side: 'left' | 'right') =>
+    log.available
+      ? { available: true as const, on: log[side], both: log.both }
+      : { available: false as const, reason: log.reason };
+  /** Log on or off, for both axes while two are drawn (AC-502). */
+  const onLog = (on: boolean) => {
+    if (!log.available || !log.both) {
+      setAxis('y', { ...axes.y, ...(on ? { log: true } : { log: undefined }) } as AxisSettings);
+      return;
+    }
+    const side = (settings: AxisSettings | undefined) =>
+      sparse({ ...settings, log: on ? true : undefined });
+    onOptions({ axes: sparse({ ...axes, y: side(axes.y), right: side(axes.right) }) });
+    announce(on ? 'Log scale on for both axes' : 'Log scale off for both axes');
+  };
+
+  return (
+    <>
+      {right ? (
+        <SynchronizeSwitch
+          measures={measures}
+          options={options}
+          formats={formats}
+          label={titleOf}
+          onOptions={onOptions}
+        />
+      ) : null}
+      <AxisPanel
+        axis="y"
+        label="Left axis"
+        head={comboAxisHead(measures, options, 'left', formats, titleOf, split)}
+        settings={axes.y ?? {}}
+        zeroLock={zeroLock}
+        log={logOf('left')}
+        onLog={onLog}
+        onChange={(next) => setAxis('y', next)}
+      />
+      {right ? (
+        <AxisPanel
+          axis="right"
+          label="Right axis"
+          head={comboAxisHead(measures, options, 'right', formats, titleOf, split)}
+          settings={axes.right ?? {}}
+          gridlines={false}
+          zeroLock={zeroLock}
+          log={logOf('right')}
+          onLog={onLog}
+          follows={synchronized}
+          onChange={(next) => setAxis('right', next)}
+        />
+      ) : null}
+    </>
   );
 }

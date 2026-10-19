@@ -30,7 +30,7 @@ import {
   type RenderSpec,
 } from '@wechart/core';
 
-import { allCounts, axesOf, type AxisSettings } from '../axis';
+import { allCounts, axesOf, writeInFormat, type AxisSettings } from '../axis';
 import { alignedAxes, alignedLogAxes, type AxisRange, type LogRange } from '../combo/alignedAxes';
 import { axisTitle } from '../combo/axisTitles';
 import { colourFor } from '../colours';
@@ -318,20 +318,37 @@ function valueAxes(
 
   return (['left', 'right'] as const).map((side) => {
     const [first] = measuresOn(side);
-    const write = first === undefined ? undefined : formatterFor(first, spec.formats ?? {});
+    /**
+     * Each axis group's own title, number format and (the left's)
+     * gridlines, from Customize › Axes (T858, AC-219); otherwise its
+     * unit's title and its first measure's format.
+     */
+    const settings = side === 'left' ? axes.y : axes.right;
+    const own = settings?.numberFormat;
+    const write =
+      first === undefined
+        ? undefined
+        : own !== undefined && own !== 'auto'
+          ? (value: unknown) => writeInFormat(own, value)
+          : formatterFor(first, spec.formats ?? {});
     return {
       type: 'value',
       position: side,
       ...titleOf(side),
+      ...(settings?.title === undefined ? {} : { name: settings.title }),
       ...aligned[side],
       ...(side === 'right' ? { splitLine: { show: false } } : {}),
       ...(first === undefined
         ? { axisLabel: { show: false }, axisLine: { show: false }, splitLine: { show: true } }
         : {}),
+      ...(side === 'left' && settings?.gridlines === false ? { splitLine: { show: false } } : {}),
       ...(write === undefined
         ? {}
         : {
-            axisLabel: { formatter: write },
+            axisLabel: {
+              formatter: write,
+              ...(settings?.tickRotation === undefined ? {} : { rotate: settings.tickRotation }),
+            },
             axisPointer: {
               label: { formatter: (params: { value: unknown }) => write(params.value) },
             },

@@ -3,6 +3,7 @@ import {
   applyQuickCalc,
   CHART_TYPE_NAMES,
   chartDocumentOf,
+  comboAxesLine,
   comboSeriesOf,
   compile,
   distinctValues,
@@ -789,7 +790,8 @@ function EditorBody({
    * A combo's mark and axis menu, as its Metrics pills (T856) and, in the
    * preview, its legend's glyphs (T857) open it: one menu over the same
    * options, so neither can disagree with Customize › Series (AC-497).
-   * Format… is the value axis's Number format, on Customize (decision T856-1).
+   * Format… is the Number format of the axis the measure is on, in
+   * Customize › Axes' Left or Right group (decision T856-1, T858).
    */
   const comboMenu =
     shownType === 'combo'
@@ -798,21 +800,37 @@ function EditorBody({
           onOptions: setOptions,
           split:
             comboRows?.split === undefined ? undefined : { dimension: comboRows.split.dimension },
-          onFormat: () => {
+          onFormat: (measure?: string) => {
+            const onRight =
+              measure !== undefined &&
+              comboSeriesOf(spec.measures, options).find((one) => one.measure === measure)
+                ?.axis === 'right';
             setInspector('customize');
             requestAnimationFrame(() => {
-              const formats = [
-                ...document.querySelectorAll<HTMLLabelElement>(
-                  '[data-testid="axes-section"] label',
-                ),
-              ].filter((label) => label.textContent === 'Number format');
-              const field = formats.at(-1)?.control;
+              const field = document.querySelector<HTMLSelectElement>(
+                `[data-testid="axes-section"] #axis-${onRight ? 'right' : 'y'}-format`,
+              );
               field?.closest('details')?.setAttribute('open', '');
               field?.focus();
             });
           },
         }
       : undefined;
+  /**
+   * A combo's canvas line (T858; AC-499, AC-501; design 20 pin 1): its
+   * series drawn on how many value axes, "3 series on 2 value axes, aligned
+   * at zero".
+   */
+  const comboLine = useMemo(() => {
+    if (drawnSpec === undefined || drawnSpec.chartType !== 'combo') return undefined;
+    const drawn = onOneScale(drawnSpec);
+    return comboAxesLine(
+      seriesOf(drawn).series.length,
+      membersOn(drawn.encoding, 'y'),
+      options,
+      formats,
+    );
+  }, [drawnSpec, options, formats]);
   /** The combo legend's glyph buttons, in the editor's preview only (T857, AC-497). */
   const legendOverlay =
     comboMenu === undefined || comboRows === undefined
@@ -825,7 +843,7 @@ function EditorBody({
             options={comboMenu.options}
             onOptions={comboMenu.onOptions}
             split={comboMenu.split}
-            onFormat={() => comboMenu.onFormat()}
+            onFormat={(measure) => comboMenu.onFormat(measure)}
             onRemove={(measure) =>
               setSpec((current) => removeFromWell(current, 'measures', measure))
             }
@@ -1021,6 +1039,7 @@ function EditorBody({
                 <p className="chart-editor__status" data-testid="preview-status">
                   Showing <b>{CHART_TYPE_NAMES[shownType]}</b> ·{' '}
                   {isManual(chartTypeState) ? 'chosen manually' : 'auto'}
+                  {comboLine === undefined ? null : ` · ${comboLine}`}
                 </p>
               )}
               {!accelerationOf(served).accelerated && rollupOnlyKnown(rollupOnly.data, null) ? (
@@ -1379,7 +1398,7 @@ function EditorBody({
               whiskers={shownType === 'boxplot'}
               eachPointIs={spec.eachPointIs !== undefined}
               sankey={shownType === 'sankey'}
-              {...(comboRows === undefined ? {} : { combo: comboRows })}
+              {...(comboRows === undefined ? {} : { combo: { ...comboRows, formats } })}
               {...stackCustomize(shownType, {
                 options,
                 onOptions: setOptions,
