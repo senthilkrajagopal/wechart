@@ -369,4 +369,17 @@ export {
   type ParallelScale,
   type ParallelSettings,
 } from './chart-types/parallel';
+export {
+  COLUMN_KINDS,
+  columnsOf,
+  graphicalTableModule,
+  graphicalTableOf,
+  newColumn,
+  NO_COLUMNS,
+  withColumns,
+  type ColumnKind,
+  type GraphicalTable,
+  type GraphicalTableColumn,
+  type GraphicalTableSettings,
+} from './chart-types/graphicalTable';
 export { sealSecretV1, type XcubeKey } from './data-sources/seal';

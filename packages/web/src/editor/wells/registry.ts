@@ -3,6 +3,7 @@ import type { WellName } from '@wechart/recommender';
 import type { ComponentType } from 'react';
 
 import type { Member } from '../fields';
+import { GraphicalTableWells } from './graphicalTable';
 import { KpiWells } from './kpi';
 import { MapWells } from './map';
 import { ParallelWells } from './parallel';
@@ -44,4 +45,5 @@ export const TYPE_WELLS: Partial<Record<ChartType, ComponentType<TypeWellsProps>
   kpi: KpiWells,
   map: MapWells,
   parallel: ParallelWells,
+  graphicalTable: GraphicalTableWells,
 };

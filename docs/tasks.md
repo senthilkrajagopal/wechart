@@ -2314,10 +2314,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 ### Lane CHARTS-A: the graphical table
 
-- [ ] T943 (AC-570, AC-037) The graphical table's spec and wells: Rows, Group rows by, and ordered columns of R80's element kinds, moved and removed from a ⋯ menu with Undo
-  - Files: `packages/core/src/chart-types/graphicalTable.ts` (+ test), `packages/web/src/editor/wells/graphicalTable.tsx` (+ test).
-  - Failing test: `graphicalTable.test.ts`: a spec of Category with Value, Sparkline, Bullet, Icon and Change columns parses and saves back in order; `graphicalTable.test.tsx` (wells): + Column offers the five kinds; a column's row opens its R80 element settings; its ⋯ holds Move up, Move down and Remove, Remove offering Undo; with no column the tile says "Add a column: Value, Change, Sparkline, Bullet or Icon." (AC-570, AC-037).
-  - Depends on: T934
+- [x] T943 (AC-570, AC-037) The graphical table's spec and wells: Rows, Group rows by, and ordered columns of R80's element kinds, moved and removed from a ⋯ menu with Undo
 
 - [ ] T944 (AC-571) Draw the graphical table as a real `<table>` with its caption, 24 px rows, and its Value, Change, Sparkline, Bullet and Icon cells
   - Files: `packages/web/src/tiles/GraphicalTable.tsx` (+ test).

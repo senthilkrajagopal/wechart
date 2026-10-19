@@ -1,4 +1,5 @@
 import type { ChartType } from '../render-spec';
+import { graphicalTableModule } from './graphicalTable';
 import { kpiModule } from './kpi';
 import { mapModule } from './map';
 import { parallelModule } from './parallel';
@@ -23,4 +24,5 @@ export const CHART_TYPE_MODULES: Partial<Record<ChartType, ChartTypeModule>> = {
   kpi: kpiModule as ChartTypeModule,
   map: mapModule as ChartTypeModule,
   parallel: parallelModule as ChartTypeModule,
+  graphicalTable: graphicalTableModule as ChartTypeModule,
 };

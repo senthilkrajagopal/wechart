@@ -88,3 +88,111 @@ test('a KPI offers its five wells after Metrics, keeps what is set through a sav
   await expect(page.getByRole('combobox', { name: 'Tile by', exact: true })).toHaveValue('');
   await expect(page.getByTestId('editor-result').getByTestId('kpi-value')).toBeVisible();
 });
+
+/**
+ * T943 / AC-570: WHEN a graphical table is edited, THE SYSTEM SHALL take Rows
+ * (one dimension), Group rows by (an optional second dimension …), and
+ * Columns, an ordered list in which each column is a Value, Change,
+ * Sparkline, Bullet or Icon, set with R80's element settings for that kind
+ * …; each column row SHALL open its settings, and its ⋯ menu SHALL hold Move
+ * up, Move down and Remove, with Undo; and with no column, … SHALL say "Add a
+ * column: Value, Change, Sparkline, Bullet or Icon." with + Column.
+ * `Fails when: a column kind is missing or another is offered; … a column
+ * can't be moved or removed without dragging, or Remove can't be undone; …
+ * or an empty table lacks the sentence or the action.`
+ * And AC-037 (R81): its spec, saved and reopened, is the same.
+ */
+test('a graphical table takes Rows, Group rows by and ordered columns, moved and removed from ⋯ with Undo, through a save', async ({
+  page,
+}) => {
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+  await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
+  const id = /\/explore\/charts\/([^/]+)\/edit/.exec(page.url())?.[1] ?? '';
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await expect(page.getByTestId('member-orders.count')).toBeVisible();
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await chooseChartType(page, 'graphicalTable');
+  await expectChartType(page, 'graphicalTable');
+
+  await expect(page.getByTestId('graphicalTable-rows')).toHaveText('Orders Status');
+  await expect(page.getByTestId('graphicalTable-groupBy')).toContainText('Optional');
+  const columns = page.getByTestId('well-graphicalTable-columns');
+  await expect(columns).toContainText('Add a column: Value, Change, Sparkline, Bullet or Icon.');
+
+  const add = columns.getByRole('button', { name: 'Add a column' });
+  await add.click();
+  await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText([
+    'Value',
+    'Change',
+    'Sparkline',
+    'Bullet',
+    'Icon',
+  ]);
+  await page.getByRole('menuitem', { name: 'Value' }).click();
+  await add.click();
+  await page.getByRole('menuitem', { name: 'Change' }).click();
+  await add.click();
+  await page.getByRole('menuitem', { name: 'Icon' }).click();
+  const list = columns.getByRole('list', { name: 'Columns' });
+  const names = list.locator('.gt-columns__name');
+  await expect(names).toHaveText([
+    'Value · Orders Count',
+    'Change · Orders Count vs the previous period',
+    'Icon · Orders Count',
+  ]);
+
+  // A column's row opens R80's settings for its kind: a Change's.
+  await names.nth(1).click();
+  const change = page.getByRole('group', { name: 'Change · Orders Count vs the previous period' });
+  await change.getByRole('combobox', { name: 'Period' }).selectOption('quarter');
+  await expect(names.nth(1)).toHaveText('Change · Orders Count vs last quarter');
+  await page
+    .getByRole('group', { name: 'Change · Orders Count vs last quarter' })
+    .getByRole('radio', { name: 'Lower is better' })
+    .check();
+
+  // Moved by its ⋯ menu, with no drag.
+  await columns.getByRole('button', { name: 'Column 3, Icon · Orders Count: more' }).click();
+  await page.getByRole('menuitem', { name: 'Move up' }).click();
+  await expect(names).toHaveText([
+    'Value · Orders Count',
+    'Icon · Orders Count',
+    'Change · Orders Count vs last quarter',
+  ]);
+
+  // Removed, and put back by Undo where it was.
+  await columns.getByRole('button', { name: 'Column 1, Value · Orders Count: more' }).click();
+  await page.getByRole('menuitem', { name: 'Remove' }).click();
+  await expect(names).toHaveText(['Icon · Orders Count', 'Change · Orders Count vs last quarter']);
+  const toast = page.getByTestId('undo-toast');
+  await expect(toast).toContainText('Removed the column Value · Orders Count.');
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect(names).toHaveText([
+    'Value · Orders Count',
+    'Icon · Orders Count',
+    'Change · Orders Count vs last quarter',
+  ]);
+
+  const title = `Graphical table ${String(Date.now())}`;
+  const head = page.getByTestId('editor-bar');
+  await head.getByLabel('Chart title').fill(title);
+  await head.getByRole('button', { name: '← Back to Explore' }).click();
+  await expect(page).toHaveURL(new RegExp(`/explore/charts/${id}$`));
+
+  // Reopened: the same columns, in the same order, with their settings.
+  await page.goto(`/explore/charts/${id}/edit`);
+  await expectChartType(page, 'graphicalTable');
+  const reopened = page.getByTestId('well-graphicalTable-columns').locator('.gt-columns__name');
+  await expect(reopened).toHaveText([
+    'Value · Orders Count',
+    'Icon · Orders Count',
+    'Change · Orders Count vs last quarter',
+  ]);
+  await reopened.nth(2).click();
+  await expect(
+    page
+      .getByRole('group', { name: 'Change · Orders Count vs last quarter' })
+      .getByRole('radio', { name: 'Lower is better' }),
+  ).toBeChecked();
+});
