@@ -254,6 +254,51 @@ describe('a combo’s legend', () => {
   });
 
   /**
+   * AC-504 (decision T852-2's open half): split, the legend has two parts,
+   * the members as swatches, then the measures as their glyphs, written in
+   * text-secondary, each measure's entry standing for its series.
+   */
+  it('lists the members, then the measures as glyphs in text-secondary, while split', () => {
+    const REGION = 'orders.region';
+    const split: RenderSpec = {
+      ...combo,
+      encoding: { x: [STATUS], color: [REGION], y: [AMOUNT, MARGIN] },
+      rows: ['North', 'South'].flatMap((region) =>
+        combo.rows.map((row) => ({ ...row, [REGION]: region })),
+      ),
+      options: { series: { [MARGIN]: { mark: 'line', axis: 'right' } } },
+    };
+    const legend = legendOf(split);
+    const option = optionFor(split);
+
+    expect(legend.data?.map((one) => one.name)).toEqual(['North', 'South', AMOUNT, MARGIN]);
+    expect(legend.data?.[0]?.icon).toBeUndefined();
+    expect(legend.data?.[2]?.icon).toMatch(/^path:\/\//);
+    expect(legend.data?.[3]?.icon).toMatch(/^path:\/\//);
+    expect(legend.data?.[2]?.icon).not.toBe(legend.data?.[3]?.icon);
+    expect(legend.formatter?.('North')).toBe('North');
+    expect(legend.formatter?.(MARGIN)).toBe('{measure|Margin %} {right|(right)}');
+    expect(legend.textStyle?.rich?.['measure']?.color).toBe(COLORS.light['text-secondary']);
+    // Each measure's entry stands for a series of its name that draws nothing,
+    // in text-secondary, on its measure's axis.
+    const standIns = (option['series'] as Record<string, unknown>[]).filter(
+      (one) => one['name'] === AMOUNT || one['name'] === MARGIN,
+    );
+    expect(standIns.map((one) => [one['name'], one['data'], one['yAxisIndex']])).toEqual([
+      [AMOUNT, [], 0],
+      [MARGIN, [], 1],
+    ]);
+    expect(
+      standIns.every(
+        (one) =>
+          (one['itemStyle'] as { color?: string } | undefined)?.color ===
+          COLORS.light['text-secondary'],
+      ),
+    ).toBe(true);
+    expect(labelsOf(renderToSvg(option)).map((label) => label.text)).toContain('Margin %');
+  });
+
+  /**
    * AC-505: a series with no data still counts and keeps its legend entry,
    * saying "No data for these filters" in text-secondary.
    */

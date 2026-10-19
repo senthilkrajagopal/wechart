@@ -572,13 +572,20 @@ describe('a partly marked combo split across every measure', () => {
     const option = optionFor(combo());
     const drawn = seriesOf(option);
     const formatter = (option['tooltip'] as { formatter: (params: unknown) => string }).formatter;
-    const at = drawn.map((one, seriesIndex) => ({
-      name: 'Books',
-      seriesName: one.name,
-      seriesIndex,
-      value: one.data[0]?.value,
-      data: one.data[0],
-    }));
+    // As ECharts' axis tooltip passes them: every series but one whose
+    // tooltip is off (research/echarts-combo-layers.md), such as a measure's
+    // legend stand-in (AC-504).
+    const at = drawn
+      .map((one, seriesIndex) => ({
+        name: 'Books',
+        seriesName: one.name,
+        seriesIndex,
+        value: one.data[0]?.value,
+        data: one.data[0],
+        off: (one as { tooltip?: { show?: boolean } }).tooltip?.show === false,
+      }))
+      .filter((row) => !row.off)
+      .map(({ off: _off, ...row }) => row);
 
     expect(formatter(at)).toBe(
       'Books<br/>East · orders.amount: 10 · Marked: 4<br/>East · orders.count: 3 · Marked: 1',

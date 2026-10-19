@@ -482,6 +482,37 @@ test('splits a combo by one dimension, counts it against 8, folds it, and leaves
     '2 measures × 3 statuses = 6 of 8 series',
   );
 
+  // The legend in two parts: the statuses as swatches, then the measures as
+  // glyphs in text-secondary, each a glyph button in the editor (AC-504).
+  const canvas = page.getByTestId('chart-canvas');
+  const legendTexts = () =>
+    canvas.locator('svg text').evaluateAll((nodes) =>
+      nodes
+        .map((node) => ({
+          text: node.textContent ?? '',
+          fill: node.getAttribute('fill') ?? '',
+          top: node.getBoundingClientRect().top,
+          left: node.getBoundingClientRect().left,
+        }))
+        .filter((one) => one.top < (nodes[0]?.closest('svg')?.getBoundingClientRect().top ?? 0) + 24)
+        .sort((a, b) => a.left - b.left),
+    );
+  // The statuses first, in the order the chart draws them, then the measures.
+  await expect
+    .poll(async () => {
+      const texts = (await legendTexts()).map((one) => one.text);
+      return [[...texts.slice(0, 3)].sort(), texts.slice(3)];
+    })
+    .toEqual([
+      ['completed', 'processing', 'shipped'],
+      ['Total Amount', 'Average Amount'],
+    ]);
+  const measuresInLegend = (await legendTexts()).slice(3);
+  expect(new Set(measuresInLegend.map((one) => one.fill))).toEqual(new Set([TEXT_SECONDARY]));
+  await expect(
+    canvas.getByRole('button', { name: 'Average Amount: line, left axis. Change mark or axis' }),
+  ).toBeVisible();
+
   // A third measure would make 9: Auto folds to the top 1 + Other.
   await wellPicker(page, 'measures').selectOption('orders.count');
   await page

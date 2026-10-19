@@ -443,7 +443,11 @@ describe('a combo split across every measure (AC-504)', () => {
       ...split({ series: { [COST]: { mark: 'area' }, [MARGIN]: { axis: 'right' } } }),
       encoding: { x: [QUARTER], color: [REGION], y: [REVENUE, COST, MARGIN] },
     };
-    const halos = (optionFor(spec)['series'] as Drawn[]).filter((one) => one.tooltip !== undefined);
+    // A halo is out of the tooltip; so is each measure's legend stand-in,
+    // which draws nothing (AC-504), so it's told apart by its `standIn`.
+    const halos = (optionFor(spec)['series'] as (Drawn & { standIn?: boolean })[]).filter(
+      (one) => one.tooltip !== undefined && one.standIn !== true,
+    );
 
     // 3 measures × 4 regions is past 8 series, so the regions fold to the
     // top 1 + Other (T853, AC-505; folded as drawn since checkpoint 1's

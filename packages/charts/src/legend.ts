@@ -93,7 +93,8 @@ function comboLegendOf(
   spec: RenderSpec,
   write: ((value: unknown) => string) | undefined,
 ): Record<string, unknown> {
-  if (spec.chartType !== 'combo' || memberOn(spec.encoding, 'color') !== undefined) return {};
+  if (spec.chartType !== 'combo') return {};
+  if (memberOn(spec.encoding, 'color') !== undefined) return splitComboLegendOf(spec, write);
   const settings = seriesSettingsOf(spec);
   const resolved = new Map(
     comboSeriesOf(membersOn(spec.encoding, 'y'), spec.options).map((one) => [one.measure, one]),
@@ -124,6 +125,66 @@ function comboLegendOf(
     },
     textStyle: {
       rich: {
+        right: { color: COLORS.light['text-secondary'] },
+        none: { color: COLORS.light['text-secondary'] },
+      },
+    },
+  };
+}
+
+/**
+ * A split combo's legend in two parts (AC-504, design 20 screen 2 pin 9;
+ * decision T852-2's open half): the members as swatches, in their colours
+ * and their order, then the measures as their marks' glyphs, written in
+ * `text-secondary`, a right-axis one adding "(right)". An entry needs a
+ * series of its name (research/echarts-combo-layers.md), so each measure's
+ * stands for one that draws nothing (`splitComboStandIns`). A member with no
+ * value in any measure says "No data for these filters" (AC-505).
+ */
+function splitComboLegendOf(
+  spec: RenderSpec,
+  write: ((value: unknown) => string) | undefined,
+): Record<string, unknown> {
+  const settings = seriesSettingsOf(spec);
+  const drawn = seriesOf(spec).series;
+  const members = [...new Set(drawn.map((one) => one.name))].filter(
+    (name) => settings[name]?.hidden !== true,
+  );
+  const empty = new Set(
+    members.filter((member) =>
+      drawn
+        .filter((one) => one.name === member)
+        .every((one) => one.values.every((value) => value === null)),
+    ),
+  );
+  const resolved = new Map(
+    comboSeriesOf(membersOn(spec.encoding, 'y'), spec.options, { split: true }).map((one) => [
+      one.measure,
+      one,
+    ]),
+  );
+  const named = (name: string) => (write === undefined ? name : write(name));
+  const plain = (text: string) => text.replace(/[{}|]/g, '');
+  return {
+    data: [
+      ...members.map((name) => ({ name })),
+      ...[...resolved.values()].map((one) => ({ name: one.measure, icon: GLYPH_PATHS[one.mark] })),
+    ],
+    itemWidth: 12,
+    itemHeight: 8,
+    formatter: (name: string) => {
+      const measure = resolved.get(name);
+      if (measure !== undefined) {
+        const said = `{measure|${plain(labelOf(spec, name))}}`;
+        return measure.axis === 'right' ? `${said} {right|(right)}` : said;
+      }
+      return empty.has(name)
+        ? `${plain(named(name))} {none|· No data for these filters}`
+        : named(name);
+    },
+    textStyle: {
+      rich: {
+        measure: { color: COLORS.light['text-secondary'] },
         right: { color: COLORS.light['text-secondary'] },
         none: { color: COLORS.light['text-secondary'] },
       },

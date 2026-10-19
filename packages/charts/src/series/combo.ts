@@ -30,6 +30,8 @@ import {
   type RenderSpec,
 } from '@wechart/core';
 
+import { COLORS } from '@wechart/ui';
+
 import { allCounts, axesOf, writeInFormat, type AxisSettings } from '../axis';
 import { alignedAxes, alignedLogAxes, type AxisRange, type LogRange } from '../combo/alignedAxes';
 import { axisTitle } from '../combo/axisTitles';
@@ -441,7 +443,8 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
       })),
       logOn.right,
     ),
-    series: series.map((one, index) => {
+    series: [
+      ...series.map((one, index) => {
       const colour = colourFor(spec, one.name, one.colourIndex);
       const { mark, axis } = one;
       const stack = stacks[index];
@@ -502,8 +505,40 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
               : {}),
           };
       }
-    }),
+      }),
+      ...splitComboStandIns(spec, series),
+    ],
   };
+}
+
+/**
+ * Split, each measure's legend entry needs a series of its name to stand
+ * for (AC-504; research/echarts-combo-layers.md: an entry draws from the
+ * first series of its name): one per measure that draws nothing, in
+ * `text-secondary`, on its measure's axis, silent and out of the tooltip
+ * (`splitComboLegendOf`). Unsplit, a series is its measure: none.
+ */
+function splitComboStandIns(
+  spec: RenderSpec,
+  drawn: readonly { readonly measure: string; readonly axis: ComboAxis; readonly mark: ComboMark }[],
+): Record<string, unknown>[] {
+  if (!isSplit(spec)) return [];
+  const measures = new Map(drawn.map((one) => [one.measure, one]));
+  return [...measures.values()].map((one) => ({
+    type: 'scatter' as const,
+    name: one.measure,
+    measure: one.measure,
+    // Beyond ECharts: it stands for a measure, drawing nothing of its own.
+    standIn: true,
+    data: [],
+    yAxisIndex: AXIS_INDEX[one.axis],
+    z: COMBO_Z[one.mark],
+    // Silent, and out of the axis tooltip, which skips a series whose
+    // tooltip is off (research/echarts-combo-layers.md).
+    silent: true,
+    tooltip: { show: false },
+    itemStyle: { color: COLORS.light['text-secondary'] },
+  }));
 }
 
 type Series = Record<string, unknown> & {
