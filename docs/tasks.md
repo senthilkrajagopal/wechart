@@ -1829,10 +1829,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T860 (AC-504, AC-505) The combo's Split by well, its count against 8, "‹dimension› shown", and "not drawn · over 8 series" with its offers
 
-- [ ] T861 (AC-218) Warn the author only while a combo draws two unsynchronized axes, in Customize › Axes, on the type card and in the tile's edit-mode head, with its variants and offers, and never a viewer
-  - Files: `packages/recommender/src/warnings.ts` (+ test), `packages/web/src/editor/combo/ComboWarning.tsx` (+ test), `packages/web/src/editor/ChartTypeCard.tsx`, `packages/web/src/tiles/ChartTile.tsx` (the edit head), `e2e/combo.spec.ts`.
-  - Failing test: `warnings.test.ts`: a combo on one axis, or two synchronized, gives no warning; two unsynchronized axes in $ and % give "Two scales: Revenue ($) and Margin % (%) can be made to look related." with One axis, Synchronize (disabled, with the reason), Small multiples and Table; $ and $ give the stronger wording with Synchronize first; lines with the right axis off zero add "The right axis doesn't start at zero."; a pie of 7 slices still warns; `ComboWarning.test.tsx`: One axis puts every series on the left; the e2e: the tile's edit head shows ⚠ opening the editor at Axes, and in view mode no part of the warning shows (AC-218).
-  - Depends on: T849, T858
+- [x] T861 (AC-218) Warn the author only while a combo draws two unsynchronized axes, in Customize › Axes, on the type card and in the tile's edit-mode head, with its variants and offers, and never a viewer
 
 - [ ] T862 (AC-507, AC-219) Reference lines and bands: the list and its form in Customize, horizontal or vertical, fixed or computed from a drawn series, with Edit, Duplicate and Delete with Undo
   - Files: `packages/core/src/combo.ts` (the references' shape and `referenceProblems`), `packages/web/src/editor/combo/ReferenceList.tsx` (+ test), `packages/web/src/editor/combo/ReferenceForm.tsx` (+ test).

@@ -38,6 +38,12 @@ export interface ChartTypeCardProps {
   readonly onPick: (type: ChartType) => void;
   /** Change, for the gallery to give focus back to. */
   readonly changeRef?: Ref<HTMLButtonElement>;
+  /**
+   * A combo drawing two unsynchronized axes (T861, AC-218; design 20 screen
+   * 2 pin 1): the warning's icon and "Two scales, not synchronized · See
+   * Axes", which opens Customize at the warning.
+   */
+  readonly onSeeAxes?: (() => void) | undefined;
 }
 
 export function ChartTypeCard({
@@ -51,6 +57,7 @@ export function ChartTypeCard({
   onAuto,
   onPick,
   changeRef,
+  onSeeAxes,
 }: ChartTypeCardProps) {
   const ids = { label: useId(), name: useId(), why: useId() };
   const name = shown === null ? undefined : CHART_TYPE_NAMES[shown];
@@ -152,6 +159,17 @@ export function ChartTypeCard({
           </button>
         </div>
       ) : null}
+      {onSeeAxes === undefined ? null : (
+        <div className="type-card-field__warning state-line" data-testid="type-two-scales">
+          <StatusIcon kind="warn" />
+          <span>
+            Two scales, not synchronized ·{' '}
+            <button type="button" className="btn-link" onClick={onSeeAxes}>
+              See Axes
+            </button>
+          </span>
+        </div>
+      )}
       {manual && warnings.length > 0 ? (
         <div className="type-card-field__warning state-line" data-testid="type-warning">
           <StatusIcon kind="warn" />

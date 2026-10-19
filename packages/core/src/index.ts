@@ -138,6 +138,7 @@ export {
   withComboStacking,
   withLogScale,
   withMembersShown,
+  withOneAxis,
   withSynchronize,
   type AreaStacking,
   type BarStacking,

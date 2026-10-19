@@ -662,6 +662,21 @@ export function comboAxesLine(
 }
 
 /**
+ * One axis (T861; AC-218's offer): every series back on the left, by
+ * forgetting each axis chosen, so marks, colours and the rest are kept and
+ * no emptied entry is left behind.
+ */
+export function withOneAxis(options: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  let next: Record<string, unknown> = { ...options };
+  for (const [name, settings] of Object.entries(seriesSettingsOf(options))) {
+    if (settings['axis'] === undefined) continue;
+    const kept = Object.fromEntries(Object.entries(settings).filter(([key]) => key !== 'axis'));
+    next = withSeriesSettings(next, name, kept);
+  }
+  return next;
+}
+
+/**
  * Back to Auto (AC-498): the measure's mark and axis forgotten, its colour
  * and anything else kept, and no empty entry left behind, so the saved
  * options stay sparse.

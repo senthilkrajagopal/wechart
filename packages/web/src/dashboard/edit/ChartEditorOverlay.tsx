@@ -60,6 +60,8 @@ export interface ChartEditorOverlayProps {
   ) => string | undefined;
   /** The tile it was opened from (T196). */
   readonly tileId?: string;
+  /** Opened at Customize › Axes, from the tile's ⚠ (T861, AC-218). */
+  readonly openAt?: 'axes' | undefined;
   /**
    * The tile the URL names as open in the editor. Once it has named this
    * editor's tile, its going — the browser's Back — closes the editor the way
@@ -124,6 +126,7 @@ export function ChartEditorOverlay({
   saveBlocked,
   tileId,
   urlTile,
+  openAt,
 }: ChartEditorOverlayProps) {
   // The dashboard it is edited on (T340, AC-268).
   const item = useQueryItem();
@@ -465,6 +468,7 @@ export function ChartEditorOverlay({
             chartId={requestableChartId(chartId, opened?.version)}
             initial={view.initial}
             tile={tile}
+            openAt={openAt}
             onChange={onChange}
             busy={applying}
             head={{ start: backControl, badges: ownership, end: saveControls }}

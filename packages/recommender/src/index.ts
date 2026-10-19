@@ -35,4 +35,10 @@ export {
   type WellName,
 } from './requirements';
 export type { Candidate, ChartType, Field, FieldKind, RuleOutcome, Signature } from './types';
-export { warningsFor } from './warnings';
+export {
+  comboWarning,
+  warningsFor,
+  type ComboAxisSide,
+  type ComboWarning,
+  type ComboWarningOffer,
+} from './warnings';

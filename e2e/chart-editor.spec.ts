@@ -1898,12 +1898,14 @@ test('a greyed type chosen from the gallery highlights the well it needs, until 
 });
 
 /**
- * T230 / AC-218: WHILE a manually chosen type is a combo, or exceeds a
- * channel's capacity for the chart's fields, THE SYSTEM SHALL show a warning
- * with an icon saying why, and offer to switch to the recommended type
- * (direction.md rules 6, 30).
- * `Fails when: a combo, or a pie drawn with more than 6 slices, shows no
- * warning.`
+ * T230 / AC-218 as amended by R80 (T861): a combo warns only while it draws
+ * two unsynchronized value axes, on the type card ("Two scales, not
+ * synchronized · See Axes", opening Customize at the warning); a manually
+ * chosen type that exceeds a channel's capacity warns why, and the
+ * recommended type is offered.
+ * `Fails when: a combo with one value axis shows a warning; one with two
+ * unsynchronized axes shows none on the type card; or a pie drawn with more
+ * than 6 slices shows no warning.`
  */
 test('a manual combo, or a pie of too many slices, warns why and offers the recommended type', async ({
   page,
@@ -1914,10 +1916,40 @@ test('a manual combo, or a pie of too many slices, warns why and offers the reco
   await wellPicker(page, 'dimensions').selectOption('orders.status');
   await expect(page.getByTestId('type-warning')).toHaveCount(0);
 
+  // One value axis, Total Amount on another scale and not drawn: no warning.
   await chooseChartType(page, 'combo');
-  const warning = page.getByTestId('type-warning');
-  await expect(warning).toContainText('Two value axes');
+  await expect(page.getByTestId('in-measures-orders.total_amount')).toContainText(
+    'not drawn · on another scale',
+  );
+  await expect(page.getByTestId('type-warning')).toHaveCount(0);
+  await expect(page.getByTestId('type-two-scales')).toHaveCount(0);
+
+  // Drawn on a right axis, the two scales are named on the card.
+  await page
+    .getByTestId('undrawn-metrics')
+    .getByRole('button', { name: 'Draw on a right axis' })
+    .click();
+  const warning = page.getByTestId('type-two-scales');
+  await expect(warning).toHaveText('Two scales, not synchronized · See Axes');
   await expect(warning.locator('svg[data-icon="warn"]')).toHaveCount(1);
+  await warning.getByRole('button', { name: 'See Axes' }).click();
+  const row = page.getByTestId('combo-warning');
+  await expect(row).toBeFocused();
+  await expect(row).toContainText(
+    'Two scales: Count (numbers) and Total Amount ($) can be made to look related.',
+  );
+  await expect(row.getByRole('button')).toHaveText([
+    'One axis',
+    'Synchronize',
+    'Small multiples',
+    'Table',
+  ]);
+  await expect(row.getByRole('button', { name: 'Synchronize' })).toBeDisabled();
+  // One axis puts both on the left again, and the warning goes.
+  await row.getByRole('button', { name: 'One axis' }).click();
+  await expect(page.getByTestId('combo-warning')).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Data' }).click();
+  await expect(page.getByTestId('type-two-scales')).toHaveCount(0);
   // Switching back is offered, on the Recommended card under it (T689), and taken.
   const recommended = await page.getByTestId('recommended-type').getAttribute('data-chart-type');
   await page.getByTestId('recommended-card').getByRole('button', { name: /^Use / }).click();

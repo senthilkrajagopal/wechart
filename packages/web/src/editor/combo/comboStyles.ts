@@ -115,6 +115,27 @@ export const COMBO_CSS = `
 .combo-switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
 .combo-toast { font-size: var(--wc-text-xs-size); color: var(--wc-text-primary); }
 .axis-panel__head { color: var(--wc-text-secondary); font-weight: 400; }
+.combo-warning { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; padding: 8px; border-radius: 6px; background: var(--wc-bg-subtle); font-size: var(--wc-text-xs-size); }
+.combo-warning__text { margin: 0 0 6px; color: var(--wc-text-primary); }
+.combo-warning__offers { display: flex; flex-wrap: wrap; gap: 6px; }
+/* A tile's two scales in the dashboard's edit mode (T861): left of its pencil. */
+.tile-two-scales {
+  position: absolute;
+  top: 13px;
+  right: 72px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+.tile-two-scales:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
 .legend-glyph-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
 .legend-glyph { position: absolute; display: grid; place-items: center; pointer-events: auto; }
 .legend-glyph .menu-button { display: grid; width: 100%; height: 100%; }

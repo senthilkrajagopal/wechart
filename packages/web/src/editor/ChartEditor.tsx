@@ -78,6 +78,7 @@ import { Wells } from './Wells';
 import { LegendGlyphButtons } from './combo/LegendGlyphButtons';
 import { undrawnWell } from './combo/undrawnWell';
 import { addToWellAs } from './combo/comboWells';
+import { comboWarningOf } from './combo/ComboWarning';
 import { stackChoice, stackCustomize } from './wells/stack';
 import { requestCalculation } from './calcRequests';
 import { RequestCalcDialog } from './RequestCalcDialog';
@@ -219,6 +220,11 @@ export interface ChartEditorProps {
    * AC-050). Given, each measure's menu offers "Request a calculation…".
    */
   readonly chartId?: string | undefined;
+  /**
+   * Opened at Customize › Axes, from a tile's ⚠ in the dashboard's edit
+   * mode (T861, AC-218): the inspector on Customize, focus on the warning.
+   */
+  readonly openAt?: 'axes' | undefined;
 }
 
 /** A channel as a dimension's pill names it (T688, EDI-09); x and y by their axes. */
@@ -279,6 +285,7 @@ function EditorBody({
   busy = false,
   folderId,
   chartId,
+  openAt,
 }: Omit<ChartEditorProps, 'item'>) {
   const [history, setHistory] = useState(() => historyOf(initial));
   /** The measure a calculation is being requested on (T383, AC-050), while its dialog is open. */
@@ -293,7 +300,9 @@ function EditorBody({
     if (typed !== (title ?? '')) change((current) => ({ ...current, title: typed }));
   };
   /** Which of the inspector's tabs is open: looking, not a change to the chart. */
-  const [inspector, setInspector] = useState<InspectorTab>('data');
+  const [inspector, setInspector] = useState<InspectorTab>(
+    openAt === 'axes' ? 'customize' : 'data',
+  );
   const inspectorId = useId();
   const inspectorTabs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -844,6 +853,30 @@ function EditorBody({
           splitBy);
     return { limit, series, dimension };
   }, [drawnSpec, undrawn, titles, shortTitles]);
+  /**
+   * A combo's two-scales warning while it draws two unsynchronized axes
+   * (T861, AC-218): in Customize › Axes, and named on the type card, whose
+   * See Axes opens Customize at it.
+   */
+  const twoScales = useMemo(
+    () => (drawnSpec === undefined ? undefined : comboWarningOf(drawnSpec)),
+    [drawnSpec],
+  );
+  const seeAxes = () => {
+    setInspector('customize');
+    requestAnimationFrame(() => {
+      const warning = document.getElementById('combo-warning');
+      warning?.closest('details')?.setAttribute('open', '');
+      warning?.focus();
+    });
+  };
+  /** Opened at Axes, from a tile's ⚠: focus the warning once it's drawn (T861). */
+  const openedAtAxes = useRef(openAt === 'axes');
+  useEffect(() => {
+    if (!openedAtAxes.current || twoScales === undefined) return;
+    openedAtAxes.current = false;
+    requestAnimationFrame(() => document.getElementById('combo-warning')?.focus());
+  }, [twoScales]);
   /** The Split by well's count and "‹dimension› shown" (T860, AC-505). */
   const comboCount =
     comboHeld?.dimension === undefined
@@ -1259,6 +1292,8 @@ function EditorBody({
                   recommendedReason={pickReason}
                   picks={picks}
                   warnings={typeWarnings}
+                  // A combo's two scales, named once, opening Axes (T861, AC-218).
+                  onSeeAxes={twoScales === undefined ? undefined : seeAxes}
                   changeRef={changeType}
                   onChange={() => setGallery(true)}
                   // Auto, or the Recommended card's Use (AC-217, AC-032).
@@ -1470,6 +1505,16 @@ function EditorBody({
                       ...comboRows,
                       formats,
                       ...(comboHeld === undefined ? {} : { series: comboHeld.series }),
+                      // Its two-scales warning, first under Axes (T861, AC-218).
+                      ...(twoScales === undefined
+                        ? {}
+                        : {
+                            warning: {
+                              warning: twoScales,
+                              onSmallMultiples: () => chooseAndReturn('trellis'),
+                              onTable: () => chooseAndReturn('table'),
+                            },
+                          }),
                     },
                   })}
               {...stackCustomize(shownType, {

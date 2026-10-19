@@ -358,6 +358,44 @@ test.describe('a combo of revenue and a count, by month (T855 follow-up)', () =>
   });
 });
 
+/**
+ * T861 (AC-218): a combo tile drawing two unsynchronized axes shows ⚠ in its
+ * head in the dashboard's edit mode, opening its chart at Customize › Axes,
+ * where the warning is; a viewer sees no part of it.
+ */
+test('marks a combo tile’s two scales with ⚠ in edit mode only, opening the editor at the warning (T861)', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await comboDashboard(request);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await expect.poll(async () => (await textsIn(page)).map((one) => one.text)).toContain('(right)');
+  const tile = page.locator('[data-tile="tile-combo"]');
+
+  // A viewer: no ⚠, no warning.
+  await expect(page.getByTestId('two-scales-tile-combo')).toHaveCount(0);
+  await expect(tile.getByText(/Two scales/)).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
+  const mark = page.getByTestId('two-scales-tile-combo');
+  await expect(mark).toBeVisible();
+  await expect(mark.locator('svg[data-icon="warn"]')).toHaveCount(1);
+  await mark.click();
+
+  const warning = page.getByTestId('combo-warning');
+  await expect(warning).toBeFocused();
+  await expect(warning).toContainText(
+    // Full titles: the chart draws on orders and products (T403).
+    'Two scales: Orders Total Amount ($) and Orders Count (numbers) can be made to look related.',
+  );
+  await expect(page.getByRole('tab', { name: 'Customize' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+});
+
 /** T857 (AC-497): a dashboard's combo legend has no glyph buttons, in view or edit mode. */
 test('gives a combo tile’s legend no glyph buttons on a dashboard, in view or edit mode (T857)', async ({
   page,

@@ -225,7 +225,8 @@ import {
 } from '../filters/FilteredCharts';
 import { newFilter, type FilterValues } from '../filters/model';
 import { adoptValues, sameValues, type SearchFilter } from '../filters/url';
-import { StateLine } from '../shell/StatusIcon';
+import { StateLine, StatusIcon } from '../shell/StatusIcon';
+import { comboWarningOf } from '../editor/combo/ComboWarning';
 import { MenuButton } from '../shell/MenuButton';
 import { ExportPane, type Outline as ExportOutline } from './export/ExportPane';
 import { ExportedToast } from './export/ExportedToast';
@@ -1307,8 +1308,12 @@ interface Affordances {
   readonly ownershipOf?:
     | ((tileId: string) => { readonly label: string; readonly run: () => void } | undefined)
     | undefined;
-  /** Opening a chart tile's chart in the editor, from its pencil (T032). */
-  readonly onEditChart?: ((tileId: string, chartId: string) => void) | undefined;
+  /**
+   * Opening a chart tile's chart in the editor, from its pencil (T032), or
+   * at Customize › Axes from its ⚠ (T861, AC-218).
+   */
+  readonly onEditChart?:
+    ((tileId: string, chartId: string, openAt?: 'axes') => void) | undefined;
   /** Deleting one tab of a tab group, the fourth thing AC-060 names. */
   readonly onDeleteTab?: ((groupId: string, tabId: string) => void) | undefined;
   /**
@@ -1490,6 +1495,30 @@ function Elements({
                 }}
               >
                 ✎
+              </button>
+            )}
+            {/**
+              A combo drawing two unsynchronized axes (T861, AC-218): in
+              edit mode only, a ⚠ in the tile's head opening its chart at
+              Customize › Axes, where the warning is. A viewer never sees it.
+            */}
+            {element.kind !== 'chart' ||
+            element.chartId === undefined ||
+            affordances.onEditChart === undefined ||
+            !affordances.editing ||
+            charts.specs[chartId] === undefined ||
+            comboWarningOf(charts.specs[chartId]) === undefined ? null : (
+              <button
+                type="button"
+                className="tile-two-scales"
+                data-testid={`two-scales-${element.id}`}
+                aria-label={`Two scales, not synchronized: see Axes for ${affordances.nameOf?.(element.id) ?? element.text ?? element.kind}`}
+                title="Two scales, not synchronized · See Axes"
+                onClick={() => {
+                  affordances.onEditChart?.(element.id, chartId, 'axes');
+                }}
+              >
+                <StatusIcon kind="warn" />
               </button>
             )}
             {/* Asking a chart again (T154, AC-148): for reading a dashboard,
@@ -2230,6 +2259,8 @@ interface OpenChart {
    * Forward — so the URL needs no change (T196).
    */
   readonly fromUrl?: boolean;
+  /** Opened at Customize › Axes, from the tile's ⚠ (T861, AC-218). */
+  readonly openAt?: 'axes' | undefined;
 }
 
 /** Ids only have to be unique within a document; Date.now alone collides. */
@@ -5562,6 +5593,8 @@ export function DashboardView({
     readonly chartId: string;
     readonly tile: TileSize | undefined;
     readonly returnTo: string;
+    /** Opened at Customize › Axes, from the tile's ⚠ (T861). */
+    readonly openAt?: 'axes' | undefined;
   } | null>(null);
 
   /**
@@ -5641,7 +5674,7 @@ export function DashboardView({
      * drawn at the old height inside it — the preview ignoring the tile's
      * height, which is AC-034's failing state.
      */
-    ({ tileId, chartId, rows, returnTo, fromUrl = false }: OpenChart) => {
+    ({ tileId, chartId, rows, returnTo, fromUrl = false, openAt }: OpenChart) => {
       const box = globalThis.document
         .querySelector(`[data-tile="${CSS.escape(tileId)}"]`)
         ?.getBoundingClientRect();
@@ -5653,6 +5686,7 @@ export function DashboardView({
         tileId,
         chartId,
         returnTo,
+        openAt,
         tile:
           box === undefined
             ? undefined
@@ -6367,6 +6401,7 @@ export function DashboardView({
               // The browser's Back takes the tile out of the URL; the editor
               // then leaves as its own Back would, keeping the change (T196).
               tileId={editingChart.tileId}
+              openAt={editingChart.openAt}
               urlTile={editTile}
               onBack={(draft) => {
                 if (draft !== undefined) {
@@ -7431,7 +7466,7 @@ function DashboardPages({
     onEditChart:
       onEditChart === undefined
         ? undefined
-        : (tileId, chartId) => {
+        : (tileId, chartId, openAt) => {
             // Not while a save is under way: an edit applied now would go to
             // a session that takes no change (AC-184, T197).
             if (session.saving) return;
@@ -7444,6 +7479,8 @@ function DashboardPages({
               rows: element !== null && isTile(element) ? element.h : undefined,
               // Back returns to the pencil it was opened from.
               returnTo: `[data-edit-chart="${CSS.escape(tileId)}"]`,
+              // From the tile's ⚠: at Customize › Axes (T861, AC-218).
+              ...(openAt === undefined ? {} : { openAt }),
             });
           },
     // A change to the dashboard goes through the session rather than into

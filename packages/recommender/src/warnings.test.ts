@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Field, Signature } from './types';
-import { warningsFor } from './warnings';
+import { comboWarning, warningsFor } from './warnings';
 
 /**
  * T230 / AC-218: WHILE a manually chosen type is a combo, or exceeds a
@@ -24,12 +24,15 @@ const time: Field = { name: 'orders.ordered_at', kind: 'timeDimension', cardinal
 const signature = (...fields: Field[]): Signature => ({ fields });
 
 describe('what a chosen type warns of (AC-218)', () => {
-  it('warns of a combo’s two value axes', () => {
-    const [warning] = warningsFor(
-      'combo',
-      signature(measure(), measure('orders.total_amount'), dimension(4)),
-    );
-    expect(warning).toMatch(/^Two value axes/);
+  /**
+   * AC-218 as amended by R80 (T861): a combo warns only while it draws two
+   * unsynchronized value axes, which its fields alone don't say, so the
+   * fields give it no warning; `comboWarning` gives it from its axes.
+   */
+  it('gives a combo no warning from its fields alone', () => {
+    expect(
+      warningsFor('combo', signature(measure(), measure('orders.total_amount'), dimension(4))),
+    ).toEqual([]);
   });
 
   it('warns of a pie with more slices than it can show, naming both counts', () => {
@@ -125,5 +128,78 @@ describe('what a chosen type warns of (AC-218)', () => {
     expect(warningsFor('bar', signature(measure(), dimension(4)))).toEqual([]);
     expect(warningsFor('table', signature(measure(), dimension(400)))).toEqual([]);
     expect(warningsFor('kpi', signature(measure()))).toEqual([]);
+  });
+
+  it('still warns of a pie of 7 slices (T861)', () => {
+    expect(warningsFor('pie', signature(measure(), dimension(7)))).toEqual([
+      'A pie is readable up to 6 slices; this has 7.',
+    ]);
+  });
+});
+
+/**
+ * T861 (AC-218; design 20 pin 6, state D): a combo warns while, and only
+ * while, it draws two value axes that aren't synchronized, naming both
+ * measures and their units and offering One axis, Synchronize, Small
+ * multiples and Table; two axes in one format get the stronger wording, with
+ * Synchronize first; and an axis off zero is said.
+ */
+describe("a combo's two scales (T861, AC-218)", () => {
+  const revenue = { measure: 'Revenue', unit: '$' };
+  const margin = { measure: 'Margin %', unit: '%' };
+  const cost = { measure: 'Cost', unit: '$' };
+  const differ = { available: false as const, reason: 'Revenue is in $ and Margin % in %' };
+
+  it('gives no warning on one axis, or two synchronized', () => {
+    expect(comboWarning({ left: revenue, synchronize: differ, synchronized: false })).toBeUndefined();
+    expect(
+      comboWarning({
+        left: revenue,
+        right: cost,
+        synchronize: { available: true },
+        synchronized: true,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('names both measures and units for $ and %, offering One axis, Synchronize (disabled), Small multiples and Table', () => {
+    expect(
+      comboWarning({ left: revenue, right: margin, synchronize: differ, synchronized: false }),
+    ).toEqual({
+      text: 'Two scales: Revenue ($) and Margin % (%) can be made to look related.',
+      offers: ['oneAxis', 'synchronize', 'smallMultiples', 'table'],
+      synchronize: differ,
+    });
+  });
+
+  it('words $ and $ more strongly, Synchronize first', () => {
+    expect(
+      comboWarning({
+        left: revenue,
+        right: cost,
+        synchronize: { available: true },
+        synchronized: false,
+      }),
+    ).toEqual({
+      text: 'Revenue and Cost are both in $. On one scale they compare honestly; on two, their gap is whatever the axes make it.',
+      offers: ['synchronize', 'oneAxis', 'smallMultiples', 'table'],
+      synchronize: { available: true },
+    });
+  });
+
+  it('adds that the right axis doesn’t start at zero, with lines off zero', () => {
+    const sessions = { measure: 'Sessions', unit: '' };
+    const conversion = { measure: 'Conversion %', unit: '%', offZero: true };
+
+    expect(
+      comboWarning({
+        left: sessions,
+        right: conversion,
+        synchronize: { available: false, reason: 'Sessions is in numbers and Conversion % in %' },
+        synchronized: false,
+      })?.text,
+    ).toBe(
+      "Two scales: Sessions (numbers) and Conversion % (%) can be made to look related. The right axis doesn't start at zero.",
+    );
   });
 });

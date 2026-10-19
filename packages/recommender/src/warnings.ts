@@ -47,6 +47,68 @@ export function warningsFor(
   );
 }
 
+/** One of a combo's value axes, as its warning names it: its first measure and its unit. */
+export interface ComboAxisSide {
+  /** The axis's first measure, by its title. */
+  readonly measure: string;
+  /** Its format's unit: "$", "%", or "" for a plain number. */
+  readonly unit: string;
+  /** The axis's range as drawn leaves zero out. */
+  readonly offZero?: boolean;
+}
+
+/** What a combo's two-scales warning offers, in its order (AC-218). */
+export type ComboWarningOffer = 'oneAxis' | 'synchronize' | 'smallMultiples' | 'table';
+
+/** A combo's two-scales warning (AC-218): its words, its offers, and whether Synchronize can be. */
+export interface ComboWarning {
+  readonly text: string;
+  readonly offers: readonly ComboWarningOffer[];
+  readonly synchronize:
+    { readonly available: true } | { readonly available: false; readonly reason: string };
+}
+
+/**
+ * The warning a combo gives its author while it draws two value axes that
+ * aren't synchronized (T861; AC-218 as amended by R80; design 20 pin 6 and
+ * state D), and none on one axis or two synchronized. Two formats: "Two
+ * scales: Revenue ($) and Margin % (%) can be made to look related.", One
+ * axis first. One format: "Revenue and Cost are both in $. On one scale they
+ * compare honestly; on two, their gap is whatever the axes make it.",
+ * Synchronize first. Either adds "The ‹left or right› axis doesn't start at
+ * zero." for an axis drawn off zero. Each axis is named by its first
+ * measure, in whose format it's written (decision T846-2); a plain number's
+ * unit is "numbers".
+ */
+export function comboWarning({
+  left,
+  right,
+  synchronize,
+  synchronized,
+}: {
+  readonly left: ComboAxisSide;
+  readonly right?: ComboAxisSide | undefined;
+  readonly synchronize: ComboWarning['synchronize'];
+  readonly synchronized: boolean;
+}): ComboWarning | undefined {
+  if (right === undefined || synchronized) return undefined;
+  const unit = (side: ComboAxisSide) => (side.unit === '' ? 'numbers' : side.unit);
+  const lead = synchronize.available
+    ? `${left.measure} and ${right.measure} are both in ${unit(left)}. On one scale they compare honestly; on two, their gap is whatever the axes make it.`
+    : `Two scales: ${left.measure} (${unit(left)}) and ${right.measure} (${unit(right)}) can be made to look related.`;
+  const offZero = (['left', 'right'] as const)
+    .filter((side) => (side === 'left' ? left : right).offZero === true)
+    .map((side) => ` The ${side} axis doesn't start at zero.`)
+    .join('');
+  return {
+    text: `${lead}${offZero}`,
+    offers: synchronize.available
+      ? ['synchronize', 'oneAxis', 'smallMultiples', 'table']
+      : ['oneAxis', 'synchronize', 'smallMultiples', 'table'],
+    synchronize,
+  };
+}
+
 function candidateFor(
   chartType: ChartType,
   measures: readonly Field[],
@@ -69,8 +131,11 @@ function candidateFor(
     case 'pivot':
     case 'kpi':
       return undefined;
+    // A combo warns of its two scales from its axes, not its fields
+    // (`comboWarning`; AC-218 as amended by R80), and folds its split
+    // within 8 series (AC-505), so its colours never run out.
     case 'combo':
-      return at({ valueFields: measures.slice(0, 2), valueAxisCount: 2 });
+      return undefined;
     case 'pie':
     case 'donut':
       // Every measure, so a pie of two says it shows one; its slices counted

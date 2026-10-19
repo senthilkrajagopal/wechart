@@ -21,6 +21,7 @@ import { ColourSetting } from './ColourSetting';
 import { SeriesRows, type SeriesRowsProps } from './combo/SeriesRows';
 import { StackingRows } from './combo/StackingRows';
 import { SynchronizeSwitch } from './combo/SynchronizeSwitch';
+import { ComboWarning, type ComboWarningProps } from './combo/ComboWarning';
 import { BoxplotDistribution } from './wells/boxplotDistribution';
 import { SankeyColourLinks } from './wells/sankey';
 
@@ -70,6 +71,14 @@ export interface CustomizeTabProps {
     readonly formats?: MemberFormats;
     /** The series drawn, counted against 8 in the Series heading (T860, AC-505). */
     readonly series?: number;
+    /**
+     * Its two-scales warning while two unsynchronized axes are drawn (T861,
+     * AC-218), first in Customize › Axes, with what Small multiples and
+     * Table do.
+     */
+    readonly warning?:
+      | Pick<ComboWarningProps, 'warning' | 'onSmallMultiples' | 'onTable'>
+      | undefined;
   };
   /** Customize › Stack, Sum or 100 %, on a stacked bar or area (T957, AC-584). */
   readonly stack?: ReactNode;
@@ -519,6 +528,9 @@ function ComboAxes({
 
   return (
     <>
+      {combo.warning === undefined ? null : (
+        <ComboWarning {...combo.warning} options={options} onOptions={onOptions} />
+      )}
       {right ? (
         <SynchronizeSwitch
           measures={measures}

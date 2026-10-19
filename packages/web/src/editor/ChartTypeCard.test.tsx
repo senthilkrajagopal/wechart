@@ -152,3 +152,22 @@ describe('a manual choice’s warning (AC-218)', () => {
     expect(screen.queryByTestId('type-warning')).toBeNull();
   });
 });
+
+/** T861 (AC-218; design 20 screen 2 pin 1): the type card names a combo's two scales once. */
+describe('a combo’s two scales on the type card (T861)', () => {
+  it('says "Two scales, not synchronized · See Axes" with the warning’s icon, See Axes opening them', async () => {
+    const onSeeAxes = vi.fn();
+    card({ shown: 'combo', manual: true, onSeeAxes });
+    const line = screen.getByTestId('type-two-scales');
+
+    expect(line.textContent).toBe('Two scales, not synchronized · See Axes');
+    expect(line.querySelector('[data-icon="warn"]')).not.toBeNull();
+    await userEvent.click(within(line).getByRole('button', { name: 'See Axes' }));
+    expect(onSeeAxes).toHaveBeenCalledOnce();
+  });
+
+  it('says nothing of scales without it', () => {
+    card({ shown: 'combo', manual: true });
+    expect(screen.queryByTestId('type-two-scales')).toBeNull();
+  });
+});

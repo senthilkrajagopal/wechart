@@ -35,6 +35,7 @@ import {
   withComboStacking,
   withLogScale,
   withMembersShown,
+  withOneAxis,
   withSynchronize,
 } from './combo';
 import { undrawnMeasures } from './undrawn';
@@ -712,6 +713,25 @@ describe("the value axes' groups and the canvas line (T858)", () => {
     );
     const noBars = { series: { [REVENUE]: { mark: 'line' }, [MARGIN]: { axis: 'right' } } };
     expect(includeZeroLock(three, noBars, label)).toBeUndefined();
+  });
+
+  it('puts every series back on the left, keeping marks and colours (T861, One axis)', () => {
+    const options = {
+      series: {
+        [MARGIN]: { mark: 'point', axis: 'right', colour: '#123456' },
+        [TARGET]: { axis: 'right' },
+        [REVENUE]: { mark: 'line' },
+      },
+      combo: { synchronize: true },
+    };
+
+    expect(withOneAxis(options)).toEqual({
+      series: { [MARGIN]: { mark: 'point', colour: '#123456' }, [REVENUE]: { mark: 'line' } },
+      combo: { synchronize: true },
+    });
+    expect(comboSeriesOf(three, withOneAxis(options)).every((one) => one.axis === 'left')).toBe(
+      true,
+    );
   });
 
   it('says on the canvas how many series are on how many axes', () => {
