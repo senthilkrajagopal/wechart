@@ -7134,8 +7134,11 @@ export function DashboardView({
         // Not drawn below 1,024 px, where the row holds only the way back,
         // the title, ⋯ and the toggle, whose count still says it (AC-495;
         // headerStyles.ts).
-        compact={() => (
+        // From 1,024 to 1,279 px they are a count that opens the sheet
+        // (AC-484, decision CLOSE-2).
+        compact={(sheet) => (
           <CompactChips
+            sheet={sheet}
             crossFilters={
               crossFiltering
                 ? crossSelections.map((selection) => ({

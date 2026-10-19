@@ -238,5 +238,53 @@ describe('the compact chips', () => {
     expect(compactMarks()).toHaveLength(0);
     expect(compactCrosses()).toHaveLength(0);
     expect(more()).toBeNull();
+    expect(count()).toBeNull();
+  });
+});
+
+/**
+ * AC-484, decision CLOSE-2: below 1,280 px the compact chips collapse to a
+ * count, "n filters" or "n markings", so the row keeps its tabs and its
+ * toggle on one line. The stylesheet shows the count, not the chips, from
+ * 1,024 to 1,279 px (headerStyles.ts); both are drawn, one hidden. The
+ * count's accessible name and tooltip list what it holds, and it opens the
+ * header sheet, where the full chips are, focus going to the Filters toggle.
+ */
+const count = () => within(row()).queryByTestId('compact-chips-count');
+
+describe('the compact chips as a count (AC-484, CLOSE-2)', () => {
+  it('counts the cross-filters, lists them in its name and tooltip, and opens the sheet', async () => {
+    board('crossFilter');
+    await pick('t-a');
+    await pick('t-b');
+
+    const button = count()!;
+    expect(button.tagName).toBe('BUTTON');
+    expect(button.textContent).toBe('2 filters');
+    const said =
+      '2 filters: Status = shipped, from By status; Status = shipped, from Status share';
+    expect(button.getAttribute('aria-label')).toBe(said);
+    expect(button.getAttribute('title')).toBe(said);
+    expect(button.getAttribute('aria-controls')).toBe(toggle().getAttribute('aria-controls'));
+
+    await userEvent.click(button);
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(count()).toBeNull();
+    expect(document.activeElement).toBe(toggle());
+  });
+
+  it('counts the non-empty markings, one as "1 marking"', async () => {
+    board('markings');
+    await pick('t-a');
+    expect(count()?.textContent).toBe('1 marking');
+    expect(count()?.getAttribute('aria-label')).toBe(
+      '1 marking: Marking: Status: shipped, from By status',
+    );
+    await pick('t-b');
+    await pick('t-c');
+    expect(count()?.textContent).toBe('3 markings');
+    expect(count()?.getAttribute('aria-label')).toBe(
+      '3 markings: Marking: Status: shipped, from By status; Shortlist: Status: shipped, from Status share; Review: Status: shipped, from Status trend',
+    );
   });
 });

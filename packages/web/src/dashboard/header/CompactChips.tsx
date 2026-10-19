@@ -53,21 +53,70 @@ function Rest({ names }: { readonly names: readonly string[] }) {
   );
 }
 
+/** The header sheet, as the count opens it: the sheet's id, and how to open it. */
+export interface CompactSheet {
+  readonly controls: string;
+  readonly open: () => void;
+}
+
+const counted = (n: number, one: string, many: string) => `${String(n)} ${n === 1 ? one : many}`;
+
+/**
+ * The chips collapsed to a count, "n filters" or "n markings" (AC-484,
+ * decision CLOSE-2): what the row shows from 1,024 to 1,279 px in place of
+ * the chips, which the stylesheet hides there (headerStyles.ts), so the
+ * tabs and the toggle keep their room on the row's one line. Its name and
+ * tooltip list what it holds; it opens the sheet, whose bar has them all.
+ */
+function Count({
+  label,
+  names,
+  sheet,
+}: {
+  readonly label: string;
+  readonly names: readonly string[];
+  readonly sheet: CompactSheet | undefined;
+}) {
+  if (sheet === undefined) return null;
+  const said = `${label}: ${names.join('; ')}`;
+  return (
+    <button
+      type="button"
+      className="compact-chips__count"
+      data-testid="compact-chips-count"
+      aria-label={said}
+      aria-controls={sheet.controls}
+      title={said}
+      onClick={sheet.open}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function CompactChips({
   markings,
   crossFilters,
   note = '',
+  sheet,
 }: {
   readonly markings: readonly CompactMarking[];
   readonly crossFilters: readonly CompactCrossFilter[];
   /** What Copy link with marks came to, shown beside the chips as in the bar. */
   readonly note?: string;
+  /** The header sheet the count opens; with none, no count (AC-484, CLOSE-2). */
+  readonly sheet?: CompactSheet | undefined;
 }) {
   const [cross, ...otherCrosses] = crossFilters;
   if (cross !== undefined) {
     const named = fromTile(cross.what, cross.from);
     return (
       <span className="compact-chips">
+        <Count
+          label={counted(crossFilters.length, 'filter', 'filters')}
+          names={crossFilters.map((each) => fromTile(each.what, each.from))}
+          sheet={sheet}
+        />
         <span
           className="compact-chip compact-chip--cross"
           data-testid="compact-cross-chip"
@@ -102,6 +151,13 @@ export function CompactChips({
   const shown = markings.slice(0, MARKINGS_SHOWN);
   return (
     <span className="compact-chips">
+      <Count
+        label={counted(markings.length, 'marking', 'markings')}
+        names={markings.map((marking) =>
+          fromTile(`${marking.name}: ${marking.values}`, marking.from),
+        )}
+        sheet={sheet}
+      />
       {shown.map((marking) => {
         const named = fromTile(`${marking.name}: ${marking.values}`, marking.from);
         return (

@@ -215,7 +215,9 @@ export interface EditChromeProps<T> {
    * 19 pin 4), after the room and before the actions. Not while editing,
    * when the sheet is open.
    */
-  readonly compact?: (() => ReactNode) | undefined;
+  readonly compact?:
+    | ((sheet: { readonly controls: string; readonly open: () => void }) => ReactNode)
+    | undefined;
   /**
    * Docked under the canvas, full width — the details panel (T269, AC-240):
    * the canvas gives it room rather than go under it.
@@ -471,7 +473,18 @@ export function EditChrome<T>({
           <span className="dashboard__header-spacer" aria-hidden="true" />
           {/* While the sheet is closed, what its chips say, in short (AC-200,
               AC-119; design 19 pin 4); open, the full chips in its bar. */}
-          {editing || (hasSheet && sheetOpen) ? null : compact?.()}
+          {editing || (hasSheet && sheetOpen)
+            ? null
+            : compact?.({
+                controls: sheetId,
+                // The chips' count opens the sheet (AC-484, CLOSE-2): it goes
+                // with the sheet open, so focus goes to the toggle, as the
+                // toggle's own press leaves it.
+                open: () => {
+                  if (!sheetOpen) toggleSheet();
+                  root.current?.querySelector<HTMLElement>('.dashboard__header .header-toggle')?.focus();
+                },
+              })}
           {/* History and Bookmarks, before the primary (AC-484). */}
           {headerLead?.(session)}
           {editing ? (

@@ -225,6 +225,31 @@ export const HEADER_CSS = `
 .compact-chip__button:hover { background: var(--wc-bg-hover); color: var(--wc-text-primary); }
 /* "+n": the rest, in the sheet's bar. */
 .compact-chips__more { color: var(--wc-text-secondary); font-size: 12px; font-weight: 600; }
+/* The chips as a count, "n filters" (AC-484, decision CLOSE-2): a compact
+   chip's 24 px pill, shown in their place only from 1,024 to 1,279 px, where
+   the row has no room for them beside the tabs and the actions. */
+.compact-chips__count {
+  display: none;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 999px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.compact-chips__count:hover { background: var(--wc-bg-hover); }
+@media (min-width: 1024px) and (max-width: 1279.98px) {
+  .dashboard__header .compact-chips__count { display: inline-flex; }
+  .dashboard__header .compact-chips > .compact-chip,
+  .dashboard__header .compact-chips > .compact-chips__more { display: none; }
+}
 
 /* The Filters toggle (AC-486; design 19 pin 6): a 32 px .btn, the funnel,
    the label and a chevron; drawn pressed on bg-subtle while the sheet is open,
