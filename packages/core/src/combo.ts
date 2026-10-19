@@ -13,7 +13,22 @@
  * Series, the Metrics pill's menu, the legend glyph) all read and write them
  * through this one module, so they can't disagree.
  */
+import { referenceProblems } from './combo-references';
 import type { MemberFormat, MemberFormats } from './format';
+
+export {
+  comboReferencesOf,
+  REFERENCE_STATS,
+  referenceFormProblem,
+  referenceProblems,
+  referenceValue,
+  withReference,
+  withoutReference,
+  type ComboReference,
+  type ReferenceDirection,
+  type ReferenceLabelAt,
+  type ReferenceStat,
+} from './combo-references';
 import {
   distinctValues,
   memberOn,
@@ -184,7 +199,7 @@ export function comboProblems(options: Readonly<Record<string, unknown>> | undef
       );
     }
   }
-  return [...problems, ...stackingProblems(options)];
+  return [...problems, ...stackingProblems(options), ...referenceProblems(options)];
 }
 
 /** How a combo's bars sit within a category (AC-503). */

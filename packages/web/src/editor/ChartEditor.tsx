@@ -6,6 +6,11 @@ import {
   comboAxesLine,
   comboLimitOf,
   comboSeriesOf,
+  formatValue,
+  referenceValue,
+  type ComboAxis,
+  type ComboReference,
+  type ReferenceStat,
   membersShownOf,
   withMembersShown,
   type MembersShown,
@@ -877,6 +882,64 @@ function EditorBody({
     openedAtAxes.current = false;
     requestAnimationFrame(() => document.getElementById('combo-warning')?.focus());
   }, [twoScales]);
+  /**
+   * What a combo's reference form and list read (T862, AC-507): the value
+   * axes drawn with their measures, the category axis, and each reference's
+   * value as its row writes it, in its axis's format.
+   */
+  const comboReferences = useMemo(() => {
+    if (drawnSpec === undefined || drawnSpec.chartType !== 'combo') return undefined;
+    const drawn = onOneScale(drawnSpec);
+    const measures = membersOn(drawn.encoding, 'y');
+    const split = memberOn(drawn.encoding, 'color') !== undefined;
+    const series = comboSeriesOf(measures, drawn.options, { split });
+    const own = (member: string) =>
+      (Object.hasOwn(titles, member) ? titles[member] : undefined) ?? member;
+    const axes = (['left', 'right'] as const).flatMap((axis) => {
+      const on = series.filter((one) => one.axis === axis);
+      return on.length === 0
+        ? []
+        : [{ axis, measures: on.map((one) => ({ measure: one.measure, title: own(one.measure) })) }];
+    });
+    const x = memberOn(drawn.encoding, 'x');
+    // The time member on x, its grain kept by its own name (`granularitiesOf`).
+    const time =
+      x === undefined ? undefined : spec.timeDimensions.find((member) => x.startsWith(member));
+    const category = time
+      ? { kind: 'time' as const, granularity: drawn.granularities?.[time] }
+      : {
+          kind: 'members' as const,
+          members: x === undefined ? [] : distinctValues(drawn.rows, x),
+        };
+    const firstOn = (axis: ComboAxis | undefined) =>
+      series.find((one) => one.axis === (axis ?? 'left'))?.measure ?? '';
+    const STATS: Record<ReferenceStat, string> = {
+      average: 'Average',
+      median: 'Median',
+      minimum: 'Minimum',
+      maximum: 'Maximum',
+    };
+    const describe = (reference: ComboReference): string => {
+      if (reference.direction === 'vertical') {
+        return reference.kind === 'band'
+          ? `${String(reference.from ?? '')}–${String(reference.to ?? '')}`
+          : String(reference.value ?? '');
+      }
+      const write = (value: unknown) => formatValue(value, firstOn(reference.axis), formats);
+      if (reference.kind === 'band') return `${write(reference.from)}–${write(reference.to)}`;
+      const value = referenceValue(drawn, reference);
+      if (reference.stat === undefined || reference.series === undefined) return write(value);
+      return `${STATS[reference.stat]} of ${own(reference.series)} · ${
+        value === undefined ? 'no data' : formatValue(value, reference.series, formats)
+      }`;
+    };
+    return {
+      axes,
+      category,
+      describe,
+      newId: () => `ref-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    };
+  }, [drawnSpec, titles, formats, spec.timeDimensions]);
   /** The Split by well's count and "‹dimension› shown" (T860, AC-505). */
   const comboCount =
     comboHeld?.dimension === undefined
@@ -1505,6 +1568,7 @@ function EditorBody({
                       ...comboRows,
                       formats,
                       ...(comboHeld === undefined ? {} : { series: comboHeld.series }),
+                      ...(comboReferences === undefined ? {} : { references: comboReferences }),
                       // Its two-scales warning, first under Axes (T861, AC-218).
                       ...(twoScales === undefined
                         ? {}

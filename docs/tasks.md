@@ -1831,10 +1831,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T861 (AC-218) Warn the author only while a combo draws two unsynchronized axes, in Customize › Axes, on the type card and in the tile's edit-mode head, with its variants and offers, and never a viewer
 
-- [ ] T862 (AC-507, AC-219) Reference lines and bands: the list and its form in Customize, horizontal or vertical, fixed or computed from a drawn series, with Edit, Duplicate and Delete with Undo
-  - Files: `packages/core/src/combo.ts` (the references' shape and `referenceProblems`), `packages/web/src/editor/combo/ReferenceList.tsx` (+ test), `packages/web/src/editor/combo/ReferenceForm.tsx` (+ test).
-  - Failing test: `ReferenceForm.test.tsx`: a horizontal line on the right axis offers Fixed, Average, Median, Minimum and Maximum of a drawn series; a vertical line on a month axis takes a month; a band with From $120K and To $90K keeps Add disabled with "A band's From must be below its To"; an empty label keeps Add disabled; `ReferenceList.test.tsx`: each row shows its icon, label, value and axis; Delete shows an Undo toast that restores it; `combo.test.ts`: an average on a split chart is one line per measure over every member (AC-507).
-  - Depends on: T855
+- [x] T862 (AC-507, AC-219) Reference lines and bands: the list and its form in Customize, horizontal or vertical, fixed or computed from a drawn series, with Edit, Duplicate and Delete with Undo
 
 - [ ] T863 (AC-508) Draw reference lines and bands with their styles and order, label them in the chart, move a colliding label, and leave out one outside its axis's range
   - Files: `packages/charts/src/combo/references.ts` (+ test), `packages/charts/src/series/combo.ts`.

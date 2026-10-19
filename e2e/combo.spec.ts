@@ -688,3 +688,49 @@ test('gives a combo its Left and Right axis groups, Synchronize, log on both and
   }
   await expect(page.getByTestId('axes-announcement')).toHaveText('Log scale on for both axes');
 });
+
+/**
+ * T862 (AC-507; design 20 pin 10, state F): Customize's reference lines and
+ * bands, a fixed line and a computed one added from the form, listed with
+ * their values and axes, and deleted with Undo.
+ */
+test('adds, lists and deletes a combo’s reference lines in Customize, with Undo (T862)', async ({
+  page,
+}) => {
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'measures').selectOption('orders.average_amount');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+  await chooseChartType(page, 'combo');
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  const section = page.getByTestId('references-section');
+  await expect(section.getByRole('heading')).toHaveText('Reference lines and bands (0)');
+
+  await section.getByRole('button', { name: '+ Line' }).click();
+  await section.getByRole('spinbutton', { name: 'Value' }).fill('1000');
+  await expect(section.getByRole('button', { name: 'Add line' })).toBeDisabled();
+  await expect(section.getByTestId('reference-form-why')).toHaveText('A reference needs a label');
+  await section.getByRole('textbox', { name: 'Label' }).fill('Monthly plan');
+  await section.getByRole('button', { name: 'Add line' }).click();
+
+  await section.getByRole('button', { name: '+ Line' }).click();
+  await section.getByRole('combobox', { name: 'Value' }).selectOption('average');
+  await section.getByRole('combobox', { name: 'Series' }).selectOption('orders.average_amount');
+  await section.getByRole('textbox', { name: 'Label' }).fill('Average order');
+  await section.getByRole('button', { name: 'Add line' }).click();
+
+  await expect(section.getByRole('heading')).toHaveText('Reference lines and bands (2)');
+  const rows = section.getByTestId('reference-row');
+  await expect(rows.nth(0).locator('[data-part]')).toHaveText(['Monthly plan', '$1,000', 'left']);
+  await expect(rows.nth(1).locator('[data-part="label"]')).toHaveText('Average order');
+  await expect(rows.nth(1).locator('[data-part="value"]')).toContainText('Average of ');
+  await expect(rows.nth(1).locator('[data-part="value"]')).toContainText('$');
+
+  await section.getByRole('button', { name: 'More for Monthly plan' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await expect(rows).toHaveCount(1);
+  await section.getByRole('status').getByRole('button', { name: 'Undo' }).click();
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0).locator('[data-part="label"]')).toHaveText('Monthly plan');
+});

@@ -1,6 +1,7 @@
 import {
   COMBO_SERIES_LIMIT,
   comboAxisHead,
+  comboReferencesOf,
   comboSeriesOf,
   includeZeroLock,
   isSynchronized,
@@ -22,6 +23,7 @@ import { SeriesRows, type SeriesRowsProps } from './combo/SeriesRows';
 import { StackingRows } from './combo/StackingRows';
 import { SynchronizeSwitch } from './combo/SynchronizeSwitch';
 import { ComboWarning, type ComboWarningProps } from './combo/ComboWarning';
+import { ReferenceList, type ReferenceListProps } from './combo/ReferenceList';
 import { BoxplotDistribution } from './wells/boxplotDistribution';
 import { SankeyColourLinks } from './wells/sankey';
 
@@ -79,6 +81,8 @@ export interface CustomizeTabProps {
     readonly warning?:
       | Pick<ComboWarningProps, 'warning' | 'onSmallMultiples' | 'onTable'>
       | undefined;
+    /** Its reference lines and bands (T862, AC-507), what their form reads. */
+    readonly references?: Omit<ReferenceListProps, 'options' | 'onOptions'> | undefined;
   };
   /** Customize › Stack, Sum or 100 %, on a stacked bar or area (T957, AC-584). */
   readonly stack?: ReactNode;
@@ -261,6 +265,23 @@ export function CustomizeTab({
         <section className="customize-tab__section" data-testid="stack-section">
           {stack}
         </section>
+      )}
+
+      {/* A combo's reference lines and bands, counted (T862, AC-507; pin 10). */}
+      {combo?.references === undefined ? null : (
+        <details
+          className="customize-tab__section"
+          open
+          aria-labelledby={`${ids}-references`}
+          data-testid="references-section"
+        >
+          <summary>
+            <h3 id={`${ids}-references`}>
+              Reference lines and bands ({comboReferencesOf(options).length})
+            </h3>
+          </summary>
+          <ReferenceList {...combo.references} options={options} onOptions={onOptions} />
+        </details>
       )}
 
       {drawn ? (

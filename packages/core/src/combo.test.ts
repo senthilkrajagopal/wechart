@@ -21,7 +21,13 @@ import {
   comboLimit,
   comboLimitOf,
   comboProblems,
+  comboReferencesOf,
   comboSeriesOf,
+  referenceFormProblem,
+  referenceValue,
+  withReference,
+  withoutReference,
+  type ComboReference,
   comboStackingOf,
   comboStackingRows,
   includeZeroLock,
@@ -741,5 +747,107 @@ describe("the value axes' groups and the canvas line (T858)", () => {
     expect(comboAxesLine(3, three, {}, formats)).toBe('3 series on one value axis');
     const cost = { series: { [TARGET]: { axis: 'right' } }, combo: { synchronize: true } };
     expect(comboAxesLine(3, three, cost, formats)).toBe('3 series on 2 axes, synchronized');
+  });
+});
+
+/**
+ * T862 (AC-507): a combo's reference lines and bands, kept in its options,
+ * checked on reading, and a computed line's value worked out from its
+ * series' rows, over every member while split.
+ */
+describe('reference lines and bands (T862, AC-507)', () => {
+  const MONTH = 'orders.month';
+  const REGION = 'orders.region';
+  const plan: ComboReference = {
+    id: 'r1',
+    kind: 'line',
+    direction: 'horizontal',
+    axis: 'left',
+    value: 100_000,
+    label: 'Monthly plan',
+  };
+  const average: ComboReference = {
+    id: 'r2',
+    kind: 'line',
+    direction: 'horizontal',
+    axis: 'right',
+    stat: 'average',
+    series: MARGIN,
+    label: 'Average Margin %',
+    showValue: true,
+  };
+  const band: ComboReference = {
+    id: 'r3',
+    kind: 'band',
+    direction: 'horizontal',
+    axis: 'left',
+    from: 90_000,
+    to: 120_000,
+    label: 'Target range',
+  };
+
+  it('reads the references kept in the options, in order', () => {
+    expect(comboReferencesOf({ references: [plan, average, band] })).toEqual([
+      plan,
+      average,
+      band,
+    ]);
+    expect(comboReferencesOf({})).toEqual([]);
+  });
+
+  it('adds, replaces and removes one, keeping the rest', () => {
+    const one = withReference({}, plan);
+    expect(one).toEqual({ references: [plan] });
+    const two = withReference(one, average);
+    expect(comboReferencesOf(two)).toEqual([plan, average]);
+    const edited = withReference(two, { ...plan, label: 'Plan' });
+    expect(comboReferencesOf(edited).map((one) => one.label)).toEqual(['Plan', 'Average Margin %']);
+    expect(withoutReference(edited, 'r1')).toEqual({ references: [{ ...average }] });
+    expect(withoutReference({ references: [plan] }, 'r1')).toEqual({});
+  });
+
+  it('works out a computed line from every member’s rows while split: one per measure', () => {
+    const spec = {
+      chartType: 'combo' as const,
+      encoding: { x: [MONTH], color: [REGION], y: [REVENUE, MARGIN] },
+      rows: [
+        { [MONTH]: 'Jan', [REGION]: 'North', [REVENUE]: 10, [MARGIN]: 0.1 },
+        { [MONTH]: 'Jan', [REGION]: 'South', [REVENUE]: 20, [MARGIN]: 0.3 },
+        { [MONTH]: 'Feb', [REGION]: 'North', [REVENUE]: 30, [MARGIN]: 0.2 },
+        { [MONTH]: 'Feb', [REGION]: 'South', [REVENUE]: 40, [MARGIN]: null },
+      ],
+    };
+
+    expect(referenceValue(spec, average)).toBeCloseTo(0.2);
+    expect(referenceValue(spec, { ...average, stat: 'median' })).toBeCloseTo(0.2);
+    expect(referenceValue(spec, { ...average, stat: 'minimum' })).toBeCloseTo(0.1);
+    expect(referenceValue(spec, { ...average, stat: 'maximum' })).toBeCloseTo(0.3);
+    expect(referenceValue(spec, plan)).toBe(100_000);
+    expect(referenceValue(spec, { ...average, series: REVENUE, stat: 'median' })).toBe(25);
+  });
+
+  it('says what a form still needs: a label, and a band’s From below its To', () => {
+    expect(referenceFormProblem({ ...plan, label: '  ' })).toBe('A reference needs a label');
+    expect(referenceFormProblem({ ...band, from: 120_000, to: 90_000 })).toBe(
+      "A band's From must be below its To",
+    );
+    expect(referenceFormProblem({ ...band, from: '2026-09', to: '2026-03', direction: 'vertical' })).toBe(
+      "A band's From must be below its To",
+    );
+    expect(referenceFormProblem(band)).toBeUndefined();
+    expect(referenceFormProblem(average)).toBeUndefined();
+  });
+
+  it('refuses stored references it couldn’t draw', () => {
+    expect(comboProblems({ references: [plan, band] })).toEqual([]);
+    expect(comboProblems({ references: [{ ...plan, label: '' }] })).toEqual([
+      'A reference line has no label.',
+    ]);
+    expect(comboProblems({ references: [{ ...plan, direction: 'diagonal' }] })).toEqual([
+      'Monthly plan runs "diagonal", but a reference is horizontal or vertical.',
+    ]);
+    expect(comboProblems({ references: 'lots' })).toEqual([
+      'Reference lines and bands are stored as something other than a list.',
+    ]);
   });
 });
