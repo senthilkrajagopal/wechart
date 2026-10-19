@@ -128,6 +128,8 @@ export default function TextEditor({
   const byInsert = useRef(false);
   const groups = menu === null ? [] : insertGroups(menu.query, menu.step, sources, copilot);
   const rows = groups.flatMap((group) => group.rows);
+  /** The active row, held to the rows there are: they change under it as sources load. */
+  const at = menu === null ? 0 : Math.max(0, Math.min(menu.active, rows.length - 1));
 
   const choose = (now: MenuState, row: InsertRow | undefined, range: Range) => {
     if (row?.run === undefined || row.disabled !== undefined) return;
@@ -149,15 +151,15 @@ export default function TextEditor({
       case 'ArrowUp': {
         if (count === 0) return true;
         const step = event.key === 'ArrowDown' ? 1 : -1;
-        setMenu({ ...now, active: (now.active + step + count) % count });
+        setMenu({ ...now, active: (at + step + count) % count });
         return true;
       }
       case 'Enter':
         if (count === 0) return false;
-        choose(now, rows[now.active], range);
+        choose(now, rows[at], range);
         return true;
       case 'ArrowRight': {
-        const measure = rows[now.active]?.measure;
+        const measure = rows[at]?.measure;
         if (measure === undefined || now.step.kind !== 'search') return false;
         setMenu({ ...now, step: { kind: 'measure', measure }, active: 0 });
         return true;
@@ -232,7 +234,7 @@ export default function TextEditor({
    * element from the Elements list, where focus stays (AC-519). As it opened.
    */
   const [autofocus] = useState<'end' | false>(selectElement === undefined ? 'end' : false);
-  const active = menu === null || rows.length === 0 ? undefined : rowId(menuId, menu.active);
+  const active = menu === null || rows.length === 0 ? undefined : rowId(menuId, at);
   const open = menu !== null;
   const editorProps = useMemo(
     () => ({
@@ -411,8 +413,16 @@ export default function TextEditor({
         editor={editor}
         // Insert opens the menu at the cursor as `{{` does, by typing it.
         onInsert={() => {
+          // At the selection's end, so nothing selected is typed over.
           byInsert.current = true;
-          editor.chain().focus().insertContent('{{').run();
+          editor
+            .chain()
+            .focus()
+            .setTextSelection(editor.state.selection.to)
+            .insertContent('{{')
+            .run();
+          // Where `{{` opens nothing — straight after a `{` — there's nothing to take back.
+          if (!insertMenuOpen(editor.state)) byInsert.current = false;
         }}
       />
       {/* Its elements' names, for their node views, which are portals in it. */}
@@ -423,7 +433,7 @@ export default function TextEditor({
         <InsertMenu
           id={menuId}
           groups={groups}
-          active={menu.active}
+          active={at}
           at={menu.rect === null ? null : { left: menu.rect.left, bottom: menu.rect.bottom }}
           onChoose={(row) => {
             choose(menu, row, menu.range);

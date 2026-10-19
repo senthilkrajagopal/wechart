@@ -1,4 +1,5 @@
 import type { JSONContent } from '@tiptap/core';
+import { useEffect } from 'react';
 
 import type { ElementKind } from '@wechart/core';
 
@@ -270,6 +271,13 @@ export function InsertMenu({
   readonly at: { readonly left: number; readonly bottom: number } | null;
   readonly onChoose: (row: InsertRow) => void;
 }) {
+  /**
+   * The active row in view: focus stays in the text, so the browser never
+   * scrolls the list to it (T881's review).
+   */
+  useEffect(() => {
+    window.document.getElementById(rowId(id, active))?.scrollIntoView?.({ block: 'nearest' });
+  }, [id, active]);
   /** Each group's first row's place among all the rows. */
   const firsts = groups.map((_, at) =>
     groups.slice(0, at).reduce((count, group) => count + group.rows.length, 0),

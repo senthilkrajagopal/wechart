@@ -67,12 +67,15 @@ const line = (text: string): TextNode => ({
   ...(text === '' ? {} : { content: [{ type: 'text', text }] }),
 });
 
-async function opened(text = 'Margin sits at ', ai: 'on' | 'off' = 'on') {
-  const copilot = ai === 'on' ? ('on' as const) : undefined;
+async function opened(
+  text: string | TextNode = 'Margin sits at ',
+  ai: 'on' | 'off' | 'setup' = 'on',
+) {
+  const copilot = ai === 'off' ? undefined : ai;
   const onLeave = vi.fn();
   render(
     <TextEditor
-      document={doc(line(text))}
+      document={doc(typeof text === 'string' ? line(text) : text)}
       name="EMEA summary"
       onLeave={onLeave}
       sources={SOURCES}
@@ -230,5 +233,69 @@ describe('the insert menu (T881, AC-517)', () => {
     await opened('', 'off');
     await userEvent.keyboard('/');
     expect(groupNames()).toEqual(['Live values', 'Controls']);
+  });
+
+  it('shows a Super-Admin Summarize… disabled, saying where AI is set up (AC-535; T881’s review)', async () => {
+    const { textbox } = await opened('', 'setup');
+    await userEvent.keyboard('/summ');
+    const row = within(listbox()).getByRole('option', { name: /Summarize/ });
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    expect(row.textContent).toContain('Set up AI in Security › AI');
+    // Enter on it does nothing: the menu stays, the text as typed.
+    await userEvent.keyboard('{Enter}');
+    expect(screen.queryAllByRole('listbox', { name: 'Insert' })).toHaveLength(1);
+    expect(textbox.textContent).toBe('/summ');
+  });
+
+  it('keeps the active row in view as ↓ moves it (T881’s review)', async () => {
+    const scrolled = vi.fn();
+    const was = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrolled;
+    try {
+      const { textbox } = await opened('');
+      await userEvent.keyboard('/');
+      await userEvent.keyboard('{ArrowDown}');
+      expect(
+        window.document
+          .getElementById(textbox.getAttribute('aria-activedescendant') ?? '')
+          ?.getAttribute('data-name'),
+      ).toBe('Change');
+      expect(scrolled).toHaveBeenCalled();
+      const last = scrolled.mock.contexts.at(-1) as Element | undefined;
+      expect(last?.getAttribute('data-name')).toBe('Change');
+    } finally {
+      Element.prototype.scrollIntoView = was;
+    }
+  });
+
+  it('opened by Insert over a selection, keeps the selection, and Esc takes back only its own {{ (T881’s review)', async () => {
+    const { textbox } = await opened('Revenue');
+    await userEvent.keyboard('{Control>}a{/Control}');
+    await userEvent.click(screen.getByRole('button', { name: 'Insert' }));
+    expect(screen.queryAllByRole('listbox', { name: 'Insert' })).toHaveLength(1);
+    await userEvent.keyboard('{Escape}');
+    expect(textbox.textContent).toBe('Revenue');
+  });
+
+  it('doesn’t open on / straight after emphasis or an element, which is inside a word', async () => {
+    await opened({
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: 'Revenue ' },
+        { type: 'value', attrs: { measure: 'orders.revenue' } },
+      ],
+    });
+    await userEvent.keyboard('/');
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  it('is one menu when / and {{ are both typed: one Esc closes it, the next leaves the text', async () => {
+    const { onLeave } = await opened('');
+    await userEvent.keyboard('/{{{{');
+    expect(screen.queryAllByRole('listbox', { name: 'Insert' })).toHaveLength(1);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    await userEvent.keyboard('{Escape}');
+    expect(onLeave).toHaveBeenCalledTimes(1);
   });
 });

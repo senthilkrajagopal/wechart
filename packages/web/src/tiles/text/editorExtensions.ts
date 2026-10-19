@@ -126,7 +126,30 @@ const insertMenu = (bridge: InsertBridge) =>
         onKeyDown: ({ event, range }: SuggestionKeyDownProps) => bridge.key(event, range),
       });
       return [
-        Suggestion({ editor: this.editor, pluginKey: SLASH, char: '/', render }),
+        Suggestion({
+          editor: this.editor,
+          pluginKey: SLASH,
+          char: '/',
+          render,
+          /**
+           * Only at a line's start or after a space (AC-517), judged on the
+           * document: the trigger's own check reads one text node, so `/`
+           * straight after emphasis or an element passed it (T881's review).
+           * And never once `{{` is typed after it, which is the other
+           * trigger's: one menu at a time.
+           */
+          allow: ({ state, range }) => {
+            const $from = state.doc.resolve(range.from);
+            const before =
+              $from.parentOffset === 0
+                ? ' '
+                : state.doc.textBetween(range.from - 1, range.from, '\n', '\u0000');
+            return (
+              (before === ' ' || before === ' ') &&
+              !state.doc.textBetween(range.from, range.to).includes('{')
+            );
+          },
+        }),
         Suggestion({
           editor: this.editor,
           pluginKey: BRACES,
