@@ -2229,12 +2229,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T978 (AC-627) Mark a map's regions and points, the lasso taking points or, with none, regions, by outline and fade, and cross-filter by region or point
 
-- [ ] T979 (AC-628) A read-write member uploads a custom GeoJSON boundary set into their My workspace, checked for polygons, the key property and unique keys; it lands in the folder through a proposal and is offered in Boundary set along the folder path
-  - Files: `packages/core/src/geo/boundarySet.ts` (+ test); the folder-item kind, its route and its storage as the research places them, through the existing My workspace and proposal paths (F29, F30); the upload page.
-  - Failing test: `boundarySet.test.ts`: a FeatureCollection of polygons each with `territory_id` passes; one with a Point feature, a feature without `territory_id`, or two features of one key is refused naming the first failing feature; an API test: a folder's read-write member uploads Territories into My workspace, a read-only member is refused with 403, and the set reaches the folder only once its proposal is approved; a chart in that folder and one in a folder under it list Territories in Boundary set, and one in a sibling folder doesn't (AC-628).
-  - Depends on: T975
-  - ~~Waits on: R81-1 (who uploads a custom boundary set, and where it lives).~~ R81-1 answered 2026-10-18: "Folder item via proposal (Recommended)".
-  - Waits on: research: where uploaded GeoJSON is stored and checked.
+- [x] T979 (AC-628) A read-write member uploads a custom GeoJSON boundary set into their My workspace, checked for polygons, the key property and unique keys; it lands in the folder through a proposal and is offered in Boundary set along the folder path
 
 - [x] T980 (AC-629) The map's text alternative and table view
 

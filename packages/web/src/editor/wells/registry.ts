@@ -40,6 +40,10 @@ export interface TypeWellsProps {
   readonly formats?: MemberFormats | undefined;
   /** Add a field to one of the editor's wells (T981: parallel coordinates' + Measure). */
   readonly onAdd?: ((well: SpecWell, member: string) => void) | undefined;
+  /** The Map's custom boundary sets the chart's folder path offers (T979). */
+  readonly customSets?: readonly { readonly id: string; readonly name: string }[] | undefined;
+  /** Where a Map's Upload a boundary set… goes: the chart's folder (T979). */
+  readonly folderId?: string | undefined;
 }
 
 /** Each type with wells of its own, by its type. One line per type. */

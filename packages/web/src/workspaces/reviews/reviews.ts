@@ -9,7 +9,8 @@ import type { StateKind } from '../../shell/StatusIcon';
  * design 05 of 2026-09-27, states C, D and E), as `GET /api/reviews`
  * answers them: never an item's content.
  */
-export type ReviewKind = 'dashboard' | 'chart' | 'data-source' | 'model';
+// A Map's custom boundary set too (T979, AC-628).
+export type ReviewKind = 'dashboard' | 'chart' | 'data-source' | 'model' | 'boundary-set';
 export type ReviewStatus = 'open' | 'approved' | 'rejected' | 'withdrawn';
 
 export interface ReviewRow {
@@ -119,6 +120,7 @@ export const KIND_LABEL: Record<ReviewKind, string> = {
   chart: 'Chart',
   'data-source': 'Data source',
   model: 'Model',
+  'boundary-set': 'Boundary set',
 };
 
 /** Each kind's icon chip, as Explore's New menu draws them (design 05, pin 2 and state D). */
@@ -129,6 +131,7 @@ export const KIND_ICON: Readonly<
   chart: { icon: '◢', chip: 'ic-chart' },
   model: { icon: '◇', chip: 'ic-model' },
   'data-source': { icon: '◍', chip: 'ic-source' },
+  'boundary-set': { icon: '◰', chip: 'ic-chart' },
 };
 
 const PLURAL: Record<ReviewKind, string> = {
@@ -136,6 +139,7 @@ const PLURAL: Record<ReviewKind, string> = {
   chart: 'charts',
   'data-source': 'data sources',
   model: 'models',
+  'boundary-set': 'boundary sets',
 };
 
 /** A folder as the page names it: "Sales / EMEA", and the root as "Shared". */

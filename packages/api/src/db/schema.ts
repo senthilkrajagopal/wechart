@@ -150,6 +150,7 @@ export interface SessionTable {
 }
 
 export interface Database {
+  boundary_sets: BoundarySetTable;
   sessions: SessionTable;
   documents: DocumentTable;
   query_log: QueryLogTable;
@@ -188,6 +189,29 @@ export interface McpResultPagesTable {
 }
 
 /** A user's own saved SQL runner query (T812, AC-457): never shared. */
+/** A custom boundary set (T979, AC-628): a Map's GeoJSON regions, in a folder or a workspace. */
+export interface BoundarySetTable {
+  id: Generated<string>;
+  folder_id: string;
+  name: string;
+  key_property: string;
+  geojson: JSONColumnType<Record<string, unknown>, string, string>;
+  regions: number;
+  version: Generated<number>;
+  target_folder_id: string | null;
+  origin: JSONColumnType<BoundarySetOrigin | null, string | null, string | null>;
+  created_by: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+/** What a workspace's boundary set is a copy of, once landed. */
+export interface BoundarySetOrigin {
+  readonly id: string;
+  readonly folderId: string;
+  readonly version: number;
+}
+
 export interface SavedQueryTable {
   id: string;
   owner_key: string;

@@ -160,6 +160,8 @@ import {
 import { registerAccessTokens } from './routes/access-tokens';
 import { registerSavedQueries } from './routes/sql-saved';
 import type { SavedQueryStore } from './repos/saved-queries';
+import { registerBoundarySets } from './routes/boundary-sets';
+import type { BoundarySetStore } from './repos/boundary-sets';
 import type { AccessTokenStore } from './repos/access-tokens';
 import type { SignInStore } from './repos/sign-ins';
 import type { McpPageStore } from './repos/mcp-pages';
@@ -286,6 +288,8 @@ export interface BuildOptions {
   readonly mcpRateLimits?: RateLimitCounter;
   /** Each user's saved SQL runner queries (T812, AC-457). Unset: none can be saved. */
   readonly savedQueries?: SavedQueryStore;
+  /** Custom boundary sets for the Map (T979, AC-628). Unset: none can be uploaded. */
+  readonly boundarySets?: BoundarySetStore;
   /** The MCP tools served, wechart's own unless a test gives others (T781). */
   readonly mcpTools?: readonly McpTool[];
   /** Where a cut MCP answer's pages are kept for its cursors (T784, AC-475). */
@@ -531,6 +535,7 @@ export function buildServer({
   signIns,
   mcpRateLimits,
   savedQueries,
+  boundarySets,
   mcpTools,
   mcpPages,
   dataSourceLanding,
@@ -1733,6 +1738,8 @@ export function buildServer({
       // With its models, as they will resolve once landed (T451).
       bind: (kind, folderId, body, resolver) => boundIn(kind, folderId, body, undefined, resolver),
       modelLanding,
+      // The Map's custom boundary sets (T979, AC-628).
+      ...(boundarySets === undefined ? {} : { boundarySets }),
       // One name per item (T704, AC-421): what the shared folders hold.
       ...(landedNames === undefined ? {} : { landedNames }),
       // Held to the data source each model ran on when proposed (T456, T713).
@@ -4528,6 +4535,27 @@ export function buildServer({
     registerSavedQueries(app, {
       store: savedQueries,
       ...(registeredSources === undefined ? {} : { sourcesOf: registeredSources.sqlSourcesOf }),
+    });
+  // The Map's custom boundary sets, into My workspace and through a proposal (T979, AC-628).
+  if (boundarySets !== undefined)
+    registerBoundarySets(app, {
+      store: boundarySets,
+      ownWorkspace: async (request) => {
+        const seen = await visibilityOf(request);
+        const own = ownWorkspaceOf(userOf(request).key);
+        return seen === undefined || seen.rights.has(own) ? own : null;
+      },
+      rights: async (request) => {
+        const seen = await visibilityOf(request);
+        if (seen === undefined) return () => ({ sees: true, writes: true });
+        return (folderId) => ({
+          sees: seen.rights.has(folderId),
+          writes: mayWrite(seen, folderId),
+        });
+      },
+      pathOf: (folderId) => pathTo(folderId),
+      workspaceOf: (folderId) => workspaceRootOf(folderId),
+      userKey: (request) => userOf(request).key,
     });
   // Personal access tokens for MCP (T767, AC-430).
   if (accessTokens !== undefined)

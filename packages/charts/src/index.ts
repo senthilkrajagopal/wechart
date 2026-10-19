@@ -30,6 +30,11 @@ export {
 } from './geo/admin1';
 export { loadMapBoundaries, mapBoundariesReady } from './geo/boundaries';
 export {
+  registerCustomSet,
+  setBoundarySetLoader,
+  type BoundarySetLoader,
+} from './geo/custom';
+export {
   onRegionSets,
   regionSetOf,
   registerRegionSet,

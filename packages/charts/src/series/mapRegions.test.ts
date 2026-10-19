@@ -16,6 +16,7 @@ import {
 } from '../geo/admin1';
 import countries from '../geo/countries-50m.geo.json';
 import { registerCountries } from '../geo/countryMap';
+import { registerCustomSet } from '../geo/custom';
 import { optionFor } from '../optionFor';
 import { regionsOf, renderToSvg } from '../testing/renderToSvg';
 import { DEFAULT_SURFACE } from '../theme';
@@ -176,6 +177,48 @@ describe('a Regions layer on Admin-1 (AC-624)', () => {
     expect(unplacedNote(germany([...STATES, ['Online', 5]]))).toBe(
       'Not on the map: "Online" (no region)',
     );
+  });
+
+  // T979: a custom set, once registered, draws as every other set does.
+  it('draws a custom set’s regions as Countries’ are, by its key property', () => {
+    const square = (key: string, at: number) => ({
+      type: 'Feature',
+      properties: { territory_id: key },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[[at, 0], [at + 5, 0], [at + 5, 5], [at, 5], [at, 0]]],
+      },
+    });
+    registerCustomSet('t979', 'territory_id', {
+      type: 'FeatureCollection',
+      features: [square('Atlantic', 0), square('Gulf', 5), square('Islands', 10)],
+    });
+    const spec: RenderSpec = {
+      chartType: 'map',
+      encoding: { x: ['stores.territory'], y: ['orders.revenue'] },
+      rows: [
+        { 'stores.territory': 'Atlantic', 'orders.revenue': 140 },
+        { 'stores.territory': 'Gulf', 'orders.revenue': 102 },
+      ],
+      options: { map: { boundarySet: 'custom:t979' } },
+    };
+    const option = optionFor(spec);
+    const regions = (option['series'] as Record<string, unknown>[]).find(
+      (one) => one['type'] === 'map',
+    )!;
+    expect(regions['nameProperty']).toBe('territory_id');
+    expect(regions['itemStyle']).toEqual({
+      areaColor: OTHER_COLOUR,
+      borderColor: DEFAULT_SURFACE,
+      borderWidth: 0.5,
+    });
+    const svg = renderToSvg(option);
+    const drawn = regionsOf(svg);
+    expect(drawn.filter((region) => region.dataIndex < 2).every((region) => region.fill !== OTHER_COLOUR)).toBe(true);
+    expect(new Set(drawn.filter((region) => region.dataIndex >= 2).map((region) => region.fill))).toEqual(
+      new Set([OTHER_COLOUR]),
+    );
+    expect(svg).toContain('No data');
   });
 
   it('says so where no country’s regions are named', () => {

@@ -7,6 +7,7 @@ import { actorOf, recordIn } from '../audit/record';
 import { USER } from '../auth/guard';
 import { userOf } from '../auth/user';
 import type { AuditStore } from '../repos/audit';
+import type { BoundarySetStore } from '../repos/boundary-sets';
 import { DataSourceRefused, type DataSource, type DataSourceStore } from '../repos/data-sources';
 import {
   OpenProposalError,
@@ -98,6 +99,11 @@ export interface ProposalRoutes {
     ): Promise<{ version: number; body: Record<string, unknown>; folderId: string } | undefined>;
   };
   readonly dataSources?: Pick<DataSourceStore, 'get' | 'inFolder' | 'withSealed' | 'setOrigin'>;
+  /** The Map's custom boundary sets, proposed and landed as folder items (T979, AC-628). */
+  readonly boundarySets?: Pick<
+    BoundarySetStore,
+    'get' | 'geojson' | 'inFolders' | 'land' | 'setOrigin'
+  >;
   /** The request's user's own workspace root; none for one who has none (AC-277). */
   readonly ownWorkspace: (request: FastifyRequest) => Promise<string | null>;
   /** The workspace a folder is in, at any depth; null for a shared one. */
@@ -196,6 +202,7 @@ const KIND_WORD: Record<ProposalKind, string> = {
   chart: 'chart',
   'data-source': 'data source',
   model: 'model',
+  'boundary-set': 'boundary set',
 };
 
 const folderIdOf = (body: Record<string, unknown>): string | null =>
@@ -254,6 +261,12 @@ const answerOf = (proposal: Proposal) => {
  * stored, never its envelope (AC-298, rule 83).
  */
 const shownSnapshot = (kind: string, snapshot: Record<string, unknown>) => {
+  // A boundary set by its name, key and regions: its GeoJSON is its own to fetch (T979).
+  if (kind === 'boundary-set') {
+    const { geojson: _geometry, ...said } = snapshot;
+    void _geometry;
+    return said;
+  }
   if (kind !== 'data-source') return snapshot;
   // Only what may be shown, named, so a key added later stays hidden until
   // it is named here (T351's review).
@@ -513,6 +526,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     if (id === undefined) return null;
     if (kind === 'data-source') return (await dataSources?.get(id))?.version ?? null;
     if (kind === 'model') return (await routes.models?.current(id))?.version ?? null;
+    if (kind === 'boundary-set') return (await routes.boundarySets?.get(id))?.version ?? null;
     return (await read(kind, id))?.version ?? null;
   };
 
@@ -964,6 +978,27 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
      * approving again lands over it rather than beside it; and the
      * workspace's is a copy of it at once.
      */
+    /**
+     * A boundary set (T979, AC-628): landed in its folder, over the set it
+     * replaces or as a new one, and offered there from then on. Nothing else
+     * goes with it.
+     */
+    const sets = proposal.items.filter((item) => item.kind === 'boundary-set');
+    if (sets.length > 0) {
+      if (routes.boundarySets === undefined)
+        throw new Refused(503, 'Boundary sets can’t be landed here.');
+      for (const item of sets) {
+        const at = await routes.boundarySets.land({
+          landsIn: item.landsIn,
+          replaces: item.replaces,
+          snapshot: item.snapshot,
+          author: proposal.author.key,
+        });
+        landed.push({ kind: 'boundary-set', id: at.id, version: at.version, from: item });
+      }
+      if (proposal.items.every((item) => item.kind === 'boundary-set')) return landed;
+    }
+
     const proposed = proposal.items.find((item) => item.kind === 'data-source');
     if (proposed !== undefined) {
       const lander = routes.dataSourceLanding;
@@ -1411,6 +1446,15 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
           });
           continue;
         }
+        // A boundary set: a copy of the one it landed as (T979).
+        if (at.kind === 'boundary-set') {
+          await routes.boundarySets?.setOrigin(at.from.id, {
+            id: at.id,
+            folderId: at.from.landsIn,
+            version: at.version,
+          });
+          continue;
+        }
         // A model: a copy of the file it landed as (T451).
         if (at.kind === 'model') {
           await routes.models?.setOrigin(at.from.id, {
@@ -1461,6 +1505,16 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         if (item.replaces === null) continue;
         const current = await routes.dataSources?.get(item.replaces.id);
         if (current?.folderId !== item.landsIn) return item;
+        continue;
+      }
+      // A boundary set: what it replaces still in its folder, and still the
+      // folder's set of its name, or none of its name for a new one (T979).
+      if (item.kind === 'boundary-set') {
+        const named = (await routes.boundarySets?.inFolders([item.landsIn]))?.find(
+          (each) => each.name === item.title,
+        );
+        if (item.replaces === null ? named !== undefined : named?.id !== item.replaces.id)
+          return item;
         continue;
       }
       // A model: what it replaces still there, and still the folder's file of its name (T451).
@@ -1680,6 +1734,12 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       stored = source === undefined ? null : { id: source.id, body: {}, version: source.version };
       home = source?.folderId ?? null;
       target = source?.targetFolderId;
+    } else if (proposing === 'boundary-set') {
+      // A workspace boundary set, by its id (T979).
+      const set = /^[0-9a-f-]{36}$/i.test(id) ? await routes.boundarySets?.get(id) : undefined;
+      stored = set === undefined ? null : { id: set.id, body: {}, version: set.version };
+      home = set?.folderId ?? null;
+      target = set?.targetFolderId;
     } else if (proposing === 'model') {
       // A workspace model file, by its id (T350).
       const file = await routes.models?.file(id);
@@ -1750,6 +1810,36 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
           },
           landsIn: target,
           replaces: named === undefined ? null : { id: named.id, version: named.version },
+        },
+      ];
+    } else if (proposing === 'boundary-set') {
+      // As it is now, GeoJSON and all; over its folder's set of its name (T979).
+      const set = (await routes.boundarySets!.get(id))!;
+      const geojson = (await routes.boundarySets!.geojson(id)) ?? {};
+      const named = (await routes.boundarySets!.inFolders([target])).find(
+        (each) => each.name === set.name,
+      );
+      const replacing =
+        set.origin !== null && set.origin.folderId === target
+          ? { id: set.origin.id, version: set.origin.version }
+          : named === undefined
+            ? null
+            : { id: named.id, version: named.version };
+      items = [
+        {
+          kind: 'boundary-set',
+          id,
+          title: set.name,
+          version: set.version,
+          snapshot: {
+            name: set.name,
+            keyProperty: set.keyProperty,
+            regions: set.regions,
+            geojson,
+            ...(set.origin === null ? {} : { origin: set.origin }),
+          },
+          landsIn: target,
+          replaces: replacing,
         },
       ];
     } else if (proposing === 'model') {

@@ -17,10 +17,7 @@ import type { TypeWellsProps } from './registry';
  * sized by a measure. All of it is stored under the chart's `options.map`,
  * sparse, through the Map's module in core.
  */
-export interface MapWellsProps extends TypeWellsProps {
-  /** The custom boundary sets the chart's folder path offers (T979); none until then. */
-  readonly customSets?: readonly { readonly id: string; readonly name: string }[];
-}
+export type MapWellsProps = TypeWellsProps;
 
 const NO_OPTIONS: Readonly<Record<string, unknown>> = {};
 
@@ -31,6 +28,7 @@ export function MapWells({
   titleOf = (member) => member,
   spec,
   customSets = [],
+  folderId,
 }: MapWellsProps) {
   const ids = useId();
   const settings = mapSettingsOf(options);
@@ -75,6 +73,17 @@ export function MapWells({
             </optgroup>
           )}
         </select>
+        {/* A set of the folder's own, through My workspace and a proposal (T979). */}
+        {folderId === undefined ? null : (
+          <a
+            className="panel-section__note"
+            href={`/explore/folders/${encodeURIComponent(folderId)}/boundary-sets/new`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Upload a boundary set…
+          </a>
+        )}
       </section>
 
       <section className="well-field" aria-labelledby={`${ids}-regions`}>

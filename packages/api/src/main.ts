@@ -11,6 +11,7 @@ import { scheduleStore, wechartScheduler } from './scheduler/schedules';
 import { migrateToLatest } from './db/migrate';
 import { bookmarkStore } from './repos/bookmarks';
 import { savedQueryStore } from './repos/saved-queries';
+import { boundarySetStore } from './repos/boundary-sets';
 import { catalog } from './repos/catalog';
 import { connectionTestStore } from './repos/connection-tests';
 import { dataSourceStore } from './repos/data-sources';
@@ -309,6 +310,8 @@ async function main(): Promise<void> {
     mcpPages,
     // Each user's saved SQL runner queries (T812, AC-457).
     savedQueries: savedQueryStore(db),
+    // The Map's custom boundary sets (T979, AC-628).
+    boundarySets: boundarySetStore(db),
     // Read-only SQL run by xcube, on a data source's connection (T532, AC-373).
     ...(config.xcube === undefined || service === undefined
       ? {}

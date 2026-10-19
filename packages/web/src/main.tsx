@@ -1,8 +1,10 @@
+import { setBoundarySetLoader } from '@wechart/charts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
+import { boundarySetGeoJson } from './query/boundarySets';
 import { AuthGate } from './shell/AuthGate';
 import { ThemeProvider } from './shell/ThemeProvider';
 import { installStyles } from './shell/styles';
@@ -28,6 +30,8 @@ const container = document.querySelector('#root');
 if (!container) throw new Error('#root is missing from index.html');
 
 installStyles();
+// A Map's custom boundary sets, fetched by the page for the renderer (T979).
+setBoundarySetLoader(boundarySetGeoJson);
 
 createRoot(container).render(
   <StrictMode>

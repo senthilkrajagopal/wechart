@@ -27,6 +27,7 @@ import { AccessTokensPage } from '../account/AccessTokensPage';
 import { AppShell } from '../shell/AppShell';
 import { NotFound } from '../shell/NotFound';
 import { StateLine } from '../shell/StatusIcon';
+import { BoundarySetUpload } from '../workspaces/explore/BoundarySetUpload';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { jobsTabOf, JobsPage } from '../workspaces/jobs/JobsPage';
 import { auditFiltersFrom, auditSearchOf } from '../workspaces/security/AuditTrail';
@@ -817,6 +818,21 @@ const folderModelFileRoute = createRoute({
  * an Explore item, under its folder's breadcrumb, opened from its row in
  * Explore or in Data sources.
  */
+/** Upload a boundary set for the Map, to go to this folder (T979, AC-628). */
+const boundarySetUploadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/explore/folders/$folderId/boundary-sets/new',
+  component: function BoundarySetUploadSurface() {
+    const params = useParams({ strict: false }) as { folderId?: string };
+    const folderId = decodeURIComponent(params.folderId ?? '');
+    return (
+      <AppShell workspace="explore">
+        <BoundarySetUpload key={folderId} folderId={folderId} />
+      </AppShell>
+    );
+  },
+});
+
 const dataSourceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/explore/data-sources/$objectId',
@@ -849,6 +865,7 @@ const routeTree = rootRoute.addChildren([
   modelFileRoute,
   folderModelRoute,
   folderModelFileRoute,
+  boundarySetUploadRoute,
 ]);
 
 export function buildRouter() {

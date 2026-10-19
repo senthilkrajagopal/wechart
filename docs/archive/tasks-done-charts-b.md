@@ -103,6 +103,13 @@ Lane CHARTS-B's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Failing test: `mapMarking.test.ts`: a lasso over 3 stores marks those 3 and no region; with no Points layer it marks the regions it touches; a marked region keeps its fill and gains the outline while others fade; in cross-filter mode a region filters to its member and a store to its store (AC-627).
   - Depends on: T976
 
+- [x] T979 (AC-628) A read-write member uploads a custom GeoJSON boundary set into their My workspace, checked for polygons, the key property and unique keys; it lands in the folder through a proposal and is offered in Boundary set along the folder path
+  - Files: `packages/core/src/geo/boundarySet.ts` (+ test); the folder-item kind, its route and its storage as the research places them, through the existing My workspace and proposal paths (F29, F30); the upload page.
+  - Failing test: `boundarySet.test.ts`: a FeatureCollection of polygons each with `territory_id` passes; one with a Point feature, a feature without `territory_id`, or two features of one key is refused naming the first failing feature; an API test: a folder's read-write member uploads Territories into My workspace, a read-only member is refused with 403, and the set reaches the folder only once its proposal is approved; a chart in that folder and one in a folder under it list Territories in Boundary set, and one in a sibling folder doesn't (AC-628).
+  - Depends on: T975
+  - ~~Waits on: R81-1 (who uploads a custom boundary set, and where it lives).~~ R81-1 answered 2026-10-18: "Folder item via proposal (Recommended)".
+  - Waits on: research: where uploaded GeoJSON is stored and checked.
+
 - [x] T980 (AC-629) The map's text alternative and table view
   - Files: `packages/charts/src/describe/map.ts` (+ test), `packages/web/src/tiles/tableView/map.ts` (+ test).
   - Failing test: (describe) "Map of Revenue by sales territory, 6 territories: highest Atlantic $1.40M, lowest Mountain $0.20M; Islands has no data. 10 stores as points sized by Revenue."; (table view) Islands reads "No data", not 0, with its store count (AC-629). Since R83: a map on Countries or Admin-1 adds "Borders and disputed areas as Natural Earth draws them."

@@ -168,6 +168,23 @@ describe('the Map’s wells (AC-622)', () => {
     });
   });
 
+  /** T979 / AC-628: a read-write member uploads a custom boundary set, to go to the chart's folder. */
+  it('links to uploading a boundary set for the chart’s folder', () => {
+    render(
+      <MapWells
+        chartType="map"
+        options={{}}
+        onOptions={vi.fn()}
+        available={AVAILABLE}
+        titleOf={titleOf}
+        spec={{ measures: [], dimensions: [] }}
+        folderId="folder sales"
+      />,
+    );
+    const link = screen.getByRole('link', { name: 'Upload a boundary set…' });
+    expect(link.getAttribute('href')).toBe('/explore/folders/folder%20sales/boundary-sets/new');
+  });
+
   /** T977 / AC-626: … its layer row and tooltip saying "Density can't be marked; it shows where points gather". */
   it('says in the Density layer’s row that it can’t be marked, once it has a location', () => {
     wells({ options: { map: { density: { location: 'stores.location' } } } });

@@ -89,6 +89,7 @@ import {
 import { OPENED_WITH, type EditorState } from './openChart';
 import { PreviewFrame, type TileSize } from './PreviewFrame';
 import { drawnSizeIn, hiddenLabelsAt } from './hiddenLabels';
+import { boundarySetsQueryOf } from '../query/boundarySets';
 import { metaQueryOf, siblingsQueryOf, useWorkspaceItem } from '../query/meta';
 import { countryMarkingsOf, signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
@@ -391,6 +392,10 @@ function EditorBody({
   const meta = useQuery(metaQueryOf(workspaceItem));
   /** Each measure's siblings, the aggregations its tag offers (T689, chart-editor-Q6). */
   const siblings = useQuery({ ...siblingsQueryOf(workspaceItem), enabled: cubeName !== '' });
+  // The Map's custom boundary sets, along the chart's folder's path (T979, AC-628):
+  // a workspace item's, its target's.
+  const setsFolder = workspaceItem?.targetFolderId ?? folderId;
+  const boundarySets = useQuery(boundarySetsQueryOf(setsFolder));
 
   /** The cubes the chosen one joins to, whose fields the chart may use too (T688, EDI-03). */
   const joined = useJoined(cubeName);
@@ -1546,6 +1551,10 @@ function EditorBody({
                           formats,
                           onAdd: (well, member) =>
                             setSpec((current) => addToWell(current, well, member)),
+                          // A Map's custom boundary sets, along its folder's path (T979).
+                          ...(setsFolder === undefined
+                            ? {}
+                            : { folderId: setsFolder, customSets: boundarySets.data ?? [] }),
                         }
                   }
                   // A box plot's "Each point is" (T400, AC-314), for a box plot alone.

@@ -467,6 +467,16 @@ function ItemPreview({
 
   if (item.kind === 'data-source')
     return <SettingsDiff item={item} alone={!open} testable={open && proposal.mayApprove} />;
+  // A boundary set by its regions and key (T979, AC-628).
+  if (item.kind === 'boundary-set')
+    return (
+      <div className="review-view__preview" data-testid="review-boundary-set">
+        <p>
+          {String(item.snapshot['regions'] ?? 0)} regions, keyed by “
+          {String(item.snapshot['keyProperty'] ?? '')}”.
+        </p>
+      </div>
+    );
   // A model's YAML against the folder's file now (T350; design 05, state G).
   if (item.kind === 'model') {
     const proposed = typeof item.snapshot['content'] === 'string' ? item.snapshot['content'] : '';

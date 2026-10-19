@@ -96,7 +96,8 @@ test('the Map’s wells offer its boundary sets and three layers, Regions drawn 
 
   const set = page.getByRole('combobox', { name: 'Boundary set' });
   await expect(set).toHaveValue('countries');
-  await expect(set.locator('option')).toHaveText(['Countries', 'Admin-1, by country']);
+  // The built-in sets; a folder's custom sets follow in their own group (T979).
+  await expect(set.locator(':scope > option')).toHaveText(['Countries', 'Admin-1, by country']);
   for (const layer of ['Regions layer', 'Points layer', 'Density layer'])
     await expect(page.getByRole('heading', { name: layer })).toBeVisible();
   await expect(page.getByTestId('map-layer-regions')).toContainText(/ coloured by /);
@@ -323,4 +324,86 @@ test('a Regions layer on Admin-1 colours German states by code or name, Bremen a
   await expect(bremen).toHaveCount(1);
   await expect(bremen).toContainText('No data');
   await expect(table.getByRole('row').filter({ hasText: 'Bavaria' })).toContainText('1,400');
+});
+
+/**
+ * T979 / AC-628: WHEN a read-write member of a folder uploads a custom
+ * boundary set, THE SYSTEM SHALL take it into their My workspace, landing it
+ * in the folder only through a proposal, … and SHALL then offer the set in
+ * Boundary set under its name to charts in that folder …
+ * AC-624: a Regions layer … on every boundary set.
+ *
+ * The single user uploads through the page, proposes, and approves it as a
+ * folder's writer may; a chart going to the folder then draws on it.
+ */
+test('a custom boundary set uploaded and approved into a folder is offered and drawn there', async ({
+  page,
+  request,
+}, testInfo) => {
+  const name = `E2E territories ${String(Date.now())}`;
+  const square = (key: string, lng: number, lat: number) => ({
+    type: 'Feature',
+    properties: { code: key },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[[lng, lat], [lng + 20, lat], [lng + 20, lat + 20], [lng, lat + 20], [lng, lat]]],
+    },
+  });
+  const geojson = {
+    type: 'FeatureCollection',
+    features: [square('FRA', -5, 40), square('NOR', 5, 58), square('USA', -100, 30)],
+  };
+
+  await page.goto('/explore/folders/seed-folder-0/boundary-sets/new');
+  await page.getByRole('textbox', { name: 'Name' }).fill(name);
+  await page.getByRole('textbox', { name: 'Key property' }).fill('code');
+  await page.getByLabel('GeoJSON file').setInputFiles({
+    name: 'territories.geojson',
+    mimeType: 'application/geo+json',
+    buffer: Buffer.from(JSON.stringify(geojson)),
+  });
+  await page.getByRole('button', { name: 'Upload to My workspace' }).click();
+  await expect(page.getByTestId('boundary-set-uploaded')).toContainText(
+    `${name} is in My workspace: 3 regions.`,
+  );
+  // Not in the folder before its proposal is approved.
+  const offered = async () =>
+    (
+      (await (
+        await request.get('/api/boundary-sets?folder=seed-folder-0')
+      ).json()) as { sets: { name: string }[] }
+    ).sets.map((set) => set.name);
+  expect(await offered()).not.toContain(name);
+  const proposing = page.waitForResponse(
+    (response) => response.url().endsWith('/api/proposals') && response.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Propose to the folder' }).click();
+  const proposal = (await (await proposing).json()) as { id: string };
+  await expect(page.getByTestId('boundary-set-proposed')).toBeVisible();
+  expect(await offered()).not.toContain(name);
+  const approved = await request.post(`/api/proposals/${proposal.id}/approve`, { data: {} });
+  expect(approved.status(), await approved.text()).toBe(200);
+  expect(await offered()).toContain(name);
+
+  // A chart going to the folder offers it, and draws its regions by its key.
+  const cube = await newChartOnCountries(page, request, testInfo.project.name);
+  await wellPicker(page, 'dimensions').selectOption(`${cube}.iso3`);
+  const result = page.getByTestId('editor-result');
+  await expect(result.locator('svg').first()).toContainText('FRA');
+  await chooseChartType(page, 'map');
+  const set = page.getByRole('combobox', { name: 'Boundary set' });
+  await set.selectOption({ label: name });
+  const map = result.locator('svg').first();
+  await expect
+    .poll(() =>
+      map
+        .locator('path[fill^="rgb"]')
+        .evaluateAll((paths) => new Set(paths.map((path) => path.getAttribute('fill'))).size),
+    )
+    // Its three regions, each its ramp colour (and the legend's own, as on Countries).
+    .toBeGreaterThanOrEqual(3);
+  await expect(map).toContainText('No data');
+  await expect(result.getByTestId('unplaced-codes')).toHaveText(
+    'Not on the map: "SGP" (no region), "GUF" (no region)',
+  );
 });

@@ -9,6 +9,7 @@ import { mapSettingsOf, type RenderSpec } from '@wechart/core';
 import { regionSetIdOf } from '../series/map';
 import { admin1Index, loadAdmin1, loadAdmin1Index } from './admin1';
 import { countryMap, loadCountryMap } from './countryMap';
+import { loadCustomSet } from './custom';
 import { regionSetOf } from './regionSets';
 
 /** Whether everything the map draws is registered. */
@@ -20,7 +21,8 @@ export function mapBoundariesReady(spec: RenderSpec): boolean {
     const id = regionSetIdOf(spec);
     return id === undefined || regionSetOf(id) !== undefined;
   }
-  return true;
+  // A custom set, once fetched and registered (T979).
+  return regionSetOf(boundarySet) !== undefined;
 }
 
 /** Fetches and registers what the map draws, once. */
@@ -34,5 +36,7 @@ export async function loadMapBoundaries(spec: RenderSpec): Promise<void> {
     await loadAdmin1Index();
     const id = regionSetIdOf(spec);
     if (id !== undefined) await loadAdmin1(id.slice('admin1:'.length));
+    return;
   }
+  await loadCustomSet(boundarySet.slice('custom:'.length));
 }

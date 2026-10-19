@@ -368,6 +368,11 @@ export {
 } from './model/objects';
 
 export { boxStats, quantile7, type BoxStats, type WhiskerRule } from './stats/boxplot';
+export {
+  BOUNDARY_SET_MAX_BYTES,
+  boundarySetProblem,
+  boundarySetRegions,
+} from './geo/boundarySet';
 export { geoPointOf, type GeoPoint } from './geo/geoValue';
 export { countryCodeMarkingOf, holdsCountryCodes, ISO_3166_ALPHA_3 } from './geo/iso3';
 export {
