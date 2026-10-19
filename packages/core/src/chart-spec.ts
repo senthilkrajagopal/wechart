@@ -35,6 +35,12 @@ export interface ChartSpec {
    * most one each, chosen from the menu on its pill.
    */
   readonly calculations?: Readonly<Record<string, QuickCalc>>;
+  /**
+   * Measures a type's own settings draw beside its Metrics, asked of Cube
+   * with them but never in Metrics (T954): a bullet chart's Target measure
+   * (`targetMeasuresOf`).
+   */
+  readonly targets?: readonly string[];
 }
 
 /**
@@ -142,7 +148,8 @@ export function isEmpty(spec: ChartSpec): boolean {
  */
 export function toCubeQuery(spec: ChartSpec): Record<string, unknown> {
   const query: Record<string, unknown> = {
-    measures: [...spec.measures].sort(),
+    // A bullet's Target measure with them, once (T954).
+    measures: [...new Set([...spec.measures, ...(spec.targets ?? [])])].sort(),
     dimensions: [...spec.dimensions].sort(),
   };
 

@@ -27,6 +27,8 @@ import {
 } from 'echarts/charts';
 import {
   AxisPointerComponent,
+  DataZoomInsideComponent,
+  DataZoomSliderComponent,
   GraphicComponent,
   GridComponent,
   LegendComponent,
@@ -55,6 +57,10 @@ echarts.use([
   // Parallel coordinates (T982): it installs its `parallel` component itself
   // (research/echarts-parallel.md).
   ParallelChart,
+  // A bullet chart's members past the tile's height, scrolled by the wheel or
+  // a slider, the value axis fixed (T954; research/echarts-bullet.md §2).
+  DataZoomInsideComponent,
+  DataZoomSliderComponent,
   // The map legend's "No data" swatch (rule 86).
   GraphicComponent,
   GridComponent,

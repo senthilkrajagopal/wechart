@@ -114,6 +114,20 @@ export function withBulletOptions(
 }
 
 /**
+ * The measures a type's own settings draw beside its Metrics, which its query
+ * asks Cube for (T954, AC-581): a bullet chart's Target measure. None for a
+ * target value, no target, or any other type.
+ */
+export function targetMeasuresOf(
+  chartType: string | undefined,
+  options: Readonly<Record<string, unknown>> | undefined,
+): string[] {
+  if (chartType !== 'bullet') return [];
+  const { target } = bulletOptionsOf(options);
+  return target?.kind === 'measure' ? [target.member] : [];
+}
+
+/**
  * The measures or values in Target, for what the chart needs (AC-580;
  * `FieldCounts.targets`). Given what the chart's cube has, a measure it
  * doesn't — kept in the options through a change of cube — counts as none.

@@ -24,6 +24,8 @@ import {
   TreemapChart,
 } from 'echarts/charts';
 import {
+  DataZoomInsideComponent,
+  DataZoomSliderComponent,
   GraphicComponent,
   GridComponent,
   LegendComponent,
@@ -47,6 +49,8 @@ echarts.use([
   HeatmapChart,
   MapChart,
   ParallelChart,
+  DataZoomInsideComponent,
+  DataZoomSliderComponent,
   GraphicComponent,
   VisualMapComponent,
   GridComponent,

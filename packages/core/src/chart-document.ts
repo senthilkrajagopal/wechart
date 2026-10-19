@@ -21,6 +21,7 @@
  */
 
 import { emptySpec, type ChartFilter, type ChartSpec } from './chart-spec';
+import { targetMeasuresOf } from './chart-types/bullet';
 import { comboProblems } from './combo';
 import { GRANULARITY_NAMES, type TimeGranularity } from './format';
 import { readQuickCalcs, type QuickCalc } from './quickCalc';
@@ -324,6 +325,7 @@ export function chartDocumentOf(input: {
 /** The authoring shape the editor and the query builder work in. */
 export function toChartSpec(document: ChartDocument): ChartSpec {
   const { chart } = document;
+  const targets = targetMeasuresOf(chart.chartType, chart.options);
 
   return {
     ...emptySpec(chart.source.cube),
@@ -335,5 +337,7 @@ export function toChartSpec(document: ChartDocument): ChartSpec {
     ...(chart.filters === undefined ? {} : { filters: [...chart.filters] }),
     ...(chart.wells.eachPointIs === undefined ? {} : { eachPointIs: chart.wells.eachPointIs }),
     ...(chart.calculations === undefined ? {} : { calculations: { ...chart.calculations } }),
+    // What its type's settings draw beside Metrics: a bullet's Target (T954).
+    ...(targets.length === 0 ? {} : { targets }),
   };
 }

@@ -54,6 +54,10 @@ function swapsFor(theme: ChartTheme): ReadonlyMap<string, string> {
   // theme's secondary text. `OTHER`'s dark value is this very colour, which
   // swaps are read against the light ones only, never twice.
   swaps.set(COLORS.light['text-secondary'].toLowerCase(), COLORS.dark['text-secondary']);
+  // A bullet chart's lowest band and its value bar and target (T954): R80's
+  // lightest grey and the primary ink, as its other bands are borders.
+  swaps.set(COLORS.light['bg-subtle'].toLowerCase(), COLORS.dark['bg-subtle']);
+  swaps.set(COLORS.light['text-primary'].toLowerCase(), COLORS.dark['text-primary']);
   return swaps;
 }
 

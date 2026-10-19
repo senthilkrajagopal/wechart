@@ -14,6 +14,7 @@ import {
   removeFromWell,
   swapMeasure,
   targetCount,
+  targetMeasuresOf,
   withStack,
   granularitiesOf,
   seriesOf,
@@ -359,11 +360,15 @@ function EditorBody({
    * wants its rows ungrouped (T399). Only a manual choice can be one — the
    * recommender, which reads the rows, never proposes it — so this can't loop.
    */
-  const query = useMemo(
-    () =>
-      toCubeQuery(chartTypeState.manual === 'boxplot' ? { ...spec, chartType: 'boxplot' } : spec),
-    [spec, chartTypeState.manual],
-  );
+  const query = useMemo(() => {
+    // A bullet chart's Target measure asked with its Metrics (T954, AC-581),
+    // as the dashboard asks it (`toChartSpec`).
+    const targets = targetMeasuresOf(chartTypeState.manual ?? undefined, options);
+    const asked = targets.length === 0 ? spec : { ...spec, targets };
+    return toCubeQuery(
+      chartTypeState.manual === 'boxplot' ? { ...asked, chartType: 'boxplot' } : asked,
+    );
+  }, [spec, chartTypeState.manual, options]);
 
   /** The members the chart uses, marked in the field list (AC-215). */
   const used = useMemo<ReadonlySet<string>>(

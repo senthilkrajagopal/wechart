@@ -13,6 +13,7 @@ import {
   itemsInShape,
   optionFor,
   themed,
+  withScrollKept,
   type Canvas,
   type EChartsOption,
   type Point,
@@ -490,7 +491,16 @@ export function ChartCanvas({
     // notMerge: a chart type change replaces the option outright. Merging
     // would leave the previous type's series in place beside the new one.
     // In the theme the page is in (AC-211), and again when it switches.
-    const option = themed(optionFor(spec, canvas), theme);
+    // A scrolled chart stays where it was scrolled to while its members are
+    // the same (T954): the dashboard draws its tiles afresh as it renders.
+    const option = withScrollKept(
+      drawnOption.current,
+      themed(optionFor(spec, canvas), theme),
+      ((chart.getOption() as { dataZoom?: unknown } | undefined)?.dataZoom ?? []) as {
+        start?: unknown;
+        end?: unknown;
+      }[],
+    );
     chart.setOption(option, true);
     // Drawn afresh, nothing emphasised (T848).
     drawnOption.current = option;

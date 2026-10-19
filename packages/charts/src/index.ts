@@ -41,6 +41,7 @@ export { legendFor, seriesCount } from './legend';
 export { logScaleOmissions, type LogOmissions } from './series/combo';
 export { MAX_PANELS } from './layout/trellis';
 export { hiddenLabelShare } from './layout/hiddenLabels';
+export { withScrollKept } from './layout/scrollWindow';
 export { isOneSource, labelOf, nameWriter } from './modelWriter';
 export { echarts } from './echarts';
 export { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from './theme';

@@ -163,6 +163,32 @@ describe('what the dark theme recolours, and what it leaves alone (T210 review)'
     expect(drawn.series[0]?.itemStyle.areaColor).toBe('#5c5b57');
   });
 
+  /** T954: a bullet chart's bands, value bar and target, drawn in the light tokens. */
+  it('draws a bullet chart’s greys and ink in the dark tokens', () => {
+    const light = COLORS.light;
+    const option = themed(
+      {
+        series: [
+          { type: 'bar', itemStyle: { color: light['bg-subtle'] } },
+          { type: 'bar', itemStyle: { color: light['border-subtle'] } },
+          { type: 'bar', itemStyle: { color: light['border-strong'] } },
+          { type: 'bar', itemStyle: { color: light['text-primary'] } },
+        ],
+      },
+      'dark',
+    );
+    const colours = (option['series'] as { itemStyle: { color: string } }[]).map(
+      (one) => one.itemStyle.color,
+    );
+    const dark = COLORS.dark;
+    expect(colours).toEqual([
+      dark['bg-subtle'],
+      dark['border-subtle'],
+      dark['border-strong'],
+      dark['text-primary'],
+    ]);
+  });
+
   it('never renames a data value that happens to be a palette colour', () => {
     // A member whose value is a colour — a product's colour column — must
     // stay the value it is on the axis, the legend and the click it sends.

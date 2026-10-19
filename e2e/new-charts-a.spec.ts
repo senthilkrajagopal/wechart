@@ -537,3 +537,175 @@ test('a 100 % stacked bar on a 5-column tile marks a segment as its tuple, shows
   expect(shares.length).toBeGreaterThan(0);
   expect(shares.every((share) => /^\d+\.\d%$/.test(share))).toBe(true);
 });
+
+/**
+ * A dashboard of bullet charts, each on a tile 4 to 6 columns wide as the
+ * Sales and Shipping dashboards place them: orders by status against a
+ * target of 75; amounts against a Target measure; one with Target emptied;
+ * and orders by ID, 240 members, more than a tile holds.
+ */
+async function bulletDashboard(request: APIRequestContext) {
+  const title = `Bullets ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const bullet = async (
+    chartTitle: string,
+    measure: string,
+    dimension: string,
+    target: Record<string, unknown> | undefined,
+  ) => {
+    const chart = (await (
+      await request.post(`${API}/documents`, {
+        data: { kind: 'chart', title: chartTitle, ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`${API}/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: chartTitle,
+          owner: 'admin',
+          localToDashboardId: dashboard.id,
+          chart: {
+            source: { cube: 'orders' },
+            wells: { measures: [measure], dimensions: [dimension], timeDimensions: [] },
+            chartType: 'bullet',
+            ...(target === undefined ? {} : { options: { bullet: { target } } }),
+          },
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    return chart.id;
+  };
+  const byValue = await bullet('Orders against 75', 'orders.count', 'orders.status', {
+    kind: 'value',
+    value: 75,
+  });
+  const byMeasure = await bullet('Amount against count', 'orders.total_amount', 'orders.status', {
+    kind: 'measure',
+    member: 'orders.count',
+  });
+  const empty = await bullet('No target yet', 'orders.count', 'orders.status', undefined);
+  const many = await bullet('Every order', 'orders.count', 'orders.id', {
+    kind: 'value',
+    value: 1,
+  });
+  const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [
+              { id: 'tile-value', kind: 'chart', w: 5, h: 40, chartId: byValue },
+              { id: 'tile-measure', kind: 'chart', w: 6, h: 40, chartId: byMeasure },
+              { id: 'tile-empty', kind: 'chart', w: 4, h: 40, chartId: empty },
+              { id: 'tile-many', kind: 'chart', w: 5, h: 40, chartId: many },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  return { id: dashboard.id, title };
+}
+
+/**
+ * T954 / AC-581: THE SYSTEM SHALL draw one bullet per member on one shared
+ * axis from zero, labelled "Axis starts at $0: bars are lengths": a 24 px
+ * band row on a 48 px pitch, the bands in R80's three greys lightest lowest,
+ * an 8 px `text-primary` value bar and a 2 × 32 px `text-primary` target; a
+ * member with no target drawing its bar with "No target"; and members past
+ * the tile's height scrolling with the axis fixed.
+ * `Fails when: bullets have their own axes, or the axis doesn't start at
+ * zero; a size or colour differs; the bands read in another lightness order;
+ * a member with no target is dropped or unlabelled; or the axis scrolls away.`
+ * (Sizes, colours and order: `charts/src/series/bullet.test.ts`.) And the
+ * tile's empty state with Target emptied (T954, design 23 sheet 8).
+ */
+test('bullet charts draw on dashboard tiles 4 to 6 columns wide, against a value or a measure, say a missing target, and scroll their members with the axis fixed', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await bulletDashboard(request);
+  // The Target measure is asked of Cube with the chart's own.
+  const asked: string[][] = [];
+  page.on('request', (sent) => {
+    if (!sent.url().endsWith('/api/load') || sent.method() !== 'POST') return;
+    const query = (sent.postDataJSON() as { query?: { measures?: string[] } } | null)?.query;
+    if (query?.measures !== undefined) asked.push(query.measures);
+  });
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  const texts = (tile: string) => page.locator(`[data-tile="${tile}"] svg text`).allTextContents();
+  const valueTile = page.locator('[data-tile="tile-value"]');
+  // One axis from zero that says so, and every status a bullet with its figures.
+  await expect.poll(() => texts('tile-value')).toContain('Axis starts at 0: bars are lengths');
+  const drawn = await texts('tile-value');
+  for (const status of ['completed', 'shipped', 'processing']) expect(drawn).toContain(status);
+  expect(drawn.filter((text) => / of 75 · \d+ %$/.test(text))).toHaveLength(3);
+  await expect(valueTile.getByTestId('chart-not-drawable')).toHaveCount(0);
+  // Bands, bars and targets drawn: R80's three greys and the ink.
+  for (const grey of ['#f0efec', '#e3e2de', '#c9c7c1'])
+    await expect(valueTile.locator(`svg path[fill="${grey}"]`)).toHaveCount(3);
+
+  // Against a Target measure: asked for, and every member drawn against it.
+  await expect
+    .poll(() => asked.some((measures) => measures.join() === 'orders.count,orders.total_amount'))
+    .toBe(true);
+  await expect
+    .poll(async () => (await texts('tile-measure')).filter((t) => t.includes(' of ')))
+    .toHaveLength(3);
+
+  // Target emptied: what it needs, said in the tile.
+  await expect(
+    page.locator('[data-tile="tile-empty"]').getByTestId('bullet-no-target'),
+  ).toContainText(
+    'A bullet chart compares each member with a target. Put a measure or a value in Target.',
+  );
+
+  // 240 orders: the tile holds some, and the wheel scrolls the rest past a
+  // value axis that stays as it was.
+  const many = page.locator('[data-tile="tile-many"]');
+  /** The value axis's tick labels: the lowest row of text above the axis's own name. */
+  const ticks = async () => {
+    const placed = await many
+      .locator('svg text')
+      .evaluateAll((all) =>
+        all.map((text) => [text.textContent ?? '', text.getBoundingClientRect().y] as const),
+      );
+    const row = Math.max(
+      ...placed.filter(([text]) => !text.startsWith('Axis starts')).map(([, y]) => y),
+    );
+    return placed.filter(([, y]) => Math.abs(y - row) < 3).map(([text]) => text);
+  };
+  await expect.poll(async () => (await texts('tile-many')).length).toBeGreaterThan(5);
+  const before = await texts('tile-many');
+  const axisBefore = await ticks();
+  expect(axisBefore.length).toBeGreaterThan(1);
+  expect(axisBefore[0]).toBe('0');
+  const box = await many.getByTestId('chart-canvas').boundingBox();
+  if (box === null) throw new Error('the bullet chart of every order is not drawn');
+  // A few notches of the wheel over the bullets, as a reader scrolls.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 3);
+  for (let notch = 0; notch < 6; notch += 1) {
+    await page.mouse.wheel(0, 120);
+    await page.waitForTimeout(150);
+  }
+  await expect.poll(async () => (await texts('tile-many')).join()).not.toBe(before.join());
+  expect(await ticks()).toEqual(axisBefore);
+});

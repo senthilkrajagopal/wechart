@@ -625,6 +625,7 @@ function TileBody({
   answered,
   chartType = tile.chartType,
   canEditChart = false,
+  onAddTarget,
   onItemClick,
   onShapeMark,
   onAxisRange,
@@ -682,6 +683,8 @@ function TileBody({
   chartType?: ChartType | undefined;
   /** The tile offers its pencil into the chart editor (T132). */
   canEditChart?: boolean;
+  /** A bullet chart's + Target: its chart opened, where the tile can open it (T954). */
+  onAddTarget?: (() => void) | undefined;
   /** A filtered answer is on its way (AC-078): what is drawn stays, marked busy. */
   busy?: boolean;
   /** The filters in effect on it, in words (AC-043). */
@@ -851,6 +854,7 @@ function TileBody({
           {...(rangeStripes === undefined ? {} : { rangeStripes })}
           {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
+          {...(onAddTarget === undefined ? {} : { onAddTarget })}
         />
       );
     case 'markdown':
@@ -1753,6 +1757,14 @@ function Elements({
               chartType={charts.typeOf?.(chartId) ?? element.chartType}
               // Named as the way in only where the pencil is offered.
               canEditChart={affordances.onEditChart !== undefined}
+              // A bullet chart's + Target opens its chart, as the pencil does (T954).
+              onAddTarget={
+                affordances.onEditChart === undefined || gone(chartId)
+                  ? undefined
+                  : () => {
+                      affordances.onEditChart?.(element.id, chartId);
+                    }
+              }
               /**
                * What this tile is marking, in words and a count (AC-098),
                * beside its title (AC-201) — a chart tile's only: a text tile

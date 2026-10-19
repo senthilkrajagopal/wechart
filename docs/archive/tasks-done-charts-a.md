@@ -49,3 +49,22 @@ Lane CHARTS-A's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
     - "Share of ‹category›" is added after the tile's table rows (`ADDED_COLUMNS` in `tiles/tableView/index.ts`, drawn by `DataTable`).
     - A stack at 100 % joins the "share shown" badge (T935-1).
     - AC-585 is ticked on `e2e/new-charts-a.spec.ts`, "a 100 % stacked bar on a 5-column tile…" (a real dashboard tile five columns wide), on headless Chromium, with the unit tests named.
+
+- [x] T954 (AC-581) Draw one bullet per member on one axis from zero: R80's greys lightest lowest, an 8 px value bar and a 2 × 32 px target
+  - Files: `packages/charts/src/series/bullet.ts` (+ test).
+  - Failing test: `bullet.test.ts` (series): 4 regions share one value axis with `min: 0` and the note "Axis starts at $0: bars are lengths"; bands are `bg-subtle`, `border-subtle`, `border-strong` from low to high, 24 px tall on a 48 px pitch; the value bar is 8 px `text-primary`; the target 2 × 32 px; a member with no target draws its bar labelled "No target"; 30 members scroll with the axis fixed (AC-581); a saved bullet chart with Target emptied draws, in the tile, design 23 sheet 8's empty state: "A bullet chart compares each member with a target. Put a measure or a value in Target." with + Target (added 2026-10-18 after T953's review: T953 says it in the editor's Target well).
+  - Depends on: T953
+  - Done (2026-10-18), decision T954-1, research `docs/research/echarts-bullet.md`:
+    - **Query:** the Target measure is asked of Cube beside the Metrics (`ChartSpec.targets`, `targetMeasuresOf`, in `toChartSpec` and the editor's query).
+    - **Drawing:** `series/bullet.ts`, registered in `SERIES`.
+      - The value bar is on a hidden second member axis, so ECharts centres it on the bands.
+      - The target is a `rect` scatter mark.
+      - Each member's figures are in its label.
+    - **Scrolling:** members past the tile's height scroll by the wheel or a slim slider.
+      - This uses the DataZoom `inside` and `slider` components, now registered.
+      - `zoomLock` is left off the `inside` dataZoom, which would silence the wheel.
+      - `layout/scrollWindow.ts` keeps the window across the tile's redraws.
+    - **Empty Target:** the tile says AC-580's sentence, with + Target where the dashboard offers the chart's pencil (`ChartTile`'s `onAddTarget`, through `TileBody`).
+    - **Dark theme:** `bg-subtle` and `text-primary` are recoloured.
+    - **e2e walk:** `bullet` comes out of `e2e/r81Awaiting.ts`'s `AWAITING_SERIES`.
+    - **AC-581** is ticked on `e2e/new-charts-a.spec.ts`, "bullet charts draw on dashboard tiles 4 to 6 columns wide…" (tiles 5, 6, 4 and 5 columns wide, on headless Chromium). This sits with `bullet.test.ts` (sizes, colours, order, pitch, scrolling), `bulletQuery.test.ts`, `bulletTile.test.tsx` and `scrollWindow.test.ts`.

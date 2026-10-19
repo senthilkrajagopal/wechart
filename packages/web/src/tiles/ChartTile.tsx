@@ -1,5 +1,11 @@
 import { describeChart, isDrawable } from '@wechart/charts';
-import { CHART_TYPE_NAMES, type ChartType, type RenderSpec } from '@wechart/core';
+import {
+  BULLET_NO_TARGET,
+  CHART_TYPE_NAMES,
+  targetCount,
+  type ChartType,
+  type RenderSpec,
+} from '@wechart/core';
 import { useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 import type { ClickedItem } from '../dashboard/crossfilter/clicked';
@@ -132,6 +138,11 @@ export interface ChartTileProps {
    * table view left on.
    */
   readonly kind?: string | undefined;
+  /**
+   * A bullet chart's + Target, where the tile can open its chart to set one
+   * (T954, AC-581); absent, its empty state says what it needs without it.
+   */
+  readonly onAddTarget?: (() => void) | undefined;
 }
 
 interface ChartBodyProps {
@@ -151,6 +162,8 @@ interface ChartBodyProps {
   readonly rowMarking?: DataTableProps['marking'];
   /** A KPI standing alone: on its own page (T683; design 06 state B). */
   readonly kpiSolo?: boolean | undefined;
+  /** A bullet chart's + Target (T954). */
+  readonly onAddTarget?: (() => void) | undefined;
 }
 
 /** Types wechart draws as DOM rather than handing to ECharts. */
@@ -170,8 +183,30 @@ function ChartBody({
   onContextMenuAt,
   rowMarking,
   kpiSolo,
+  onAddTarget,
 }: ChartBodyProps) {
   const describedId = useId();
+  /**
+   * A bullet chart with Target emptied (T954, AC-581; design 23 sheet 8): it
+   * has nothing to compare its members with, so it says what it needs, with
+   * + Target where the tile can open its chart.
+   */
+  if (spec.chartType === 'bullet' && targetCount(spec.options) === 0)
+    return (
+      <div className="tile-no-rows" data-testid="bullet-no-target" role="status">
+        <p className="tile-no-rows__headline">
+          <StatusIcon kind="idle" />
+          <span>{BULLET_NO_TARGET}</span>
+        </p>
+        {onAddTarget === undefined ? null : (
+          <p>
+            <button type="button" className="btn btn-sm" onClick={onAddTarget}>
+              + Target
+            </button>
+          </p>
+        )}
+      </div>
+    );
   // A KPI alone, at text-kpi-solo (T683; design 06 state B).
   if (spec.chartType === 'kpi')
     return <Kpi spec={spec} {...(kpiSolo === true ? { solo: true } : {})} />;
@@ -248,6 +283,7 @@ export function ChartTile({
   badge,
   notes,
   kind,
+  onAddTarget,
 }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
@@ -454,6 +490,7 @@ export function ChartTile({
           {...(onContextMenuAt === undefined ? {} : { onContextMenuAt })}
           {...(rowMarking === undefined ? {} : { rowMarking })}
           {...(kpiSolo === true ? { kpiSolo } : {})}
+          {...(onAddTarget === undefined ? {} : { onAddTarget })}
         />
       )}
       {/* A map's codes it can't place, named under it (T398, rule 87). */}

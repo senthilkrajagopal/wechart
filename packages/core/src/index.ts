@@ -423,6 +423,7 @@ export {
   MAX_BANDS,
   MIN_BANDS,
   targetCount,
+  targetMeasuresOf,
   withBulletOptions,
   type BulletSettings,
   type BulletTarget,
