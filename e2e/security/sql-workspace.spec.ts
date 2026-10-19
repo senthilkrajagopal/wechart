@@ -31,7 +31,7 @@ const switcher = (page: Page) =>
 const workspace = (page: Page) => page.getByRole('region', { name: 'SQL runner' });
 
 /** A page of a role's, signed in afresh in a context of its own. */
-async function signedIn(browser: Browser, role: 'super' | 'reader' | 'manager') {
+async function signedIn(browser: Browser, role: 'super' | 'reader' | 'manager' | 'norunner') {
   const context = await browser.newContext({
     baseURL: BASE_URL,
     storageState: { cookies: [], origins: [] },
@@ -458,6 +458,52 @@ test.describe('the data source picker (T798, AC-447)', () => {
   // Who sees a folder only from below, or reads it, is the API's to hold
   // (`routes/sql-sources.test.ts`): here those users have no workspace to
   // open the picker in.
+
+  /**
+   * AC-466's second sentence (T799, design 17's H2): a read-write member of a
+   * folder whose data sources none runs SQL. As `norunner`, whose group only
+   * this test grants, so no other spec's source is theirs (the coordinator's
+   * call, 2026-10-18).
+   */
+  test('a member who may run SQL on no data source is told so, with the way to Data sources (T799, AC-466)', async ({
+    browser,
+  }) => {
+    const admin = await signedIn(browser, 'super');
+    let folderId = '';
+    try {
+      const made = await admin.page.request.post('/api/documents', {
+        data: { kind: 'folder', title: `No runner ${RUN}`, folderId: 'root' },
+      });
+      expect(made.status()).toBe(201);
+      folderId = ((await made.json()) as { id: string }).id;
+      const access = await admin.page.request.put(`/api/folders/${folderId}/access`, {
+        data: { readOnly: [], readWrite: ['norunner-rw'] },
+      });
+      expect(access.status()).toBe(200);
+      const { context, page } = await signedIn(browser, 'norunner');
+      try {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.goto('/sql');
+        await expect(workspace(page)).toBeVisible();
+        await expect(
+          page.getByText(
+            'No data source runs SQL for you yet. A Super-Admin turns the SQL runner on for each data source. Your own data sources in My workspace need no switch.',
+          ),
+        ).toBeVisible();
+        await expect(page.getByRole('link', { name: 'Go to Data sources' })).toHaveAttribute(
+          'href',
+          '/data-sources',
+        );
+        // Not the first visit's sentence, which asks to choose one.
+        await expect(page.getByText('Choose a data source to write SQL against.')).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    } finally {
+      if (folderId !== '') await admin.page.request.delete(`/api/documents/folder/${folderId}`);
+      await admin.context.close();
+    }
+  });
 });
 
 /**

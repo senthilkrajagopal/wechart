@@ -49,5 +49,10 @@
     "email": "manager@wechart.test",
     "password": "wechart-dev-manager",
     "groups": ["managers"]
+  },
+  "norunner": {
+    "email": "norunner@wechart.test",
+    "password": "wechart-dev-norunner",
+    "groups": ["norunner-rw"]
   }
 }

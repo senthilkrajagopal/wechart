@@ -107,3 +107,12 @@ staticPasswords:
     preferredUsername: manager
     userID: 00000000-0000-4000-8000-000000000006
     groups: [managers]
+  # A read-write member of a folder with no data source switched on (AC-466's
+  # "No data source runs SQL for you yet"): no other spec grants its group.
+  - email: norunner@wechart.test
+    hash: $2y$10$fGer427m6sADSw/pz4UdJ.UTiMbVFJQ98phjFDSPY7wdLCZ0jQf7S
+    username: norunner
+    name: Nora Norunner
+    preferredUsername: norunner
+    userID: 00000000-0000-4000-8000-000000000007
+    groups: [norunner-rw]
