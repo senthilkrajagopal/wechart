@@ -122,6 +122,7 @@ import {
   emptyTextDocument,
   isEmptyTextDocument,
   tokenOfElement,
+  withElementSettings,
   type TokenRender,
 } from '../tiles/text/documents';
 import { elementCountOf, whyTextUnsaveable } from '../tiles/text/elementLimit';
@@ -130,6 +131,10 @@ import { LazyTextEditor, TextEditingContext, type TextEditing } from '../tiles/t
 import type { CopilotOffer, InsertSources } from '../tiles/text/InsertMenu';
 import { insertSourcesOf } from '../tiles/text/insertSources';
 import { copilotOfferFor } from '../tiles/text/copilotOffer';
+import type { ElementRender } from '../tiles/text/readMapping';
+import { changeQueryOf, timeOf, valueQueryOf } from '../tiles/text/elementQueries';
+import { ValueElement } from '../tiles/text/elements/ValueElement';
+import { ChangeElement } from '../tiles/text/elements/ChangeElement';
 import { namesFrom } from '../tiles/text/elementName';
 import { ElementsList } from '../tiles/text/ElementsList';
 import { QueryClientContext } from '@tanstack/react-query';
@@ -640,6 +645,7 @@ function TileBody({
   memberTitle,
   notes,
   tokens,
+  elements,
   rowsTotal,
 }: {
   tile: Tile;
@@ -647,6 +653,8 @@ function TileBody({
   rowsTotal?: number | undefined;
   /** A text tile's live values, drawn for its tokens (T389, AC-116). */
   tokens?: TokenRender | undefined;
+  /** A Text tile's live elements, drawn by their kinds (T884, AC-520). */
+  elements?: ElementRender | undefined;
   /** What the tile says of its answer, drawn under its head (T253's review). */
   notes?: readonly ReactNode[] | undefined;
   /** A member's title from the model, for what the tile says of one (AC-220). */
@@ -872,6 +880,9 @@ function TileBody({
           // Its Value and Marking elements as the markdown tile's tokens
           // were drawn: the markings and measures (T389, AC-116).
           renderElement={(node, key) => {
+            // Its kind's own drawing (T884–T886), else as its token was drawn.
+            const drawnByKind = elements?.(node, key);
+            if (drawnByKind !== undefined) return drawnByKind;
             const token = tokenOfElement(node);
             return token === undefined ? null : tokens?.(token, key);
           }}
@@ -919,6 +930,7 @@ function TileBody({
                   sources={textEditing.sources}
                   copilot={textEditing.copilot}
                   selectElement={textEditing.selectElement}
+                  changeElement={textEditing.changeElement}
                   onElements={(elements, selected) => {
                     textEditing.onElements?.(tile.id, elements, selected);
                   }}
@@ -1078,6 +1090,11 @@ interface TileCharts {
   readonly limitedStates?: Readonly<Record<string, LimitedState>> | undefined;
   /** A text tile's tokens, drawn as the markings' state and the measures' values (T389, AC-116). */
   readonly textTokensOf?: ((tileId: string) => TokenRender) | undefined;
+  /**
+   * A Text tile's live elements drawn as their kinds draw them (T884,
+   * AC-520, AC-116), or undefined for a kind still drawn as its token.
+   */
+  readonly textElementsOf?: ((tileId: string) => ElementRender) | undefined;
   /** Each drafted chart's rows in all, where its query asked (T401's review, AC-315). */
   readonly draftTotals?: Readonly<Record<string, number>> | undefined;
   /** The marking a tile shows, its colour and how many items it holds (AC-098). */
@@ -1727,6 +1744,7 @@ function Elements({
               title={charts.titleOf?.(chartId)}
               memberTitle={charts.memberTitle}
               tokens={charts.textTokensOf?.(element.id)}
+              elements={charts.textElementsOf?.(element.id)}
               rowsTotal={drill === undefined ? charts.draftTotals?.[chartId] : undefined}
               // A drilled view's own answer, so its own freshness (AC-238).
               answered={drill === undefined ? charts.answered?.[chartId] : drill.answered}
@@ -4778,6 +4796,62 @@ export function DashboardView({
         />
       );
     },
+    /**
+     * A Text tile's Values and Changes (T884, AC-520, AC-116): under the
+     * filters that reach the tile and their own; a Value over its marking's
+     * rows, all data while nothing is marked unless "—" was chosen; a Change
+     * along its time dimension. Other kinds are drawn as their tokens were,
+     * until their own drawing (T885, T886).
+     */
+    textElementsOf: (tileId: string) => (node, key) => {
+      const attrs = node.attrs ?? {};
+      const measure = typeof attrs['measure'] === 'string' ? attrs['measure'] : undefined;
+      if (measure === undefined) return undefined;
+      if (node.type === 'value') {
+        const named = typeof attrs['marking'] === 'string' ? attrs['marking'] : undefined;
+        const found =
+          named === undefined
+            ? undefined
+            : markings.find(
+                (each) => each.name.trim().toLowerCase() === named.trim().toLowerCase(),
+              );
+        if (named !== undefined && found === undefined)
+          return <UnknownMarkingToken key={key} name={named} />;
+        const asked = valueQueryOf(
+          node,
+          found === undefined ? undefined : markingOf(marks, found.id),
+        );
+        return (
+          <ValueElement
+            key={key}
+            asked={
+              'query' in asked ? { query: withFilters(asked.query, textFiltersOf(tileId)) } : asked
+            }
+            member={measure}
+            formats={formats}
+            context={preview}
+          />
+        );
+      }
+      if (node.type === 'change') {
+        const time = timeOf(node, model);
+        return (
+          <ChangeElement
+            key={key}
+            query={
+              time === undefined
+                ? undefined
+                : withFilters(changeQueryOf(node, time), textFiltersOf(tileId))
+            }
+            member={measure}
+            attrs={attrs}
+            formats={formats}
+            context={preview}
+          />
+        );
+      }
+      return undefined;
+    },
     typeOf: (chartId: string) => drawn.documents?.[chartId]?.chart.chartType,
     documented: (chartId: string) => drawn.documents?.[chartId] !== undefined,
     answered: withFiltered.answered,
@@ -5238,6 +5312,10 @@ export function DashboardView({
   const [elementAsk, setElementAsk] = useState<{ index: number; ask: number } | undefined>(
     undefined,
   );
+  /** An element's settings from Properties, for the text being edited (T884, AC-520). */
+  const [elementChange, setElementChange] = useState<
+    { index: number; settings: Record<string, unknown>; ask: number } | undefined
+  >(undefined);
   const onTextElements = useCallback(
     (tileId: string, elements: TextNode[], selected: number | null) => {
       setTextElements({ tileId, elements, selected });
@@ -5252,6 +5330,7 @@ export function DashboardView({
     setEditingText(tileId);
     setTextElements(null);
     setElementAsk(undefined);
+    setElementChange(undefined);
   }, []);
   /** What a Text tile's insert menu offers: the dashboard's measures, markings, filters (T881). */
   const textSources = useMemo(
@@ -6059,6 +6138,31 @@ export function DashboardView({
                         }
                         setElementAsk((was) => ({ index, ask: (was?.ask ?? 0) + 1 }));
                       }}
+                      markings={session.document.markings ?? []}
+                      // Its settings (T884, AC-520): to the text being edited,
+                      // else to the stored document, one change either way.
+                      onChange={(index, settings) => {
+                        if (session.saving) return;
+                        if (editingText === tile.id) {
+                          setElementChange((was) => ({
+                            index,
+                            settings,
+                            ask: (was?.ask ?? 0) + 1,
+                          }));
+                          return;
+                        }
+                        session.update((current) =>
+                          changeTile(current, tile.id, (each) => {
+                            const read = readAsText(each) as Tile;
+                            return read.document === undefined
+                              ? read
+                              : {
+                                  ...read,
+                                  document: withElementSettings(read.document, index, settings),
+                                };
+                          }),
+                        );
+                      }}
                     />
                   );
                 }}
@@ -6472,6 +6576,7 @@ export function DashboardView({
               copilot={copilot}
               onTextElements={onTextElements}
               elementAsk={elementAsk}
+              elementChange={elementChange}
               where={where}
               onAim={(next) => {
                 setSelected(next.selected);
@@ -6676,6 +6781,7 @@ function DashboardPages({
   copilot,
   onTextElements,
   elementAsk,
+  elementChange,
   where,
   onAim,
   deleted,
@@ -6762,6 +6868,8 @@ function DashboardPages({
   /** The edited text's elements, for Properties' Elements list, and a row's ask to select one (AC-519). */
   onTextElements?: TextEditing['onElements'];
   elementAsk?: TextEditing['selectElement'];
+  /** An element's settings from Properties, for the text being edited (T884). */
+  elementChange?: TextEditing['changeElement'];
   /** Where the next insert is aimed, owned above so the sidebar agrees. */
   where: { selected: string | null; addTarget: string | null; pageId: string };
   onAim: (next: { selected: string | null; addTarget: string | null }) => void;
@@ -6886,6 +6994,7 @@ function DashboardPages({
     copilot,
     onElements: onTextElements,
     selectElement: elementAsk,
+    changeElement: elementChange,
   };
 
   const drag = useTileDrag({

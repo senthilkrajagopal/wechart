@@ -64,6 +64,17 @@ export interface TextEditorProps {
   readonly onElements?: ((elements: TextNode[], selected: number | null) => void) | undefined;
   /** Select the element at this place, asked anew by `ask` (a row of the Elements list). */
   readonly selectElement?: { readonly index: number; readonly ask: number } | undefined;
+  /**
+   * Settings for the element at this place, set in Properties while the text
+   * is edited (T884, AC-520); a null takes one away. Asked anew by `ask`.
+   */
+  readonly changeElement?:
+    | {
+        readonly index: number;
+        readonly settings: Readonly<Record<string, unknown>>;
+        readonly ask: number;
+      }
+    | undefined;
 }
 
 const ELEMENT_TYPES = new Set<string>(ELEMENT_KINDS);
@@ -119,6 +130,7 @@ export default function TextEditor({
   copilot,
   onElements,
   selectElement,
+  changeElement,
 }: TextEditorProps) {
   const names = useMemo(() => namesFrom(sources), [sources]);
   /** The insert menu, while open: what's typed, where, and which row (AC-517). */
@@ -323,6 +335,26 @@ export default function TextEditor({
     // text's however it was opened (T882's review).
     if (at !== undefined) editor.chain().setNodeSelection(at).focus().run();
   }, [editor, selectElement]);
+
+  /**
+   * Settings set in Properties reach the element in the text, one step of
+   * its history, and it stays selected (T884, AC-520).
+   */
+  useEffect(() => {
+    if (changeElement === undefined) return;
+    const at = elementAt(editor, changeElement.index);
+    if (at === undefined) return;
+    editor
+      .chain()
+      .command(({ tr }) => {
+        const node = tr.doc.nodeAt(at);
+        if (node === null) return false;
+        tr.setNodeMarkup(at, undefined, { ...node.attrs, ...changeElement.settings });
+        return true;
+      })
+      .setNodeSelection(at)
+      .run();
+  }, [editor, changeElement]);
 
   /**
    * Leaving the text (AC-302): focus going anywhere but the text, its toolbar

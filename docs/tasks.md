@@ -1921,10 +1921,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `elementLimit.test.ts`: at 10 elements Insert and every menu row are disabled with "This tile holds 10 elements, the most a Text tile can. Remove one, or add another Text tile."; pasting text holding 2 elements into a tile of 9 is refused with that reason and changes nothing; a filter control and a button count (AC-518).
   - Depends on: T882
 
-- [ ] T884 (AC-520, AC-116) The Value and Change elements: their settings, model formats, marking limits, own filters, and Change's triangle, sign and direction colour
-  - Files: `packages/web/src/tiles/text/elements/ValueElement.tsx` (+ test), `packages/web/src/tiles/text/elements/ChangeElement.tsx` (+ test), `packages/web/src/tiles/text/elementQueries.ts` (+ test).
-  - Failing test: `ValueElement.test.tsx`: Revenue in its model's currency format; limited by Marking, over the marked rows, and with nothing marked all data, or "—" when chosen; its own filter added to the tile's in the query; `ChangeElement.test.tsx`: +4.2 % with Higher is better reads "▲ 4.2%" in `status-success`, −2.1 % "▼ 2.1%" in `status-error`, Neutral in `text-secondary`; as an amount "▲ $50K" (AC-520, AC-116).
-  - Depends on: T882
+- [x] T884 (AC-520, AC-116) The Value and Change elements: their settings, model formats, marking limits, own filters, and Change's triangle, sign and direction colour
 
 - [ ] T885 (AC-521) Sparkline and Bullet graph as wechart's own SVG, word-sized, each an image with its text alternative
   - Files: `packages/web/src/tiles/text/elements/Sparkline.tsx` (+ test), `packages/web/src/tiles/text/elements/BulletGraph.tsx` (+ test).

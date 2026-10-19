@@ -36,6 +36,59 @@ const ELEMENTS: TextNode[] = [
   { type: 'filterControl', attrs: { filter: 'f-country' } },
 ];
 
+/**
+ * T884 / AC-520: a Value's settings — Limit by marking, and what it shows
+ * with nothing marked — and a Change's — its period, shown as % or an
+ * amount, and its direction (design 21 C1, C5).
+ */
+describe('a Value’s and a Change’s settings (T884, AC-520)', () => {
+  const settingsOf = (selected: number) => {
+    const onChange = vi.fn();
+    render(
+      <ElementsList
+        elements={[
+          ...ELEMENTS.slice(0, 2),
+          { type: 'value', attrs: { measure: 'orders.revenue', marking: 'Picks' } },
+        ]}
+        selected={selected}
+        names={names}
+        markings={[{ name: 'Picks' }]}
+        onSelect={vi.fn()}
+        onChange={onChange}
+      />,
+    );
+    return onChange;
+  };
+
+  it('limits a Value by a marking, and chooses what it shows with nothing marked', async () => {
+    const onChange = settingsOf(0);
+    expect(screen.getByText("The model's")).toBeTruthy();
+    await userEvent.selectOptions(screen.getByLabelText('Limit by marking'), 'Picks');
+    expect(onChange).toHaveBeenLastCalledWith(0, { marking: 'Picks' });
+    // Only with a marking is there a nothing-marked choice.
+    expect(screen.queryByRole('radio', { name: '"—"' })).toBeNull();
+  });
+
+  it('shows "—" or all data with nothing marked, once limited', async () => {
+    const onChange = settingsOf(2);
+    await userEvent.click(screen.getByRole('radio', { name: '"—"' }));
+    expect(onChange).toHaveBeenLastCalledWith(2, { whenUnmarked: 'none' });
+    await userEvent.selectOptions(screen.getByLabelText('Limit by marking'), '');
+    expect(onChange).toHaveBeenLastCalledWith(2, { marking: null, whenUnmarked: null });
+  });
+
+  it('sets a Change’s period, its % or amount, and its direction', async () => {
+    const onChange = settingsOf(1);
+    expect((screen.getByLabelText('Period') as HTMLSelectElement).value).toBe('quarter');
+    await userEvent.selectOptions(screen.getByLabelText('Period'), 'year');
+    expect(onChange).toHaveBeenLastCalledWith(1, { period: 'year' });
+    await userEvent.click(screen.getByRole('radio', { name: 'Amount' }));
+    expect(onChange).toHaveBeenLastCalledWith(1, { show: 'amount' });
+    await userEvent.click(screen.getByRole('radio', { name: 'Lower is better' }));
+    expect(onChange).toHaveBeenLastCalledWith(1, { direction: 'lower' });
+  });
+});
+
 describe('the Elements list (T882, AC-519)', () => {
   it('lists every element in text order, with its kind and source, and "3 of 10"', () => {
     render(<ElementsList elements={ELEMENTS} selected={null} names={names} onSelect={vi.fn()} />);

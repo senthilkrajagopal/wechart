@@ -28,6 +28,14 @@ export interface TextEditing {
     ((tileId: string, elements: TextNode[], selected: number | null) => void) | undefined;
   /** An element to select, asked from the Elements list (AC-519). */
   readonly selectElement?: { readonly index: number; readonly ask: number } | undefined;
+  /** An element's settings, set in Properties while its text is edited (T884). */
+  readonly changeElement?:
+    | {
+        readonly index: number;
+        readonly settings: Readonly<Record<string, unknown>>;
+        readonly ask: number;
+      }
+    | undefined;
 }
 
 export const TextEditingContext = createContext<TextEditing | undefined>(undefined);

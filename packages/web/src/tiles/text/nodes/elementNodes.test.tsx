@@ -132,6 +132,31 @@ describe('an element in the text being edited (T882, AC-519)', () => {
     expect(holder.textContent).toBe('Change, orders.revenue against previous quarter');
   });
 
+  it('takes settings set in Properties while the text is edited, kept selected (T884)', async () => {
+    const onLeave = vi.fn();
+    const document = doc({ type: 'text', text: 'a' }, CHANGE);
+    const props = { document, name: 'EMEA summary', onLeave, sources: SOURCES };
+    const { rerender } = render(<TextEditor {...props} />);
+    const textbox = screen.getByRole('textbox', { name: 'EMEA summary' });
+    await waitFor(() => {
+      expect(textbox.contains(window.document.activeElement)).toBe(true);
+    });
+    rerender(
+      <TextEditor
+        {...props}
+        changeElement={{ index: 0, settings: { show: 'amount', period: null }, ask: 1 }}
+      />,
+    );
+    expect(selectedElement(textbox)?.getAttribute('data-element')).toBe('change');
+    await userEvent.keyboard('{Escape}');
+    expect(onLeave.mock.calls[0]?.[0]).toEqual(
+      doc(
+        { type: 'text', text: 'a' },
+        { type: 'change', attrs: { measure: 'orders.revenue', show: 'amount' } },
+      ),
+    );
+  });
+
   it('is removed whole by Backspace just after it', async () => {
     const { onLeave } = await opened(doc({ type: 'text', text: 'a' }, CHANGE));
     await userEvent.keyboard('{Backspace}{Escape}');

@@ -55,6 +55,15 @@ export const TEXT_CSS = `
 .text-tile__count[data-state='warning'] { color: var(--wc-status-warning); font-weight: 600; }
 /* An empty tile's placeholder, in edit mode only (design 21 G6). */
 .text-tile--empty { margin: 0; color: var(--wc-text-muted); }
+/* Live values as read (T884; direction §7h): in the sentence's own type,
+   tabular; a Change in the status its direction gives it (rule 3). */
+.text-value,
+.text-change { font-variant-numeric: tabular-nums; }
+.text-value--waiting,
+.text-value--unavailable { color: var(--wc-text-muted); }
+.text-change[data-tone='success'] { color: var(--wc-status-success); }
+.text-change[data-tone='error'] { color: var(--wc-status-error); }
+.text-change[data-tone='neutral'] { color: var(--wc-text-secondary); }
 /* Double-click's target in edit mode; no box of its own (T876). */
 .text-tile-host { display: contents; }
 /* While its text is edited, the tile stacks its head, the toolbar and the

@@ -61,3 +61,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/tiles/text/nodes/*.ts` (one node per kind, inline atoms with `ReactNodeViewRenderer`), `packages/web/src/tiles/text/ElementsList.tsx` (+ test), `packages/web/src/tiles/text/elementName.ts` (+ test).
   - Failing test: `ElementsList.test.tsx`: elements listed in text order with kind and source and "3 of 10"; choosing a row selects that element and opens its settings; `elementName.test.ts`: "Change, Revenue against previous quarter"; a node test: → steps over an element as one character and selects it; Backspace after it removes it whole; a filter control in edit mode ignores a click's change (AC-519).
   - Depends on: T881
+
+- [x] T884 (AC-520, AC-116) The Value and Change elements: their settings, model formats, marking limits, own filters, and Change's triangle, sign and direction colour
+  - Files: `packages/web/src/tiles/text/elements/ValueElement.tsx` (+ test), `packages/web/src/tiles/text/elements/ChangeElement.tsx` (+ test), `packages/web/src/tiles/text/elementQueries.ts` (+ test).
+  - Failing test: `ValueElement.test.tsx`: Revenue in its model's currency format; limited by Marking, over the marked rows, and with nothing marked all data, or "—" when chosen; its own filter added to the tile's in the query; `ChangeElement.test.tsx`: +4.2 % with Higher is better reads "▲ 4.2%" in `status-success`, −2.1 % "▼ 2.1%" in `status-error`, Neutral in `text-secondary`; as an amount "▲ $50K" (AC-520, AC-116).
+  - Depends on: T882

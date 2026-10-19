@@ -425,3 +425,125 @@ test('an element is an atom: stepped over and selected by the arrows, removed wh
   await page.keyboard.press('Escape');
   await expect(textbox).toHaveCount(0);
 });
+
+/** A dashboard holding one Text tile of this document, as saved after R80. */
+async function dashboardWithText(request: APIRequestContext, content: unknown[]) {
+  const title = `Text ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed', interactions: { mode: 'markings' } },
+        markings: [{ id: 'm1', name: 'Picks', slot: 'mk1', isDefault: true }],
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [
+              {
+                id: 'tile-text',
+                kind: 'text',
+                w: 6,
+                h: 24,
+                document: { version: 1, doc: { type: 'doc', content } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  return { id: dashboard.id, title };
+}
+
+/**
+ * T884 / AC-520, AC-116: a Value reads in its model's format, and one
+ * limited by a marking with nothing marked shows "—" when the author chose
+ * so; a Change reads ▲ or ▼ and its size, in the status its direction
+ * gives, and its settings in Properties — Show as Amount — change what it
+ * reads, one Undo putting it back.
+ */
+test('a Value in its model’s format, limited by a marking, and a Change with its triangle, colour and settings', async ({
+  page,
+  request,
+}) => {
+  const amount = 'orders.total_amount';
+  const { id, title } = await dashboardWithText(request, [
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: 'Revenue ' },
+        { type: 'value', attrs: { measure: amount } },
+        { type: 'text', text: ', picked ' },
+        { type: 'value', attrs: { measure: amount, marking: 'Picks', whenUnmarked: 'none' } },
+        { type: 'text', text: ', change ' },
+        { type: 'change', attrs: { measure: amount, period: 'month', direction: 'higher' } },
+      ],
+    },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+
+  const tile = page.locator('[data-tile="tile-text"]');
+  const values = tile.locator('.text-tile .text-value');
+  // The model's currency format (AC-046).
+  await expect(values.first()).toHaveText(/^\$\d{1,3}(,\d{3})*(\.\d+)?$/);
+  // Nothing marked, and "—" chosen for that.
+  await expect(values.nth(1)).toHaveText('—');
+
+  const change = tile.locator('.text-tile .text-change');
+  await expect(change).toHaveText(/^(▲|▼) \d+\.\d%$|^0\.0%$/);
+  const read = await change.evaluate((element) => {
+    const probe = (colour: string) => {
+      const span = document.createElement('span');
+      span.style.color = colour;
+      element.parentElement?.append(span);
+      const value = getComputedStyle(span).color;
+      span.remove();
+      return value;
+    };
+    return {
+      text: element.textContent ?? '',
+      tone: element.getAttribute('data-tone'),
+      colour: getComputedStyle(element).color,
+      success: probe('var(--wc-status-success)'),
+      error: probe('var(--wc-status-error)'),
+      neutral: probe('var(--wc-text-secondary)'),
+    };
+  });
+  // Higher is better: a rise in status-success, a fall in status-error.
+  const tone = read.text.startsWith('▲')
+    ? 'success'
+    : read.text.startsWith('▼')
+      ? 'error'
+      : 'neutral';
+  expect(read.tone).toBe(tone);
+  expect(read.colour).toBe(read[tone]);
+
+  // Its settings: Show as Amount, set while the text is edited.
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await tile.locator('.text-tile').dblclick();
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await sidebar
+    .getByRole('list', { name: 'Elements' })
+    .getByRole('button', { name: /^Change/ })
+    .click();
+  await sidebar.getByRole('radio', { name: 'Amount' }).check();
+  await tile.locator('.tile-head__kind').click();
+  await expect(tile.getByRole('textbox')).toHaveCount(0);
+  await expect(change).toHaveText(/^((▲|▼) )?\$\d+(\.\d)?[KMB]?$/);
+
+  // One Undo takes the whole edit back.
+  await toolbar(page).getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(change).toHaveText(/^(▲|▼) \d+\.\d%$|^0\.0%$/);
+});

@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 
 import {
+  ELEMENT_KINDS,
   elementsOf,
   TEXT_DOCUMENT_VERSION,
+  type ElementKind,
   type TextDocument,
   type TextNode,
   type TextToken,
@@ -76,6 +78,41 @@ export function tokenOfElement(node: TextNode): TextToken | undefined {
       show: attrs['show'] === 'summary' ? 'summary' : 'count',
     };
   return undefined;
+}
+
+/**
+ * The document with the element at this place in text order given these
+ * settings (T884, AC-520), a null taking one away; the same document, by
+ * identity, where no element is at that place. Only the path to it is copied.
+ */
+export function withElementSettings(
+  document: TextDocument,
+  index: number,
+  settings: Readonly<Record<string, unknown>>,
+): TextDocument {
+  let seen = 0;
+  let done = false;
+  const visit = (node: TextNode): TextNode => {
+    if (done) return node;
+    if (ELEMENT_KINDS.includes(node.type as ElementKind)) {
+      if (seen !== index) {
+        seen += 1;
+        return node;
+      }
+      done = true;
+      const attrs = Object.fromEntries(
+        Object.entries({ ...node.attrs, ...settings }).filter(
+          ([, value]) => value !== null && value !== undefined,
+        ),
+      );
+      return { ...node, attrs };
+    }
+    if (node.content === undefined) return node;
+    const content = node.content.map(visit);
+    return content.every((child, at) => child === node.content?.[at]) ? node : { ...node, content };
+  };
+  const doc = visit(document.doc);
+  return doc === document.doc ? document : { ...document, doc };
 }
 
 /** The first line of a Text tile that reads as anything, or '' for none. */
