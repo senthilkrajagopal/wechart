@@ -429,3 +429,65 @@ test('a box plot’s Distribution offers its points and violin once Each point i
   await expect(radio('Beeswarm')).toBeChecked();
   await expect(violin).toBeChecked();
 });
+
+/**
+ * T991 / AC-306, AC-592 (points): Points as None, Outliers, All or Beeswarm,
+ * drawn in the editor's preview. `Fails when: … a box plot with Points at
+ * Outliers draws other than before R81` (AC-306); `a size or opacity
+ * differs; two Beeswarm points overlap; two draws of the same data place a
+ * point differently` (AC-592).
+ *
+ * Each point an order: the seed's 240 orders, 80 a status, $22.50 apart
+ * within each, so a Beeswarm has to place them side by side.
+ */
+test('a box plot draws its points as None, Outliers, All or Beeswarm, the swarm without overlap', async ({
+  page,
+  request,
+}) => {
+  const id = await boxPlot(request, [], 'orders.id');
+  await page.goto(`/explore/charts/${id}/edit`);
+  await expectChartType(page, 'boxplot');
+  const chart = page.getByTestId('editor-result').locator('svg').first();
+  await expect(chart).toContainText('completed');
+  // Outliers, as before R81: evenly spread amounts leave none beyond the whiskers.
+  await expect(dotsIn(chart)).toHaveCount(0);
+
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  const radio = (name: string) =>
+    page.getByRole('radiogroup', { name: 'Points' }).getByRole('radio', { name, exact: true });
+  const centres = () =>
+    dotsIn(chart).evaluateAll((dots) =>
+      dots.map((dot) => {
+        const box = dot.getBoundingClientRect();
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2, size: box.width };
+      }),
+    );
+
+  await radio('None').check();
+  await expect(dotsIn(chart)).toHaveCount(0);
+
+  await radio('All').check();
+  await expect(dotsIn(chart)).toHaveCount(240);
+  const jittered = await centres();
+  for (const dot of jittered) expect(Math.round(dot.size)).toBe(8);
+
+  await radio('Beeswarm').check();
+  await expect(dotsIn(chart)).toHaveCount(240);
+  const swarm = await centres();
+  let closest = Number.POSITIVE_INFINITY;
+  for (let a = 0; a < swarm.length; a += 1)
+    for (let b = a + 1; b < swarm.length; b += 1)
+      closest = Math.min(closest, Math.hypot(swarm[a]!.x - swarm[b]!.x, swarm[a]!.y - swarm[b]!.y));
+  expect(closest).toBeGreaterThanOrEqual(7.9);
+
+  // Drawn again, every point lands where it was.
+  await radio('All').check();
+  await expect.poll(centres).toEqual(jittered);
+  await radio('Beeswarm').check();
+  await expect.poll(centres).toEqual(swarm);
+
+  // And back to Outliers: as it drew before.
+  await radio('Outliers').check();
+  await expect(dotsIn(chart)).toHaveCount(0);
+  await expect(chart.locator('path[fill="#fff"]')).not.toHaveCount(0);
+});

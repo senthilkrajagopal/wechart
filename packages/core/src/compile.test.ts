@@ -322,6 +322,12 @@ describe('compiling a saved document', () => {
       'orders.id',
       'orders.total_amount',
     ]);
+    // And names it, so the box plot knows what one point is (T991, AC-592).
+    expect(compile(document, { rows: [], chartType: 'boxplot' }).eachPointIs).toBe('orders.id');
+    const without = documentFor((spec) =>
+      addToWell(addToWell(spec, 'measures', 'orders.total_amount'), 'dimensions', 'orders.status'),
+    );
+    expect('eachPointIs' in compile(without, { rows: [], chartType: 'boxplot' })).toBe(false);
   });
 
   it('names a grain chosen from the pill, the one its query asks for (AC-216)', () => {

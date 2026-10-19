@@ -265,6 +265,11 @@ export interface RenderSpec {
    */
   readonly options?: Record<string, unknown>;
   /**
+   * A box plot's "Each point is" (AC-314), where it is set: what one point
+   * is, so its Points can be drawn as All or Beeswarm (T991, AC-592).
+   */
+  readonly eachPointIs?: string;
+  /**
    * The cross-filter selection this chart shows, where a tile pair is set to
    * Highlight (AC-117, `docs/research/cross-highlight.md`).
    *

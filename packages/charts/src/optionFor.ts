@@ -179,7 +179,7 @@ export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): E
   // Its lines' halos last, under the lines as drawn (§7h; T846).
   if (isComboType(spec.chartType))
     return withLineHalos(drawn(onGrid(comboOption(spec, canvas))), spec);
-  if (isBoxplotType(spec.chartType)) return drawn(onGrid(boxplotOption(spec)));
+  if (isBoxplotType(spec.chartType)) return drawn(onGrid(boxplotOption(spec, canvas)));
   // Its own legend and tooltip, and no axes (T398). Drawn only once its
   // boundaries are registered: the tile loads them first (`loadCountryMap`).
   if (isMapType(spec.chartType)) {

@@ -140,10 +140,15 @@ function boxplotTooltip(spec: RenderSpec): EChartsOption {
   const render = (params: Params) => {
     const value = Array.isArray(params.value) ? params.value : [];
     if (params.seriesType === 'scatter') {
-      const [name, outlier] = value;
+      const [name, point] = value;
+      // A point is said to be beyond the whiskers only when it is: All and
+      // Beeswarm draw every point (T991).
+      const its = boxes.find((one) => one.name === String(name));
+      const beyond =
+        its === undefined || Number(point) < its.stats.low || Number(point) > its.stats.high;
       return [
         escapeHtml(category(name)),
-        `${escapeHtml(titleOf(spec, measure))}: ${escapeHtml(format(outlier))}, beyond the whiskers`,
+        `${escapeHtml(titleOf(spec, measure))}: ${escapeHtml(format(point))}${beyond ? ', beyond the whiskers' : ''}`,
       ].join('<br/>');
     }
     const box = boxes[params.dataIndex ?? -1];

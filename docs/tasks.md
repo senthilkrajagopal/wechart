@@ -2574,11 +2574,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 - [x] T990 [P] (AC-591, AC-306) Customize › Distribution on a box plot: Points and Violin, Outliers by default, and All, Beeswarm and Violin unavailable without Each point is
 
-- [ ] T991 (AC-592, AC-306) Points as None, All or Beeswarm, these two from a fixed seed, 8 px at 0.6, falling back to All with a note where a beeswarm can't fit
-  - Files: `packages/charts/src/series/boxplot.ts` (+ test).
-  - Failing test: `boxplot.test.ts`: None draws no dots, not even the outliers (added 2026-10-18 from T990's review: no other task drew it); Beeswarm gives points with no two overlapping; All jitters them; two draws of the same data give identical positions; points are 8 px at opacity 0.6; APAC's 3,000 points fall back to All with "Too many points to place side by side in APAC: drawn as All, jittered."; Outliers draws as before R81 (AC-592, AC-306).
-  - Depends on: T990
-  - Waits on: research: ECharts 6.1's jitter and `jitterOverlap`, and how its placement can be seeded (the study: "not published").
+- [x] T991 (AC-592, AC-306) Points as None, All or Beeswarm, these two from a fixed seed, 8 px at 0.6, falling back to All with a note where a beeswarm can't fit
 
 - [ ] T992 (AC-592) The violin: the category's colour at 0.24 with a 1.5 px edge, the box narrowing to 20 px inside it
   - Files: `packages/charts/src/series/violin.ts` (+ test), `packages/charts/src/series/boxplot.ts`.

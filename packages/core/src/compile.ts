@@ -173,6 +173,8 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
         // Carried through unchanged. Compile decides the encoding; it has no
         // business interpreting what a chart type does with its own options.
         ...(chart.options === undefined ? {} : { options: chart.options }),
+        // What one point is, for a box plot's Points (T991).
+        ...(chart.wells.eachPointIs === undefined ? {} : { eachPointIs: chart.wells.eachPointIs }),
         ...(options.formats === undefined ? {} : { formats: options.formats }),
         ...(options.titles === undefined ? {} : { titles: options.titles }),
         ...(options.shortTitles === undefined ? {} : { shortTitles: options.shortTitles }),
