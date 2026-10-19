@@ -427,7 +427,11 @@ test('an element is an atom: stepped over and selected by the arrows, removed wh
 });
 
 /** A dashboard holding one Text tile of this document, as saved after R80. */
-async function dashboardWithText(request: APIRequestContext, content: unknown[]) {
+async function dashboardWithText(
+  request: APIRequestContext,
+  content: unknown[],
+  filters: unknown[] = [],
+) {
   const title = `Text ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
@@ -444,6 +448,7 @@ async function dashboardWithText(request: APIRequestContext, content: unknown[])
         owner: 'admin',
         settings: { width: 'fixed', interactions: { mode: 'markings' } },
         markings: [{ id: 'm1', name: 'Picks', slot: 'mk1', isDefault: true }],
+        ...(filters.length === 0 ? {} : { filters }),
         pages: [
           {
             id: 'only',
@@ -607,4 +612,59 @@ test('a Sparkline and a Bullet graph, word-sized SVG images named by what they s
   const bulletBox = await bullet.boundingBox();
   expect([bulletBox?.width, bulletBox?.height]).toEqual([96, 16]);
   await expect(bullet.locator('[data-part="range"]')).toHaveCount(3);
+});
+
+/**
+ * T886 / AC-522, AC-116: an Icon shows the first matching rule's icon and
+ * word; a Filter value, while its filter is unset, that all its values are
+ * in; an As of the data's age, its tooltip saying what answered; a Marking
+ * its count.
+ */
+test('an Icon, a Filter value, an As of and a Marking, each read as words in the sentence', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardWithText(
+    request,
+    [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'icon',
+            attrs: {
+              measure: 'orders.count',
+              rules: [
+                { op: '>=', value: 200, state: 'success', label: 'On track' },
+                { op: '>=', value: 100, state: 'warning', label: 'Watch' },
+                { op: 'otherwise', state: 'error', label: 'Behind' },
+              ],
+            },
+          },
+          { type: 'text', text: ' for ' },
+          { type: 'filterValue', attrs: { filter: 'f-status' } },
+          { type: 'text', text: ', ' },
+          { type: 'asOf', attrs: { measure: 'orders.count' } },
+          { type: 'text', text: ', marked ' },
+          { type: 'marking', attrs: { marking: 'Picks', show: 'count' } },
+        ],
+      },
+    ],
+    [{ id: 'f-status', widget: 'list', member: 'orders.status' }],
+  );
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="tile-text"] .text-tile');
+
+  // 240 orders: the first rule matches.
+  const icon = tile.locator('.text-icon');
+  await expect(icon).toHaveText('On track');
+  await expect(icon).toHaveAttribute('data-tone', 'success');
+  await expect(icon.locator('[data-icon="ok"]')).toHaveCount(1);
+
+  await expect(tile).toContainText('for all statuses,');
+  const asOf = tile.locator('.text-as-of');
+  await expect(asOf).toHaveText(/^as of \S/);
+  await expect(asOf).toHaveAttribute('title', /^Answered by the /);
+  await expect(tile).toContainText(/marked 0$/);
 });

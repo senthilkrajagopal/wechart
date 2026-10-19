@@ -1922,10 +1922,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T885 (AC-521) Sparkline and Bullet graph as wechart's own SVG, word-sized, each an image with its text alternative
 
-- [ ] T886 (AC-522, AC-116) The Icon, Marking, Filter value and As of elements
-  - Files: `packages/web/src/tiles/text/elements/IconElement.tsx` (+ test), `packages/web/src/tiles/text/elements/MarkingElement.tsx`, `packages/web/src/tiles/text/elements/FilterValueElement.tsx` (+ test), `packages/web/src/tiles/text/elements/AsOfElement.tsx` (+ test).
-  - Failing test: `IconElement.test.tsx`: rules ≥ 100 % On track, ≥ 90 % Watch, otherwise Behind show the first match's icon and word; with no data, "No rule matched" with a neutral ring; `FilterValueElement.test.tsx`: Country set to Germany and France reads "Germany, France", unset "all countries"; `AsOfElement.test.tsx`: "as of 14:05" with a tooltip naming a pre-aggregation; a Marking element shows its count (AC-522, AC-116).
-  - Depends on: T884
+- [x] T886 (AC-522, AC-116) The Icon, Marking, Filter value and As of elements
 
 - [ ] T887 (AC-523) A Text tile as a cross-filter target only, Filter or None, and its elements of one cube in one Cube request
   - Files: `packages/web/src/dashboard/settings/CrossFilterMatrix.tsx`, `packages/web/src/tiles/text/elementQueries.ts` (+ test), `packages/web/src/dashboard/crossfilter/` (targets).

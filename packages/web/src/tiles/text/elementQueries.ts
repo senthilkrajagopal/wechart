@@ -99,6 +99,20 @@ export function bulletQueryOf(node: Element, marking: MarkingPredicate | undefin
   };
 }
 
+/**
+ * An Icon's query (T886, AC-522): its measure, and the one it's a share of
+ * where it names one, over its marking and under its own filter.
+ */
+export function iconQueryOf(node: Element, marking: MarkingPredicate | undefined): Query {
+  const measure = text(node.attrs?.['measure']) ?? '';
+  const of = text(node.attrs?.['of']);
+  const filters = [...limitOf(node, marking), ...ownFilters(node)];
+  return {
+    measures: [measure, ...(of === undefined ? [] : [of])],
+    ...(filters.length === 0 ? {} : { filters }),
+  };
+}
+
 /** The periods a Change compares, when it names none: a month (decision T884-1). */
 const PERIOD = 'month';
 

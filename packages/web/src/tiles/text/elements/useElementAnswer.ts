@@ -28,6 +28,8 @@ export function useElementAnswer(
   });
   const rows = (answer.data as { data?: readonly Record<string, unknown>[] } | undefined)?.data;
   return {
+    /** Cube's whole answer: its refresh time and what answered it, beside the rows. */
+    result: answer.data,
     rows: rows ?? [],
     pending: query !== undefined && answer.isPending,
     error: answer.isError ? answer.error : undefined,

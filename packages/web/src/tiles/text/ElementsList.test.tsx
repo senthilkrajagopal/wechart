@@ -141,6 +141,63 @@ describe('a Sparkline’s and a Bullet graph’s settings (T885, AC-521)', () =>
   });
 });
 
+/**
+ * T886 / AC-522: an Icon's rules, top to bottom, each a condition, one of
+ * the four states and its editable label; a Marking's count or summary
+ * (design 21 C3, C6).
+ */
+describe('an Icon’s and a Marking’s settings (T886, AC-522)', () => {
+  const settingsOf = (element: TextNode) => {
+    const onChange = vi.fn();
+    render(
+      <ElementsList
+        elements={[element]}
+        selected={0}
+        names={names}
+        onSelect={vi.fn()}
+        onChange={onChange}
+      />,
+    );
+    return onChange;
+  };
+  const RULE = { op: '>=', value: 1, state: 'success', label: 'On track' };
+
+  it('adds an Icon’s rules in order, each with its condition, state and label', async () => {
+    const onChange = settingsOf({
+      type: 'icon',
+      attrs: { measure: 'orders.revenue', rules: [RULE] },
+    });
+    const rules = screen.getByRole('list', { name: 'Rules' });
+    expect(within(rules).getAllByRole('listitem')).toHaveLength(1);
+    await userEvent.click(screen.getByRole('button', { name: '+ rule' }));
+    expect(onChange).toHaveBeenLastCalledWith(0, {
+      rules: [RULE, { op: 'otherwise', state: 'neutral', label: 'Otherwise' }],
+    });
+  });
+
+  it('edits a rule’s state and label, and removes one', async () => {
+    const onChange = settingsOf({
+      type: 'icon',
+      attrs: { measure: 'orders.revenue', rules: [RULE] },
+    });
+    await userEvent.selectOptions(screen.getByLabelText('Rule 1 state'), 'warning');
+    expect(onChange).toHaveBeenLastCalledWith(0, { rules: [{ ...RULE, state: 'warning' }] });
+    const label = screen.getByLabelText('Rule 1 label');
+    await userEvent.clear(label);
+    await userEvent.type(label, 'Fine');
+    await userEvent.tab();
+    expect(onChange).toHaveBeenLastCalledWith(0, { rules: [{ ...RULE, label: 'Fine' }] });
+    await userEvent.click(screen.getByRole('button', { name: 'Remove rule 1' }));
+    expect(onChange).toHaveBeenLastCalledWith(0, { rules: null });
+  });
+
+  it('shows a Marking’s count or its summary', async () => {
+    const onChange = settingsOf({ type: 'marking', attrs: { marking: 'Picks', show: 'count' } });
+    await userEvent.click(screen.getByRole('radio', { name: 'Summary' }));
+    expect(onChange).toHaveBeenLastCalledWith(0, { show: 'summary' });
+  });
+});
+
 describe('the Elements list (T882, AC-519)', () => {
   it('lists every element in text order, with its kind and source, and "3 of 10"', () => {
     render(<ElementsList elements={ELEMENTS} selected={null} names={names} onSelect={vi.fn()} />);

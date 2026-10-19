@@ -167,7 +167,10 @@ describe('an element in the text being edited (T882, AC-519)', () => {
     const { textbox, onElements } = await opened(doc(CHANGE, { type: 'text', text: ' rose' }));
     await userEvent.click(screen.getByRole('img', { name: /^Change/ }));
     expect(selectedElement(textbox)?.getAttribute('data-element')).toBe('change');
-    expect(onElements).toHaveBeenLastCalledWith([CHANGE], 0);
+    // Told once ProseMirror has finished with the selection (T882).
+    await waitFor(() => {
+      expect(onElements).toHaveBeenLastCalledWith([CHANGE], 0);
+    });
   });
 
   it('draws a control as itself, inert: a click selects it and changes nothing', async () => {

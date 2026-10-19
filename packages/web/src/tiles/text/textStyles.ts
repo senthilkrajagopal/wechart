@@ -64,6 +64,14 @@ export const TEXT_CSS = `
 .text-change[data-tone='success'] { color: var(--wc-status-success); }
 .text-change[data-tone='error'] { color: var(--wc-status-error); }
 .text-change[data-tone='neutral'] { color: var(--wc-text-secondary); }
+/* An Icon: its status icon and its word, in the status's text (rule 3). */
+.text-icon { display: inline-flex; align-items: center; gap: 4px; vertical-align: -2px; }
+.text-icon[data-tone='success'] { color: var(--wc-status-success); }
+.text-icon[data-tone='warning'] { color: var(--wc-status-warning); }
+.text-icon[data-tone='error'] { color: var(--wc-status-error); }
+.text-icon[data-tone='neutral'] { color: var(--wc-text-secondary); }
+.text-sparkline,
+.text-bullet { display: inline-block; vertical-align: -2px; }
 /* Double-click's target in edit mode; no box of its own (T876). */
 .text-tile-host { display: contents; }
 /* While its text is edited, the tile stacks its head, the toolbar and the

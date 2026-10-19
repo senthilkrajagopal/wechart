@@ -7,6 +7,7 @@ import {
   bulletQueryOf,
   changeOf,
   changeQueryOf,
+  iconQueryOf,
   sparklineQueryOf,
   timeOf,
   valueQueryOf,
@@ -136,6 +137,28 @@ describe('what a Sparkline and a Bullet graph ask (T885, AC-521, AC-116)', () =>
         undefined,
       ),
     ).toEqual({ measures: ['orders.margin'] });
+  });
+});
+
+describe('what an Icon asks (T886, AC-522, AC-116)', () => {
+  it('asks its measure, and the one it’s a share of, over its marking and its own filter', () => {
+    expect(
+      iconQueryOf(
+        {
+          type: 'icon',
+          attrs: {
+            measure: 'orders.revenue',
+            of: 'orders.revenue_target',
+            marking: 'Picks',
+            filters: [OWN],
+          },
+        },
+        shipped,
+      ),
+    ).toEqual({
+      measures: ['orders.revenue', 'orders.revenue_target'],
+      filters: [SHIPPED, OWN],
+    });
   });
 });
 

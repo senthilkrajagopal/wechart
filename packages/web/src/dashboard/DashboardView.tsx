@@ -132,9 +132,14 @@ import type { CopilotOffer, InsertSources } from '../tiles/text/InsertMenu';
 import { insertSourcesOf } from '../tiles/text/insertSources';
 import { copilotOfferFor } from '../tiles/text/copilotOffer';
 import type { ElementRender } from '../tiles/text/readMapping';
+import { AsOfElement } from '../tiles/text/elements/AsOfElement';
+import { FilterValueText, filterValueWords } from '../tiles/text/elements/FilterValueElement';
+import { IconElement } from '../tiles/text/elements/IconElement';
+import { MarkingText } from '../tiles/text/elements/MarkingElement';
 import {
   bulletQueryOf,
   changeQueryOf,
+  iconQueryOf,
   sparklineQueryOf,
   timeOf,
   valueQueryOf,
@@ -4816,8 +4821,24 @@ export function DashboardView({
      */
     textElementsOf: (tileId: string) => (node, key) => {
       const attrs = node.attrs ?? {};
+      // A Filter value (T886, AC-522): what its dashboard filter is set to,
+      // "all ‹values›" while unset; "Unavailable" for a filter gone (G5).
+      if (node.type === 'filterValue') {
+        const filter = (live.filters ?? []).find((each) => each.id === attrs['filter']);
+        if (filter === undefined)
+          return (
+            <span key={key} className="text-value text-value--unavailable">
+              Unavailable
+            </span>
+          );
+        const set = activeFilters([filter], filterValues)[0]?.value;
+        const fieldTitle =
+          filter.member === undefined
+            ? 'value'
+            : (shortTitles?.[filter.member] ?? memberTitle?.(filter.member) ?? filter.member);
+        return <FilterValueText key={key} words={filterValueWords(set, fieldTitle)} />;
+      }
       const measure = typeof attrs['measure'] === 'string' ? attrs['measure'] : undefined;
-      if (measure === undefined || node.type === 'icon' || node.type === 'asOf') return undefined;
       // The marking it follows, by its name, as a token found one (AC-116).
       const named = typeof attrs['marking'] === 'string' ? attrs['marking'] : undefined;
       const found =
@@ -4827,6 +4848,45 @@ export function DashboardView({
       if (named !== undefined && found === undefined)
         return <UnknownMarkingToken key={key} name={named} />;
       const predicate = found === undefined ? undefined : markingOf(marks, found.id);
+      // A Marking (T886, AC-522, AC-116): its count, or its summary.
+      if (node.type === 'marking') {
+        const count = predicate === undefined ? 0 : markedCount(predicate);
+        return (
+          <MarkingText
+            key={key}
+            text={
+              attrs['show'] === 'summary'
+                ? count === 0 || predicate === undefined
+                  ? 'nothing marked'
+                  : summariseMarking(predicate, memberTitle, 5, (id) => chartTitleOfTile(id))
+                : count.toLocaleString('en-GB')
+            }
+          />
+        );
+      }
+      if (measure === undefined) return undefined;
+      // An As of (T886, AC-522): when its measure's answer was refreshed, and by what.
+      if (node.type === 'asOf') {
+        const asked = valueQueryOf({ attrs: { measure } }, undefined);
+        return 'query' in asked ? (
+          <AsOfElement
+            key={key}
+            query={withFilters(asked.query, textFiltersOf(tileId))}
+            context={preview}
+          />
+        ) : null;
+      }
+      // An Icon (T886, AC-522): its rules against its measure, or its share of another.
+      if (node.type === 'icon')
+        return (
+          <IconElement
+            key={key}
+            query={withFilters(iconQueryOf(node, predicate), textFiltersOf(tileId))}
+            member={measure}
+            attrs={attrs}
+            context={preview}
+          />
+        );
       // Its measure by its short title, as a one-source chart's legend names it.
       const title = shortTitles?.[measure] ?? memberTitle?.(measure) ?? measure;
       if (node.type === 'sparkline') {

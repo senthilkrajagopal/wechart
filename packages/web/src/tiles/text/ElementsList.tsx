@@ -137,6 +137,20 @@ function ElementSettings({
         <SparklineSettings attrs={attrs} onChange={onChange} />
       ) : element.type === 'bulletGraph' ? (
         <BulletSettings attrs={attrs} onChange={onChange} />
+      ) : element.type === 'icon' ? (
+        <IconSettings attrs={attrs} onChange={onChange} />
+      ) : element.type === 'marking' ? (
+        <Choices
+          label="Show"
+          options={[
+            ['count', 'Count'],
+            ['summary', 'Summary'],
+          ]}
+          value={attrs['show'] === 'summary' ? 'summary' : 'count'}
+          onChoose={(show) => {
+            onChange({ show });
+          }}
+        />
       ) : null}
     </section>
   );
@@ -409,6 +423,125 @@ function BulletSettings({
         }}
       />
     </>
+  );
+}
+
+const OPS = [
+  ['>=', '≥'],
+  ['>', '>'],
+  ['<=', '≤'],
+  ['<', '<'],
+  ['=', '='],
+  ['otherwise', 'Otherwise'],
+] as const;
+
+const STATES = [
+  ['success', 'Success'],
+  ['warning', 'Warning'],
+  ['error', 'Error'],
+  ['neutral', 'Neutral'],
+] as const;
+
+type Rule = Readonly<Record<string, unknown>>;
+
+/**
+ * An Icon's rules, top to bottom, the first that matches showing (design 21
+ * C3): each a condition, one of the four states and its label. A measure as
+ * the one it's a share of is set through the API for now (decision T886-1).
+ */
+function IconSettings({
+  attrs,
+  onChange,
+}: {
+  attrs: Readonly<Record<string, unknown>>;
+  onChange: (settings: Record<string, unknown>) => void;
+}) {
+  const rules: Rule[] = Array.isArray(attrs['rules'])
+    ? (attrs['rules'] as unknown[]).filter(
+        (rule): rule is Rule => typeof rule === 'object' && rule !== null,
+      )
+    : [];
+  const set = (next: readonly Rule[]) => {
+    onChange({ rules: next.length === 0 ? null : next });
+  };
+  const changeRule = (at: number, patch: Rule) => {
+    set(rules.map((rule, index) => (index === at ? { ...rule, ...patch } : rule)));
+  };
+  return (
+    <div className="text-element-settings__rules">
+      <ol aria-label="Rules" className="text-element-settings__rule-list">
+        {rules.map((rule, at) => (
+          // Rules are kept in their order, one per place.
+          <li key={`rule-${String(at)}`} className="text-element-settings__rule">
+            <select
+              aria-label={`Rule ${String(at + 1)} condition`}
+              value={typeof rule['op'] === 'string' ? rule['op'] : '>='}
+              onChange={(event) => {
+                const op = event.target.value;
+                // Otherwise has no value to compare with.
+                changeRule(at, op === 'otherwise' ? { op, value: undefined } : { op });
+              }}
+            >
+              {OPS.map(([op, words]) => (
+                <option key={op} value={op}>
+                  {words}
+                </option>
+              ))}
+            </select>
+            {rule['op'] === 'otherwise' ? null : (
+              <NumberField
+                label={`Rule ${String(at + 1)} value`}
+                value={typeof rule['value'] === 'number' ? String(rule['value']) : ''}
+                check={(typed) => (asNumber(typed) === undefined ? 'Type a number.' : undefined)}
+                onSet={(typed) => {
+                  changeRule(at, { value: asNumber(typed) });
+                }}
+              />
+            )}
+            <select
+              aria-label={`Rule ${String(at + 1)} state`}
+              value={typeof rule['state'] === 'string' ? rule['state'] : 'neutral'}
+              onChange={(event) => {
+                changeRule(at, { state: event.target.value });
+              }}
+            >
+              {STATES.map(([state, words]) => (
+                <option key={state} value={state}>
+                  {words}
+                </option>
+              ))}
+            </select>
+            <NumberField
+              label={`Rule ${String(at + 1)} label`}
+              value={typeof rule['label'] === 'string' ? rule['label'] : ''}
+              check={(typed) => (typed === '' ? 'A rule needs a label.' : undefined)}
+              onSet={(label) => {
+                changeRule(at, { label });
+              }}
+            />
+            <button
+              type="button"
+              className="btn-ghost btn-sm"
+              aria-label={`Remove rule ${String(at + 1)}`}
+              onClick={() => {
+                set(rules.filter((_, index) => index !== at));
+              }}
+            >
+              ×
+            </button>
+          </li>
+        ))}
+      </ol>
+      <button
+        type="button"
+        className="btn btn-sm"
+        onClick={() => {
+          set([...rules, { op: 'otherwise', state: 'neutral', label: 'Otherwise' }]);
+        }}
+      >
+        + rule
+      </button>
+    </div>
   );
 }
 
