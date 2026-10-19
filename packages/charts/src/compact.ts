@@ -1,7 +1,7 @@
 import type { RenderSpec } from '@wechart/core';
 
 /** Whether a measure's model format is money: its name, a currency, or a "$" specifier. */
-function moneyOf(format: unknown): { currency: string } | undefined {
+export function moneyOf(format: unknown): { currency: string } | undefined {
   if (typeof format === 'string')
     return format.startsWith('currency') ? { currency: 'USD' } : undefined;
   if (typeof format !== 'object' || format === null) return undefined;

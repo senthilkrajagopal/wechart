@@ -1,4 +1,9 @@
-import { describeChart, isDrawable } from '@wechart/charts';
+import {
+  describeChart,
+  isDrawable,
+  loadMapBoundaries,
+  mapBoundariesReady,
+} from '@wechart/charts';
 import {
   BULLET_NO_TARGET,
   CHART_TYPE_NAMES,
@@ -7,7 +12,16 @@ import {
   type ChartType,
   type RenderSpec,
 } from '@wechart/core';
-import { useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
 import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 import type { AnswerMeta } from '../query/answerMeta';
@@ -234,6 +248,26 @@ function ChartBody({
 }: ChartBodyProps) {
   const describedId = useId();
   /**
+   * A map's text alternative reads its boundaries (T980), which its canvas
+   * loads: said once they are in.
+   */
+  const isMap = spec.chartType === 'map';
+  const [, boundariesIn] = useReducer((count: number) => count + 1, 0);
+  const mapReady = isMap && mapBoundariesReady(spec);
+  useEffect(() => {
+    if (!isMap || mapReady) return undefined;
+    let current = true;
+    loadMapBoundaries(spec).then(
+      () => {
+        if (current) boundariesIn();
+      },
+      () => undefined,
+    );
+    return () => {
+      current = false;
+    };
+  }, [isMap, mapReady, spec]);
+  /**
    * A bullet chart with Target emptied (T954, AC-581; design 23 sheet 8): it
    * has nothing to compare its members with, so it says what it needs, with
    * + Target where the tile can open its chart.
@@ -305,7 +339,7 @@ function ChartBody({
    * 166; T958, AC-585): read with the chart by a screen reader, which can't
    * read a canvas, and not drawn, the chart being its picture.
    */
-  const described = describeChart(spec);
+  const described = mapReady || spec.chartType !== 'map' ? describeChart(spec) : undefined;
   return (
     <>
       <ChartCanvas

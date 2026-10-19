@@ -156,18 +156,23 @@ const valueOf = (raw: unknown) => {
  * region's key, the first row a region's values name being its value (T975).
  * None where the set's boundaries aren't in, or no country is named.
  */
-function regionsOf(
+export interface DrawnRegions {
+  readonly mapName: string;
+  readonly nameProperty: string;
+  /** The regions the rows place, each by its key, its value and its row's value. */
+  readonly placed: { name: string; value: number; member: unknown }[];
+  /** Each region's name, by its key. */
+  readonly names: ReadonlyMap<string, string>;
+  /** Every region of the set a value can be placed on (T980). */
+  readonly keys: readonly string[];
+  /** What one of the set's regions is called: "country", "region", "territory". */
+  readonly noun: string;
+}
+
+export function drawnRegionsOf(
   spec: RenderSpec,
-  map: CountryMap | undefined,
-):
-  | {
-      readonly mapName: string;
-      readonly nameProperty: string;
-      readonly placed: { name: string; value: number; member: unknown }[];
-      readonly names: ReadonlyMap<string, string>;
-    }
-  | { readonly instead: string }
-  | undefined {
+  map: CountryMap | undefined = countryMap(),
+): DrawnRegions | { readonly instead: string } | undefined {
   const { boundarySet } = mapSettingsOf(spec.options);
   if (boundarySet === 'countries') {
     if (map === undefined) return undefined;
@@ -178,6 +183,8 @@ function regionsOf(
         .filter(({ code }) => map.keys.has(code))
         .map(({ code, raw }) => ({ name: code, value: valueOf(raw), member: code })),
       names: map.names,
+      keys: [...map.keys],
+      noun: 'country',
     };
   }
   if (boundarySet.startsWith('custom:') && regionSetOf(boundarySet) === undefined)
@@ -203,7 +210,14 @@ function regionsOf(
     seen.add(key);
     return [{ name: key, value: valueOf(row[measure]), member: raw }];
   });
-  return { mapName: set.map, nameProperty: set.nameProperty, placed, names: set.names };
+  return {
+    mapName: set.map,
+    nameProperty: set.nameProperty,
+    placed,
+    names: set.names,
+    keys: [...set.names.keys()],
+    noun: set.noun,
+  };
 }
 
 export function mapOption(spec: RenderSpec, map: CountryMap | undefined): EChartsOption {
@@ -211,7 +225,7 @@ export function mapOption(spec: RenderSpec, map: CountryMap | undefined): EChart
   // The Map's Regions on its boundary set (T973, AC-622): Countries draws as
   // the country map did; a country map saved before R81 has no settings and
   // reads as Countries. Every set draws as Countries does (T975, AC-624).
-  const regions = regionsOf(spec, map);
+  const regions = drawnRegionsOf(spec, map);
   if (regions === undefined) throw new Error('The map’s boundaries are not loaded yet.');
   if ('instead' in regions) return sayInstead(regions.instead);
   const measure = memberOn(spec.encoding, 'y') ?? '';

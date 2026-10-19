@@ -102,3 +102,8 @@ Lane CHARTS-B's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Files: `packages/charts/src/interaction/itemsInShape.ts`, `packages/charts/src/series/mapMarking.test.ts`.
   - Failing test: `mapMarking.test.ts`: a lasso over 3 stores marks those 3 and no region; with no Points layer it marks the regions it touches; a marked region keeps its fill and gains the outline while others fade; in cross-filter mode a region filters to its member and a store to its store (AC-627).
   - Depends on: T976
+
+- [x] T980 (AC-629) The map's text alternative and table view
+  - Files: `packages/charts/src/describe/map.ts` (+ test), `packages/web/src/tiles/tableView/map.ts` (+ test).
+  - Failing test: (describe) "Map of Revenue by sales territory, 6 territories: highest Atlantic $1.40M, lowest Mountain $0.20M; Islands has no data. 10 stores as points sized by Revenue."; (table view) Islands reads "No data", not 0, with its store count (AC-629). Since R83: a map on Countries or Admin-1 adds "Borders and disputed areas as Natural Earth draws them."
+  - Depends on: T976

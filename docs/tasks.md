@@ -2246,10 +2246,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - ~~Waits on: R81-1 (who uploads a custom boundary set, and where it lives).~~ R81-1 answered 2026-10-18: "Folder item via proposal (Recommended)".
   - Waits on: research: where uploaded GeoJSON is stored and checked.
 
-- [ ] T980 (AC-629) The map's text alternative and table view
-  - Files: `packages/charts/src/describe/map.ts` (+ test), `packages/web/src/tiles/tableView/map.ts` (+ test).
-  - Failing test: (describe) "Map of Revenue by sales territory, 6 territories: highest Atlantic $1.40M, lowest Mountain $0.20M; Islands has no data. 10 stores as points sized by Revenue."; (table view) Islands reads "No data", not 0, with its store count (AC-629). Since R83: a map on Countries or Admin-1 adds "Borders and disputed areas as Natural Earth draws them."
-  - Depends on: T976
+- [x] T980 (AC-629) The map's text alternative and table view
 
 ### Lane CHARTS-B: parallel coordinates
 

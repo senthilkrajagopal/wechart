@@ -307,4 +307,20 @@ test('a Regions layer on Admin-1 colours German states by code or name, Bremen a
   await expect(result.getByTestId('unplaced-codes')).toHaveText(
     'Not on the map: "Online" (no region)',
   );
+
+  /**
+   * T980 / AC-629: a text alternative naming the measure, the set, the
+   * regions, the extremes and those with no data, Natural Earth's point of
+   * view said (R83); and a table view by region, "No data" where a region
+   * has no row, never 0.
+   */
+  await expect(result.getByTestId('chart-text-alternative')).toHaveText(
+    /^Map of .*Total by .*state, 15 regions: highest Bavaria 1\.40K, lowest Saarland 0\.06K; Free Hanseatic Bremen has no data\. Borders and disputed areas as Natural Earth draws them\.$/,
+  );
+  await page.getByTestId('toggle-table-view').click();
+  const table = result.getByTestId('data-table');
+  const bremen = table.getByRole('row').filter({ hasText: 'Free Hanseatic Bremen' });
+  await expect(bremen).toHaveCount(1);
+  await expect(bremen).toContainText('No data');
+  await expect(table.getByRole('row').filter({ hasText: 'Bavaria' })).toContainText('1,400');
 });

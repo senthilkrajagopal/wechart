@@ -3,6 +3,7 @@ import type { ChartType, RenderSpec } from '@wechart/core';
 import { boxplotPointRows, boxplotStatistics } from './boxplot';
 import { bulletTableView } from './bullet';
 import { kpiTableView } from './kpi';
+import { mapTableView } from './map';
 import { sankeyFlows } from './sankey';
 import { stack100Columns } from './stack100';
 
@@ -27,6 +28,7 @@ export const TABLE_VIEWS: Partial<Record<ChartType, TableViewOf>> = {
   boxplot: boxplotStatistics,
   bullet: bulletTableView,
   kpi: kpiTableView,
+  map: mapTableView,
   sankey: sankeyFlows,
 };
 
