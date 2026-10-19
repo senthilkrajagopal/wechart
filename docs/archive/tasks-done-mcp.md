@@ -585,6 +585,13 @@
     - **Cold review (one round): PASS**, four low findings.
       - **Fixed in a follow-up:** the "viewed now" mark carried over to the next item opened beside the same panel (the dashboard and chart pages aren't keyed by item), since it wasn't kept by item. It is now kept by the item's id; a new unit test, seen red first. A kept data-source row's "Compare with current", whose condition the commit touched, gets a test of its own.
       - **Left:** only the dashboard is shown end to end (the chart's View marks the row only, as T766-1 says; the data source's is unit-tested); the unit tests not seen red, as said above.
+    - **Batch runs** (lane MCP, batch 8), real Chrome, at 7cf11d66 (main) and 25f0d82a (security). None of the failures touches this batch's files.
+      - **Main** (`--project=chrome`): 856 passed, 2 failed. `model-design.spec.ts:855` is the known flake. `chart-editor.spec.ts:1330` (three panes at 1440 × 900) times out clicking `pick-orders.status`, "outside of the viewport" in the cube picker, and fails alone too: new, not lane MCP's.
+      - **Security** (`--project=chrome`): 397 passed, 5 failed, 14 did not run (their serial followers). `history.spec.ts` passed whole.
+        - `sql-workspace.spec.ts:581` expects the result head "Finished … Download CSV", which now reads "… Make a cube… Make a chart… Download CSV": T819's (552146de) new buttons, its spec not updated.
+        - `sql-workspace.spec.ts:1080` reads "Not run at …" where it expects "Finished 1 row"; `sql-runner.spec.ts:764` doesn't find the schema browser's element. Both are lane SQL's surfaces.
+        - `review-view.spec.ts:110` is refused 400, "The Text tile "t-text" can't be saved: A Text document must be an object with its version and doc.": its fixture's Text tile predates lane TEXT's document model.
+        - `deleting.spec.ts:568` expects `/explore?folder=…` after deleting a model file and stays on the file's page.
 
 ## Security specs failing alone: xcube's folder tree stuck (lane MCP, batch 7, at the coordinator's request)
 
