@@ -5,7 +5,9 @@ import {
   ALL_CARDS,
   CARD_NAMES,
   cardChoice,
+  DESIGNED_PURPOSES,
   needsText,
+  PARKED,
   TYPE_DESCRIPTIONS,
   TYPE_PURPOSES,
   typesMatching,
@@ -25,8 +27,9 @@ describe('the chart type gallery’s catalog (AC-217)', () => {
       expect(grouped.has(card)).toBe(true);
       expect(TYPE_DESCRIPTIONS[card].length).toBeGreaterThan(0);
     }
-    // Every type the spec knows has a card of its own.
-    for (const type of CHART_TYPES) expect(ALL_CARDS).toContain(type);
+    // Every type the spec knows has a card of its own, but a parked one's
+    // is hidden (the user, 2026-10-18).
+    for (const type of CHART_TYPES) if (!PARKED.has(type)) expect(ALL_CARDS).toContain(type);
   });
 
   it('says what each type needs, in the field list’s words', () => {
@@ -62,8 +65,8 @@ describe('the chart type gallery’s catalog (AC-217)', () => {
  * Bullet chart and KPI.`
  */
 describe('R81’s gallery: nine purposes and the new cards (AC-559)', () => {
-  it('lists the nine purposes in order, each with its cards', () => {
-    expect(TYPE_PURPOSES.map((purpose) => [purpose.name, purpose.cards])).toEqual([
+  it('lists the nine purposes in order, each with its cards as designed', () => {
+    expect(DESIGNED_PURPOSES.map((purpose) => [purpose.name, purpose.cards])).toEqual([
       [
         'Evolution over time',
         [
@@ -101,6 +104,37 @@ describe('R81’s gallery: nine purposes and the new cards (AC-559)', () => {
       ['KPI', ['kpi', 'bullet']],
       ['Table', ['table', 'pivot', 'graphicalTable']],
     ]);
+  });
+
+  /**
+   * The user, 2026-10-18: "any of the charts that you have not started
+   * implmentation put them in the parking lot for now". A parked type's card
+   * is hidden from every shelf, from All charts and from search, so no one
+   * can choose a type that isn't drawn; un-parking a type is one line of
+   * `PARKED`.
+   */
+  it('hides the parked types’ cards from the shelves, All charts and search', () => {
+    const parked = [
+      'waterfall',
+      'histogram',
+      'bubble',
+      'funnel',
+      'timeline',
+      'calendar',
+      'icicle',
+    ] as const;
+    expect([...PARKED].sort()).toEqual([...parked].sort());
+    const shown = new Set(TYPE_PURPOSES.flatMap((purpose) => purpose.cards));
+    for (const card of parked) {
+      expect(shown.has(card)).toBe(false);
+      expect(ALL_CARDS).not.toContain(card);
+      expect(typesMatching(CARD_NAMES[card])).not.toContain(card);
+    }
+    // Each shelf as designed, less its parked cards; Flow keeps the Sankey.
+    expect(TYPE_PURPOSES.map((purpose) => purpose.cards)).toEqual(
+      DESIGNED_PURPOSES.map((purpose) => purpose.cards.filter((card) => !PARKED.has(card))),
+    );
+    expect(TYPE_PURPOSES.find((purpose) => purpose.id === 'flow')?.cards).toEqual(['sankey']);
   });
 
   it('names each new card and says what it is for and needs, in design 23’s words', () => {

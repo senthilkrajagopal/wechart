@@ -2488,6 +2488,29 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
 
 The chart types not started are parked: the waterfall (T948–T952), the histogram (T959–T964, T1018), the bubble (T965–T967), the funnel (T994–T997), the timeline (T998–T1002, T1019), the calendar heatmap (T1003–T1006) and the icicle and sunburst (T1007–T1011). Their tasks are kept below unticked and unchanged, so nothing is lost, and are not built this phase; their criteria are marked parked in `docs/spec.md` and listed in `docs/phase-2/backlog.md` §7. The types started stay in their lanes above and are seen through: the KPI, the graphical table, the bullet chart, 100 % stacking, the Map, parallel coordinates, the Sankey and the box plot's points and violin.
 
+**For whoever picks a parked type up** (the user, 2026-10-18: "whatever you are parking will be picked up later.. so document them for later pick up"):
+
+- **What every parked type already has, from T934 (done):**
+  - its `ChartType` id in `packages/core/src/render-spec.ts` (`R81_TYPES`) and its name in `chart-type-names.ts`;
+  - its card's description and needs in `packages/web/src/editor/chartTypeCatalog.ts` (`TYPE_DESCRIPTIONS`, `NEEDS`, design 23's words) and its place on its shelves (`DESIGNED_PURPOSES`);
+  - its requirements and its gallery reason in `packages/recommender/src/requirements.ts` and `recommend.ts` (the recommender proposes none of them yet);
+  - its skeleton in `packages/web/src/tiles/TileSkeleton.tsx`, its icon in `ChartTypeIcon.tsx`;
+  - its line in `e2e/r81Awaiting.ts` (`AWAITING_SERIES`, `AWAITING_TABLE_VIEW`), which keeps the walks over every type off it;
+  - the waterfall and the histogram: their place in the "share shown" badge's `SHARE_SHOWN_TYPES` (`packages/web/src/dashboard/markings/markedValues.ts`, T935).
+- **What none has:** a module in `chart-types/`, `series/`, `editor/wells/`, `tiles/tableView/` or `describe/` (the registries T934 made, one line each, alphabetically). A chart of a parked type says "‹type› charts are not drawn yet." on its tile.
+- **Hidden while parked:** each card is left out of the gallery's shelves, All charts and search by `PARKED` in `chartTypeCatalog.ts`. **To un-park a type,** take it out of `PARKED` once it draws, and out of `e2e/r81Awaiting.ts` with the task that draws its series and its table view, as T934-5 says. Then put its struck-through parts back in the cross-cutting tasks above (T968, T969, T971, T972, T1012–T1014) and in AC-037, AC-559, AC-560, AC-561 and AC-563, and remove its "parked" line under its criteria in `docs/spec.md` and its row in `docs/phase-2/backlog.md` §7.
+- **Per type** (design 23 is `docs/design/reviews/2026-10-18/designs/23-new-chart-types.html`; direction.md §7i and the rules named on each criterion):
+
+  | Type | Tasks left | Criteria | Design 23 | Research it waits on | Open points |
+  |---|---|---|---|---|---|
+  | Waterfall | T948–T952 (none started) | AC-575 – AC-579 | sheet 3; screen 2 pins 8, 9 | T949: the palette validator on the blue and red pair | `compareDateRange` for Compare periods (T948): read what `docs/research/cube-capabilities.md` and `xcube-slice-3b.md` say of it, and any sibling corrections, before building on it. |
+  | Histogram | T959–T964, T1018 (none started) | AC-586 – AC-590, AC-631 | sheet 4; screen 2 pin 11 | none listed | R81-A1 (`docs/design/decisions-charts-a.md`) already decides how a dimension's browser bin marks and what Metrics takes. |
+  | Bubble | T965–T967 (none started) | AC-594 – AC-596 | sheet 5 | none listed | **Take T965 with T966.** AC-594 makes a Scatter a Bubble while Size is set; if Size is a Scatter's third measure, a 3-measure scatter becomes a Bubble at once and would say "not drawn yet" until T966 draws it. Add a `'bubble'` case to core `undrawnOf` (`packages/core/src/undrawn.ts`), beside parallel's, with a failing test that no measure of a bubble is called undrawn. Still to decide: whether Size is the third measure in Metrics or its own well stored in options (the query must ask for it either way), how Colour and Shape are chosen among the chart's dimensions (Shape never by Auto, so it is the author's choice, e.g. `options.bubble.shape`), and how the wells learn a dimension's distinct count for the caps (`TypeWellsProps` carries no rows yet). Drawing larger marks first across colours needs one series with per-item colours and symbols, or another way; z orders series, not items. |
+  | Funnel | T994–T997 (none started) | AC-614 – AC-617 | sheet 12 | none listed | It sits on two shelves, Ranking and Flow. |
+  | Timeline | T998–T1002, T1019 (none started) | AC-602 – AC-605, AC-632 | sheet 13 | T999: min and max of a time column from Cube; T1000: `@echarts-x/custom-bar-range`; T1019: a measure in an ungrouped query | R81-A1 decides how a duration combines with "First to last", and that Unit has no default. |
+  | Calendar heatmap | T1003–T1006 (none started) | AC-606 – AC-609 | sheet 14 | T1003: how the browser gives a locale's first weekday | — |
+  | Icicle and sunburst | T1007–T1011 (none started) | AC-618 – AC-621 | sheet 15 | T1008: an icicle as an ECharts 6.1 custom series | — |
+
 #### Lane CHARTS-A: the waterfall
 
 - [ ] T948 (AC-575, AC-037) The waterfall's spec and data: steps by member or by change between two periods through `compareDateRange`, totals, and "Show at most 6"

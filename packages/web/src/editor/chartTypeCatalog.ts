@@ -22,8 +22,25 @@ export interface TypePurpose {
   readonly cards: readonly CardId[];
 }
 
-/** AC-559's nine purposes, in order, each with its cards in design 23's order. */
-export const TYPE_PURPOSES: readonly TypePurpose[] = [
+/**
+ * The types parked by the user (2026-10-18: "any of the charts that you have
+ * not started implmentation put them in the parking lot for now"), not drawn
+ * this phase: their cards are hidden from every shelf, All charts and search,
+ * so no one chooses a chart that would say it isn't drawn. Un-parking a type
+ * is taking it out of this set once it draws (docs/tasks.md §P2.27, "Parked").
+ */
+export const PARKED: ReadonlySet<CardId> = new Set<CardId>([
+  'bubble',
+  'calendar',
+  'funnel',
+  'histogram',
+  'icicle',
+  'timeline',
+  'waterfall',
+]);
+
+/** AC-559's nine purposes, in order, each with its cards in design 23's order, parked ones too. */
+export const DESIGNED_PURPOSES: readonly TypePurpose[] = [
   {
     id: 'evolution',
     name: 'Evolution over time',
@@ -72,6 +89,12 @@ export const TYPE_PURPOSES: readonly TypePurpose[] = [
   { id: 'table', name: 'Table', cards: ['table', 'pivot', 'graphicalTable'] },
 ];
 
+/** The gallery's shelves: each designed purpose with its cards, less the parked ones. */
+export const TYPE_PURPOSES: readonly TypePurpose[] = DESIGNED_PURPOSES.map((purpose) => ({
+  ...purpose,
+  cards: purpose.cards.filter((card) => !PARKED.has(card)),
+}));
+
 /** What a preset opens: its stacked type, at 100 %. */
 const PRESETS: Readonly<Record<Preset, { readonly type: ChartType; readonly stack: 'percent' }>> = {
   stackedBar100: { type: 'stackedBar', stack: 'percent' },
@@ -90,13 +113,18 @@ export function cardChoice(card: CardId): {
   return isPreset(card) ? PRESETS[card] : { type: card };
 }
 
-/** Every card, as All charts lists them: each type, a preset after its stacked type. */
+/**
+ * Every card, as All charts lists them: each type, a preset after its stacked
+ * type; none of a parked type's.
+ */
 export const ALL_CARDS: readonly CardId[] = CHART_TYPES.flatMap((type): CardId[] =>
-  type === 'stackedBar'
-    ? [type, 'stackedBar100']
-    : type === 'stackedArea'
-      ? [type, 'stackedArea100']
-      : [type],
+  PARKED.has(type)
+    ? []
+    : type === 'stackedBar'
+      ? [type, 'stackedBar100']
+      : type === 'stackedArea'
+        ? [type, 'stackedArea100']
+        : [type],
 );
 
 /** Each card by its name (AC-217): a type's from the one list, a preset's as design 23 names it. */

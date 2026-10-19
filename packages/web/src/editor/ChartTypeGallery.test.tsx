@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ChartTypeGallery } from './ChartTypeGallery';
-import { ALL_CARDS } from './chartTypeCatalog';
+import { ALL_CARDS, PARKED } from './chartTypeCatalog';
 
 /**
  * T230 / AC-217: THE SYSTEM SHALL show the chart's type by its name … with a
@@ -68,11 +68,14 @@ describe('the chart type gallery (AC-217)', () => {
     const { dialog } = gallery();
     await userEvent.click(within(dialog).getByRole('button', { name: 'All charts' }));
     // Every type the spec knows, the box plot (T399) included, and R81's
-    // 100 % cards (T934).
+    // 100 % cards (T934); none parked (the user, 2026-10-18).
     expect(typesShown(dialog)).toEqual([...ALL_CARDS]);
-    for (const type of CHART_TYPES) expect(typesShown(dialog)).toContain(type);
+    for (const type of CHART_TYPES)
+      if (PARKED.has(type)) expect(typesShown(dialog)).not.toContain(type);
+      else expect(typesShown(dialog)).toContain(type);
     expect(dialog.textContent).not.toContain('groupedBar');
 
+    // The Icicle parked.
     await userEvent.click(within(dialog).getByRole('button', { name: 'Part of a whole' }));
     expect(typesShown(dialog)).toEqual([
       'pie',
@@ -82,7 +85,6 @@ describe('the chart type gallery (AC-217)', () => {
       'stackedArea',
       'stackedBar100',
       'stackedArea100',
-      'icicle',
     ]);
   });
 
@@ -120,7 +122,8 @@ describe('the chart type gallery (AC-217)', () => {
   it('opens a 100 % card as its stacked type at 100 %, and keeps the Flow shelf (AC-559)', async () => {
     const { dialog, onChoose } = gallery();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Flow' }));
-    expect(typesShown(dialog)).toEqual(['sankey', 'funnel']);
+    // The Funnel parked (the user, 2026-10-18).
+    expect(typesShown(dialog)).toEqual(['sankey']);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Part of a whole' }));
     const card = within(dialog).getByTestId('type-card-stackedBar100');
     expect(card.textContent).toContain('100 % stacked bar');
