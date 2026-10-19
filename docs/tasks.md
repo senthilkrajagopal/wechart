@@ -1916,10 +1916,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: the list widget's test over 4,212 customers: 1,000 options and "Showing 1,000 of 4,212 · type to find the rest"; typing "acme" queries Cube with `contains` and lists "Acme Retail SARL", which wasn't in the first 1,000, with "3 matches in all 4,212 customers" (AC-529).
   - Depends on: T892
 
-- [ ] T894 (AC-530) Action buttons: a label, a style, and an ordered list of declared actions, run in order and nothing else
-  - Files: `packages/core/src/text-document.ts` (the four action kinds), `packages/web/src/tiles/text/elements/ActionButton.tsx` (+ test), `packages/web/src/tiles/text/ActionList.tsx` (+ test).
-  - Failing test: `ActionList.test.tsx`: + action offers Go to page tab, Apply bookmark, Reset filters and Export only; Move up reorders; `ActionButton.test.tsx`: Reset filters then Go to page tab Detail runs in that order; Reset filters leaves a parameter's value; Export of two tiles downloads two CSVs, each as AC-171 makes it; a stored button with `{"kind":"script"}` is refused by `textDocumentProblems` and runs nothing (AC-530).
-  - Depends on: T882
+- [x] T894 (AC-530) Action buttons: a label, a style, and an ordered list of declared actions, run in order and nothing else
 
 - [x] T895 [P] (AC-531) The dashboard parameter in the dashboard's document: a name, a role, ordered labelled choices of at most 1,000 and a default among them
 

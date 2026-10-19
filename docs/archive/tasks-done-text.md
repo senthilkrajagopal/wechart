@@ -127,3 +127,8 @@ Lane TEXT's ticked tasks from `docs/tasks.md` §P2.26 (F45–F48), their sub-lin
   - Files: `packages/web/src/tiles/text/elements/FilterControl.tsx` (+ test), `packages/web/src/filters/FilterBar.tsx` (the shared widget), `e2e/text-tile.spec.ts`.
   - Failing test: `FilterControl.test.tsx`: the control renders the bar's widget for Country with its scope tag, at 28 px; the e2e: choosing Spain in the control updates the bar's pill, the header's count and every tile in scope, announced once; clearing it in the bar clears the control; a second Text tile's control of Country shows the same value; deleting Country shows "1 element needs fixing" in edit mode (AC-528).
   - Depends on: T882
+
+- [x] T894 (AC-530) Action buttons: a label, a style, and an ordered list of declared actions, run in order and nothing else
+  - Files: `packages/core/src/text-document.ts` (the four action kinds), `packages/web/src/tiles/text/elements/ActionButton.tsx` (+ test), `packages/web/src/tiles/text/ActionList.tsx` (+ test).
+  - Failing test: `ActionList.test.tsx`: + action offers Go to page tab, Apply bookmark, Reset filters and Export only; Move up reorders; `ActionButton.test.tsx`: Reset filters then Go to page tab Detail runs in that order; Reset filters leaves a parameter's value; Export of two tiles downloads two CSVs, each as AC-171 makes it; a stored button with `{"kind":"script"}` is refused by `textDocumentProblems` and runs nothing (AC-530).
+  - Depends on: T882
