@@ -2394,10 +2394,7 @@ F49 adds R81's fifteen types to the gallery and the recommender, keeps saved Aut
   - Failing test: `sankeyMarking.test.ts`: clicking Web → EMEA marks (Channel = Web, Region = EMEA); with a marking elsewhere unmarked links fade to 0.28 of 0.4 and Web → EMEA's tooltip reads "Marked: $96K of $210K"; the tile's ⓘ says the share is in the tooltip; the chip reads "Channel: Web · Region: EMEA" (AC-612).
   - Depends on: T987
 
-- [ ] T989 (AC-613) The Sankey's text alternative and its table of flows
-  - Files: `packages/charts/src/describe/sankey.ts` (+ test), `packages/web/src/tiles/tableView/sankey.ts` (+ test).
-  - Failing test: (describe) "Sankey of Revenue from Channel to Region, 12 flows, $1.35M. Largest: Web → North America $237K; Web → EMEA $210K; Retail → North America $183K."; (table view) "Web → EMEA · $210,000 · 32.3%" (AC-613).
-  - Depends on: T987
+- [x] T989 (AC-613) The Sankey's text alternative and its table of flows
 
 ### Lane CHARTS-B: the box plot's points and violin
 

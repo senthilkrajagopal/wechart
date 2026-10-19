@@ -2,6 +2,7 @@ import type { ChartType, RenderSpec } from '@wechart/core';
 
 import { boxplotPointRows, boxplotStatistics } from './boxplot';
 import { bulletTableView } from './bullet';
+import { sankeyFlows } from './sankey';
 import { stack100Columns } from './stack100';
 
 /**
@@ -23,6 +24,7 @@ export type TableViewOf = (spec: RenderSpec) => TableView;
 export const TABLE_VIEWS: Partial<Record<ChartType, TableViewOf>> = {
   boxplot: boxplotStatistics,
   bullet: bulletTableView,
+  sankey: sankeyFlows,
 };
 
 /** A chart's own table view, where its type has one; the rows as queried otherwise. */

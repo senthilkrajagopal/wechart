@@ -101,9 +101,10 @@ function keptBy(
 /**
  * What a Sankey draws from a spec (AC-611): its steps' nodes and flows,
  * folded past 50 flows, each node uniquely named. The series, the notes,
- * the text alternative and the table view all read this.
+ * the text alternative and the table view all read this; the last two
+ * unfolded (`fold` false), every flow as the rows hold it.
  */
-export function sankeyDrawnOf(spec: RenderSpec): SankeyDrawn {
+export function sankeyDrawnOf(spec: RenderSpec, fold = true): SankeyDrawn {
   const steps = membersOn(spec.encoding, 'x');
   const sankey = sankeyOf(
     {
@@ -133,7 +134,7 @@ export function sankeyDrawnOf(spec: RenderSpec): SankeyDrawn {
   // within the cap (decision T987-2).
   let links = original;
   let folded = false;
-  for (let top = SANKEY_FLOW_CAP; links.length > SANKEY_FLOW_CAP && top > 0; top -= 1) {
+  for (let top = SANKEY_FLOW_CAP; fold && links.length > SANKEY_FLOW_CAP && top > 0; top -= 1) {
     const kept = keptBy(original, steps.length, top);
     const rows: Row[] = spec.rows.map((row) => {
       const next: Record<string, unknown> = { ...row };

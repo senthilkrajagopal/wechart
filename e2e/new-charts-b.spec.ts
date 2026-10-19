@@ -309,3 +309,36 @@ test('a Sankey draws its steps’ nodes 12 px wide and its flows at 0.4, folding
   await expect(folded).toContainText('Other');
   expect(await folded.locator('path[fill-opacity="0.4"]').count()).toBeLessThanOrEqual(50);
 });
+
+/**
+ * T989 / AC-613: THE SYSTEM SHALL give a Sankey a text alternative naming the
+ * steps, the number of flows, the total and the three largest flows …, and a
+ * table view of each flow as "‹source› → ‹target›" with its value and its
+ * share of its source. `Fails when: a part of the text alternative is
+ * missing; or a flow is missing from the table, or its share differs.`
+ */
+test('a Sankey says its steps, flows, total and largest flows, and its table lists every flow with its share', async ({
+  page,
+  request,
+}) => {
+  const id = await sankeyChart(request, ['orders.status', 'orders.id']);
+  await page.goto(`/explore/charts/${id}`);
+  const main = page.getByRole('main');
+  await expect(main.getByTestId('chart-text-alternative')).toHaveText(
+    /^Sankey of .+ from .+ to .+, 240 flows, \$[\d.]+K?\. Largest: \S+ → \S+ \$[\d.]+K?; \S+ → \S+ \$[\d.]+K?; \S+ → \S+ \$[\d.]+K?\.$/,
+  );
+
+  await main.getByTestId('toggle-table-view').click();
+  const table = main.getByTestId('data-table');
+  await expect(table.getByRole('columnheader')).toHaveText(['Flow', /Amount/, 'Share of source']);
+  // Every flow, past the 50 drawn; each order is all of its status's share of it.
+  await expect(table.locator('table')).toBeVisible();
+  const first = table.getByTestId('table-row').first();
+  await expect(first.getByRole('cell').first()).toHaveText(/^\S+ → \S+$/);
+  await expect(first.getByRole('cell').nth(2)).toHaveText(/^\d+\.\d%$/);
+  const rows = await table.evaluate((scroller) => {
+    scroller.scrollTop = scroller.scrollHeight;
+    return scroller.querySelectorAll('tbody tr[data-testid="table-row"]').length;
+  });
+  expect(rows).toBe(240);
+});
