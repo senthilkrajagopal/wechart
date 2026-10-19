@@ -26,7 +26,7 @@ import {
 } from './quickCalc';
 import { CHANNELS, type ChartType, type Encoding, type RenderSpec } from './render-spec';
 import { applySort } from './sort';
-import { applyRowLimit, applyTopN } from './topN';
+import { applyComboFold, applyRowLimit, applyTopN } from './topN';
 
 export interface CompileOptions {
   readonly rows: readonly Record<string, unknown>[];
@@ -170,7 +170,9 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
   // The row limit last, on the rows as drawn (T390, AC-041).
   const drawn = applyRowLimit(
     applySort(
-      applyTopN({
+      // A split combo's members folded within its 8 series (T853, AC-505).
+      applyComboFold(
+        applyTopN({
         chartType: chart.chartType ?? options.chartType,
         encoding,
         rows: options.rows,
@@ -197,7 +199,8 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
         ],
         ...(options.palette === undefined ? {} : { palette: options.palette }),
         ...(options.surface === undefined ? {} : { surface: options.surface }),
-      }),
+        }),
+      ),
     ),
   );
   // The rows as answered, for a pick made again (T510's review).

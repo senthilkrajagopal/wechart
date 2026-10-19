@@ -16,6 +16,8 @@ import {
   canSynchronize,
   COMBO_AXES,
   COMBO_MARKS,
+  comboLimit,
+  comboLimitOf,
   comboProblems,
   comboSeriesOf,
   comboStackingOf,
@@ -23,6 +25,7 @@ import {
   isSynchronized,
   logScaleState,
   markTakenBy,
+  membersShownOf,
   withComboAuto,
   withComboSeries,
   withComboSplit,
@@ -518,5 +521,138 @@ describe('stacking (AC-503)', () => {
     expect(comboProblems({ combo: { areas: 'stacked-ish' } })).toEqual([
       'Areas are stacked as "stacked-ish", but a combo\'s areas overlap or are stacked.',
     ]);
+  });
+});
+
+/**
+ * T853 (AC-505): a combo draws at most 8 series. Split, with nothing chosen,
+ * it first folds the members to the top k + Other, k at least 1 and as large
+ * as keeps every measure within 8; only then does it leave whole measures
+ * out, the last added first. With All or a k chosen it folds no further.
+ */
+describe('held to 8 series (AC-505)', () => {
+  const REGION = 'orders.region';
+  const MONTH = 'orders.month';
+  const COST = 'orders.cost';
+  const PROFIT = 'orders.profit';
+  const measuresOf = (count: number) => [REVENUE, TARGET, MARGIN, ORDERS, COST, PROFIT].slice(0, count);
+
+  it('folds 2 measures × 21 countries to the top 3 + Other: 8 series', () => {
+    expect(comboLimit([REVENUE, TARGET], 21)).toEqual({
+      members: 21,
+      top: 3,
+      drawn: [REVENUE, TARGET],
+      over: [],
+      series: 8,
+    });
+  });
+
+  it('folds 3 measures × 4 regions to the top 1 + Other while nothing is chosen: 6 series', () => {
+    expect(comboLimit(measuresOf(3), 4)).toEqual({
+      members: 4,
+      top: 1,
+      drawn: measuresOf(3),
+      over: [],
+      series: 6,
+    });
+  });
+
+  it('folds nothing while every measure fits unfolded', () => {
+    expect(comboLimit([REVENUE, TARGET], 4)).toEqual({
+      members: 4,
+      drawn: [REVENUE, TARGET],
+      over: [],
+      series: 8,
+    });
+  });
+
+  it('with All chosen draws 2 measures × 4 and leaves the third, the last added, over 8 series', () => {
+    expect(comboLimit(measuresOf(3), 4, 'all')).toEqual({
+      members: 4,
+      drawn: [REVENUE, TARGET],
+      over: [MARGIN],
+      series: 8,
+    });
+  });
+
+  it('with a k chosen folds to it and no further', () => {
+    expect(comboLimit(measuresOf(3), 5, 2)).toEqual({
+      members: 5,
+      top: 2,
+      drawn: [REVENUE, TARGET],
+      over: [MARGIN],
+      series: 6,
+    });
+  });
+
+  it('draws 4 of 5 measures × 4 regions, each as the top 1 + Other, leaving the last added', () => {
+    expect(comboLimit(measuresOf(5), 4)).toEqual({
+      members: 4,
+      top: 1,
+      drawn: measuresOf(4),
+      over: [COST],
+      series: 8,
+    });
+  });
+
+  it('draws 8 of 9 unsplit measures', () => {
+    const nine = [...measuresOf(6), 'a.one', 'a.two', 'a.three'];
+
+    expect(comboLimit(nine, undefined)).toEqual({
+      members: 1,
+      drawn: nine.slice(0, 8),
+      over: ['a.three'],
+      series: 8,
+    });
+  });
+
+  it('always draws the first measure, folding its members to the top 7 + Other when All is past 8 (decision T853-1)', () => {
+    expect(comboLimit([REVENUE, TARGET], 21, 'all')).toEqual({
+      members: 21,
+      top: 7,
+      drawn: [REVENUE],
+      over: [TARGET],
+      series: 8,
+    });
+  });
+
+  it('counts a hidden member and a member with no data, each a series', () => {
+    const rows = ['North', 'South', 'East', 'West'].flatMap((region) => [
+      {
+        [MONTH]: 'Jan',
+        [REGION]: region,
+        [REVENUE]: region === 'West' ? null : 10,
+        [TARGET]: 5,
+      },
+    ]);
+    const spec = {
+      chartType: 'combo' as const,
+      encoding: { x: [MONTH], color: [REGION], y: [REVENUE, TARGET, MARGIN] },
+      rows: rows.map((row) => ({ ...row, [MARGIN]: 0.1 })),
+      // East hidden, West with no revenue: both still count (AC-505).
+      options: { series: { East: { hidden: true } }, combo: { shown: 'all' } },
+    };
+
+    expect(comboLimitOf(spec)).toEqual({
+      members: 4,
+      drawn: [REVENUE, TARGET],
+      over: [MARGIN],
+      series: 8,
+    });
+  });
+
+  it('reads "‹dimension› shown" from the combo settings, All or a top k', () => {
+    expect(membersShownOf({ combo: { shown: 'all' } })).toBe('all');
+    expect(membersShownOf({ combo: { shown: 3 } })).toBe(3);
+    expect(membersShownOf({})).toBeUndefined();
+    expect(membersShownOf({ combo: { shown: 0 } })).toBeUndefined();
+  });
+
+  it('refuses a stored shown other than All or a whole number from 1', () => {
+    expect(comboProblems({ combo: { shown: 'most' } })).toEqual([
+      'The members shown are "most", but a combo shows All or a top number from 1.',
+    ]);
+    expect(comboProblems({ combo: { shown: 2.5 } })).toHaveLength(1);
+    expect(comboProblems({ combo: { shown: 3 } })).toEqual([]);
   });
 });

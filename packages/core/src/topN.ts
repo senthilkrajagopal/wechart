@@ -10,7 +10,9 @@
  * has no way to tell how much of the chart they are not seeing.
  */
 
+import { comboLimitOf } from './combo';
 import { membersOn, memberOn, type RenderSpec } from './render-spec';
+import { undrawnMeasures } from './undrawn';
 
 export const OTHER_LABEL = 'Other';
 
@@ -104,6 +106,66 @@ export function applyTopN(spec: RenderSpec): RenderSpec {
   }
 
   return { ...spec, rows: [...kept.flatMap((entry) => entry.rows), otherRow] };
+}
+
+/**
+ * A split combo's members folded to the top *k* + "Other (n)" (T853, AC-505),
+ * where its 8 series need it (`comboLimit`): the members ranked by their
+ * first measure's total, and within each category the rest added up into one
+ * row per measure. The same object where nothing folds.
+ */
+export function applyComboFold(spec: RenderSpec): RenderSpec {
+  if (spec.chartType !== 'combo') return spec;
+  const split = memberOn(spec.encoding, 'color');
+  if (split === undefined) return spec;
+  const measures = membersOn(spec.encoding, 'y');
+  // Counted over the measures drawn on their scale, as `undrawnMeasures` counts.
+  const offScale = new Set(
+    undrawnMeasures(spec)
+      .filter((each) => each.reason === 'scale')
+      .map((each) => each.member),
+  );
+  const { top } = comboLimitOf(
+    spec,
+    measures.filter((measure) => !offScale.has(measure)),
+  );
+  if (top === undefined) return spec;
+
+  const category = memberOn(spec.encoding, 'x');
+  const totals = new Map<string, number>();
+  for (const row of spec.rows) {
+    const member = String(row[split] ?? '');
+    totals.set(member, (totals.get(member) ?? 0) + (numberAt(row, measures[0] ?? '') ?? 0));
+  }
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([member]) => member);
+  const kept = new Set(ranked.slice(0, top));
+  const other = `${OTHER_LABEL} (${String(ranked.length - kept.size)})`;
+
+  // By category, in the order they arrived: its kept members' rows, then Other.
+  const byCategory = new Map<string, Record<string, unknown>[]>();
+  for (const row of spec.rows) {
+    const key = category === undefined ? '' : String(row[category] ?? '');
+    byCategory.set(key, [...(byCategory.get(key) ?? []), row]);
+  }
+  const rows = [...byCategory.values()].flatMap((inCategory) => {
+    const folded = inCategory.filter((row) => !kept.has(String(row[split] ?? '')));
+    const first = inCategory[0] ?? {};
+    const otherRow: Record<string, unknown> = {
+      ...(category === undefined ? {} : { [category]: first[category] }),
+      [split]: other,
+    };
+    for (const measure of measures) {
+      // As `applyTopN`: a quick calculation's fold has no value (AC-048).
+      otherRow[measure] = Object.hasOwn(spec.calculated ?? {}, measure)
+        ? null
+        : total(folded.map((row) => numberAt(row, measure)));
+    }
+    return [
+      ...inCategory.filter((row) => kept.has(String(row[split] ?? ''))),
+      ...(folded.length === 0 ? [] : [otherRow]),
+    ];
+  });
+  return { ...spec, rows };
 }
 
 /**

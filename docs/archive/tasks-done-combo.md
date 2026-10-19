@@ -66,3 +66,8 @@ Lane COMBO's ticked tasks from `docs/tasks.md` §P2.26 (F44), their sub-lines wo
   - Files: `packages/recommender/src/explain.ts` (+ test), `packages/web/src/editor/WhyThisChart.tsx`.
   - Failing test: `explain.test.ts`: for time × 2 measures on different scales, a combo with Margin % on the right gives the same recommendation and runners-up as one without, and the one-value-axis rule reads "You drew a second axis by hand; the recommender never does" (AC-510).
   - Depends on: T845
+
+- [x] T853 (AC-505) Hold a combo to 8 series: fold members to the top k + Other unless the author chose, then leave whole measures out, last added first
+  - Files: `packages/core/src/combo.ts` (`comboLimit`), `packages/core/src/undrawn.ts` ("over 8 series"; + test), `packages/core/src/topN.ts`.
+  - Failing test: `combo.test.ts`: 2 measures × 21 countries fold to top 3 + Other (8 series); 3 measures × 4 regions with nothing chosen fold to top 1 + Other (6); the same with "All" chosen draws 2 measures × 4 and leaves the third, last added, "not drawn · over 8 series"; 5 measures × 4 regions with nothing chosen draw 4 measures × (top 1 + Other); 9 unsplit measures draw 8; a hidden member and a member with no data each count (AC-505).
+  - Depends on: T852

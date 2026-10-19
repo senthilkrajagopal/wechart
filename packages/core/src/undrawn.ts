@@ -14,8 +14,9 @@
  * editor's pills and the recommender alike.
  */
 import type { MemberFormat, MemberFormats } from './format';
-import { comboSeriesOf } from './combo';
+import { comboSeriesOf, comboLimit, membersShownOf, type MembersShown } from './combo';
 import {
+  distinctValues,
   membersOn,
   memberOn,
   type ChartType,
@@ -42,8 +43,11 @@ export function scaleOf(format: string | MemberFormat | undefined): string {
   return 'number';
 }
 
-/** Why a metric isn't drawn: on another scale than the first, or past what the form draws. */
-export type UndrawnReason = 'scale' | 'form';
+/**
+ * Why a metric isn't drawn: on another scale than the first, past what the
+ * form draws, or past a combo's 8 series ("over 8 series", AC-505).
+ */
+export type UndrawnReason = 'scale' | 'form' | 'series';
 
 export interface Undrawn {
   readonly member: string;
@@ -98,6 +102,10 @@ export interface FormShape {
    * has a scale of its own. Absent, every metric shares one axis.
    */
   readonly axisOf?: (member: string) => ComboAxis;
+  /** A split combo's members, hidden and empty ones counted (AC-505). */
+  readonly members?: number;
+  /** A combo's "‹dimension› shown", where the author chose (AC-505). */
+  readonly shown?: MembersShown;
 }
 
 /** The metrics a form doesn't draw, each with why, in the wells' order. */
@@ -107,6 +115,8 @@ export function undrawnOf({
   split,
   scaleOf: scale,
   axisOf = () => 'left',
+  members,
+  shown,
 }: FormShape): Undrawn[] {
   const past = (drawn: number): Undrawn[] =>
     measures.slice(drawn).map((member) => ({ member, reason: 'form' as const }));
@@ -127,12 +137,30 @@ export function undrawnOf({
     // Each metric against the first on its own axis: there is one axis
     // except in a combo the author gave a second (T846).
     const firstOn = (axis: ComboAxis) => measures.find((member) => axisOf(member) === axis);
-    return measures
-      .filter((member) => {
+    const offScale = new Set(
+      measures.filter((member) => {
         const own = firstOn(axisOf(member));
         return member !== own && scale(member) !== scale(own ?? first);
-      })
-      .map((member) => ({ member, reason: 'scale' as const }));
+      }),
+    );
+    /**
+     * A combo draws at most 8 series (T853, AC-505): of the measures on
+     * their scale, whole ones past them aren't drawn, the last added first.
+     */
+    const over = new Set(
+      chartType === 'combo'
+        ? comboLimit(
+            measures.filter((member) => !offScale.has(member)),
+            split ? members : undefined,
+            shown,
+          ).over
+        : [],
+    );
+    return measures.flatMap((member): Undrawn[] => {
+      if (offScale.has(member)) return [{ member, reason: 'scale' }];
+      if (over.has(member)) return [{ member, reason: 'series' }];
+      return [];
+    });
   }
   // A KPI, a pie or donut, a treemap, a heatmap, a box plot, a map: one.
   return past(1);
@@ -153,8 +181,16 @@ function shapeOf(spec: RenderSpec, formats: MemberFormats = spec.formats ?? {}):
       ONE_AXIS.has(spec.chartType) || spec.chartType === 'trellis' ? split !== undefined : false,
     scaleOf: (member) => scaleOf(formats[member]),
     ...(axes === undefined ? {} : { axisOf: (member: string) => axes.get(member) ?? 'left' }),
+    ...(spec.chartType === 'combo' && split !== undefined
+      ? { members: distinctValues(spec.rows, split).length }
+      : {}),
+    ...(spec.chartType === 'combo' ? optional('shown', membersShownOf(spec.options)) : {}),
   };
 }
+
+/** `{ [key]: value }`, or nothing where the value is absent (exact optional properties). */
+const optional = <K extends string, V>(key: K, value: V | undefined) =>
+  (value === undefined ? {} : { [key]: value }) as Partial<Record<K, V>>;
 
 /** The metrics this chart's form leaves undrawn (T510): what the editor's pills say. */
 export function undrawnMeasures(spec: RenderSpec): Undrawn[] {
@@ -164,12 +200,13 @@ export function undrawnMeasures(spec: RenderSpec): Undrawn[] {
 /**
  * An unsplit bar, line or area with its value axis held to the first
  * metric's scale (R67, "Draw the first only"): the metrics on another taken
- * off it, so its axis wears the first's format. Any other spec as it is.
+ * off it, so its axis wears the first's format. A combo's measures past its
+ * 8 series are taken off too (T853, AC-505). Any other spec as it is.
  */
 export function onOneScale(spec: RenderSpec): RenderSpec {
   const off = new Set(
     undrawnMeasures(spec)
-      .filter((each) => each.reason === 'scale')
+      .filter((each) => each.reason === 'scale' || each.reason === 'series')
       .map((each) => each.member),
   );
   if (off.size === 0) return spec;

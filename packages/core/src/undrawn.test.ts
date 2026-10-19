@@ -182,3 +182,48 @@ describe('an unsplit bar, line or area drawn on its first metric’s scale (T510
     expect(onOneScale(scatter)).toBe(scatter);
   });
 });
+
+/**
+ * T853 (AC-505): a combo draws at most 8 series; a whole measure past them
+ * isn't drawn, the last added first, and its pill says "over 8 series".
+ */
+describe('a combo past 8 series (T853, AC-505)', () => {
+  const nine = Array.from({ length: 9 }, (_, at) => `orders.m${String(at + 1)}`);
+
+  it('names the ninth unsplit measure as over 8 series', () => {
+    expect(undrawnMeasures(spec('combo', nine))).toEqual([
+      { member: 'orders.m9', reason: 'series' },
+    ]);
+  });
+
+  it('counts only the measures drawn on their scale, and leaves the last added out first', () => {
+    // AMOUNT is on another scale: it isn't drawn, so it takes no series.
+    const measures = [...nine.slice(0, 8), AMOUNT, 'orders.m9'];
+    expect(undrawnMeasures(spec('combo', measures))).toEqual([
+      { member: AMOUNT, reason: 'scale' },
+      { member: 'orders.m9', reason: 'series' },
+    ]);
+  });
+
+  it('counts each member of a split: 3 measures × 4 regions with All chosen draw 2', () => {
+    const split: RenderSpec = {
+      ...spec('combo', [COUNT, 'orders.items', 'orders.lines'], { color: [REGION] }),
+      rows: ['North', 'South', 'East', 'West'].map((region) => ({
+        [STATUS]: 'open',
+        [REGION]: region,
+        [COUNT]: 1,
+        'orders.items': 2,
+        'orders.lines': 3,
+      })),
+      options: { combo: { shown: 'all' } },
+    };
+
+    expect(undrawnMeasures(split)).toEqual([{ member: 'orders.lines', reason: 'series' }]);
+    // Not drawn, so not a series.
+    expect(onOneScale(split).encoding.y).toEqual([COUNT, 'orders.items']);
+  });
+
+  it('offers Small multiples and Table for a measure over 8 series', () => {
+    expect(undrawnOffers('combo', 'series')).toEqual(['smallMultiples', 'table']);
+  });
+});

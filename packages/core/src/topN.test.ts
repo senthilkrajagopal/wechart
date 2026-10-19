@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from './render-spec';
-import { applyRowLimit, applyTopN, OTHER_LABEL } from './topN';
+import { comboLimitOf } from './combo';
+import { applyComboFold, applyRowLimit, applyTopN, OTHER_LABEL } from './topN';
 
 /**
  * T048 / AC-041: WHEN a categorical chart exceeds its top-N setting, THE
@@ -188,5 +189,70 @@ describe('the types with no category ranked on y', () => {
       const unfolded = spec({ chartType });
       expect(applyTopN(unfolded)).toBe(unfolded);
     }
+  });
+});
+
+/**
+ * T853 (AC-505): a split combo past 8 series folds its members to the top k
+ * by the first measure plus "Other (n)", within each category, adding up
+ * every measure; the folded rows give the same limit again.
+ */
+describe("a split combo's members folded to the top k + Other (AC-505)", () => {
+  const MONTH = 'orders.month';
+  const REGION = 'orders.region';
+  const REVENUE = 'orders.revenue';
+  const TARGET = 'orders.target';
+  const MARGIN = 'orders.margin';
+  const totals: Record<string, number> = { North: 40, South: 30, East: 20, West: 10 };
+  const combo = (options: Record<string, unknown> = {}): RenderSpec => ({
+    chartType: 'combo',
+    encoding: { x: [MONTH], color: [REGION], y: [REVENUE, TARGET, MARGIN] },
+    measures: [REVENUE, TARGET, MARGIN],
+    rows: ['Jan', 'Feb'].flatMap((month) =>
+      ['West', 'East', 'South', 'North'].map((region) => ({
+        [MONTH]: month,
+        [REGION]: region,
+        [REVENUE]: (totals[region] ?? 0) / 2,
+        [TARGET]: 1,
+        [MARGIN]: 2,
+      })),
+    ),
+    options,
+  });
+
+  it('keeps the top 1 by the first measure and folds the other 3 into Other (3), per month', () => {
+    const folded = applyComboFold(combo());
+
+    expect(folded.rows.map((row) => `${String(row[MONTH])} ${String(row[REGION])}`)).toEqual([
+      'Jan North',
+      `Jan ${OTHER_LABEL} (3)`,
+      'Feb North',
+      `Feb ${OTHER_LABEL} (3)`,
+    ]);
+    expect(folded.rows[1]).toEqual({
+      [MONTH]: 'Jan',
+      [REGION]: `${OTHER_LABEL} (3)`,
+      [REVENUE]: 30,
+      [TARGET]: 3,
+      [MARGIN]: 6,
+    });
+  });
+
+  it('gives the same limit again once folded', () => {
+    expect(comboLimitOf(applyComboFold(combo()))).toEqual({
+      members: 2,
+      drawn: [REVENUE, TARGET, MARGIN],
+      over: [],
+      series: 6,
+    });
+  });
+
+  it('leaves a combo whose members fit, or with All chosen, as it came', () => {
+    const all = combo({ combo: { shown: 'all' } });
+    expect(applyComboFold(all)).toBe(all);
+    const unsplit: RenderSpec = { ...combo(), encoding: { x: [MONTH], y: [REVENUE] } };
+    expect(applyComboFold(unsplit)).toBe(unsplit);
+    const bar: RenderSpec = { ...combo(), chartType: 'bar' };
+    expect(applyComboFold(bar)).toBe(bar);
   });
 });

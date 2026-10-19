@@ -14,7 +14,15 @@
  * through this one module, so they can't disagree.
  */
 import type { MemberFormat, MemberFormats } from './format';
-import type { ComboAxis, ComboMark, SeriesOptions } from './render-spec';
+import {
+  distinctValues,
+  memberOn,
+  membersOn,
+  type ComboAxis,
+  type ComboMark,
+  type RenderSpec,
+  type SeriesOptions,
+} from './render-spec';
 import { scaleOf } from './undrawn';
 
 /** The four marks a combo offers, in the order the editor lists them (AC-497). */
@@ -201,7 +209,12 @@ const STACKING_VALUES: Readonly<Record<ComboStackingRow, readonly string[]>> = {
 function stackingProblems(options: Readonly<Record<string, unknown>> | undefined): string[] {
   const combo = comboSettingsOf(options);
   const problems: string[] = [];
-  const { bars, areas } = combo;
+  const { bars, areas, shown } = combo;
+  if (shown !== undefined && !isShown(shown)) {
+    problems.push(
+      `The members shown are "${String(shown)}", but a combo shows All or a top number from 1.`,
+    );
+  }
   if (bars !== undefined && !STACKING_VALUES.bars.includes(bars as string)) {
     problems.push(
       `Bars are stacked as "${String(bars)}", but a combo's bars are side by side or stacked.`,
@@ -351,6 +364,101 @@ export function canSynchronize(
     available: false,
     reason: `${label(left.measure)} is in ${unit(left.measure)} and ${label(right.measure)} in ${unit(right.measure)}`,
   };
+}
+
+/** The most series a combo draws (AC-505, design 20 Q2 (a)). */
+export const COMBO_SERIES_LIMIT = 8;
+
+/**
+ * "‹dimension› shown" (AC-505): every member, or the top *k* by the first
+ * measure plus "Other". Absent, the author hasn't chosen, and the combo folds
+ * as far as it must to keep every measure within 8.
+ */
+export type MembersShown = 'all' | number;
+
+const isShown = (value: unknown): value is MembersShown =>
+  value === 'all' || (typeof value === 'number' && Number.isInteger(value) && value >= 1);
+
+/** The author's "‹dimension› shown", from `options.combo.shown`, or none. */
+export function membersShownOf(
+  options: Readonly<Record<string, unknown>> | undefined,
+): MembersShown | undefined {
+  const shown = comboSettingsOf(options)['shown'];
+  return isShown(shown) ? shown : undefined;
+}
+
+/** What a combo draws within its 8 series (AC-505). */
+export interface ComboLimit {
+  /** The split's members, hidden and empty ones counted; 1 unsplit. */
+  readonly members: number;
+  /** Folded to the top *k* + Other: *k*. Absent, every member is drawn. */
+  readonly top?: number;
+  /** The measures drawn, in the well's order. */
+  readonly drawn: readonly string[];
+  /** The measures not drawn, "over 8 series", the last added. */
+  readonly over: readonly string[];
+  /** Series drawn: the drawn measures times the members each draws. */
+  readonly series: number;
+}
+
+/**
+ * A combo held to 8 series (AC-505, R80 "capped at 8 series").
+ *
+ * Unsplit, each measure is a series, so a ninth isn't drawn. Split, each
+ * measure is drawn once per member. With nothing chosen, the members fold
+ * first, to the top *k* + Other, *k* at least 1 and as large as keeps every
+ * measure within 8; only then are whole measures left out, the last added
+ * first (the last in the Metrics well, decision T853-2). With All or a *k*
+ * chosen nothing folds further, and whole measures are left out instead.
+ *
+ * A fold that keeps as many series as it folds ("top 3 + Other" of 4) only
+ * hides a member's name, so it isn't made. And the first measure is always
+ * drawn: where a choice would give it more than 8 series alone, its members
+ * fold to the top 7 + Other (decision T853-1), since drawing nothing at all
+ * helps no one.
+ */
+export function comboLimit(
+  measures: readonly string[],
+  members: number | undefined,
+  shown?: MembersShown,
+): ComboLimit {
+  const limit = COMBO_SERIES_LIMIT;
+  const held = (count: number, perMeasure: number, top?: number): ComboLimit => {
+    const drawn = measures.slice(0, Math.max(1, Math.min(measures.length, count)));
+    return {
+      members: members ?? 1,
+      ...(top === undefined ? {} : { top }),
+      drawn,
+      over: measures.slice(drawn.length),
+      series: drawn.length * perMeasure,
+    };
+  };
+  if (members === undefined || members <= 1) {
+    return held(Math.floor(limit / Math.max(1, members ?? 1)), Math.max(1, members ?? 1));
+  }
+  /** The top `k` + Other, or every member where folding wouldn't drop a series. */
+  const folded = (k: number) =>
+    k + 1 < members ? { perMeasure: k + 1, top: k } : { perMeasure: members };
+  let fold: { perMeasure: number; top?: number };
+  if (shown === 'all') fold = { perMeasure: members };
+  else if (shown !== undefined) fold = folded(shown);
+  else if (measures.length * members <= limit) fold = { perMeasure: members };
+  else fold = folded(Math.max(1, Math.floor(limit / measures.length) - 1));
+  if (fold.perMeasure > limit) fold = folded(limit - 1);
+  return held(Math.floor(limit / fold.perMeasure), fold.perMeasure, fold.top);
+}
+
+/**
+ * A spec's combo limit (AC-505): its split's members counted from its rows,
+ * a hidden member and one with no data each a series, as they are drawn.
+ */
+export function comboLimitOf(
+  spec: Pick<RenderSpec, 'encoding' | 'rows' | 'options'>,
+  measures: readonly string[] = membersOn(spec.encoding, 'y'),
+): ComboLimit {
+  const split = memberOn(spec.encoding, 'color');
+  const members = split === undefined ? undefined : distinctValues(spec.rows, split).length;
+  return comboLimit(measures, members, membersShownOf(spec.options));
 }
 
 /** The chart-wide combo settings, `options.combo`, or none (decision T845-1). */

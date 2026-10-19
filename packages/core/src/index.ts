@@ -107,6 +107,9 @@ export {
   canSynchronize,
   COMBO_AXES,
   COMBO_MARKS,
+  COMBO_SERIES_LIMIT,
+  comboLimit,
+  comboLimitOf,
   comboProblems,
   comboSeriesOf,
   comboStackingOf,
@@ -114,6 +117,7 @@ export {
   isSynchronized,
   logScaleState,
   markTakenBy,
+  membersShownOf,
   unitOfFormat,
   withComboAuto,
   withComboSeries,
@@ -123,7 +127,9 @@ export {
   withSynchronize,
   type AreaStacking,
   type BarStacking,
+  type ComboLimit,
   type ComboSeries,
+  type MembersShown,
   type ComboStacking,
   type ComboStackingRow,
   type LogScaleState,
@@ -170,7 +176,7 @@ export {
 
 export { pivot, type PivotResult } from './pivot';
 
-export { applyRowLimit, applyTopN, OTHER_LABEL } from './topN';
+export { applyComboFold, applyRowLimit, applyTopN, OTHER_LABEL } from './topN';
 export { drilledDocument, drillOptions, type DrillOption } from './drill';
 
 export { applySort, type SortBy, type SortDirection, type SortSettings } from './sort';

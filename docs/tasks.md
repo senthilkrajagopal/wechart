@@ -1813,10 +1813,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
 
 - [x] T852 (AC-504) Split a combo by one dimension across every measure: a series per measure × member, coloured by member, on its measure's axis, one mark per measure
 
-- [ ] T853 (AC-505) Hold a combo to 8 series: fold members to the top k + Other unless the author chose, then leave whole measures out, last added first
-  - Files: `packages/core/src/combo.ts` (`comboLimit`), `packages/core/src/undrawn.ts` ("over 8 series"; + test), `packages/core/src/topN.ts`.
-  - Failing test: `combo.test.ts`: 2 measures × 21 countries fold to top 3 + Other (8 series); 3 measures × 4 regions with nothing chosen fold to top 1 + Other (6); the same with "All" chosen draws 2 measures × 4 and leaves the third, last added, "not drawn · over 8 series"; 5 measures × 4 regions with nothing chosen draw 4 measures × (top 1 + Other); 9 unsplit measures draw 8; a hidden member and a member with no data each count (AC-505).
-  - Depends on: T852
+- [x] T853 (AC-505) Hold a combo to 8 series: fold members to the top k + Other unless the author chose, then leave whole measures out, last added first
 
 - [x] T854 (AC-506) Inside a combo, offer "Draw on a right axis" first for a measure on another scale, putting it there
 
