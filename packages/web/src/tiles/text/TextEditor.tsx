@@ -109,6 +109,9 @@ export default function TextEditor({ document, name, onLeave }: TextEditorProps)
       onBlur={(event) => {
         const to = event.relatedTarget;
         if (to !== null && event.currentTarget.contains(to)) return;
+        // The window losing focus — another app, another tab — isn't leaving
+        // the text: it's still being edited when the author comes back.
+        if (to === null && !window.document.hasFocus()) return;
         leave(to === null ? 'nowhere' : 'away');
       }}
     >

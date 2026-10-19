@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -66,6 +66,17 @@ describe('a Text tile’s text, edited in place (T876, AC-302)', () => {
     await userEvent.keyboard('{Escape}');
     expect(onLeave).toHaveBeenCalledTimes(1);
     expect(onLeave.mock.calls[0]?.[1]).toBe('escape');
+  });
+
+  it('stays while the window loses focus, to another app or tab (T876’s review)', async () => {
+    const { textbox, onLeave } = opened(doc(paragraph(text('One'))));
+    await waitFor(() => {
+      expect(textbox.contains(document.activeElement)).toBe(true);
+    });
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    fireEvent.blur(textbox, { relatedTarget: null });
+    hasFocus.mockRestore();
+    expect(onLeave).not.toHaveBeenCalled();
   });
 
   it('hands back nothing when the text is unchanged, so no change is recorded', async () => {

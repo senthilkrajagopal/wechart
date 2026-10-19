@@ -198,6 +198,19 @@ test('a Text tile’s text is edited on the canvas, left by a click, Esc or Tab,
   await expect(tile).toHaveAttribute('data-selected', 'true');
   await expect(tile.locator('.text-tile p')).toHaveText('Revenue grew!');
 
+  // A click on nothing that takes focus, outside the tile — the dashboard's
+  // title — leaves it too, the tile selected and focused (T876's review).
+  await tile.locator('.text-tile').dblclick();
+  await expect(textbox).toBeFocused();
+  await page.keyboard.type('?');
+  await page.locator('.dashboard__header h1').click();
+  await expect(textbox).toHaveCount(0);
+  await expect(tile).toBeFocused();
+  await expect(tile).toHaveAttribute('data-selected', 'true');
+  await expect(tile.locator('.text-tile p')).toHaveText('Revenue grew!?');
+  await toolbar(page).getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(tile.locator('.text-tile p')).toHaveText('Revenue grew!');
+
   // Tab leaves it for the next control: focus is no longer in the text.
   await tile.locator('.text-tile').dblclick();
   await expect(textbox).toBeFocused();

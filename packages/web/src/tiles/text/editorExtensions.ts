@@ -98,17 +98,50 @@ const elementNode = (kind: ElementKind) =>
         elementAttributeNames(kind).map((name) => [name, { default: null, rendered: false }]),
       );
     },
+    /**
+     * Read back from the clipboard: ProseMirror pastes through the HTML a
+     * copy or cut wrote, so an element's settings travel in `data-attrs`
+     * (T876's review). Only what its kind declares is taken; the stored
+     * schema's check still judges the values (T868, AC-513).
+     */
+    parseHTML() {
+      return [
+        {
+          tag: `span[data-element="${kind}"]`,
+          getAttrs: (element) => settingsOf(kind, element.getAttribute('data-attrs')),
+        },
+      ];
+    },
     renderHTML({ node }) {
       const source = ['measure', 'marking', 'filter', 'parameter', 'label']
         .map((name) => node.attrs[name] as unknown)
         .find((value): value is string => typeof value === 'string');
+      const settings = Object.fromEntries(
+        Object.entries(node.attrs).filter(([, value]) => value !== null && value !== undefined),
+      );
       return [
         'span',
-        { class: 'text-element', 'data-element': kind },
+        { class: 'text-element', 'data-element': kind, 'data-attrs': JSON.stringify(settings) },
         source === undefined ? ELEMENT_WORDS[kind] : `${ELEMENT_WORDS[kind]} · ${source}`,
       ];
     },
   });
+
+/** An element's settings as its copy wrote them: only the ones its kind declares. */
+function settingsOf(kind: ElementKind, written: string | null): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(written ?? '{}');
+  } catch {
+    return {};
+  }
+  if (!isRecord(parsed)) return {};
+  return Object.fromEntries(
+    elementAttributeNames(kind).flatMap((name) =>
+      Object.hasOwn(parsed, name) ? [[name, parsed[name]]] : [],
+    ),
+  );
+}
 
 /** The editor's extensions: the stored schema's nodes and marks, and nothing else. */
 export function textEditorExtensions(): Extensions {
@@ -126,8 +159,11 @@ export function textEditorExtensions(): Extensions {
       link: {
         openOnClick: false,
         autolink: false,
-        // Only an http(s) address or a wechart dashboard (rule 42, AC-513).
+        // Only an http(s) address or a wechart dashboard (rule 42, AC-513);
+        // a pasted address is linked by `shouldAutoLink`, never `isAllowedUri`
+        // (T876's review), so both ask.
         isAllowedUri: (url) => textLinkProblem(url) === undefined,
+        shouldAutoLink: (url) => textLinkProblem(url) === undefined,
       },
     }),
     Heading,
@@ -146,26 +182,45 @@ const KEPT: Readonly<Record<string, readonly string[]>> = {
   ...Object.fromEntries(ELEMENT_KINDS.map((kind) => [kind, elementAttributeNames(kind)])),
 };
 
-function markOf(mark: unknown): TextMark[] {
+const ELEMENTS = new Set<string>(ELEMENT_KINDS);
+
+/**
+ * A mark as stored: a link only to an address the schema takes (rule 42), and
+ * never on an element (decision T868-1). A paste can make either — Tiptap
+ * links a pasted address over the selection, elements in it too — and the
+ * words stay, unlinked (T876's review).
+ */
+function markOf(mark: unknown, onElement: boolean): TextMark[] {
   if (!isRecord(mark) || typeof mark['type'] !== 'string') return [];
   if (mark['type'] !== 'link') return [{ type: mark['type'] }];
   const href = isRecord(mark['attrs']) ? mark['attrs']['href'] : undefined;
-  return typeof href === 'string' ? [{ type: 'link', attrs: { href } }] : [];
+  return !onElement && typeof href === 'string' && textLinkProblem(href) === undefined
+    ? [{ type: 'link', attrs: { href } }]
+    : [];
 }
 
-function nodeOf(input: JSONContent): TextNode {
-  const type = input.type ?? 'paragraph';
+/** What a list item may hold after its first paragraph: StarterKit's takes any block. */
+const IN_LIST_ITEM = new Set(['paragraph', 'bulletList', 'orderedList']);
+
+function nodeOf(input: JSONContent, parent?: string): TextNode {
+  // A heading or Large value pasted into a list item is a paragraph there.
+  const type =
+    parent === 'listItem' && !IN_LIST_ITEM.has(input.type ?? '')
+      ? 'paragraph'
+      : (input.type ?? 'paragraph');
   const attrs = Object.fromEntries(
     (KEPT[type] ?? []).flatMap((name) => {
       const value: unknown = input.attrs?.[name];
       return value === null || value === undefined ? [] : [[name, value]];
     }),
   );
-  const marks = (input.marks ?? []).flatMap(markOf);
+  const marks = (input.marks ?? []).flatMap((mark) => markOf(mark, ELEMENTS.has(type)));
   return {
     type,
     ...(Object.keys(attrs).length === 0 ? {} : { attrs }),
-    ...(input.content === undefined ? {} : { content: input.content.map(nodeOf) }),
+    ...(input.content === undefined
+      ? {}
+      : { content: input.content.map((child) => nodeOf(child, type)) }),
     ...(marks.length === 0 ? {} : { marks }),
     ...(typeof input.text === 'string' ? { text: input.text } : {}),
   };
