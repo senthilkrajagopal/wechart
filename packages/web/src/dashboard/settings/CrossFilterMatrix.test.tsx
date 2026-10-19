@@ -74,14 +74,17 @@ describe('a Text tile in the cross-filter matrix (T887, AC-523)', () => {
   it('offers Filter and None, Highlight disabled with its reason', async () => {
     const { onChange } = shown({ mode: 'crossFilter', crossFilter: { defaultAction: 'filter' } });
     const cell = screen.getByRole('combobox', { name: 'By status to text: Summary' });
-    const highlight = within(cell).getByRole('option', { name: 'Highlight' });
+    // The reason is the option's own words, read and shown wherever it is (checkpoint 2).
+    const highlight = within(cell).getByRole('option', {
+      name: 'Highlight: Text has no marks to highlight',
+    });
     expect((highlight as HTMLOptionElement).disabled).toBe(true);
-    expect(highlight.getAttribute('title')).toBe('Text has no marks to highlight');
+    expect(highlight.textContent).toBe('Highlight: Text has no marks to highlight');
     expect(
       within(cell)
         .getAllByRole('option')
         .map((option) => option.textContent),
-    ).toEqual(['Filter', 'Highlight', 'None']);
+    ).toEqual(['Filter', 'Highlight: Text has no marks to highlight', 'None']);
     await userEvent.selectOptions(cell, 'None');
     expect(onChange).toHaveBeenCalledWith({
       defaultAction: 'filter',

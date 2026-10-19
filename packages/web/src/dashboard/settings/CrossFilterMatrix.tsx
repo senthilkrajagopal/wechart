@@ -192,14 +192,10 @@ export function CrossFilterMatrix({
                                 );
                               }}
                             >
+                              {/* Highlight's reason is its own words, read and seen in the list. */}
                               {ACTIONS.map(({ value, label }) => (
-                                <option
-                                  key={value}
-                                  value={value}
-                                  disabled={value === 'highlight'}
-                                  {...(value === 'highlight' ? { title: NO_MARKS } : {})}
-                                >
-                                  {label}
+                                <option key={value} value={value} disabled={value === 'highlight'}>
+                                  {value === 'highlight' ? `${label}: ${NO_MARKS}` : label}
                                 </option>
                               ))}
                             </select>
