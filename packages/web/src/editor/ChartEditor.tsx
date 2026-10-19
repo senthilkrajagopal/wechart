@@ -3,6 +3,7 @@ import {
   applyQuickCalc,
   CHART_TYPE_NAMES,
   chartDocumentOf,
+  comboSeriesOf,
   compile,
   distinctValues,
   emptySpec,
@@ -576,7 +577,6 @@ function EditorBody({
   };
 
   const recommendation = useMemo(() => recommend(signature), [signature]);
-  const explanation = useMemo(() => explain(signature), [signature]);
 
   /**
    * AC-032: a manual choice survives field changes. Nothing here resets it on
@@ -586,6 +586,17 @@ function EditorBody({
   // the same type on a tile as here.
   const recommended = topTypeOf(recommendation);
   const shownType = effectiveType(chartTypeState, recommended);
+  /**
+   * The trace, saying of a combo's right axis that the author drew it; the
+   * recommendation itself reads the signature alone (AC-510).
+   */
+  const secondAxisByHand =
+    shownType === 'combo' &&
+    comboSeriesOf(spec.measures, options).some((one) => one.axis === 'right');
+  const explanation = useMemo(
+    () => explain(signature, { secondAxisByHand }),
+    [signature, secondAxisByHand],
+  );
   /**
    * The pick's reason built from the data (T689, EDI-07): "8 Customers
    * Country values × 1 measure → Bar", each field by its title (AC-220).

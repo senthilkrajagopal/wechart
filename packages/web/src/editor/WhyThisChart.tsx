@@ -76,6 +76,14 @@ export function WhyThisChart({ explanation, picked, titles = {} }: WhyThisChartP
               <StatusIcon kind="ok" />
               <span>{signature}</span>
             </li>
+            {explanation.oneValueAxis === undefined ? null : (
+              // A second axis the author drew in a combo (AC-510, design 20
+              // state L): said, never weighed.
+              <li className="why-chart__check" data-testid="check-one-value-axis">
+                <StatusIcon kind="warn" />
+                <span>One value axis: {explanation.oneValueAxis}</span>
+              </li>
+            )}
             {fields
               .filter((field) => field.kind !== 'measure')
               .map((field) => (

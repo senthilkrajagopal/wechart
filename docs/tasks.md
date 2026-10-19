@@ -1866,10 +1866,7 @@ F44 gives combo charts per-series marks and axes, two aligned value axes, one sp
   - Failing test: `describe.test.ts`: the split example reads "Combo, by quarter, split by Region. Revenue: bars, left axis, dollars. Margin %: line, right axis, percent. Axes aligned at zero. 8 series." and adds "Monthly plan: line at $100K, left axis"; `DataTable.test.tsx`: a split combo's table has two header rows, the first "Revenue · bars, left · $" (AC-509).
   - Depends on: T852, T863
 
-- [ ] T865 (AC-510) Keep the recommendation as it is when the author draws a second axis, and say so in "Why this recommendation?"
-  - Files: `packages/recommender/src/explain.ts` (+ test), `packages/web/src/editor/WhyThisChart.tsx`.
-  - Failing test: `explain.test.ts`: for time × 2 measures on different scales, a combo with Margin % on the right gives the same recommendation and runners-up as one without, and the one-value-axis rule reads "You drew a second axis by hand; the recommender never does" (AC-510).
-  - Depends on: T845
+- [x] T865 (AC-510) Keep the recommendation as it is when the author draws a second axis, and say so in "Why this recommendation?"
 
 - [ ] T866 (AC-511) Below 1,024 px, keep axis titles above their axes, compact ticks, thinned category labels, a wrapped legend and reference labels without values
   - Files: `packages/charts/src/series/combo.ts`, `packages/charts/src/combo/references.ts`, `e2e/combo.spec.ts`.

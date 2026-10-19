@@ -17,7 +17,14 @@ export {
   type Recommendations,
 } from './recommend';
 export { dataReasonFor } from './reason';
-export { explain, type CandidateTrace, type Explanation, type FieldTrace } from './explain';
+export {
+  explain,
+  SECOND_AXIS_BY_HAND,
+  type CandidateTrace,
+  type DrawnByHand,
+  type Explanation,
+  type FieldTrace,
+} from './explain';
 export {
   REQUIREMENTS,
   canDraw,

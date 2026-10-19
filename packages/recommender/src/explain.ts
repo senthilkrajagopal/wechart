@@ -29,9 +29,29 @@ export interface CandidateTrace {
 export interface Explanation {
   readonly signature: readonly FieldTrace[];
   readonly candidates: readonly CandidateTrace[];
+  /**
+   * What the one-value-axis rule says of a second axis the author drew in a
+   * combo (AC-510, design 20 state L); none while there is none.
+   */
+  readonly oneValueAxis?: string;
 }
 
-export function explain(signature: Signature): Explanation {
+/** What the chart drawn has beyond the recommendation, by the author's hand. */
+export interface DrawnByHand {
+  /** A combo series the author put on the right axis (AC-497, rule 117). */
+  readonly secondAxisByHand?: boolean;
+}
+
+/** The one-value-axis rule's line while the author drew a second axis (AC-510). */
+export const SECOND_AXIS_BY_HAND = 'You drew a second axis by hand; the recommender never does';
+
+/**
+ * The trace for a signature. What the author drew by hand is said, never
+ * weighed: the candidates and their order depend on the signature alone, so
+ * a second axis drawn by hand leaves the recommendation as it is (AC-510,
+ * AC-030).
+ */
+export function explain(signature: Signature, drawn: DrawnByHand = {}): Explanation {
   const candidates = enumerate(signature).map((candidate: Candidate): CandidateTrace => {
     const rules = checkLegality(candidate);
     const legal = rules.every((outcome) => outcome.passed);
@@ -56,5 +76,6 @@ export function explain(signature: Signature): Explanation {
       if (a.legal !== b.legal) return a.legal ? -1 : 1;
       return (a.score ?? Number.POSITIVE_INFINITY) - (b.score ?? Number.POSITIVE_INFINITY);
     }),
+    ...(drawn.secondAxisByHand === true ? { oneValueAxis: SECOND_AXIS_BY_HAND } : {}),
   };
 }

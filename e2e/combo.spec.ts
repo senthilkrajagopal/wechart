@@ -224,6 +224,31 @@ test.describe('a combo of revenue and a count, by month (T855 follow-up)', () =>
     await expect.poll(() => axesOnCanvas(page)).toBeGreaterThan(0);
   });
 
+  test('keeps the recommendation as it was once the count is on the right, and says so in Why (T865, AC-510)', async ({
+    page,
+  }) => {
+    await comboOfRevenueAndCount(page);
+    const why = page.getByRole('button', { name: 'Why this recommendation?' });
+    await why.click();
+    const checklist = page.getByTestId('why-checklist');
+    const picked = await page.getByTestId('picked-type').getAttribute('data-chart-type');
+    const runners = await checklist.locator('[data-testid^="runner-up-"]').allTextContents();
+    await expect(page.getByTestId('check-one-value-axis')).toHaveCount(0);
+
+    await page
+      .getByTestId('undrawn-metrics')
+      .getByRole('button', { name: 'Draw on a right axis' })
+      .click();
+
+    await expect(page.getByTestId('check-one-value-axis')).toHaveText(
+      'One value axis: You drew a second axis by hand; the recommender never does',
+    );
+    await expect(page.getByTestId('picked-type')).toHaveAttribute('data-chart-type', picked ?? '');
+    expect(await checklist.locator('[data-testid^="runner-up-"]').allTextContents()).toEqual(
+      runners,
+    );
+  });
+
   test('puts the count on the right from its pill’s menu, which Customize › Series agrees with (T856)', async ({
     page,
   }) => {

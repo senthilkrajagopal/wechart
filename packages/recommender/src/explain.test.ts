@@ -106,3 +106,44 @@ describe('the trace agrees with the recommendation', () => {
     }
   });
 });
+
+/**
+ * T865 (AC-510; design 20 state L): a combo whose author drew a second value
+ * axis leaves the recommendation as it is, and the trace's one-value-axis
+ * rule says so.
+ */
+describe('a second axis the author drew (AC-510)', () => {
+  // Time × Revenue ($) and Margin % (%): two measures on different scales.
+  const input: Signature = {
+    fields: [
+      { name: 'orders.month', kind: 'timeDimension', cardinality: 12 },
+      { name: 'orders.revenue', kind: 'measure', scale: 'currency USD' },
+      { name: 'orders.margin_pct', kind: 'measure', scale: 'percent' },
+    ],
+  };
+
+  it('ranks the same candidates the same way, with or without it', () => {
+    const plain = explain(input);
+    const byHand = explain(input, { secondAxisByHand: true });
+
+    expect(byHand.candidates).toEqual(plain.candidates);
+    expect(byHand.signature).toEqual(plain.signature);
+  });
+
+  it('says on the one-value-axis rule that the author drew it, and never otherwise', () => {
+    expect(explain(input, { secondAxisByHand: true }).oneValueAxis).toBe(
+      'You drew a second axis by hand; the recommender never does',
+    );
+    expect(explain(input).oneValueAxis).toBeUndefined();
+  });
+
+  it('still never recommends a second axis itself (AC-030)', () => {
+    const trace = explain(input, { secondAxisByHand: true });
+    const { top, runnersUp } = recommend(input);
+
+    expect(top?.candidate.valueAxisCount).toBe(1);
+    expect(runnersUp.every((one) => one.candidate.valueAxisCount === 1)).toBe(true);
+    // The top of the trace is the recommendation, as it is without the axis.
+    expect(trace.candidates[0]?.chartType).toBe(top?.candidate.chartType);
+  });
+});

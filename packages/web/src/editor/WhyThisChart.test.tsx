@@ -117,3 +117,40 @@ describe('“Why this recommendation?” (AC-029, AC-220; T689, EDI-12)', () => 
     ).toBe('Customers Country');
   });
 });
+
+/**
+ * T865 (AC-510; design 20 state L): in a combo whose author drew a second
+ * value axis, the checklist's one-value-axis line says so, with ⚠, after the
+ * signature; the pick and runners-up stay as they are.
+ */
+describe('a second axis the author drew (AC-510)', () => {
+  it('reads "You drew a second axis by hand; the recommender never does" on its one-value-axis line', async () => {
+    render(
+      <WhyThisChart
+        explanation={{
+          ...EXPLANATION,
+          oneValueAxis: 'You drew a second axis by hand; the recommender never does',
+        }}
+        picked={PICKED}
+        titles={TITLES}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Why this recommendation?' }));
+    const checks = within(screen.getByTestId('why-checklist')).getAllByRole('listitem');
+
+    const line = screen.getByTestId('check-one-value-axis');
+    expect(line.textContent).toBe(
+      'One value axis: You drew a second axis by hand; the recommender never does',
+    );
+    expect(line.querySelector('svg')?.dataset['icon']).toBe('warn');
+    expect(checks.indexOf(line)).toBe(1);
+    expect(screen.getByTestId('picked-type').dataset['chartType']).toBe('bar');
+  });
+
+  it('has no such line while no second axis is drawn', async () => {
+    why();
+    await userEvent.click(screen.getByRole('button', { name: 'Why this recommendation?' }));
+
+    expect(screen.queryByTestId('check-one-value-axis')).toBeNull();
+  });
+});
