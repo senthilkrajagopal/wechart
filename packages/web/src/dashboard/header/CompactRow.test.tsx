@@ -152,6 +152,27 @@ describe('the compact row', () => {
     expectNothingOfTheSheet(header);
   });
 
+  /**
+   * Decision CLOSE-3 (AC-484, as AC-494 for History and Bookmarks): in My
+   * workspace the copy's "Propose to …" carries an icon, and its words in a
+   * label the stylesheet hides from 1,024 to 1,279 px, and in its accessible
+   * name and tooltip, so the row keeps its tabs on its one line there.
+   */
+  it('in My workspace, its Propose names itself in its name and tooltip, its words a label beside an icon', () => {
+    const header = view({
+      place: {
+        line: 'In My workspace',
+        editsElsewhere: false,
+        proposeTo: { label: 'Propose to Shared…', onClick: vi.fn() },
+      },
+    });
+    const propose = within(header).getByRole('button', { name: 'Propose to Shared…' });
+    expect(propose.getAttribute('aria-label')).toBe('Propose to Shared…');
+    expect(propose.getAttribute('title')).toBe('Propose to Shared…');
+    expect(propose.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    expect(propose.querySelector('.header-action__label')?.textContent).toBe('Propose to Shared…');
+  });
+
   it('keeps the page tabs out of the band under it', () => {
     view();
     const tablists = screen.getAllByRole('tablist', { name: 'Pages' });

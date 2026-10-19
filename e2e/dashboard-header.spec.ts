@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 import { headerSheet, openHeaderSheet } from './dashboardHeader';
-import { IN_MY_WORKSPACE, sharedIn } from './workspace';
+import { IN_MY_WORKSPACE, shared, sharedIn } from './workspace';
 
 const API = 'http://localhost:4100/api';
 
@@ -109,6 +109,216 @@ for (const size of [
     expect(await tabs.boundingBox()).toEqual(tabsBox);
     await expect(tabs).toBeInViewport({ ratio: 1 });
     expect((await canvas(page).boundingBox())?.y).toBe(top);
+  });
+}
+
+/**
+ * A dashboard of the spec's own in My workspace, cross-filtering by
+ * highlighting so a tile's keys set a cross-filter: a description, two page
+ * tabs, a filter, and one bar tile of orders by status.
+ */
+async function crossFilteringDashboard(
+  request: APIRequestContext,
+): Promise<{ id: string; title: string }> {
+  const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const title = `Row ${unique}`;
+  const made = async (kind: 'dashboard' | 'chart', named: string) =>
+    (
+      (await (
+        await request.post(`${API}/documents`, {
+          data: { kind, title: named, ...IN_MY_WORKSPACE },
+        })
+      ).json()) as { id: string }
+    ).id;
+  const id = await made('dashboard', title);
+  const chart = await made('chart', 'By status');
+  await request.put(`${API}/documents/chart/${chart}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: 'By status',
+        owner: 'admin',
+        localToDashboardId: id,
+        chart: {
+          source: { cube: 'orders' },
+          wells: { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] },
+          chartType: 'bar',
+        },
+      },
+    },
+  });
+  await request.put(`${API}/documents/dashboard/${id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        description: 'Monthly revenue, orders and top products for the EMEA region.',
+        settings: {
+          width: 'full',
+          interactions: { mode: 'crossFilter', crossFilter: { defaultAction: 'highlight' } },
+        },
+        pages: [
+          {
+            id: 'overview',
+            title: 'Overview',
+            items: [{ id: 'tile-status', kind: 'chart', w: 6, h: 40, chartId: chart }],
+          },
+          { id: 'detail', title: 'Detail', items: [] },
+        ],
+        filters: [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }],
+      },
+    },
+  });
+  return { id, title };
+}
+
+/**
+ * AC-484 (`[R79]`; design 19 screen 1) on the rendered row, at 1,024 and
+ * 1,440 px, with a cross-filter set and the sheet closed: one 48 px line
+ * holding, left to right, the way back, the title, the page tabs, the
+ * compact chip, the actions as today and the Filters toggle last; and none
+ * of the description, the ownership line or a filter pill. (Fixed while the
+ * tiles scroll: T829's test above.) The actions as today: on a shared
+ * dashboard History, Bookmarks, "Edit in my workspace" and ⋯; in My
+ * workspace Bookmarks, Edit, "Propose to Shared…", the gear and ⋯.
+ */
+const ACTIONS = {
+  shared: [
+    ['History', { name: 'History', exact: true }],
+    ['Bookmarks', { name: /^Bookmarks/ }],
+    // "Open my copy" while the copy it was proposed from is still there.
+    ['the primary action', { name: /^(Edit in my workspace|Open my copy)$/ }],
+    ['⋯', { name: 'More', exact: true }],
+  ],
+  'My workspace': [
+    ['Bookmarks', { name: /^Bookmarks/ }],
+    ['the primary action', { name: 'Edit', exact: true }],
+    ['Propose', { name: 'Propose to Shared…', exact: true }],
+    ['the gear', { name: 'Dashboard settings', exact: true }],
+    ['⋯', { name: 'More', exact: true }],
+  ],
+} as const;
+for (const [where, actions] of Object.entries(ACTIONS))
+for (const width of [1024, 1440]) {
+  test(`at ${String(width)} px, ${where}, the row holds its items in order, a compact chip after the tabs, and nothing of the sheet`, async ({
+    page,
+    request,
+  }) => {
+    const made = await crossFilteringDashboard(request);
+    const title = made.title;
+    const id =
+      where === 'shared'
+        ? (await shared(request, 'dashboard', made.id)).find((each) => each.kind === 'dashboard')!
+            .id
+        : made.id;
+    await page.setViewportSize({ width, height: 900 });
+    const filters = [
+      { id: 'f-status', member: 'orders.status', value: { kind: 'values', values: ['shipped'] } },
+    ];
+    await page.goto(
+      `/explore/dashboards/${id}?filters=${encodeURIComponent(JSON.stringify(filters))}`,
+    );
+    await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+    const tile = page.locator('[data-tile="tile-status"]');
+    await expect(tile.getByTestId('chart-canvas')).toBeVisible();
+    const toggle = row(page).getByRole('button', { name: /^Filters\b/ });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    // A cross-filter, set from the tile's keys: its compact chip in the row,
+    // or below 1,280 px the chips as a count (decision CLOSE-2).
+    await tile.focus();
+    await page.keyboard.press('Space');
+    const fullChip = row(page).getByTestId('compact-cross-chip');
+    const count = row(page).getByTestId('compact-chips-count');
+    await expect(fullChip).toHaveCount(1);
+    const chip = width < 1280 ? count : fullChip;
+    await expect(width < 1280 ? fullChip : count).toBeHidden();
+    await expect(chip).toBeVisible();
+    if (width < 1280) {
+      await expect(count).toHaveText('1 filter');
+      await expect(count).toHaveAccessibleName(/^1 filter: Orders Status = .+, from By status$/);
+    }
+
+    const items: [string, Locator][] = [
+      ['the way back', row(page).getByRole('link', { name: /^Back to / })],
+      ['the title', row(page).getByRole('heading', { level: 1, name: title })],
+      ['the page tabs', row(page).getByRole('tablist', { name: 'Pages' })],
+      [width < 1280 ? 'the chips’ count' : 'the compact chip', chip],
+      ...actions.map(
+        ([name, role]) => [name, row(page).getByRole('button', role)] as [string, Locator],
+      ),
+      ['the Filters toggle', toggle],
+    ];
+    // No other action in the row: the buttons outside the chip and the tabs are those, and no more.
+    // (The page tabs' own "More pages", where tabs don't fit, is part of the tabs: AC-492.)
+    const tabsPart = row(page).getByRole('tablist', { name: 'Pages' });
+    const others = await row(page)
+      .locator('button:visible')
+      .evaluateAll(
+        (nodes, tablist) =>
+          nodes
+            .filter(
+              (node) =>
+                node.getAttribute('role') !== 'tab' &&
+                node.getAttribute('aria-label') !== 'More pages' &&
+                node.closest('.compact-chips') === null &&
+                (tablist === null || !tablist.contains(node)),
+            )
+            .map((node) => node.getAttribute('aria-label') ?? node.textContent),
+        await tabsPart.elementHandle(),
+      );
+    expect(others, JSON.stringify(others)).toHaveLength(actions.length + 1);
+    const header = (await row(page).boundingBox())!;
+    expect(header.height).toBe(48);
+    let left = Number.NEGATIVE_INFINITY;
+    for (const [name, item] of items) {
+      await expect(item, name).toBeInViewport({ ratio: 1 });
+      const box = (await item.boundingBox())!;
+      // On the row's one line.
+      expect(box.y, name).toBeGreaterThanOrEqual(header.y);
+      expect(box.y + box.height, name).toBeLessThanOrEqual(header.y + header.height);
+      // After the one before it, not overlapping it.
+      expect(box.x, name).toBeGreaterThanOrEqual(left);
+      left = box.x + box.width;
+    }
+    // Below 1,280 px Propose is an icon, its words in its name and tooltip (CLOSE-3).
+    if (where === 'My workspace') {
+      const propose = row(page).getByRole('button', { name: 'Propose to Shared…', exact: true });
+      await expect(propose).toHaveAttribute('title', 'Propose to Shared…');
+      if (width < 1280) {
+        expect(await propose.innerText()).toBe('');
+        await expect(propose.locator('svg').first()).toBeVisible();
+      } else await expect(propose).toHaveText('Propose to Shared…');
+    }
+    // The tabs hold at least the open page, wholly shown (AC-492).
+    await expect(tabsPart.getByRole('tab', { selected: true })).toBeInViewport({ ratio: 1 });
+    // The toggle is last: nothing visible in the row ends after it.
+    const ends = await row(page)
+      .locator(':scope *:visible')
+      .evaluateAll((nodes) => Math.max(...nodes.map((node) => node.getBoundingClientRect().right)));
+    expect(ends).toBeLessThanOrEqual(left + 0.5);
+
+    // Nothing of the sheet in the row.
+    for (const selector of [
+      '.dashboard__description',
+      '.dashboard__ownership',
+      'section.filter-bar',
+      '[data-filter-id]',
+    ])
+      await expect(row(page).locator(selector), selector).toHaveCount(0);
+    await expect(row(page)).not.toContainText('Monthly revenue, orders and top products');
+
+    // The count opens the sheet, where the full chip is, focus on the toggle (CLOSE-2).
+    if (width < 1280) {
+      await count.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await expect(toggle).toBeFocused();
+      await expect(headerSheet(page).getByTestId('cross-filter-chip')).toHaveCount(1);
+    }
   });
 }
 

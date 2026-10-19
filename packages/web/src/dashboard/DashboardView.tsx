@@ -567,6 +567,25 @@ type LimitedState =
  * state, with its icon (T183, AC-177), and no Retry: asking again cannot
  * bring a deleted chart back (AC-042's review).
  */
+/**
+ * Propose to …'s icon (decision CLOSE-3): an arrow up out of a tray, the copy
+ * going back to where it is shared; all the button shows from 1,024 to
+ * 1,279 px, as History's clock is.
+ */
+function ProposeIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none">
+      <path
+        d="M8 10.5V2.5M5 5.5l3-3 3 3M2.75 9.5v3.75h10.5V9.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function TileMissing() {
   return (
     <StateLine kind="warn" role="status" testId="tile-missing-chart">
@@ -6543,9 +6562,18 @@ export function DashboardView({
                 {place.copy.label}
               </button>
             ) : place.proposeTo !== undefined ? (
-              // The copy's primary: its way back (state F).
-              <button type="button" className="btn-primary" onClick={place.proposeTo.onClick}>
-                {place.proposeTo.label}
+              // The copy's primary: its way back (state F). Named and titled
+              // by its words, which only its icon shows from 1,024 to 1,279
+              // px (decision CLOSE-3, AC-484; as AC-494's History).
+              <button
+                type="button"
+                className="btn-primary dashboard__propose"
+                aria-label={place.proposeTo.label}
+                title={place.proposeTo.label}
+                onClick={place.proposeTo.onClick}
+              >
+                <ProposeIcon />
+                <span className="header-action__label">{place.proposeTo.label}</span>
               </button>
             ) : null}
             {

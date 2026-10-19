@@ -164,12 +164,14 @@ export const HEADER_CSS = `
 .page-menu { gap: 6px; max-width: 100%; }
 /* From 1,024 to 1,279 px (AC-494; design 19 D1): History and Bookmarks are
    32 px icon buttons, their words in their names and tooltips only, so the
-   row keeps to one 48 px line with room for the tabs. */
+   row keeps to one 48 px line with room for the tabs. So is a My workspace
+   copy's "Propose to …" (decision CLOSE-3, AC-484). */
 @media (min-width: 1024px) and (max-width: 1279.98px) {
   .dashboard__header .header-action__label,
   .dashboard__header .dashboard__bookmarks-button > svg:last-child { display: none; }
   .dashboard__header .dashboard__history,
-  .dashboard__header .dashboard__bookmarks-button {
+  .dashboard__header .dashboard__bookmarks-button,
+  .dashboard__header .dashboard__propose {
     justify-content: center;
     min-width: 32px;
     padding: 0 8px;
