@@ -74,3 +74,8 @@ Lane CHARTS-B's ticked tasks from `docs/tasks.md` §P2.27 (F49–F55), their sub
   - Files: `packages/charts/src/describe/sankey.ts` (+ test), `packages/web/src/tiles/tableView/sankey.ts` (+ test).
   - Failing test: (describe) "Sankey of Revenue from Channel to Region, 12 flows, $1.35M. Largest: Web → North America $237K; Web → EMEA $210K; Retail → North America $183K."; (table view) "Web → EMEA · $210,000 · 32.3%" (AC-613).
   - Depends on: T987
+
+- [x] T974 (AC-623) A region key for every boundary set, from its values or the model's mark, and every unplaced value named in the page's text
+  - Files: `packages/core/src/geo/regionKeys.ts` (+ test), `packages/core/src/geo/iso3.ts`, `packages/web/src/workspaces/model/form/ObjectForm.tsx`, `packages/web/src/workspaces/model/form/regionKey.test.tsx`, `packages/web/src/tiles/UnplacedCodes.tsx`.
+  - Failing test: `regionKeys.test.ts`: a dimension whose values are all keys of a set is its key; `meta.wechart.regionKey` naming the set counts whatever the values, and `false` never counts; ISO-3 dimensions keep AC-313's behaviour; `regionKey.test.tsx`: the model form sets and clears the mark; `UnplacedCodes.test.tsx`: "Online" is listed under the map as "Not on the map: "Online" (no territory)" in the DOM (AC-623). Since R83: an Admin-1 region counts by its ISO 3166-2 code and by its English name ("DE-BY", "Bavaria"), and a value matching more than one region is named "(matches more than one region)" and never placed.
+  - Depends on: T973
