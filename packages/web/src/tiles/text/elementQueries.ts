@@ -128,6 +128,23 @@ function canonical(value: unknown): unknown {
 }
 
 /**
+ * Whether a query's time dimensions only limit it to dates — a date filter
+ * reaching the tile, put there by `withFilters` — with no granularity, so its
+ * answer is still one row (checkpoint 2's review).
+ */
+function onlyDateRanges(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (each: unknown) =>
+        typeof each === 'object' &&
+        each !== null &&
+        Object.keys(each).every((key) => key === 'dimension' || key === 'dateRange'),
+    )
+  );
+}
+
+/**
  * The query each of a tile's elements is asked by (T887, AC-523): elements
  * whose queries ask only measures of one cube, under the same filters, are
  * asked as one query of all their measures — one Cube request — each
@@ -142,7 +159,9 @@ export function batchedQueries(queries: readonly Query[]): Map<Query, Query> {
   for (const query of queries) {
     const { measures, ...rest } = query;
     const cubes = new Set(Array.isArray(measures) ? measures.map(cubeOf) : []);
-    const flat = Object.keys(rest).every((key) => key === 'filters');
+    const flat = Object.entries(rest).every(
+      ([key, value]) => key === 'filters' || (key === 'timeDimensions' && onlyDateRanges(value)),
+    );
     const [cube] = cubes;
     if (!Array.isArray(measures) || cubes.size !== 1 || cube === undefined || !flat) {
       sent.set(query, query);

@@ -269,6 +269,35 @@ describe('one Cube request for a tile’s elements of one cube (T887, AC-523)', 
     expect(queries.map((query) => batches.get(query))).toEqual(queries);
   });
 
+  /**
+   * Checkpoint 2's review: a date filter reaching the tile puts a date range
+   * in `timeDimensions` (`withFilters`), and the Values still share it, so
+   * they are still one request.
+   */
+  it('asks three Values as one query under a date filter that reaches the tile', () => {
+    const ORDERED: ActiveFilter = {
+      filter: { id: 'f2', widget: 'dateRange', member: 'orders.created_at' },
+      value: { kind: 'dates', from: '2026-01-01', to: '2026-06-30' },
+    };
+    const dated = (measure: string) => {
+      const value = valueQueryOf({ type: 'value', attrs: { measure } }, undefined);
+      if (!('query' in value)) throw new Error('Nothing asked');
+      return withFilters(value.query, [COUNTRY, ORDERED]);
+    };
+    const queries = [dated('orders.revenue'), dated('orders.count'), dated('orders.margin')];
+    expect(queries[0]?.['timeDimensions']).toEqual([
+      { dimension: 'orders.created_at', dateRange: ['2026-01-01', '2026-06-30'] },
+    ]);
+    const batches = batchedQueries(queries);
+    const sent = queries.map((query) => batches.get(query));
+    expect(sent[0]).toEqual({
+      ...queries[0],
+      measures: ['orders.revenue', 'orders.count', 'orders.margin'],
+    });
+    expect(sent[1]).toBe(sent[0]);
+    expect(sent[2]).toBe(sent[0]);
+  });
+
   it('asks a measure two elements both name once', () => {
     const queries = [asked('orders.count'), asked('orders.count'), asked('orders.revenue')];
     const batches = batchedQueries(queries);
