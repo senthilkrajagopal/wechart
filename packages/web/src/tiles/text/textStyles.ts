@@ -437,4 +437,64 @@ button.text-action--text {
 .text-actions__row { display: flex; align-items: flex-start; gap: 6px; }
 .text-actions__grip,
 .text-actions__add { position: relative; }
+/* Dashboard settings › Parameters (T896, AC-531; design 21 S3; §7h
+   "Parameters list: 34 px rows; choice rows 34 px; dialogs 520 px"). Lane
+   TEXT's, kept with the Text tile's rules. */
+.parameters-settings { display: grid; gap: 12px; justify-items: start; }
+.parameters-settings__none { margin: 0; color: var(--wc-text-secondary); }
+.parameters-settings__table { width: 100%; border-collapse: collapse; font-size: var(--wc-text-sm-size); }
+.parameters-settings__table th {
+  height: 28px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  text-align: left;
+  font-size: var(--wc-text-xs-size);
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+}
+.parameters-settings__table td {
+  height: 34px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  color: var(--wc-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.parameters-settings__row[aria-selected='true'] td { background: var(--wc-bg-subtle); }
+button.parameters-settings__name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wc-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.parameter-form { display: grid; gap: 8px; width: 100%; max-width: 520px; }
+.parameter-form__role { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; border: 0; }
+.parameter-form__role legend { padding: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.parameter-form__hint { flex-basis: 100%; margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.parameter-form__head { margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.parameter-form__choices { display: grid; margin: 0; padding: 0; list-style: none; }
+.parameter-form__choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.parameter-form__grip { position: relative; }
+.parameter-form__member { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parameter-form__ask {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--wc-status-warning);
+  border-radius: 4px;
+}
+.parameter-form__ask p { flex-basis: 100%; margin: 0; }
+.parameter-form__problems { margin: 0; padding-left: 20px; color: var(--wc-status-error); font-size: var(--wc-text-xs-size); }
+.parameter-dialog { max-width: calc(100vw - 32px); }
 `;

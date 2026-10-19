@@ -75,6 +75,8 @@ describe('the dashboard settings page', () => {
       'Interactions',
       'Markings',
       'Cross-filtering',
+      // F46 (AC-531): after Cross-filtering, before Layout.
+      'Parameters',
       'Layout',
     ]);
     // And each one actually says its name. On the attribute alone a nav of

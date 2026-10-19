@@ -44,6 +44,7 @@ export function changesOf(saved: DashboardDocument, draft: DashboardDocument): s
     ['the markings', !same(markingsFrom(saved.markings), markingsFrom(draft.markings))],
     ['the tiles’ markings', !same(saved.pages, draft.pages)],
     ['cross-filtering', !same(before.crossFilter, after.crossFilter)],
+    ['the parameters', !same(saved.parameters ?? [], draft.parameters ?? [])],
     ['the page width', saved.settings.width !== draft.settings.width],
   ];
   const named = changed.filter(([, differs]) => differs).map(([name]) => name);
@@ -55,8 +56,9 @@ export function changesOf(saved: DashboardDocument, draft: DashboardDocument): s
  * doesn't name stays in, so a new one is still asked about (T685's review).
  */
 function rest(document: DashboardDocument): Record<string, unknown> {
-  const { title, folderId, description, settings, markings, pages, ...others } = document;
-  void [title, folderId, description, markings, pages];
+  const { title, folderId, description, settings, markings, pages, parameters, ...others } =
+    document;
+  void [title, folderId, description, markings, pages, parameters];
   const { width, interactions, ...otherSettings } = settings;
   void [width, interactions];
   return { ...others, settings: otherSettings };

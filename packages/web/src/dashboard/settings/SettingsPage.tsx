@@ -1,8 +1,14 @@
-import { markingsFrom } from '@wechart/core';
+import {
+  dashboardParameterProblems,
+  dashboardParametersProblems,
+  markingsFrom,
+  type ChartDocument,
+} from '@wechart/core';
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import type { DashboardDocument } from '../model/document';
 import { CrossFilterMatrix } from './CrossFilterMatrix';
+import { ParametersSettings } from './ParametersSettings';
 import { MarkingsSettings } from './MarkingsSettings';
 import { chartTileMarkings, markingNameProblem } from './markingsDraft';
 import { changedSentence, changesOf } from './dirtyGuard';
@@ -49,6 +55,8 @@ export const SETTINGS_SECTIONS = [
   'Interactions',
   'Markings',
   'Cross-filtering',
+  // F46 (AC-531; design 21 S3 pin 1): after Cross-filtering, before Layout.
+  'Parameters',
   'Layout',
 ] as const;
 
@@ -241,6 +249,17 @@ export interface SettingsPageProps {
   readonly titleOf?: ((chartId: string) => string | undefined) | undefined;
   /** The section it opens on, where a link into it names one; General otherwise. */
   readonly section?: SettingsSection | undefined;
+  /** A chart tile's chart, where it is at hand: what uses a parameter is read from it (AC-531). */
+  readonly chartOf?: ((chartId: string) => ChartDocument | undefined) | undefined;
+}
+
+/** The first thing wrong with the dashboard's parameters, or none (AC-531). */
+function parameterProblem(document: DashboardDocument): string | undefined {
+  const parameters = document.parameters ?? [];
+  return [
+    ...dashboardParametersProblems(parameters),
+    ...parameters.flatMap((parameter) => dashboardParameterProblems(parameter)),
+  ][0];
 }
 
 /** The document without one optional field — absent, not set to undefined. */
@@ -302,6 +321,7 @@ export function SettingsPage({
   onSave,
   titleOf,
   section = 'General',
+  chartOf = () => undefined,
 }: SettingsPageProps) {
   const [open, setOpen] = useState<SettingsSection>(section);
   const folders = useFolders();
@@ -542,6 +562,13 @@ export function SettingsPage({
                 setFailed(named);
                 return;
               }
+              // So must each parameter be whole (AC-531): said on its section.
+              const wrong = parameterProblem(draft);
+              if (wrong !== undefined) {
+                setOpen('Parameters');
+                setFailed(wrong);
+                return;
+              }
               setFailed(undefined);
               const answer = onSave(draft);
               if (answer === undefined) return;
@@ -593,6 +620,12 @@ export function SettingsPage({
                 {/* Which of the two modes is in effect, read from the draft so
                     it follows the radio immediately rather than after a save
                     (AC-070, direction.md rule 56). */}
+                {/* How many parameters, read from the draft (AC-531). */}
+                {section === 'Parameters' && (draft.parameters ?? []).length > 0 ? (
+                  <span className="settings-page__count">
+                    {(draft.parameters ?? []).length.toLocaleString('en-GB')}
+                  </span>
+                ) : null}
                 {mode === undefined ? null : (
                   <span className="settings-page__activity">
                     {/* Its icon as well as its word (T183, AC-177). */}
@@ -762,6 +795,9 @@ export function SettingsPage({
                 }}
               />
             </>
+          ) : open === 'Parameters' ? (
+            // The dashboard's parameters (T896, AC-531), in the draft until Save.
+            <ParametersSettings document={draft} chartOf={chartOf} onChange={setDraft} />
           ) : open === 'Layout' ? (
             /**
              * direction.md: "The dashboard is fixed-width and centred (max

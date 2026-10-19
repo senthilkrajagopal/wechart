@@ -6500,6 +6500,8 @@ export function DashboardView({
               section={settingsSection}
               // How the cross-filter matrix names each tile (AC-118).
               titleOf={chartTitleOf}
+              // What uses each parameter, from its charts' wells (AC-531).
+              chartOf={(chartId) => drawn.documents?.[chartId]}
               onCancel={() => {
                 setSettingsOpen(false);
               }}

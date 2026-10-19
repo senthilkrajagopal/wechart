@@ -245,6 +245,8 @@ export {
   dashboardParameterProblems,
   dashboardParametersProblems,
   parameterChoiceOf,
+  parameterIdOf,
+  parameterRef,
   parameterValueOf,
   type DashboardParameter,
   type ParameterChoice,

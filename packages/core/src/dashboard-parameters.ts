@@ -141,6 +141,23 @@ export function parameterValueOf(
     : parameter.default;
 }
 
+const REF = 'parameter:';
+
+/**
+ * How a dashboard-local chart's well holds a parameter (AC-533): in the
+ * member's place, `parameter:‹id›` — never a member, which always has a dot
+ * after its cube and nothing but letters, digits and `_` before it — so the
+ * well keeps its order and its other members as they are.
+ */
+export function parameterRef(id: string): string {
+  return `${REF}${id}`;
+}
+
+/** The parameter a well's entry follows, or none for a member. */
+export function parameterIdOf(entry: string): string | undefined {
+  return entry.startsWith(REF) && entry.length > REF.length ? entry.slice(REF.length) : undefined;
+}
+
 /** The choice a parameter stands for now, with its label. */
 export function parameterChoiceOf(
   parameter: DashboardParameter,

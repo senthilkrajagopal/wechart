@@ -19,6 +19,7 @@
 import type {
   ChartDocument,
   ChartType,
+  DashboardParameter,
   LimitCombination,
   Marking,
   RenderSpec,
@@ -216,6 +217,13 @@ export interface DashboardDocument {
    * not the dashboard's.
    */
   readonly filters?: readonly DashboardFilter[];
+  /**
+   * The dashboard's parameters (F46, AC-531), in order: each a field switch
+   * a Text tile's control sets and a local chart's well or a Value follows.
+   * Saved with the dashboard; the value each holds is the reader's, starting
+   * at its default (AC-534), as a filter's is.
+   */
+  readonly parameters?: readonly DashboardParameter[];
   /**
    * Charts edited from a tile during this edit session, by chart id, not yet
    * written (T032). **Never saved as part of the dashboard.** `withoutDrafts`

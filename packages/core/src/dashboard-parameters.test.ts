@@ -4,6 +4,8 @@ import {
   PARAMETER_CHOICE_LIMIT,
   dashboardParameterProblems,
   dashboardParametersProblems,
+  parameterIdOf,
+  parameterRef,
   parameterValueOf,
   type DashboardParameter,
 } from './dashboard-parameters';
@@ -121,6 +123,15 @@ describe("a dashboard's parameters", () => {
     ]);
     expect(dashboardParametersProblems(undefined)).toEqual([]);
     expect(dashboardParametersProblems([metric])).toEqual([]);
+  });
+});
+
+describe('a parameter in a well (AC-533)', () => {
+  it('is held in a member’s place as parameter:‹id›, which no member can be', () => {
+    expect(parameterRef('p1')).toBe('parameter:p1');
+    expect(parameterIdOf('parameter:p1')).toBe('p1');
+    expect(parameterIdOf('orders.revenue')).toBeUndefined();
+    expect(parameterIdOf('parameter:')).toBeUndefined();
   });
 });
 
