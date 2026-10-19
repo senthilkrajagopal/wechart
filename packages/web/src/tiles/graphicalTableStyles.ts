@@ -51,6 +51,11 @@ export const GT_CSS = `
    marks, keep their colours. A row partly marked by another tile says its
    additive Value cells' marked amounts in text-secondary. */
 .gt tr.gt__markable { cursor: pointer; }
+/* The row the keyboard is on (AC-563): the app's 2 px accent ring, inside
+   the table, apart from a marked row's rule down its left, as a table
+   tile's (T405). */
+.gt tr[data-row-index]:focus { outline: none; }
+.gt tr[data-row-index]:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
 .gt tr[data-marked='whole'] > * { font-weight: 600; }
 .gt tr[data-marked='whole'] > th[scope='row'] { box-shadow: inset 3px 0 0 var(--gt-mark, var(--wc-text-primary)); }
 .gt tr[data-marked='none'] > :not(.gt__change):not(.gt__icon) { color: var(--wc-text-secondary); }

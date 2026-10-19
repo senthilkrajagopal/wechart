@@ -2336,6 +2336,63 @@ test('a graphical table on a 6-column tile marks its rows by click, Ctrl and Shi
 });
 
 /**
+ * AC-563: WHILE a dashboard is in Markings mode, THE SYSTEM SHALL let the
+ * keyboard mark the items of every R81 type with §7a's existing keys and
+ * roving focus …: the arrow keys move focus without marking, Space marks,
+ * Ctrl/⌘+Space toggles, Shift+arrow extends, and Esc unmarks, each change
+ * announced politely; … graphical-table rows as table tiles' rows.
+ * `Fails when: an item of an R81 type that a pointer can mark can't be marked
+ * from the keyboard; a key does something other than §7a says; …`
+ */
+test('a graphical table’s rows mark from the keyboard as a table tile’s rows', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await graphicalTableDashboard(
+    request,
+    [
+      {
+        tile: 'gt-status',
+        dimensions: ['orders.status'],
+        columns: [{ kind: 'value', measure: 'orders.total_amount' }],
+      },
+    ],
+    { mode: 'markings', crossFilter: { defaultAction: 'filter' } },
+  );
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const tile = page.locator('[data-tile="gt-status"]');
+  const rows = tile.locator('tbody tr');
+  await expect(rows).toHaveCount(3);
+  const drawn = await tile.locator('tbody th[scope="row"]').allTextContents();
+  const said = page.getByTestId('marking-announcer');
+
+  await tile.getByRole('region', { name: /at a glance$/ }).focus();
+  // The arrows move focus between rows, marking nothing.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(rows.nth(1)).toBeFocused();
+  await expect(tile.getByTestId('mark-badge')).toHaveCount(0);
+  // Space marks the focused row, said once.
+  await page.keyboard.press('Space');
+  await expect(rows.nth(1)).toHaveAttribute('data-marked', 'whole');
+  await expect(page.getByTestId('mark-chip')).toContainText(drawn[1] ?? '');
+  await expect(said).toContainText('1 item marked');
+  // Shift and an arrow extend from it.
+  await page.keyboard.press('Shift+ArrowDown');
+  await expect(rows.nth(2)).toHaveAttribute('data-marked', 'whole');
+  await expect(tile.getByTestId('mark-badge')).toContainText('2 marked');
+  // Ctrl/⌘ and Space toggle the focused row.
+  await page.keyboard.press('ControlOrMeta+Space');
+  await expect(rows.nth(2)).toHaveAttribute('data-marked', 'none');
+  await expect(tile.getByTestId('mark-badge')).toContainText('1 marked');
+  // Esc unmarks the tile.
+  await page.keyboard.press('Escape');
+  await expect(tile.getByTestId('mark-badge')).toHaveCount(0);
+  await expect(rows.nth(1)).not.toHaveAttribute('data-marked', 'whole');
+});
+
+/**
  * T947 / AC-574: THE SYSTEM SHALL give a graphical table a "View as table"
  * holding the numbers behind every cell: a Sparkline column as its first and
  * last values ("$84K → $112K"), a Bullet column as value and target ("23.1% /

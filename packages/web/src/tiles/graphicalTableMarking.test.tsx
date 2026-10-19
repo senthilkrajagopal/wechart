@@ -229,6 +229,66 @@ describe('a graphical table’s rows marked (T946, AC-573)', () => {
     expect(within(row('Dairy')).getAllByRole('cell')[0]?.textContent).toBe('$720,000');
   });
 
+  /**
+   * AC-563: … graphical-table rows as table tiles' rows …, with §7a's keys:
+   * the arrows move focus without marking, Space marks, Ctrl/⌘+Space
+   * toggles, Shift extends, and Esc unmarks; no other key acts.
+   */
+  it('marks its rows from the keyboard, as a table tile’s rows (AC-563)', () => {
+    const onItemClick = vi.fn();
+    const onShapeMark = vi.fn();
+    render(
+      <GraphicalTableView
+        spec={spec()}
+        trends={[]}
+        now={now}
+        onItemClick={onItemClick}
+        onShapeMark={onShapeMark}
+      />,
+    );
+    const region = screen.getByRole('region', { name: 'Categories at a glance' });
+    const item = (value: string) => ({ name: value, marks: [{ member: CATEGORY, value }] });
+    const press = (key: string, more: Record<string, boolean> = {}) => {
+      fireEvent.keyDown(document.activeElement ?? region, { key, ...more });
+    };
+    region.focus();
+    // The arrows move focus between rows, marking nothing.
+    press('ArrowDown');
+    expect(document.activeElement).toBe(row('Beverages'));
+    press('ArrowDown');
+    expect(document.activeElement).toBe(row('Seafood'));
+    expect(onItemClick).not.toHaveBeenCalled();
+    // Space marks; Ctrl/⌘+Space toggles.
+    press(' ');
+    expect(onItemClick).toHaveBeenLastCalledWith(item('Seafood'), false);
+    press('ArrowDown');
+    press(' ', { ctrlKey: true });
+    expect(onItemClick).toHaveBeenLastCalledWith(item('Dairy'), true);
+    // Shift extends from the anchor, Seafood: by Space, and by an arrow.
+    press('ArrowDown');
+    press(' ', { shiftKey: true });
+    expect(onShapeMark).toHaveBeenLastCalledWith(
+      [item('Seafood'), item('Dairy'), item('Produce')],
+      false,
+    );
+    press('ArrowUp', { shiftKey: true });
+    expect(document.activeElement).toBe(row('Dairy'));
+    expect(onShapeMark).toHaveBeenLastCalledWith([item('Seafood'), item('Dairy')], false);
+    // Home and End, as a table tile's.
+    press('Home');
+    expect(document.activeElement).toBe(row('Beverages'));
+    press('End');
+    expect(document.activeElement).toBe(row('Produce'));
+    // Esc unmarks the tile: a click on nothing.
+    press('Escape');
+    expect(onItemClick).toHaveBeenLastCalledWith({}, false);
+    // No other key acts.
+    const calls = onItemClick.mock.calls.length + onShapeMark.mock.calls.length;
+    for (const key of ['Enter', 'm', 'Delete', 'PageDown']) press(key);
+    expect(onItemClick.mock.calls.length + onShapeMark.mock.calls.length).toBe(calls);
+    expect(document.activeElement).toBe(row('Produce'));
+  });
+
   it('filters the others to its member as a cross-filter source', () => {
     const onItemClick = vi.fn();
     const drawn = spec();

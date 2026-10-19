@@ -19,7 +19,7 @@ import {
   type TimeGranularity,
 } from '@wechart/core';
 import { useQueries } from '@tanstack/react-query';
-import { useContext, useMemo, useState, type CSSProperties } from 'react';
+import { useContext, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 import { useQueryItem } from '../query/item';
@@ -469,6 +469,8 @@ export function GraphicalTableView({
    * range, so a second Shift-click grows or shrinks the same one.
    */
   const [anchor, setAnchor] = useState<{ page: number; at: number } | null>(null);
+  /** The scrolling region, its rows found in it by the keys (AC-563). */
+  const scroller = useRef<HTMLDivElement | null>(null);
   const columns = columnsOf(spec.options);
   // Each row under the marking the tile shows, read once per answer (as a table's).
   const marksOf = useMemo(
@@ -516,7 +518,10 @@ export function GraphicalTableView({
       marks: [{ member: rowsMember, value: typeof raw === 'number' ? raw : member }],
     };
   };
-  const clickRow = (at: number, event: React.MouseEvent) => {
+  const clickRow = (
+    at: number,
+    event: { readonly shiftKey: boolean; readonly ctrlKey: boolean; readonly metaKey: boolean },
+  ) => {
     const row = drawnRows[at];
     if (row === undefined || onItemClick === undefined) return;
     const from = anchor?.page === paged.page ? anchor.at : undefined;
@@ -529,6 +534,47 @@ export function GraphicalTableView({
     // A plain click starts the range; a Ctrl/⌘ toggle leaves it where it began.
     if (!toggle) setAnchor({ page: paged.page, at });
     onItemClick(itemOf(row), toggle);
+  };
+  /**
+   * The rows from the keyboard (AC-563, as a table tile's rows, T405): from
+   * the table's region the arrows take focus to a row and move it, Home and
+   * End to the first and last, marking nothing; Space marks the focused row
+   * as a click does, Ctrl/⌘ and Space toggle it, Shift and Space or an arrow
+   * mark the range from the anchor as a Shift-click does; Esc unmarks the
+   * tile, as a click on nothing does. No other key is claimed, and those
+   * that are stop here, so the tile's own chart keys don't hear them too.
+   */
+  const focusRow = (index: number) => {
+    scroller.current?.querySelector<HTMLElement>(`[data-row-index="${String(index)}"]`)?.focus();
+  };
+  const onRowKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (onItemClick === undefined || drawnRows.length === 0) return;
+    const on =
+      event.target instanceof HTMLElement ? event.target.closest('[data-row-index]') : null;
+    const at = on === null ? null : Number(on.getAttribute('data-row-index'));
+    const last = drawnRows.length - 1;
+    const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+    if (step !== 0) {
+      const next = at === null ? 0 : Math.min(Math.max(at + step, 0), last);
+      focusRow(next);
+      // Shift and an arrow extend from the anchor, as Shift and Space do; with
+      // none yet, from the row the arrow left.
+      if (event.shiftKey && at !== null && onShapeMark !== undefined) {
+        const from = anchor?.page === paged.page ? anchor.at : at;
+        if (anchor?.page !== paged.page) setAnchor({ page: paged.page, at });
+        const [first, end] = from <= next ? [from, next] : [next, from];
+        onShapeMark(drawnRows.slice(first, end + 1).map(itemOf), false);
+      }
+    } else if (event.key === 'Home' || event.key === 'End') {
+      focusRow(event.key === 'Home' ? 0 : last);
+    } else if (event.key === ' ' || event.key === 'Spacebar') {
+      if (at === null) return;
+      clickRow(at, event);
+    } else if (event.key === 'Escape') {
+      onItemClick({}, false);
+    } else return;
+    event.preventDefault();
+    event.stopPropagation();
   };
   let drawnAt = 0;
   const pager =
@@ -564,7 +610,11 @@ export function GraphicalTableView({
   return (
     <div className="gt-paged">
       {/* A table wider than its tile scrolls inside it, in a named region the keyboard reaches (T944-1). */}
+      {/* Its rows' keys are heard on the region that holds them, as a table tile's (T405). */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
+        ref={scroller}
+        onKeyDown={onRowKey}
         className="gt-scroll"
         data-testid="graphical-table"
         role="region"
@@ -617,6 +667,9 @@ export function GraphicalTableView({
                       ? {}
                       : {
                           className: 'gt__markable',
+                          // Reached by the arrows (AC-563), as a table tile's row.
+                          tabIndex: -1,
+                          'data-row-index': place,
                           onClick: (event: React.MouseEvent) => {
                             clickRow(place, event);
                           },
