@@ -204,6 +204,13 @@ describe('a KPI’s comparison, asked of Cube (AC-565)', () => {
     ]);
   });
 
+  // Checkpoint 2's review: 29 February has no day a year before; it is the 28th.
+  it('takes Same period last year from 29 February as February, not March', () => {
+    const leap = new Date('2028-02-29T12:00:00Z');
+    expect(kpiPeriodOf('month', leap).lastYear).toEqual(['2027-02-01', '2027-02-28']);
+    expect(kpiPeriodOf('day', leap).lastYear).toEqual(['2027-02-28', '2027-02-28']);
+  });
+
   it('takes the period of each grain that holds now, and the one before it', () => {
     // 18 October 2026 is a Sunday; Cube's weeks start on Monday.
     expect(kpiPeriodOf('day', now)).toEqual({

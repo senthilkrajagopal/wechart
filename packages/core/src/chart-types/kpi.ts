@@ -218,11 +218,15 @@ function rangeOf(grain: TimeGranularity, start: Date): KpiRange {
  */
 export function kpiPeriodOf(grain: TimeGranularity, now: Date): KpiPeriods {
   const current = startOf(grain, now);
+  // The same day a year before, or its month's last where it has none: 29
+  // February's is the 28th, never 1 March (checkpoint 2's review).
+  const year = now.getUTCFullYear() - 1;
+  const lastDay = new Date(Date.UTC(year, now.getUTCMonth() + 1, 0)).getUTCDate();
   const yearBefore = new Date(
     Date.UTC(
-      now.getUTCFullYear() - 1,
+      year,
       now.getUTCMonth(),
-      now.getUTCDate(),
+      Math.min(now.getUTCDate(), lastDay),
       now.getUTCHours(),
       now.getUTCMinutes(),
       now.getUTCSeconds(),
