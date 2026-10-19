@@ -89,6 +89,7 @@ import { LegendGlyphButtons } from './combo/LegendGlyphButtons';
 import { undrawnWell } from './combo/undrawnWell';
 import { addToWellAs } from './combo/comboWells';
 import { comboWarningOf } from './combo/ComboWarning';
+import { kpiCustomize } from './wells/kpiTiles';
 import { stackChoice, stackCustomize } from './wells/stack';
 import { requestCalculation } from './calcRequests';
 import { RequestCalcDialog } from './RequestCalcDialog';
@@ -827,8 +828,8 @@ function EditorBody({
           onFormat: (measure?: string) => {
             const onRight =
               measure !== undefined &&
-              comboSeriesOf(spec.measures, options).find((one) => one.measure === measure)
-                ?.axis === 'right';
+              comboSeriesOf(spec.measures, options).find((one) => one.measure === measure)?.axis ===
+                'right';
             setInspector('customize');
             requestAnimationFrame(() => {
               const field = document.querySelector<HTMLSelectElement>(
@@ -904,7 +905,12 @@ function EditorBody({
       const on = series.filter((one) => one.axis === axis);
       return on.length === 0
         ? []
-        : [{ axis, measures: on.map((one) => ({ measure: one.measure, title: own(one.measure) })) }];
+        : [
+            {
+              axis,
+              measures: on.map((one) => ({ measure: one.measure, title: own(one.measure) })),
+            },
+          ];
     });
     const x = memberOn(drawn.encoding, 'x');
     // The time member on x, its grain kept by its own name (`granularitiesOf`).
@@ -1588,6 +1594,8 @@ function EditorBody({
                           }),
                     },
                   })}
+              // A tiled KPI's tile order (T940, AC-567).
+              {...kpiCustomize(shownType, { options, onOptions: setOptions })}
               {...stackCustomize(shownType, {
                 options,
                 onOptions: setOptions,

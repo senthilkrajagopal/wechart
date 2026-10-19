@@ -1,7 +1,6 @@
 import {
   KPI_COMPARE_TO,
   KPI_DIRECTIONS,
-  KPI_TILE_ORDERS,
   kpiOptionsOf,
   withKpiOptions,
   type KpiCompareTo,
@@ -299,28 +298,7 @@ export function KpiWells({ highlight, available, options, onOptions, titleOf }: 
             </option>
           ))}
         </select>
-        {/* The tiles' order (T940, AC-567): by value, highest first, unless chosen. */}
-        {kpi.tileBy === undefined ? null : (
-          <select
-            aria-label="Tile order"
-            value={kpi.tileOrder ?? 'value'}
-            onChange={(event) => {
-              const order = KPI_TILE_ORDERS.find((one) => one.value === event.target.value);
-              if (order !== undefined)
-                set(
-                  order.value === 'value'
-                    ? without('tileOrder')
-                    : { ...kpi, tileOrder: order.value },
-                );
-            }}
-          >
-            {KPI_TILE_ORDERS.map((choice) => (
-              <option key={choice.value} value={choice.value}>
-                {choice.label}
-              </option>
-            ))}
-          </select>
-        )}
+        {/* The tiles' order is Customize's (T940, AC-567; `kpiTiles.tsx`). */}
       </Well>
 
       <section className="well-field">

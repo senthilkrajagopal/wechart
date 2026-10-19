@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Wells } from '../Wells';
 import type { Member } from '../fields';
 import { KpiWells } from './kpi';
+import { kpiCustomize } from './kpiTiles';
 import { TYPE_WELLS } from './registry';
 
 /**
@@ -194,13 +195,27 @@ describe('the KPI’s wells (AC-564)', () => {
    * T940 / AC-567: … order them by value, highest first, unless the author
    * orders them in Customize.
    */
-  it('orders a tiled KPI’s tiles by value unless the author chooses another order', async () => {
+  /**
+   * AC-567: the author orders tiles in Customize (checkpoint 2's review), so
+   * the Data tab's Tile by well holds the dimension alone; the order's own
+   * test is `kpiTiles.test.tsx`.
+   */
+  it('leaves a tiled KPI’s tile order to Customize, not the Tile by well', async () => {
     render(<Harness />);
     expect(screen.queryByRole('combobox', { name: 'Tile order' })).toBeNull();
     await userEvent.selectOptions(
       screen.getByRole('combobox', { name: 'Tile by' }),
       'orders.region',
     );
+    expect(stored()).toEqual({ kpi: { tileBy: 'orders.region' } });
+    expect(screen.queryByRole('combobox', { name: 'Tile order' })).toBeNull();
+    // Tiled now, Customize offers the order, by value first.
+    const patches: Readonly<Record<string, unknown>>[] = [];
+    const customize = kpiCustomize('kpi', {
+      options: stored(),
+      onOptions: (patch) => patches.push(patch),
+    });
+    render(<>{customize.tiles}</>);
     const order = screen.getByRole('combobox', { name: 'Tile order' });
     expect([...(order as HTMLSelectElement).options].map((one) => one.text)).toEqual([
       'By value, highest first',
@@ -209,9 +224,7 @@ describe('the KPI’s wells (AC-564)', () => {
     ]);
     expect((order as HTMLSelectElement).value).toBe('value');
     await userEvent.selectOptions(order, 'name');
-    expect(stored()).toEqual({ kpi: { tileBy: 'orders.region', tileOrder: 'name' } });
-    await userEvent.selectOptions(order, 'value');
-    expect(stored()).toEqual({ kpi: { tileBy: 'orders.region' } });
+    expect(patches).toEqual([{ kpi: { tileBy: 'orders.region', tileOrder: 'name' } }]);
   });
 
   it('clears a setting back to none, leaving no `kpi` key behind', async () => {

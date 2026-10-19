@@ -1342,6 +1342,42 @@ test('a KPI tiled by status draws a named tile per member by value, and one tile
 });
 
 /**
+ * T940 / AC-567: … order them by value, highest first, unless the author
+ * orders them in Customize (checkpoint 2's review: Customize, not the Tile
+ * by well).
+ */
+test('a tiled KPI’s tile order is set in Customize, and the tiles follow it', async ({ page }) => {
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await expect(page.getByTestId('member-orders.count')).toBeVisible();
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await chooseChartType(page, 'kpi');
+  await page.getByRole('combobox', { name: 'Tile by', exact: true }).selectOption('orders.status');
+  // Not in the Data tab's wells.
+  await expect(page.getByRole('combobox', { name: 'Tile order' })).toHaveCount(0);
+  const result = page.getByTestId('editor-result');
+  const names = () =>
+    result
+      .getByRole('listitem')
+      .evaluateAll((all) =>
+        all.map((one) => (one.getAttribute('aria-label') ?? '').split(':')[0] ?? ''),
+      );
+  await expect.poll(async () => (await names()).length).toBe(3);
+  const byValue = await names();
+
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  const order = page.getByRole('combobox', { name: 'Tile order' });
+  await expect(order).toHaveValue('value');
+  // The tiles' order alone: a KPI has no axes, legend or series to set.
+  await expect(page.getByTestId('kpi-tiles-section')).toBeVisible();
+  await expect(page.getByRole('tabpanel', { name: 'Customize' }).getByRole('combobox')).toHaveCount(
+    1,
+  );
+  await order.selectOption('name');
+  await expect.poll(names).toEqual([...byValue].sort((a, b) => a.localeCompare(b)));
+});
+
+/**
  * T939 / AC-566: IF a KPI's Compare to is Previous period or Same period last
  * year and Time is empty, THEN THE SYSTEM SHALL say "Compare to: ‹choice›
  * needs a time dimension in Time." with the Time well as its action; and IF

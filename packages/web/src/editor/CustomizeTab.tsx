@@ -79,8 +79,7 @@ export interface CustomizeTabProps {
      * Table do.
      */
     readonly warning?:
-      | Pick<ComboWarningProps, 'warning' | 'onSmallMultiples' | 'onTable'>
-      | undefined;
+      Pick<ComboWarningProps, 'warning' | 'onSmallMultiples' | 'onTable'> | undefined;
     /** Its reference lines and bands (T862, AC-507), what their form reads. */
     readonly references?: Omit<ReferenceListProps, 'options' | 'onOptions'> | undefined;
   };
@@ -88,6 +87,8 @@ export interface CustomizeTabProps {
   readonly stack?: ReactNode;
   /** At 100 %, the value axis is 0–100 %, every 25 %, and nothing else of it is set (AC-584). */
   readonly shareAxis?: boolean;
+  /** Customize › Tile order, on a KPI tiled by a dimension (T940, AC-567). */
+  readonly tiles?: ReactNode;
 }
 
 const POSITIONS: readonly [LegendPosition, string][] = [
@@ -132,6 +133,7 @@ export function CustomizeTab({
   combo,
   stack,
   shareAxis = false,
+  tiles,
 }: CustomizeTabProps) {
   const ids = useId();
   const axes = record(options['axes']) as AxesSettings;
@@ -212,7 +214,8 @@ export function CustomizeTab({
     </button>
   );
 
-  if (!drawn && !cartesian && !whiskers) {
+  // A KPI is drawn as DOM, and has its tiles' order to set when tiled (T940).
+  if (!drawn && !cartesian && !whiskers && tiles === undefined) {
     return <p className="panel-section__note">This chart type has nothing to customize here.</p>;
   }
 
@@ -264,6 +267,12 @@ export function CustomizeTab({
       {stack === undefined ? null : (
         <section className="customize-tab__section" data-testid="stack-section">
           {stack}
+        </section>
+      )}
+
+      {tiles === undefined ? null : (
+        <section className="customize-tab__section" data-testid="kpi-tiles-section">
+          {tiles}
         </section>
       )}
 
