@@ -711,6 +711,79 @@ describe('stacking (AC-503)', () => {
     expect(sideLeft?.max).toBeLessThan(240);
   });
 
+  type Bar = {
+    name?: string;
+    type?: string;
+    data?: unknown[];
+    itemStyle?: { borderWidth?: number; borderRadius?: number[] };
+  };
+  const barsOf = (spec: RenderSpec, canvas?: { width: number; height: number }) =>
+    (comboOption(spec, canvas)['series'] as Bar[]).filter((one) => one.type === 'bar');
+  /** Each bar's corner radii, per category, as drawn. */
+  const radiiOf = (bar: Bar | undefined) =>
+    (bar?.data ?? []).map((item) =>
+      typeof item === 'object' && item !== null && 'itemStyle' in item
+        ? (item as { itemStyle: { borderRadius: number[] } }).itemStyle.borderRadius
+        : bar?.itemStyle?.borderRadius,
+    );
+
+  it('rounds only each stack’s outermost segment, at its data end (T851’s review)', () => {
+    const drawn = barsOf(bars({ bars: 'stacked' }));
+    const named = (name: string) => drawn.find((one) => one.name === name);
+
+    // Revenue is under Cost on the left, Orders under Returns on the right.
+    expect(radiiOf(named(REVENUE))).toEqual([
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
+    expect(radiiOf(named(COST))).toEqual([
+      [4, 4, 0, 0],
+      [4, 4, 0, 0],
+    ]);
+    expect(radiiOf(named(ORDERS))).toEqual([
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
+    expect(radiiOf(named(RETURNS))).toEqual([
+      [4, 4, 0, 0],
+      [4, 4, 0, 0],
+    ]);
+  });
+
+  it('rounds a stack’s segment below zero at its foot, and the top one where the outermost has no value', () => {
+    const spec = bars({ bars: 'stacked' });
+    const rows = [
+      { [MONTH]: 'Jan', [REVENUE]: 120, [COST]: -80, [ORDERS]: 10, [RETURNS]: 2 },
+      { [MONTH]: 'Feb', [REVENUE]: 150, [COST]: null, [ORDERS]: 12, [RETURNS]: 3 },
+    ];
+    const drawn = barsOf({ ...spec, rows });
+    const named = (name: string) => drawn.find((one) => one.name === name);
+
+    expect(radiiOf(named(COST))[0]).toEqual([0, 0, 4, 4]);
+    expect(radiiOf(named(REVENUE))[1]).toEqual([4, 4, 0, 0]);
+  });
+
+  it('keeps the bars’ surface gap where two stacks a category leave them wide enough (AC-210)', () => {
+    const months = Array.from({ length: 20 }, (_, at) => `M${String(at)}`);
+    const wide = (combo?: Record<string, unknown>): RenderSpec => ({
+      ...bars(combo),
+      rows: months.map((month) => ({
+        [MONTH]: month,
+        [REVENUE]: 120,
+        [COST]: 80,
+        [ORDERS]: 10,
+        [RETURNS]: 2,
+      })),
+    });
+    const canvas = { width: 600, height: 320 };
+    const gapOf = (spec: RenderSpec) => barsOf(spec, canvas)[0]?.itemStyle?.borderWidth;
+
+    // Four bars a month side by side are too narrow for the gap…
+    expect(gapOf(wide())).toBe(0);
+    // …two stacks a month are not.
+    expect(gapOf(wide({ bars: 'stacked' }))).toBeGreaterThan(0);
+  });
+
   it('draws a right stack beside the left one, never on top of it', () => {
     const svg = draw(bars({ bars: 'stacked' }));
     const marks = marksOf(svg, FOUR);

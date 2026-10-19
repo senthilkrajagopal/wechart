@@ -352,13 +352,44 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
    * (T852, AC-504).
    */
   const { categories, series } = comboDrawingOf(spec);
-  const barCount = series.filter((one) => one.mark === 'bar').length;
+  const stacks = series.map((one) => stackOf(spec, one.mark, one.axis));
+  /**
+   * Bars side by side in a category: one per unstacked bar series, one per
+   * stack (T851's review), as a stacked bar chart counts one (`barOption`).
+   */
+  const barColumns = new Set(
+    series.flatMap((one, index) =>
+      one.mark === 'bar' ? [stacks[index] ?? `alone:${String(index)}`] : [],
+    ),
+  ).size;
   const logOn = logAxesOf(spec);
   /** On a log axis a value at or below zero has no place, so isn't drawn (AC-502). */
   const valuesOf = (one: ComboDrawn) =>
     logOn[one.axis]
       ? one.values.map((value) => (value !== null && value <= 0 ? null : value))
       : one.values;
+  /**
+   * A stacked bar's corners at each category (T851's review): rounded at its
+   * data end only where it's its stack's outermost segment of its sign, as a
+   * stacked bar chart's (`cornerRadii` in `bar.ts`); a value below zero grows
+   * down, so its foot is its data end.
+   */
+  const stackedRadii = (index: number): number[][] => {
+    const r = MARK.cornerRadiusPx;
+    const own = series[index];
+    if (own === undefined) return [];
+    return valuesOf(own).map((value, at) => {
+      if (value === null) return [0, 0, 0, 0];
+      const negative = value < 0;
+      const covered = series.some((other, later) => {
+        if (later <= index || stacks[later] !== stacks[index]) return false;
+        const above = valuesOf(other)[at];
+        return above !== null && above !== undefined && above < 0 === negative;
+      });
+      if (covered) return [0, 0, 0, 0];
+      return negative ? [0, 0, r, r] : [r, r, 0, 0];
+    });
+  };
 
   // Bars a bar per category in each bar series, the gap kept only where it
   // leaves each bar its colour on this canvas (AC-210).
@@ -373,7 +404,7 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
         ),
       ),
       categories.length,
-      Math.max(1, barCount),
+      Math.max(1, barColumns),
     ),
   );
 
@@ -384,19 +415,19 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
     xAxis: { type: 'category', data: categories },
     yAxis: valueAxes(
       spec,
-      series.map((one) => ({
+      series.map((one, index) => ({
         measure: one.measure,
         mark: one.mark,
         axis: one.axis,
-        stack: stackOf(spec, one.mark, one.axis),
+        stack: stacks[index],
         values: valuesOf(one),
       })),
       logOn.right,
     ),
-    series: series.map((one) => {
+    series: series.map((one, index) => {
       const colour = colourFor(spec, one.name, one.colourIndex);
       const { mark, axis } = one;
-      const stack = stackOf(spec, mark, axis);
+      const stack = stacks[index];
       const common = {
         ...(stack === undefined ? {} : { stack }),
         name: one.name,
@@ -413,6 +444,15 @@ export function comboOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): 
         case 'bar':
           return {
             ...common,
+            // Stacked, each segment's corners by its place in the stack.
+            ...(stack === undefined
+              ? {}
+              : {
+                  data: valuesOf(one).map((value, at) => ({
+                    value,
+                    itemStyle: { borderRadius: stackedRadii(index)[at] },
+                  })),
+                }),
             type: 'bar' as const,
             // At most 36 px, as every bar (T683, CMP-12).
             barMaxWidth: BAR_MAX_PX,
