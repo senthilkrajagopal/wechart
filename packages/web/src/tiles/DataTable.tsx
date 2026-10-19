@@ -13,7 +13,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
 
-import { addedColumnsOf, tableViewOf } from './tableView';
+import { addedColumnsOf, pointRowsOf, tableViewOf } from './tableView';
 
 /**
  * The table (AC-037), and the table view every chart can switch to (AC-178).
@@ -61,7 +61,88 @@ const DEFAULT_HEIGHT = 320;
  */
 const ROW_HEIGHT = 24;
 
-export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: DataTableProps) {
+/** The row of view buttons over a type's own table view: §4's small button and its gap. */
+const VIEWS_BAR_PX = 32;
+
+/**
+ * The table view, a type's own where it has one (T993, AC-593): a box plot's
+ * statistics, a row per box, with "View points" switching to the points it
+ * draws, each its entity and value — shown and marked as any table's rows
+ * are — and "View statistics" back. The rows as queried otherwise.
+ */
+export function DataTable(props: DataTableProps) {
+  const { spec, height = DEFAULT_HEIGHT, label } = props;
+  const own = useMemo(() => tableViewOf(spec), [spec]);
+  const points = useMemo(() => pointRowsOf(spec), [spec]);
+  const [viewing, setViewing] = useState<'own' | 'points'>('own');
+  if (own === undefined) return <RowsTable {...props} />;
+
+  const showingPoints = viewing === 'points' && points !== undefined;
+  const inner = Math.max(ROW_HEIGHT * 2, height - (points === undefined ? 0 : VIEWS_BAR_PX));
+  return (
+    <div data-testid="table-view-of-type">
+      {points === undefined ? null : (
+        <div className="data-table__views" style={{ height: `${String(VIEWS_BAR_PX)}px` }}>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => {
+              setViewing(showingPoints ? 'own' : 'points');
+            }}
+          >
+            {showingPoints ? 'View statistics' : 'View points'}
+          </button>
+        </div>
+      )}
+      {showingPoints ? (
+        <RowsTable {...props} spec={{ ...spec, rows: points }} height={inner} />
+      ) : (
+        <div
+          className="data-table"
+          data-testid="data-table"
+          style={{ height: `${String(inner)}px`, overflow: 'auto' }}
+          // A scrolling region the keyboard must reach (WCAG 2.1.1), as the rows' is.
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+          tabIndex={0}
+          role="region"
+          aria-label={label === undefined ? 'Table' : `${label}, table`}
+        >
+          <table className="grid-table comfy">
+            <thead>
+              <tr>
+                {own.columns.map((column, at) => (
+                  <th scope="col" key={column} className={at === 0 ? undefined : 'num'}>
+                    {column}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {own.rows.map((row, index) => (
+                <tr
+                  key={row[0] ?? String(index)}
+                  data-testid="table-row"
+                  style={{ height: `${String(ROW_HEIGHT)}px` }}
+                >
+                  {row.map((cell, at) => (
+                    <td
+                      key={own.columns[at] ?? String(at)}
+                      className={at === 0 ? undefined : 'num'}
+                    >
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RowsTable({ spec, height = DEFAULT_HEIGHT, marking, label }: DataTableProps) {
   const scroller = useRef<HTMLDivElement | null>(null);
   const { rows } = spec;
 
@@ -78,9 +159,7 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
   useEffect(() => {
     const index = focusOnceDrawn.current;
     if (index === null) return;
-    const row = scroller.current?.querySelector<HTMLElement>(
-      `[data-row-index="${String(index)}"]`,
-    );
+    const row = scroller.current?.querySelector<HTMLElement>(`[data-row-index="${String(index)}"]`);
     if (row === null || row === undefined) return;
     focusOnceDrawn.current = null;
     row.focus();

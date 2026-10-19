@@ -68,6 +68,21 @@ export interface ClickedItem {
    * it (T632).
    */
   readonly panelIndex?: number | undefined;
+  /**
+   * The entity a box plot's point is, by its "Each point is" value as text
+   * (AC-593): the point stands for it, not for its category.
+   */
+  readonly entity?: string | undefined;
+}
+
+/** The entity a clicked item carries as drawn (a box plot's point, AC-593), as text. */
+export function clickedEntity(params: { data?: unknown }): string | undefined {
+  const { data } = params;
+  const own =
+    typeof data === 'object' && data !== null && !Array.isArray(data)
+      ? (data as { entity?: unknown }).entity
+      : undefined;
+  return own === undefined || own === null ? undefined : String(own);
 }
 
 /** Chart types where a click means the series, not the category. */
@@ -140,6 +155,9 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
       ? undefined
       : { member: split, value: item.legend };
   }
+  // A box plot's point is its entity (AC-593): "a point to its Order".
+  if (spec.chartType === 'boxplot' && item.entity !== undefined && spec.eachPointIs !== undefined)
+    return { member: spec.eachPointIs, value: item.entity };
   const bySeries = BY_SERIES.has(spec.chartType);
   const byPanel = spec.chartType === 'trellis' && !panelledByMetric(spec);
   const channel = byPanel ? 'facet' : bySeries ? 'color' : 'x';
@@ -169,6 +187,18 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
 export function clickedMarkItem(spec: RenderSpec, item: ClickedItem): MarkedItem | undefined {
   const clicked = clickedValue(spec, item);
   if (clicked === undefined) return undefined;
+  // A point's entity as its row holds it, so the row matches (AC-593).
+  if (clicked.member === spec.eachPointIs && item.entity !== undefined) {
+    const held = spec.rows.find((row) => String(row[clicked.member]) === clicked.value)?.[
+      clicked.member
+    ];
+    return [
+      {
+        member: clicked.member,
+        value: typeof held === 'number' || typeof held === 'string' ? held : clicked.value,
+      },
+    ];
+  }
   const category = memberOn(spec.encoding, 'x');
   const tuple =
     isPercentStack(spec) &&

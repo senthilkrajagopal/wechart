@@ -11,6 +11,7 @@ export { bulletsOf } from './series/bullet';
 export { pieOption, isPieType, type PieType } from './series/pie';
 export { treemapOption, isTreemapType } from './series/treemap';
 export { heatmapOption, isHeatmapType } from './series/heatmap';
+export { boxesOf, drawnPointsOf, type Box } from './series/boxplot';
 export { isMapType, mapOption, unplacedCodes } from './series/map';
 export { countryMap, loadCountryMap, type CountryMap } from './geo/countryMap';
 export {

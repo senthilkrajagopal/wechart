@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Locator } from '@playwright/
 
 import { chooseChartType, expectChartType } from './chartType';
 import { cubePicker } from './cubePicker';
+import { viewAs } from './tileMenu';
 import { ownCubeFile, PUBLISHED } from './model-files';
 import { wellPicker } from './wells';
 import { IN_MY_WORKSPACE, newInMyWorkspace } from './workspace';
@@ -554,4 +555,230 @@ test('a box plot draws a violin per status in its colour, the box 20 px inside i
   await page.getByRole('checkbox', { name: /^Violin/ }).uncheck();
   await expect(violins).toHaveCount(0);
   await expect.poll(widths).toEqual(before);
+});
+
+/**
+ * A Markings-mode dashboard of two box plots of order amounts by status,
+ * each point an order: a beeswarm, and a violin with no points.
+ */
+async function markingBoxPlots(request: APIRequestContext) {
+  const title = `Box plot marks ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/api/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const items = [];
+  for (const [tile, distribution] of [
+    ['tile-swarm', { points: 'beeswarm', violin: true }],
+    ['tile-violin', { points: 'none', violin: true }],
+  ] as const) {
+    const chart = (await (
+      await request.post(`${API}/api/documents`, {
+        data: { kind: 'chart', title: tile, ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`${API}/api/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: tile,
+          owner: 'admin',
+          localToDashboardId: dashboard.id,
+          chart: {
+            source: { cube: 'orders' },
+            wells: {
+              measures: ['orders.total_amount'],
+              dimensions: ['orders.status'],
+              timeDimensions: [],
+              eachPointIs: 'orders.id',
+            },
+            chartType: 'boxplot',
+            options: { distribution },
+          },
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    items.push({ id: tile, kind: 'chart', w: 6, h: 40, chartId: chart.id });
+  }
+  const placed = await request.put(`${API}/api/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed', interactions: { mode: 'markings' } },
+        markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
+        pages: [{ id: 'only', title: 'Only', items }],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  return { id: dashboard.id, title };
+}
+
+/**
+ * T993 / AC-593: THE SYSTEM SHALL mark a box plot's point as its entity by
+ * ID, at most 1,000 (AC-102), and the points inside a rectangle or lasso, and
+ * a box or violin as its category member, as today; and SHALL add to its text
+ * alternative how points and violin are drawn …, its table view keeping
+ * today's statistics with "View points" listing the entities drawn and their
+ * values. `Fails when: a point marks other than its entity's ID; a box or
+ * violin marks other than its member; or the text alternative or "View
+ * points" is missing.`
+ *
+ * The real surface: a Markings-mode dashboard over the seed's 240 orders.
+ */
+test('a box plot marks a point as its order, a rectangle the orders inside, and a violin its status; its table lists the points', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingBoxPlots(request);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  const swarm = page.locator('[data-tile="tile-swarm"]');
+  const chart = swarm.locator('svg').first();
+  const dots = dotsIn(chart);
+  await expect(dots).toHaveCount(240);
+  const badge = swarm.getByTestId('mark-badge');
+  const chip = page.getByTestId('mark-chip');
+
+  // The text alternative says how the points and the violins are drawn.
+  const said = swarm.getByTestId('chart-text-alternative');
+  await expect(said).toContainText(/^Box plot of .+ by .+\. completed: n 80, low /);
+  await expect(said).toContainText(/Points: every .+, as a beeswarm\./);
+  await expect(said).toContainText(/Violin: \S+ gathers near \$[\d,.]+, .+ spreads widest\./);
+
+  // A click on a point marks its order: one point stays, outlined; the rest fade.
+  const centres = () =>
+    dots.evaluateAll((all) =>
+      all.map((dot) => {
+        const box = dot.getBoundingClientRect();
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      }),
+    );
+  const before = await centres();
+  const [first] = before;
+  if (first === undefined) throw new Error('no point');
+  // The loneliest point, so no neighbour is under the pointer.
+  const lonely = before.reduce((best, one) => {
+    const gap = (dot: { x: number; y: number }) =>
+      Math.min(
+        ...before.filter((other) => other !== dot).map((o) => Math.hypot(o.x - dot.x, o.y - dot.y)),
+      );
+    return gap(one) > gap(best) ? one : best;
+  }, first);
+  await page.mouse.click(lonely.x, lonely.y);
+  await expect(badge).toContainText('1 marked');
+  // The other 239 fade; the one marked stays at full strength where it was clicked.
+  const fadedDots = () =>
+    chart
+      .locator('path[fill-opacity="0.28"]')
+      .evaluateAll(
+        (all) => all.filter((path) => (path.getAttribute('d') ?? '').startsWith('M1 0A1 1')).length,
+      );
+  await expect.poll(fadedDots).toBe(239);
+  await expect(dots).toHaveCount(0);
+  const full = await chart.locator('path').evaluateAll(
+    (all, at) =>
+      all.filter((path) => {
+        if (!(path.getAttribute('d') ?? '').startsWith('M1 0A1 1')) return false;
+        if (Number(path.getAttribute('fill-opacity') ?? 1) !== 1) return false;
+        const box = path.getBoundingClientRect();
+        return Math.hypot(box.x + box.width / 2 - at.x, box.y + box.height / 2 - at.y) < 2;
+      }).length,
+    lonely,
+  );
+  expect(full).toBe(1);
+
+  // "View points" lists the orders drawn, the marked one marked: its ID is the chip's.
+  await viewAs(swarm, 'table');
+  await expect(swarm.getByRole('columnheader')).toHaveText([
+    /Status/,
+    'n',
+    'Low',
+    'Q1',
+    'Median',
+    'Q3',
+    'High',
+  ]);
+  await expect(swarm.getByTestId('table-row')).toHaveCount(3);
+  await swarm.getByRole('button', { name: 'View points' }).click();
+  await expect(swarm.getByRole('columnheader')).toHaveCount(3);
+  await expect(swarm.locator('table[aria-rowcount="240"]')).toBeVisible();
+  // Its rows drawn a window at a time: scrolled down to the marked one.
+  const markedRow = swarm.locator('[data-testid="table-row"][data-marked="whole"]');
+  const rows = swarm.getByTestId('data-table');
+  for (let step = 0; step < 60 && (await markedRow.count()) === 0; step += 1) {
+    await rows.evaluate((scroller) => {
+      scroller.scrollTop += scroller.clientHeight / 2;
+    });
+    await page.waitForTimeout(50);
+  }
+  await expect(markedRow).toHaveCount(1);
+  const orderId = ((await markedRow.locator('td').nth(1).textContent()) ?? '').trim();
+  expect(orderId).not.toBe('');
+  await expect(chip).toContainText(orderId);
+  await swarm.getByRole('button', { name: 'View statistics' }).click();
+  await expect(swarm.getByRole('columnheader')).toHaveCount(7);
+  await viewAs(swarm, 'chart');
+  await expect.poll(fadedDots).toBe(239);
+
+  // A rectangle over the left-hand points marks the orders inside it, not a status.
+  const leftmost = Math.min(...before.map((dot) => dot.x));
+  const column = before.filter((dot) => dot.x < leftmost + 40);
+  const top = Math.min(...column.map((dot) => dot.y)) - 6;
+  const foot = (top + Math.max(...column.map((dot) => dot.y))) / 2 + 0.5;
+  const [x0, x1] = [leftmost - 10, leftmost + 40];
+  const inside = before.filter(
+    (dot) => dot.x >= x0 && dot.x <= x1 && dot.y >= top && dot.y <= foot,
+  ).length;
+  expect(inside).toBeGreaterThan(1);
+  await page.mouse.move(x0, top);
+  await page.mouse.down();
+  await page.mouse.move(x1, foot, { steps: 6 });
+  await page.mouse.up();
+  await expect(badge).toContainText(`${String(inside)} marked`);
+  await expect.poll(fadedDots).toBe(240 - inside);
+
+  // A click on a violin, beside its box, marks its status.
+  const violin = page.locator('[data-tile="tile-violin"]');
+  const spot = await violin
+    .locator('svg [fill-opacity="0.24"][stroke-width="1.5"]')
+    .first()
+    .evaluate((shape) => {
+      const polygon = shape as SVGGeometryElement;
+      const local = polygon.getBBox();
+      const centre = local.x + local.width / 2;
+      const matrix = polygon.getScreenCTM();
+      for (let y = local.y + local.height / 2; y < local.y + local.height; y += 2)
+        for (const x of [centre - 16, centre + 16]) {
+          const point = new DOMPoint(x, y);
+          if (polygon.isPointInFill(point) && matrix !== null) {
+            const at = point.matrixTransform(matrix);
+            return { x: at.x, y: at.y };
+          }
+        }
+      return undefined;
+    });
+  if (spot === undefined) throw new Error('no place on the violin beside its box');
+  // The status under it, by the axis label nearest across.
+  const status = await violin.locator('svg text').evaluateAll(
+    (all, x) =>
+      all
+        .filter((text) => ['completed', 'processing', 'shipped'].includes(text.textContent ?? ''))
+        .map((text) => {
+          const box = text.getBoundingClientRect();
+          return { name: text.textContent ?? '', gap: Math.abs(box.x + box.width / 2 - x) };
+        })
+        .sort((a, b) => a.gap - b.gap)[0]?.name,
+    spot.x,
+  );
+  await page.mouse.click(spot.x, spot.y);
+  await expect(violin.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(chip).toContainText(status ?? 'no status');
 });

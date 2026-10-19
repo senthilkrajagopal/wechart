@@ -22,7 +22,7 @@ import { seriesOf, type MarkingSlot, type RenderSpec } from '@wechart/core';
 import { COLORS } from '@wechart/ui';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { clickedName, type ClickedItem } from '../dashboard/crossfilter/clicked';
+import { clickedEntity, clickedName, type ClickedItem } from '../dashboard/crossfilter/clicked';
 import { StateLine } from '../shell/StatusIcon';
 import { useThemeName } from '../shell/ThemeProvider';
 
@@ -217,10 +217,11 @@ export function ChartCanvas({
      * at all — a mark that sometimes does nothing, with nothing to debug.
      */
     const clicks = itemClicks(({ item, toggle }) => {
-      const [name, seriesName] = (item ?? '').split('\u0000');
+      const [name, seriesName, entity = ''] = (item ?? '').split('\u0000');
       // Ctrl or ⌘ held: a marking toggles the one item rather than replacing
-      // itself with it (AC-087). Cross-filtering ignores it.
-      clicked.current?.({ name, seriesName }, toggle);
+      // itself with it (AC-087). Cross-filtering ignores it. A box plot's
+      // point carries its entity too (AC-593).
+      clicked.current?.({ name, seriesName, ...(entity === '' ? {} : { entity }) }, toggle);
     });
     const at = (params: {
       name?: string;
@@ -235,7 +236,7 @@ export function ChartCanvas({
       // The pair carries both names; which one a click stands for is the
       // dashboard's to decide, by chart type (`crossfilter/clicked.ts`). A
       // pie's slice by the category it carries, not its written name.
-      item: `${clickedName(params)}\u0000${params.seriesName ?? ''}`,
+      item: `${clickedName(params)}\u0000${params.seriesName ?? ''}\u0000${clickedEntity(params) ?? ''}`,
       x: params.event?.offsetX ?? 0,
       y: params.event?.offsetY ?? 0,
       // zrender carries the browser's own event under `event.event`.
@@ -349,7 +350,11 @@ export function ChartCanvas({
       }
       const items = itemsInShape(chart, chart.getOption() as EChartsOption, shape);
       shaped.current?.(
-        items.map(({ name, seriesName }) => ({ name, seriesName })),
+        items.map(({ name, seriesName, entity }) => ({
+          name,
+          seriesName,
+          ...(entity === undefined ? {} : { entity }),
+        })),
         toggleOnRelease,
       );
     });

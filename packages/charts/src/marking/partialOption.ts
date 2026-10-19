@@ -711,6 +711,21 @@ export function withBoxMarks(
   const outliers = after[0]?.['type'] === 'scatter' ? after[0] : undefined;
   const rest = outliers === undefined ? after : after.slice(1);
   const seen = new Map<string, number>();
+  /** Whether any of a box's points is marked: a violin fades where none is, as its box does (AC-593). */
+  const anyMarked = (name: string) =>
+    (points.get(name) ?? []).some((row) => (kinds.get(row) ?? 'none') !== 'none');
+  const faded = (one: Series): Series =>
+    one.type !== 'custom'
+      ? one
+      : {
+          ...one,
+          data: (one.data ?? []).map((raw, index) => {
+            const item = asItem(raw);
+            const value = item['value'];
+            if (!Array.isArray(value) || anyMarked(names[index] ?? '')) return raw;
+            return { ...item, value: [...value.slice(0, 3), UNMARKED_OPACITY] };
+          }),
+        };
   return {
     ...option,
     series: [
@@ -766,7 +781,7 @@ export function withBoxMarks(
               }),
             },
           ]),
-      ...rest,
+      ...rest.map(faded),
     ],
   };
 }

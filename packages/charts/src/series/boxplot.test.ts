@@ -276,8 +276,25 @@ describe('a box plot’s points (T991, AC-592, AC-306)', () => {
     };
     const { options: _chosen, ...asBefore } = outliers;
     void _chosen;
-    expect(boxplotOption(outliers)).toEqual(boxplotOption(spec()));
-    expect(boxplotOption(asBefore)).toEqual(boxplotOption(spec()));
+    // With Each point is, each outlier is written `{ value, entity }`, its
+    // entity being what a click on it marks (T993, AC-593; these rows carry
+    // none); its value, and so its drawing, are as before.
+    const withoutEntities = (option: Record<string, unknown>) => ({
+      ...option,
+      series: (option['series'] as { type: string; data: unknown[] }[]).map((one) =>
+        one.type !== 'scatter'
+          ? one
+          : {
+              ...one,
+              data: one.data.map((item) =>
+                Array.isArray(item) ? item : (item as { value: unknown }).value,
+              ),
+            },
+      ),
+    });
+    expect(scatterOf(boxplotOption(outliers))?.data).toEqual([{ value: ['paid', 100] }]);
+    expect(withoutEntities(boxplotOption(outliers))).toEqual(boxplotOption(spec()));
+    expect(withoutEntities(boxplotOption(asBefore))).toEqual(boxplotOption(spec()));
     const before = dotsOf(renderToSvg(optionFor(spec())));
     expect(dotsOf(renderToSvg(optionFor(outliers)))).toEqual(before);
     expect(before).toHaveLength(1);

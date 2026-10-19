@@ -1,5 +1,6 @@
 import type { ChartType, RenderSpec } from '@wechart/core';
 
+import { boxplotPointRows, boxplotStatistics } from './boxplot';
 import { bulletTableView } from './bullet';
 import { stack100Columns } from './stack100';
 
@@ -20,12 +21,31 @@ export type TableViewOf = (spec: RenderSpec) => TableView;
 
 /** Each type with a table view of its own, by its type. One line per type. */
 export const TABLE_VIEWS: Partial<Record<ChartType, TableViewOf>> = {
+  boxplot: boxplotStatistics,
   bullet: bulletTableView,
 };
 
 /** A chart's own table view, where its type has one; the rows as queried otherwise. */
 export function tableViewOf(spec: RenderSpec): TableView | undefined {
   return TABLE_VIEWS[spec.chartType]?.(spec);
+}
+
+/**
+ * The rows a type's own table view lists under "View points" (AC-593): the
+ * points it draws, each a row of named members, shown and marked as any
+ * table's rows are. Undefined where it draws none that are entities.
+ */
+export type PointRowsOf = (spec: RenderSpec) => Record<string, unknown>[] | undefined;
+
+/** Each type whose table view offers "View points", by its type. One line per type. */
+export const VIEW_POINTS: Partial<Record<ChartType, PointRowsOf>> = {
+  boxplot: boxplotPointRows,
+};
+
+/** The rows "View points" lists, where a chart's type offers it and draws any. */
+export function pointRowsOf(spec: RenderSpec): Record<string, unknown>[] | undefined {
+  const rows = VIEW_POINTS[spec.chartType]?.(spec);
+  return rows === undefined || rows.length === 0 ? undefined : rows;
 }
 
 /**

@@ -38,6 +38,11 @@ export interface ShapeItem {
   readonly name: string;
   /** The series it is in, as the legend writes it. */
   readonly seriesName: string;
+  /**
+   * The entity a box plot's point is, by its "Each point is" value (AC-593),
+   * written as the point carries it; a point is then itself, not its category.
+   */
+  readonly entity?: string;
 }
 
 type Axis = { readonly type?: string; readonly data?: readonly unknown[] };
@@ -74,11 +79,11 @@ export function itemsInShape(
   const yAxes = list<Axis>(option['yAxis']);
   const out: ShapeItem[] = [];
   const seen = new Set<string>();
-  const take = (name: string, seriesName: string) => {
-    const key = `${name}\u0000${seriesName}`;
+  const take = (name: string, seriesName: string, entity?: string) => {
+    const key = `${name}\u0000${seriesName}\u0000${entity ?? ''}`;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ name, seriesName });
+    out.push(entity === undefined ? { name, seriesName } : { name, seriesName, entity });
   };
   /**
    * Where each stack has reached, per axis pair, category and sign: ECharts
@@ -139,7 +144,19 @@ export function itemsInShape(
       if ((series.type === 'scatter' || series.type === 'heatmap') && !pointAtCategory) {
         if (!Array.isArray(value)) return;
         const [x, y] = value as [number | string, number | string];
-        if (!insideShape(shape, px(x), py(y))) return;
+        // Where it is drawn: a box plot's point is moved sideways from its
+        // category's centre by its own offset (T991), and is its entity (AC-593).
+        const own =
+          typeof item === 'object' && item !== null && !Array.isArray(item)
+            ? (item as { symbolOffset?: unknown; entity?: unknown })
+            : {};
+        const offset = Array.isArray(own.symbolOffset) ? own.symbolOffset : [];
+        const [dx = 0, dy = 0] = offset.map((each) => (typeof each === 'number' ? each : 0));
+        if (!insideShape(shape, px(x) + dx, py(y) + dy)) return;
+        if (own.entity !== undefined && own.entity !== null) {
+          take(String(x), seriesName, String(own.entity));
+          return;
+        }
         // A heatmap's cell is named by its column, as its axis writes it.
         const name =
           series.type === 'heatmap' && typeof x === 'number' && xAxis.data !== undefined

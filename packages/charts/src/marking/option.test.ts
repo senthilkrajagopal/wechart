@@ -378,7 +378,8 @@ describe('each item marked by its own rows (T507)', () => {
 
     // T992: with Points at None, the violin follows the boxes; it isn't
     // their points, so no item of it is read as an outlier's row.
-    it('leaves a violin’s items alone, with no points between it and the boxes', () => {
+    // T993 (AC-593): a violin fades with its box, its opacity its fourth value.
+    it('reads no violin item as a point, and fades a violin with its box', () => {
       const violin = (marked: readonly string[]): RenderSpec => ({
         ...boxplot(EACH, marked),
         eachPointIs: EACH,
@@ -390,7 +391,15 @@ describe('each item marked by its own rows (T507)', () => {
         Object.entries(violin([])).filter(([key]) => key !== 'marking'),
       ) as unknown as RenderSpec;
       const [, unmarked] = seriesIn(optionFor(unmarkedSpec));
-      expect(second?.data).toEqual(unmarked?.data);
+      const fadedAt = (data: unknown[] | undefined) =>
+        (data ?? []).map((item) => (item as { value: unknown[] }).value[3]);
+      expect(fadedAt(second?.data)).toEqual([1, 0.28]);
+      expect(fadedAt(unmarked?.data)).toEqual([1, 1]);
+      // Otherwise as unmarked: no item of it marked or styled as a point.
+      const asValues = (data: unknown[] | undefined) =>
+        (data ?? []).map((item) => (item as { value: unknown[] }).value.slice(0, 3));
+      expect(asValues(second?.data)).toEqual(asValues(unmarked?.data));
+      expect((second?.data ?? []).every((item) => !('itemStyle' in (item as object)))).toBe(true);
     });
   });
 

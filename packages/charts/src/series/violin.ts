@@ -129,10 +129,13 @@ export function violinSeries(name: string, violins: readonly ViolinOf[]): Custom
       return [round(centre + width * half), round(y)];
     });
     const left = [...right].reverse().map(([x = 0, y = 0]) => [round(2 * centre - x), y]);
+    const opacity = Number(api.value(3));
     return {
       type: 'polygon',
       shape: { points: [...right, ...left] },
       style: {
+        // Faded with its box under a marking that holds none of its points (AC-593).
+        ...(Number.isFinite(opacity) && opacity < 1 ? { opacity } : {}),
         fill: violin.colour,
         fillOpacity: VIOLIN_FILL_OPACITY,
         stroke: violin.colour,
@@ -146,11 +149,18 @@ export function violinSeries(name: string, violins: readonly ViolinOf[]): Custom
     z: 1,
     clip: true,
     encode: { x: 0, y: [1, 2] },
-    data: violins.map((violin) => [
-      violin.name,
-      violin.density[0]?.at ?? null,
-      violin.density[violin.density.length - 1]?.at ?? null,
-    ]),
+    // Named by its category, so a click on it names what a click on its box
+    // names (AC-593); its fourth value its opacity, which a marking lowers
+    // where its box fades (`withBoxMarks`).
+    data: violins.map((violin) => ({
+      name: violin.name,
+      value: [
+        violin.name,
+        violin.density[0]?.at ?? null,
+        violin.density[violin.density.length - 1]?.at ?? null,
+        1,
+      ],
+    })),
     renderItem,
   };
 }

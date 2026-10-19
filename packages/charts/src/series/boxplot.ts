@@ -145,6 +145,14 @@ export interface PlacedPoint {
   readonly value: number;
   /** Sideways from its category's centre, in pixels. */
   readonly dx: number;
+  /** Its row's "Each point is" value, which a click on it marks (AC-593); none without one. */
+  readonly entity?: unknown;
+}
+
+/** A row's point: its value, and its "Each point is" value where the chart has one. */
+interface RowPoint {
+  readonly value: number;
+  readonly entity?: unknown;
 }
 
 export interface PointsLayout {
@@ -159,22 +167,58 @@ export interface PointsLayout {
   readonly noteLines: number;
 }
 
-/** Each category's numeric values, in the rows' order, the categories as they first appear. */
-function valuesByCategory(spec: RenderSpec): Map<string, number[]> {
+/**
+ * Each category's points: its rows with a numeric value, in the rows' order,
+ * the categories as they first appear; each with its "Each point is" value
+ * where the chart has one (AC-593).
+ */
+function pointsByCategory(spec: RenderSpec): Map<string, RowPoint[]> {
   const category = memberOn(spec.encoding, 'x');
   const value = memberOn(spec.encoding, 'y');
-  const values = new Map<string, number[]>();
-  if (category === undefined || value === undefined) return values;
+  const entity = spec.eachPointIs;
+  const points = new Map<string, RowPoint[]>();
+  if (category === undefined || value === undefined) return points;
   for (const row of spec.rows) {
     const raw = row[value];
     const number = raw === null || raw === undefined || raw === '' ? Number.NaN : Number(raw);
     if (!Number.isFinite(number)) continue;
     const name = String(row[category] ?? '');
-    let list = values.get(name);
-    if (list === undefined) values.set(name, (list = []));
-    list.push(number);
+    let list = points.get(name);
+    if (list === undefined) points.set(name, (list = []));
+    list.push(entity === undefined ? { value: number } : { value: number, entity: row[entity] });
   }
-  return values;
+  return points;
+}
+
+/** Each category's numeric values, in the rows' order, the categories as they first appear. */
+export function valuesByCategory(spec: RenderSpec): Map<string, number[]> {
+  return new Map(
+    [...pointsByCategory(spec)].map(([name, points]) => [name, points.map((one) => one.value)]),
+  );
+}
+
+/**
+ * The points a box plot draws (AC-593), its category's rows each once, in
+ * their order: every point where Points is All or Beeswarm, its values beyond
+ * the whiskers where it is Outliers, none where it is None. What its table
+ * view's "View points" lists, and its text alternative counts.
+ */
+export function drawnPointsOf(spec: RenderSpec): { name: string; point: RowPoint }[] {
+  const { points } = drawnDistribution(spec.options, spec.eachPointIs !== undefined);
+  if (points === 'none') return [];
+  const byCategory = pointsByCategory(spec);
+  if (points !== 'outliers')
+    return [...byCategory].flatMap(([name, list]) => list.map((point) => ({ name, point })));
+  return boxesOf(spec).flatMap(({ name, stats }) => {
+    // Each outlier its row's: the nth of its value in its category.
+    const left = [...(byCategory.get(name) ?? [])];
+    return stats.outliers.flatMap((value) => {
+      const at = left.findIndex((one) => one.value === Number(value));
+      if (at < 0) return [{ name, point: { value: Number(value) } }];
+      const [point] = left.splice(at, 1);
+      return point === undefined ? [] : [{ name, point }];
+    });
+  });
 }
 
 /**
@@ -231,7 +275,10 @@ export function pointsLayoutOf(
   points: 'all' | 'beeswarm',
   canvas: Canvas = DEFAULT_CANVAS,
 ): PointsLayout {
-  const byCategory = valuesByCategory(spec);
+  const rowPoints = pointsByCategory(spec);
+  const byCategory = new Map(
+    [...rowPoints].map(([name, list]) => [name, list.map((one) => one.value)]),
+  );
   const all = [...byCategory.values()].flat();
   const extent = niceExtent(all.length === 0 ? [0] : all);
   const write = formatterFor(memberOn(spec.encoding, 'y') ?? '', spec.formats ?? {});
@@ -261,11 +308,16 @@ export function pointsLayoutOf(
       const swarm = points === 'beeswarm' ? beeswarm(values, pxPerValue, room) : undefined;
       if (points === 'beeswarm' && swarm === undefined) fellBack.push(name);
       const random = seeded(seedOf(name));
-      return values.map((value, at) => ({
-        name,
-        value,
-        dx: swarm?.[at] ?? round((random() - 0.5) * jitterWidth),
-      }));
+      const entities = rowPoints.get(name) ?? [];
+      return values.map((value, at) => {
+        const entity = entities[at]?.entity;
+        return {
+          name,
+          value,
+          dx: swarm?.[at] ?? round((random() - 0.5) * jitterWidth),
+          ...(entity === undefined ? {} : { entity }),
+        };
+      });
     });
     const notes =
       fellBack.length === 0
@@ -367,9 +419,15 @@ function boxesAndPoints(spec: RenderSpec, canvas: Canvas): EChartsOption {
           // Outliers, in their category's colour at 60 % (direction.md rule 88).
           type: 'scatter' as const,
           name: `${value} (outliers)`,
-          data: boxes.flatMap(({ name, stats }) =>
-            stats.outliers.map((outlier) => [name, outlier]),
-          ),
+          // Each by its entity, where Each point is says what a point is
+          // (AC-593); as before R81 where it doesn't.
+          data:
+            spec.eachPointIs === undefined
+              ? boxes.flatMap(({ name, stats }) => stats.outliers.map((outlier) => [name, outlier]))
+              : drawnPointsOf(spec).map(({ name, point }) => ({
+                  value: [name, point.value],
+                  ...(point.entity === undefined ? {} : { entity: point.entity }),
+                })),
           symbolSize: POINT_PX,
           itemStyle: { color: colour, opacity: POINT_OPACITY },
         },
@@ -412,6 +470,8 @@ function boxesAndPoints(spec: RenderSpec, canvas: Canvas): EChartsOption {
         data: layout.points.map((point) => ({
           value: [point.name, point.value],
           symbolOffset: [point.dx, 0],
+          // What a click on it marks (AC-593).
+          ...(point.entity === undefined ? {} : { entity: point.entity }),
         })),
         symbolSize: POINT_PX,
         itemStyle: { color: colour, opacity: POINT_OPACITY },
